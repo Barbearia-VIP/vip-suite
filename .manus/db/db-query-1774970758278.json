@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO user_profiles (userId, orgId, role, active, createdAt, updatedAt)\nVALUES (1, 1, 'master', 1, NOW(), NOW())\nON DUPLICATE KEY UPDATE role = 'master', active = 1, updatedAt = NOW();",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4T7G3uAA8hnJwsB.fa5b0780ed64 --database Gw6CU8nRy9T64yBMvKuEjJ --execute INSERT INTO user_profiles (userId, orgId, role, active, createdAt, updatedAt)\nVALUES (1, 1, 'master', 1, NOW(), NOW())\nON DUPLICATE KEY UPDATE role = 'master', active = 1, updatedAt = NOW();",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 466
+}

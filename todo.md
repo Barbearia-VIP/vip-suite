@@ -78,3 +78,8 @@
 - [ ] Exportação de relatórios em Excel/PDF
 - [ ] Colaboradores, comissões e calendário (Data VIP)
 - [ ] Clientes e raio-X (retenção, churn, coorte)
+
+## Bugs Reportados
+
+- [x] orgs.myProfile retorna undefined quando usuário não tem userProfile no banco
+- [x] orgs.units retorna "Sem acesso a esta organização" para usuário admin sem userProfile

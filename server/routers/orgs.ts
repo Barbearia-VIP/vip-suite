@@ -3,6 +3,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import {
   getOrgsByOwner,
+  getOrgsByMember,
   createOrg,
   getOrgById,
   updateOrg,
@@ -19,7 +20,24 @@ import {
 } from "../db";
 
 // ── Middleware: ensure user has a profile in the org ──────────────────────────
-async function requireOrgAccess(userId: number, orgId: number) {
+// sysAdmin = user.role === 'admin' in the users table → always gets master access
+const MASTER_PROFILE = {
+  id: 0,
+  userId: 0,
+  orgId: 0,
+  unitId: null,
+  role: "master" as const,
+  active: true,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+async function requireOrgAccess(
+  userId: number,
+  orgId: number,
+  isSysAdmin = false
+) {
+  if (isSysAdmin) return { ...MASTER_PROFILE, userId, orgId };
   const profile = await getUserProfile(userId, orgId);
   if (!profile) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso a esta organização" });
@@ -27,7 +45,12 @@ async function requireOrgAccess(userId: number, orgId: number) {
   return profile;
 }
 
-async function requireMasterOrOrgAdmin(userId: number, orgId: number) {
+async function requireMasterOrOrgAdmin(
+  userId: number,
+  orgId: number,
+  isSysAdmin = false
+) {
+  if (isSysAdmin) return { ...MASTER_PROFILE, userId, orgId };
   const profile = await getUserProfile(userId, orgId);
   if (!profile || !["master", "org_admin"].includes(profile.role)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem realizar esta ação" });
@@ -38,13 +61,17 @@ async function requireMasterOrOrgAdmin(userId: number, orgId: number) {
 export const orgsRouter = router({
   // ── Organizations ─────────────────────────────────────────────────────────
   list: protectedProcedure.query(async ({ ctx }) => {
-    return getOrgsByOwner(ctx.user.id);
+    // sysAdmin sees all orgs they own OR are a member of
+    if (ctx.user.role === "admin") {
+      return getOrgsByOwner(ctx.user.id);
+    }
+    return getOrgsByMember(ctx.user.id);
   }),
 
   get: protectedProcedure
     .input(z.object({ orgId: z.number() }))
     .query(async ({ ctx, input }) => {
-      await requireOrgAccess(ctx.user.id, input.orgId);
+      await requireOrgAccess(ctx.user.id, input.orgId, ctx.user.role === "admin");
       return getOrgById(input.orgId);
     }),
 
@@ -89,7 +116,7 @@ export const orgsRouter = router({
   units: protectedProcedure
     .input(z.object({ orgId: z.number() }))
     .query(async ({ ctx, input }) => {
-      const profile = await requireOrgAccess(ctx.user.id, input.orgId);
+      const profile = await requireOrgAccess(ctx.user.id, input.orgId, ctx.user.role === "admin");
       const units = await getUnitsByOrg(input.orgId);
       // Non-master/admin: filter to only their unit
       if (!["master", "org_admin"].includes(profile.role) && profile.unitId) {
@@ -112,7 +139,7 @@ export const orgsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await requireMasterOrOrgAdmin(ctx.user.id, input.orgId);
+      await requireMasterOrOrgAdmin(ctx.user.id, input.orgId, ctx.user.role === "admin");
       return createUnit(input);
     }),
 
@@ -131,7 +158,7 @@ export const orgsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await requireMasterOrOrgAdmin(ctx.user.id, input.orgId);
+      await requireMasterOrOrgAdmin(ctx.user.id, input.orgId, ctx.user.role === "admin");
       const { unitId, orgId, ...data } = input;
       return updateUnit(unitId, data);
     }),
@@ -140,13 +167,18 @@ export const orgsRouter = router({
   myProfile: protectedProcedure
     .input(z.object({ orgId: z.number() }))
     .query(async ({ ctx, input }) => {
-      return getUserProfile(ctx.user.id, input.orgId);
+      // sysAdmin always has master access — return a virtual master profile if no real one exists
+      const profile = await getUserProfile(ctx.user.id, input.orgId);
+      if (!profile && ctx.user.role === "admin") {
+        return { ...MASTER_PROFILE, userId: ctx.user.id, orgId: input.orgId };
+      }
+      return profile ?? null;
     }),
 
   orgUsers: protectedProcedure
     .input(z.object({ orgId: z.number() }))
     .query(async ({ ctx, input }) => {
-      await requireMasterOrOrgAdmin(ctx.user.id, input.orgId);
+      await requireMasterOrOrgAdmin(ctx.user.id, input.orgId, ctx.user.role === "admin");
       return getUsersInOrg(input.orgId);
     }),
 
@@ -161,7 +193,7 @@ export const orgsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await requireMasterOrOrgAdmin(ctx.user.id, input.orgId);
+      await requireMasterOrOrgAdmin(ctx.user.id, input.orgId, ctx.user.role === "admin");
       return upsertUserProfile({
         userId: input.targetUserId,
         orgId: input.orgId,
@@ -175,7 +207,7 @@ export const orgsRouter = router({
   moduleConfigs: protectedProcedure
     .input(z.object({ unitId: z.number(), orgId: z.number() }))
     .query(async ({ ctx, input }) => {
-      const profile = await requireOrgAccess(ctx.user.id, input.orgId);
+      const profile = await requireOrgAccess(ctx.user.id, input.orgId, ctx.user.role === "admin");
       if (!["master", "org_admin", "unit_manager"].includes(profile.role)) {
         throw new TRPCError({ code: "FORBIDDEN" });
       }
@@ -193,7 +225,7 @@ export const orgsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await requireMasterOrOrgAdmin(ctx.user.id, input.orgId);
+      await requireMasterOrOrgAdmin(ctx.user.id, input.orgId, ctx.user.role === "admin");
       return upsertModuleConfig({
         unitId: input.unitId,
         module: input.module,
@@ -205,7 +237,7 @@ export const orgsRouter = router({
   moduleAccess: protectedProcedure
     .input(z.object({ unitId: z.number(), orgId: z.number() }))
     .query(async ({ ctx, input }) => {
-      await requireOrgAccess(ctx.user.id, input.orgId);
+      await requireOrgAccess(ctx.user.id, input.orgId, ctx.user.role === "admin");
       return getModuleAccess(input.unitId);
     }),
 
@@ -219,7 +251,7 @@ export const orgsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await requireMasterOrOrgAdmin(ctx.user.id, input.orgId);
+      await requireMasterOrOrgAdmin(ctx.user.id, input.orgId, ctx.user.role === "admin");
       return upsertModuleAccess({
         unitId: input.unitId,
         module: input.module,

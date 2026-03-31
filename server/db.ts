@@ -91,6 +91,20 @@ export async function getOrgsByOwner(ownerId: number) {
   return db.select().from(organizations).where(eq(organizations.ownerId, ownerId));
 }
 
+// Returns orgs where user is a member (has a userProfile) — used for non-admin users
+export async function getOrgsByMember(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const profiles = await db
+    .select({ orgId: userProfiles.orgId })
+    .from(userProfiles)
+    .where(and(eq(userProfiles.userId, userId), eq(userProfiles.active, true)));
+  if (profiles.length === 0) return [];
+  const orgIds = profiles.map((p) => p.orgId).filter((id): id is number => id !== null);
+  if (orgIds.length === 0) return [];
+  return db.select().from(organizations).where(inArray(organizations.id, orgIds));
+}
+
 export async function getOrgById(orgId: number) {
   const db = await getDb();
   if (!db) return undefined;
