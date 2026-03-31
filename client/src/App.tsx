@@ -55,6 +55,11 @@ import AutoInstagramPage from "./pages/auto-instagram/AutoInstagramPage";
 import ComentariosPage from "./pages/auto-instagram/ComentariosPage";
 import SeguidoresPage from "./pages/auto-instagram/SeguidoresPage";
 import EngajamentoPage from "./pages/auto-instagram/EngajamentoPage";
+import PromptsPage from "./pages/auto-instagram/PromptsPage";
+import LogsPage from "./pages/auto-instagram/LogsPage";
+import AprovacaoPage from "./pages/auto-instagram/AprovacaoPage";
+import StoriesPage from "./pages/auto-instagram/StoriesPage";
+import DiagnosticoPage from "./pages/auto-instagram/DiagnosticoPage";
 
 // We Send
 import WeSendPage from "./pages/we-send/WeSendPage";
@@ -216,6 +221,21 @@ function Router() {
       </Route>
       <Route path="/auto-instagram/seguidores">
         <ProtectedLayout><SeguidoresPage /></ProtectedLayout>
+      </Route>
+      <Route path="/auto-instagram/prompts">
+        <ProtectedLayout><PromptsPage /></ProtectedLayout>
+      </Route>
+      <Route path="/auto-instagram/logs">
+        <ProtectedLayout><LogsPage /></ProtectedLayout>
+      </Route>
+      <Route path="/auto-instagram/aprovacao">
+        <ProtectedLayout><AprovacaoPage /></ProtectedLayout>
+      </Route>
+      <Route path="/auto-instagram/stories">
+        <ProtectedLayout><StoriesPage /></ProtectedLayout>
+      </Route>
+      <Route path="/auto-instagram/diagnostico">
+        <ProtectedLayout><DiagnosticoPage /></ProtectedLayout>
       </Route>
       <Route path="/auto-instagram/engajamento">
         <ProtectedLayout><EngajamentoPage /></ProtectedLayout>

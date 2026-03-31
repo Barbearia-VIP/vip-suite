@@ -1,153 +1,294 @@
-import { useState } from "react";
+import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import PageHeader from "@/components/PageHeader";
-import { Instagram, MessageSquare, Heart, Users, TrendingUp, AlertCircle, Bot, Settings, Plus, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
-import { useOrg } from "@/hooks/useOrg";
-import { trpc } from "@/lib/trpc";
-
-const MOCK_COMMENTS = [
-  { id: 1, user: "@carlos_vip", text: "Ficou incrível! 🔥", post: "Corte do dia", replied: true, time: "há 5 min" },
-  { id: 2, user: "@ana_beauty", text: "Quanto custa o combo?", post: "Promoção", replied: false, time: "há 12 min" },
-  { id: 3, user: "@pedro_barber", text: "Melhor barbearia! ❤️", post: "Story", replied: true, time: "há 25 min" },
-  { id: 4, user: "@maria_style", text: "Quero agendar!", post: "Novo serviço", replied: false, time: "há 1h" },
-];
-
-const MOCK_RULES = [
-  { id: 1, trigger: "preço", response: "Olá! Para saber os preços, acesse nosso link na bio ou envie uma DM 😊", active: true },
-  { id: 2, trigger: "agendar", response: "Oi! Para agendar, clique no link da bio ou nos chame no WhatsApp!", active: true },
-  { id: 3, trigger: "❤️", response: "Obrigado pelo carinho! 🙏 Nos vemos em breve!", active: false },
-];
+import PageHeader from "@/components/PageHeader";
+import {
+  Instagram, Play, Pause, RefreshCw, MessageCircle, BookOpen,
+  CheckSquare, FileText, Zap, AlertTriangle, TrendingUp, Activity, ChevronRight, Settings,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Link } from "wouter";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 export default function AutoInstagramPage() {
   const { selectedUnit } = useApp();
-  const { org } = useOrg();
-  const [rules, setRules] = useState(MOCK_RULES);
-  const [newTrigger, setNewTrigger] = useState("");
-  const [newResponse, setNewResponse] = useState("");
-  const configQuery = trpc.orgs.moduleConfigs.useQuery(
-    { unitId: selectedUnit?.id ?? 0, orgId: org?.id ?? 0 },
-    { enabled: !!selectedUnit?.id && !!org?.id }
-  );
-  const hasConfig = configQuery.data?.some(c => c.module === "auto_instagram" && c.active);
+  const unitId = selectedUnit?.id ?? 0;
 
-  const addRule = () => {
-    if (!newTrigger.trim() || !newResponse.trim()) return;
-    setRules(prev => [...prev, { id: Date.now(), trigger: newTrigger.trim(), response: newResponse.trim(), active: true }]);
-    setNewTrigger(""); setNewResponse("");
-    toast.success("Regra adicionada!");
+  const statusQuery = trpc.ig.getStatus.useQuery({ unitId }, { enabled: unitId > 0, refetchInterval: 15000 });
+  const statsQuery = trpc.igDashboard.getStats.useQuery({ unitId, days: 7 }, { enabled: unitId > 0 });
+  const activityQuery = trpc.igDashboard.getRecentActivity.useQuery({ unitId, limit: 10 }, { enabled: unitId > 0, refetchInterval: 15000 });
+
+  const startBotMut = trpc.ig.startBot.useMutation({
+    onSuccess: (r) => { toast.success(r.message); statusQuery.refetch(); statsQuery.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const stopBotMut = trpc.ig.stopBot.useMutation({
+    onSuccess: (r) => { toast.success(r.message); statusQuery.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const runCycleMut = trpc.ig.runCycleNow.useMutation({
+    onSuccess: (r) => { toast.success(r.message); activityQuery.refetch(); statsQuery.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const status = statusQuery.data;
+  const stats = statsQuery.data;
+  const activity = activityQuery.data ?? [];
+
+  const isRunning = status?.isRunning ?? false;
+  const isConfigured = status?.isConfigured ?? false;
+
+  const logTypeColor: Record<string, string> = {
+    comment_reply: "text-green-400",
+    story_reply: "text-blue-400",
+    welcome: "text-yellow-400",
+    error: "text-red-400",
+    info: "text-muted-foreground",
+    warning: "text-orange-400",
   };
+
+  const logTypeIcon: Record<string, React.ReactNode> = {
+    comment_reply: <MessageCircle className="w-3.5 h-3.5" />,
+    story_reply: <Activity className="w-3.5 h-3.5" />,
+    error: <AlertTriangle className="w-3.5 h-3.5" />,
+    info: <Zap className="w-3.5 h-3.5" />,
+    warning: <AlertTriangle className="w-3.5 h-3.5" />,
+  };
+
+  if (!unitId) {
+    return (
+      <div className="p-6">
+        <PageHeader title="Auto Instagram" description="Selecione uma unidade para gerenciar o bot" />
+        <Card className="mt-6 border-border bg-card">
+          <CardContent className="py-12 text-center text-muted-foreground">
+            Selecione uma unidade no seletor do topo para gerenciar o bot do Instagram.
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
       <PageHeader
         title="Auto Instagram"
-        description={selectedUnit ? `Automação — ${selectedUnit.name}` : "Automação de Instagram"}
+        description="Automação de respostas a comentários e stories"
         actions={
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${hasConfig ? "bg-green-500 animate-pulse" : "bg-muted"}`} />
-            <span className="text-xs text-muted-foreground">{hasConfig ? "Bot ativo" : "Bot inativo"}</span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => runCycleMut.mutate({ unitId })} disabled={!isConfigured || runCycleMut.isPending}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${runCycleMut.isPending ? "animate-spin" : ""}`} />
+              Forçar Ciclo
+            </Button>
+            {isRunning ? (
+              <Button variant="destructive" size="sm" onClick={() => stopBotMut.mutate({ unitId })} disabled={stopBotMut.isPending}>
+                <Pause className="w-4 h-4 mr-2" /> Pausar Bot
+              </Button>
+            ) : (
+              <Button size="sm" onClick={() => startBotMut.mutate({ unitId })} disabled={!isConfigured || startBotMut.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white">
+                <Play className="w-4 h-4 mr-2" /> Iniciar Bot
+              </Button>
+            )}
           </div>
         }
       />
 
-      {!hasConfig && !configQuery.isLoading && (
-        <Card className="bg-amber-500/5 border-amber-500/20"><CardContent className="p-4 flex items-center gap-3">
-          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-          <div><p className="text-xs font-medium text-foreground">Instagram não conectado</p>
-          <p className="text-xs text-muted-foreground">Configure o Access Token do Instagram em Configurações para ativar o bot.</p></div>
-        </CardContent></Card>
-      )}
-
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { label: "Comentários respondidos", value: "142", sub: "Este mês", icon: MessageSquare, color: "oklch(0.65 0.15 320)" },
-          { label: "Novos seguidores", value: "+38", sub: "Esta semana", icon: Users, color: "oklch(0.65 0.15 200)" },
-          { label: "Taxa de engajamento", value: "6.8%", sub: "Média dos posts", icon: TrendingUp, color: "oklch(0.65 0.15 145)" },
-          { label: "Curtidas totais", value: "1.2k", sub: "Último mês", icon: Heart, color: "oklch(0.65 0.15 30)" },
-        ].map(kpi => {
-          const Icon = kpi.icon;
-          return (
-            <Card key={kpi.label} className="bg-card border-border"><CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div><p className="text-xs text-muted-foreground mb-1">{kpi.label}</p><p className="text-xl font-bold text-foreground">{kpi.value}</p><p className="text-xs text-muted-foreground mt-0.5">{kpi.sub}</p></div>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${kpi.color}20` }}><Icon className="w-4 h-4" style={{ color: kpi.color }} /></div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className={`border-2 ${isRunning ? "border-green-500/50 bg-green-500/5" : isConfigured ? "border-yellow-500/50 bg-yellow-500/5" : "border-red-500/50 bg-red-500/5"}`}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className={`w-3 h-3 rounded-full ${isRunning ? "bg-green-500 animate-pulse" : isConfigured ? "bg-yellow-500" : "bg-red-500"}`} />
+              <div>
+                <p className="text-xs text-muted-foreground">Status do Bot</p>
+                <p className={`font-semibold text-sm ${isRunning ? "text-green-400" : isConfigured ? "text-yellow-400" : "text-red-400"}`}>
+                  {isRunning ? "Ativo" : isConfigured ? "Pausado" : "Não Configurado"}
+                </p>
               </div>
-            </CardContent></Card>
-          );
-        })}
+            </div>
+            {status?.lastRun && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Último ciclo: {formatDistanceToNow(new Date(status.lastRun), { addSuffix: true, locale: ptBR })}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <MessageCircle className="w-4 h-4 text-green-400" />
+              <p className="text-xs text-muted-foreground">Comentários (7 dias)</p>
+            </div>
+            <p className="text-2xl font-bold text-foreground">{stats?.replies ?? 0}</p>
+            <p className="text-xs text-muted-foreground">respostas enviadas</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Activity className="w-4 h-4 text-blue-400" />
+              <p className="text-xs text-muted-foreground">Stories (7 dias)</p>
+            </div>
+            <p className="text-2xl font-bold text-foreground">{stats?.stories ?? 0}</p>
+            <p className="text-xs text-muted-foreground">respostas enviadas</p>
+          </CardContent>
+        </Card>
+
+        <Card className={`border-border ${(stats?.pendingApproval ?? 0) > 0 ? "border-yellow-500/50 bg-yellow-500/5" : "bg-card"}`}>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <CheckSquare className={`w-4 h-4 ${(stats?.pendingApproval ?? 0) > 0 ? "text-yellow-400" : "text-muted-foreground"}`} />
+              <p className="text-xs text-muted-foreground">Aguardando Aprovação</p>
+            </div>
+            <p className={`text-2xl font-bold ${(stats?.pendingApproval ?? 0) > 0 ? "text-yellow-400" : "text-foreground"}`}>
+              {stats?.pendingApproval ?? 0}
+            </p>
+            {(stats?.pendingApproval ?? 0) > 0 && (
+              <Link href="/auto-instagram/aprovacao">
+                <p className="text-xs text-yellow-400 hover:underline cursor-pointer mt-1">Ver fila →</p>
+              </Link>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      <Tabs defaultValue="comentarios">
-        <TabsList className="h-8">
-          <TabsTrigger value="comentarios" className="text-xs h-6 px-3"><MessageSquare className="w-3 h-3 mr-1" />Comentários</TabsTrigger>
-          <TabsTrigger value="regras" className="text-xs h-6 px-3"><Bot className="w-3 h-3 mr-1" />Regras do Bot</TabsTrigger>
-        </TabsList>
+      {/* Alertas */}
+      {!isRunning && isConfigured && (
+        <Card className="border-yellow-500/50 bg-yellow-500/5">
+          <CardContent className="p-4 flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-yellow-400">Bot pausado</p>
+              <p className="text-xs text-muted-foreground">O bot está configurado mas não está em execução. Clique em "Iniciar Bot" para ativar as respostas automáticas.</p>
+            </div>
+            <Button size="sm" onClick={() => startBotMut.mutate({ unitId })} className="ml-auto bg-green-600 hover:bg-green-700 text-white">
+              <Play className="w-3.5 h-3.5 mr-1.5" /> Iniciar
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-        <TabsContent value="comentarios" className="mt-4 space-y-2">
-          {MOCK_COMMENTS.map(comment => (
-            <Card key={comment.id} className="bg-card border-border">
-              <CardContent className="p-3 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="text-xs font-bold text-primary">{comment.user[1]?.toUpperCase()}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-xs font-medium text-foreground">{comment.user}</span>
-                    <span className="text-xs text-muted-foreground">em {comment.post}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground truncate">{comment.text}</p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Badge variant={comment.replied ? "secondary" : "outline"} className="text-xs">
-                    {comment.replied ? "Respondido" : "Pendente"}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">{comment.time}</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </TabsContent>
+      {!isConfigured && (
+        <Card className="border-red-500/50 bg-red-500/5">
+          <CardContent className="p-4 flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-red-400">Credenciais não configuradas</p>
+              <p className="text-xs text-muted-foreground">Configure o Access Token e o ID da conta do Instagram em Configurações para ativar o bot.</p>
+            </div>
+            <Link href="/configuracoes">
+              <Button size="sm" variant="outline" className="ml-auto">
+                <Settings className="w-3.5 h-3.5 mr-1.5" /> Configurar
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
-        <TabsContent value="regras" className="mt-4 space-y-4">
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Nova Regra de Resposta</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5"><Label className="text-xs">Palavra-chave / gatilho</Label><Input placeholder="Ex: preço, agendar, ❤️" value={newTrigger} onChange={e => setNewTrigger(e.target.value)} className="text-xs h-8" /></div>
-                <div className="space-y-1.5"><Label className="text-xs">Resposta automática</Label><Input placeholder="Resposta que será enviada" value={newResponse} onChange={e => setNewResponse(e.target.value)} className="text-xs h-8" /></div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Gráfico */}
+        <Card className="lg:col-span-2 bg-card border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-primary" />
+              Atividade dos Últimos 7 Dias
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(stats?.chartData?.length ?? 0) > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={stats?.chartData ?? []}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "oklch(0.6 0 0)" }}
+                    tickFormatter={(v) => { const d = new Date(v); return `${d.getDate()}/${d.getMonth() + 1}`; }} />
+                  <YAxis tick={{ fontSize: 11, fill: "oklch(0.6 0 0)" }} />
+                  <Tooltip contentStyle={{ background: "oklch(0.15 0 0)", border: "1px solid oklch(0.3 0 0)", borderRadius: 8 }}
+                    labelFormatter={(v) => new Date(v).toLocaleDateString("pt-BR")} />
+                  <Bar dataKey="replies" name="Comentários" fill="oklch(0.65 0.15 145)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="stories" name="Stories" fill="oklch(0.65 0.15 200)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
+                Nenhuma atividade registrada nos últimos 7 dias
               </div>
-              <Button size="sm" className="gap-1 text-xs h-7" onClick={addRule}><Plus className="w-3 h-3" />Adicionar regra</Button>
-            </CardContent>
-          </Card>
-          <div className="space-y-2">
-            {rules.map(rule => (
-              <Card key={rule.id} className="bg-card border-border">
-                <CardContent className="p-3 flex items-center gap-3">
-                  <Switch checked={rule.active} onCheckedChange={v => setRules(prev => prev.map(r => r.id === rule.id ? { ...r, active: v } : r))} />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Acesso rápido */}
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Acesso Rápido</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 p-4 pt-0">
+            {[
+              { href: "/auto-instagram/prompts", icon: BookOpen, label: "Editor de Prompts", desc: "Personalidade do bot" },
+              { href: "/auto-instagram/aprovacao", icon: CheckSquare, label: "Fila de Aprovação", desc: `${stats?.pendingApproval ?? 0} pendentes`, badge: stats?.pendingApproval },
+              { href: "/auto-instagram/stories", icon: Activity, label: "Respostas a Stories", desc: "Configurar e ver logs" },
+              { href: "/auto-instagram/logs", icon: FileText, label: "Histórico de Logs", desc: "Todas as atividades" },
+              { href: "/auto-instagram/diagnostico", icon: Zap, label: "Diagnóstico", desc: "Testar conexão" },
+            ].map(item => (
+              <Link key={item.href} href={item.href}>
+                <div className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-accent/50 cursor-pointer transition-colors">
+                  <item.icon className="w-4 h-4 text-primary flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <Badge variant="outline" className="text-xs h-4 px-1.5">Gatilho: {rule.trigger}</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate">{rule.response}</p>
+                    <p className="text-sm font-medium text-foreground">{item.label}</p>
+                    <p className="text-xs text-muted-foreground">{item.desc}</p>
                   </div>
-                  <button onClick={() => setRules(prev => prev.filter(r => r.id !== rule.id))} className="text-muted-foreground hover:text-red-500 transition-colors">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </CardContent>
-              </Card>
+                  {item.badge ? <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-400 text-xs">{item.badge}</Badge> : null}
+                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                </div>
+              </Link>
             ))}
-          </div>
-        </TabsContent>
-      </Tabs>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Log recente */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-2 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Activity className="w-4 h-4 text-primary" />
+            Atividade Recente
+          </CardTitle>
+          <Link href="/auto-instagram/logs">
+            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">Ver todos →</Button>
+          </Link>
+        </CardHeader>
+        <CardContent className="p-0">
+          {activity.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground text-sm">Nenhuma atividade registrada ainda</div>
+          ) : (
+            <div className="divide-y divide-border">
+              {activity.map((log) => (
+                <div key={log.id} className="flex items-start gap-3 px-4 py-3">
+                  <span className={`mt-0.5 flex-shrink-0 ${logTypeColor[log.type] ?? "text-muted-foreground"}`}>
+                    {logTypeIcon[log.type] ?? <Zap className="w-3.5 h-3.5" />}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-foreground truncate">{log.message}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDistanceToNow(new Date(log.createdAt), { addSuffix: true, locale: ptBR })}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className={`text-xs flex-shrink-0 ${logTypeColor[log.type]}`}>
+                    {log.type.replace("_", " ")}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

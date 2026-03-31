@@ -99,3 +99,22 @@
 - [ ] Estado "aguardando configuração" para módulos sem chaves configuradas
 - [ ] Gráfico de faturamento mensal com dados reais do BD
 - [ ] Ranking de unidades com dados reais do BD
+
+## Módulo Auto Instagram (Concluído)
+
+- [x] Tabelas BD: ig_config, ig_activity_logs, story_reply_config, story_reply_log, ig_approval_queue, ig_bot_stats, ig_replied_comments
+- [x] Bot scheduler no servidor (setInterval por unidade, persiste entre sessões, reinicia ao ligar servidor)
+- [x] Router tRPC: ig (getConfig, saveConfig, testConnection, getStatus, startBot, stopBot, runCycleNow)
+- [x] Router tRPC: igPrompts (getCommentPrompt, saveCommentPrompt, getStoryPrompt, saveStoryPrompt, testPrompt)
+- [x] Router tRPC: igDashboard (getStats, getHealthStatus, getRecentActivity, getChartData)
+- [x] Router tRPC: igLogs (getList, exportCsv)
+- [x] Router tRPC: igApproval (getPending, approve, reject)
+- [x] Router tRPC: igStories (getConfig, saveConfig, getLogs)
+- [x] Seção Auto Instagram no painel de configurações da unidade (accessToken, instagramUserId, intervalo, toggles)
+- [x] Página /auto-instagram — Dashboard com KPIs, estado do bot, gráfico de barras 7 dias, logs recentes
+- [x] Página /auto-instagram/prompts — Editor de prompts comentários + stories com teste ao vivo
+- [x] Página /auto-instagram/logs — Histórico paginado com filtros e exportação CSV
+- [x] Página /auto-instagram/aprovacao — Fila de aprovação manual com edição de respostas
+- [x] Página /auto-instagram/stories — Config e logs de respostas a stories
+- [x] Página /auto-instagram/diagnostico — Teste de conexão, info da conta, forçar ciclo
+- [x] Testes Vitest: 15 testes passando

@@ -152,9 +152,11 @@ const SIDEBAR_ITEMS: Record<ModuleId, Array<{ label: string; path: string; icon:
   ],
   auto_instagram: [
     { label: "Dashboard", path: "/auto-instagram", icon: LayoutDashboard },
-    { label: "Comentários", path: "/auto-instagram/comentarios", icon: MessageSquare },
-    { label: "Seguidores", path: "/auto-instagram/seguidores", icon: Users },
-    { label: "Engajamento", path: "/auto-instagram/engajamento", icon: BarChart3 },
+    { label: "Editor de Prompts", path: "/auto-instagram/prompts", icon: MessageSquare },
+    { label: "Fila de Aprovação", path: "/auto-instagram/aprovacao", icon: ClipboardList },
+    { label: "Logs", path: "/auto-instagram/logs", icon: BarChart3 },
+    { label: "Stories", path: "/auto-instagram/stories", icon: Star },
+    { label: "Diagnóstico", path: "/auto-instagram/diagnostico", icon: Settings },
   ],
   we_send: [
     { label: "Nova Campanha", path: "/we-send", icon: MessageSquare },

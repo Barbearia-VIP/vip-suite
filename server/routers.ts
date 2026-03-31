@@ -5,6 +5,11 @@ import { publicProcedure, router } from "./_core/trpc";
 import { orgsRouter } from "./routers/orgs";
 import { dataVipRouter } from "./routers/dataVip";
 import { dashboardRouter } from "./routers/dashboard";
+import { igConfigRouter, igDashboardRouter, igLogsRouter, igApprovalRouter, igStoriesRouter, igPromptsRouter } from "./routers/instagram";
+import { initSchedulers } from "./igScheduler";
+
+// Inicializar schedulers do Instagram ao subir o servidor
+initSchedulers().catch(console.error);
 
 export const appRouter = router({
   system: systemRouter,
@@ -19,6 +24,12 @@ export const appRouter = router({
   orgs: orgsRouter,
   dataVip: dataVipRouter,
   dashboard: dashboardRouter,
+  ig: igConfigRouter,
+  igDashboard: igDashboardRouter,
+  igLogs: igLogsRouter,
+  igApproval: igApprovalRouter,
+  igStories: igStoriesRouter,
+  igPrompts: igPromptsRouter,
 });
 
 export type AppRouter = typeof appRouter;

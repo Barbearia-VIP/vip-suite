@@ -381,3 +381,121 @@ export const auditLog = mysqlTable("audit_log", {
   index("idx_audit_user").on(t.userId),
   index("idx_audit_unit").on(t.unitId),
 ]);
+
+// ─────────────────────────────────────────────
+// AUTO INSTAGRAM — Configuração do Bot por Unidade
+// ─────────────────────────────────────────────
+export const igConfig = mysqlTable("ig_config", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull().unique(),
+  accessToken: text("accessToken"),
+  instagramUserId: varchar("instagramUserId", { length: 64 }),
+  checkIntervalMinutes: int("checkIntervalMinutes").default(5).notNull(),
+  personalityPrompt: text("personalityPrompt"),
+  storyPersonalityPrompt: text("storyPersonalityPrompt"),
+  isActive: int("isActive").default(0).notNull(),
+  maxRepliesPerCycle: int("maxRepliesPerCycle").default(10).notNull(),
+  skipOwnComments: int("skipOwnComments").default(1).notNull(),
+  requireApproval: int("requireApproval").default(0).notNull(),
+  lastRunAt: timestamp("lastRunAt"),
+  startedAt: timestamp("startedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_ig_config_unit").on(t.unitId),
+]);
+
+// ─────────────────────────────────────────────
+// AUTO INSTAGRAM — Configuração de Respostas a Stories
+// ─────────────────────────────────────────────
+export const igStoryReplyConfig = mysqlTable("ig_story_reply_config", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull().unique(),
+  isActive: int("isActive").default(0).notNull(),
+  requireApproval: int("requireApproval").default(0).notNull(),
+  replyToMentions: int("replyToMentions").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_ig_story_config_unit").on(t.unitId),
+]);
+
+// ─────────────────────────────────────────────
+// AUTO INSTAGRAM — Logs de Atividade
+// ─────────────────────────────────────────────
+export const igActivityLogs = mysqlTable("ig_activity_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  type: mysqlEnum("type", ["comment_reply", "story_reply", "welcome", "error", "info", "warning"]).notNull(),
+  message: text("message").notNull(),
+  metadata: json("metadata"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_ig_logs_unit_date").on(t.unitId, t.createdAt),
+]);
+
+// ─────────────────────────────────────────────
+// AUTO INSTAGRAM — Log de Respostas a Stories
+// ─────────────────────────────────────────────
+export const igStoryReplyLog = mysqlTable("ig_story_reply_log", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  senderId: varchar("senderId", { length: 64 }).notNull(),
+  storyId: varchar("storyId", { length: 128 }),
+  storyUrl: text("storyUrl"),
+  incomingText: text("incomingText"),
+  replyText: text("replyText"),
+  isMention: int("isMention").default(0),
+  status: mysqlEnum("status", ["success", "failed", "pending_approval"]).default("success").notNull(),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_ig_story_log_unit").on(t.unitId, t.createdAt),
+]);
+
+// ─────────────────────────────────────────────
+// AUTO INSTAGRAM — Fila de Aprovação
+// ─────────────────────────────────────────────
+export const igApprovalQueue = mysqlTable("ig_approval_queue", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  type: mysqlEnum("type", ["comment", "story"]).notNull(),
+  commentId: varchar("commentId", { length: 128 }),
+  postId: varchar("postId", { length: 128 }),
+  authorName: varchar("authorName", { length: 120 }),
+  commentText: text("commentText"),
+  suggestedReply: text("suggestedReply"),
+  status: mysqlEnum("status", ["pending", "approved", "rejected", "auto_approved"]).default("pending").notNull(),
+  reviewedAt: timestamp("reviewedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_ig_approval_unit_status").on(t.unitId, t.status),
+]);
+
+// ─────────────────────────────────────────────
+// AUTO INSTAGRAM — Estatísticas Diárias do Bot
+// ─────────────────────────────────────────────
+export const igBotStats = mysqlTable("ig_bot_stats", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  date: date("date").notNull(),
+  repliesCount: int("repliesCount").default(0).notNull(),
+  storiesReplied: int("storiesReplied").default(0).notNull(),
+  errorsCount: int("errorsCount").default(0).notNull(),
+  cyclesRun: int("cyclesRun").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_ig_stats_unit_date").on(t.unitId, t.date),
+]);
+
+// ─────────────────────────────────────────────
+// AUTO INSTAGRAM — Comentários Já Respondidos (evitar duplicatas)
+// ─────────────────────────────────────────────
+export const igRepliedComments = mysqlTable("ig_replied_comments", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  commentId: varchar("commentId", { length: 128 }).notNull(),
+  repliedAt: timestamp("repliedAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_ig_replied_unit_comment").on(t.unitId, t.commentId),
+]);
