@@ -88,6 +88,7 @@ import DiagnosticoPage from "./pages/auto-instagram/DiagnosticoPage";
 import WeSendPage from "./pages/we-send/WeSendPage";
 import CampanhasPage from "./pages/we-send/CampanhasPage";
 import RelatoriosWeSendPage from "./pages/we-send/RelatoriosWeSendPage";
+import ConfiguracaoWeSendPage from "./pages/we-send/ConfiguracaoWeSendPage";
 
 // Configurações
 import ConfiguracoesPage from "./pages/ConfiguracoesPage";
@@ -337,6 +338,9 @@ function Router() {
       </Route>
       <Route path="/we-send/relatorios">
         <ProtectedLayout><RelatoriosWeSendPage /></ProtectedLayout>
+      </Route>
+      <Route path="/we-send/configuracoes">
+        <ProtectedLayout><ConfiguracaoWeSendPage /></ProtectedLayout>
       </Route>
 
       {/* Configurações */}

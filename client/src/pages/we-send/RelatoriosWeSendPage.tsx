@@ -1,23 +1,172 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import PageHeader from "@/components/PageHeader";
+import { BarChart3, Send, CheckCircle, XCircle, Users, TrendingUp, RefreshCw } from "lucide-react";
+import { useApp } from "@/contexts/AppContext";
+import { trpc } from "@/lib/trpc";
+import { Link } from "wouter";
 
 export default function RelatoriosWeSendPage() {
+  const { selectedUnit } = useApp();
+  const unitId = selectedUnit?.id ?? 0;
+
+  const dashboardQuery = trpc.weSend.getDashboard.useQuery({ unitId }, { enabled: !!unitId });
+  const campanhasQuery = trpc.weSend.getCampanhas.useQuery({ unitId }, { enabled: !!unitId });
+
+  const dashboard = dashboardQuery.data;
+  const campanhas = campanhasQuery.data || [];
+
+  // Calcular métricas por status
+  const porStatus = campanhas.reduce((acc, c) => {
+    acc[c.status] = (acc[c.status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Top 5 campanhas por envios
+  const top5 = [...campanhas]
+    .sort((a, b) => (b.totalEnviados || 0) - (a.totalEnviados || 0))
+    .slice(0, 5);
+
   return (
-    <div className="p-6">
+    <div className="p-6 space-y-6">
       <PageHeader
         title="Relatórios"
-        description="Relatórios de envio e entrega"
+        description="Análise de desempenho das campanhas WhatsApp"
+        actions={
+          <Link href="/we-send">
+            <Button size="sm" className="gap-1.5 text-xs">
+              <Send className="w-3.5 h-3.5" />Nova campanha
+            </Button>
+          </Link>
+        }
       />
-      <div className="rounded-lg border border-border bg-card p-8 text-center">
-        <div
-          className="w-12 h-12 rounded-xl mx-auto mb-4 flex items-center justify-center"
-          style={{ background: "oklch(0.65 0.15 145)20" }}
-        >
-          <div className="w-6 h-6 rounded-full" style={{ background: "oklch(0.65 0.15 145)" }} />
+
+      {dashboardQuery.isLoading ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[1, 2, 3, 4].map(i => <div key={i} className="h-24 rounded-lg bg-muted/30 animate-pulse" />)}
         </div>
-        <h3 className="text-sm font-medium text-foreground mb-1">Relatórios</h3>
-        <p className="text-xs text-muted-foreground">Relatórios de envio e entrega</p>
-        <p className="text-xs text-muted-foreground mt-4 opacity-60">Módulo em implementação</p>
-      </div>
+      ) : dashboard ? (
+        <>
+          {/* KPIs */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Total de campanhas", value: dashboard.totalCampanhas, icon: BarChart3, color: "text-primary" },
+              { label: "Total enviados", value: dashboard.totalEnviados.toLocaleString(), icon: Send, color: "text-green-500" },
+              { label: "Total falhas", value: dashboard.totalFalhas.toLocaleString(), icon: XCircle, color: "text-red-500" },
+              { label: "Taxa de sucesso", value: `${dashboard.taxaSucesso}%`, icon: TrendingUp, color: "text-emerald-500" },
+            ].map(kpi => (
+              <Card key={kpi.label} className="bg-card border-border">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
+                    <span className="text-xs text-muted-foreground">{kpi.label}</span>
+                  </div>
+                  <p className="text-xl font-bold text-foreground">{kpi.value}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Campanhas por status */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="bg-card border-border">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-foreground">Campanhas por status</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {Object.entries(porStatus).length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4">Nenhuma campanha ainda</p>
+                ) : (
+                  Object.entries(porStatus).map(([status, count]) => (
+                    <div key={status} className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground capitalize">{status.replace("_", " ")}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary rounded-full"
+                            style={{ width: `${(count / campanhas.length) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-foreground font-medium w-6 text-right">{count}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card border-border">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-foreground">Top campanhas por envios</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {top5.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4">Nenhuma campanha ainda</p>
+                ) : (
+                  top5.map((c, i) => (
+                    <div key={c.id} className="flex items-center gap-2 text-xs">
+                      <span className="text-muted-foreground w-4">{i + 1}.</span>
+                      <span className="flex-1 text-foreground truncate">{c.nome}</span>
+                      <span className="text-green-500 font-medium">{c.totalEnviados || 0}</span>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Tabela de campanhas */}
+          {campanhas.length > 0 && (
+            <Card className="bg-card border-border">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold text-foreground">Todas as campanhas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-2 text-muted-foreground font-medium">Campanha</th>
+                        <th className="text-right py-2 text-muted-foreground font-medium">Contatos</th>
+                        <th className="text-right py-2 text-muted-foreground font-medium">Enviados</th>
+                        <th className="text-right py-2 text-muted-foreground font-medium">Falhas</th>
+                        <th className="text-right py-2 text-muted-foreground font-medium">Taxa</th>
+                        <th className="text-right py-2 text-muted-foreground font-medium">Data</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {campanhas.map(c => {
+                        const total = c.totalEnviados || 0 + (c.totalFalhas || 0);
+                        const taxa = total > 0 ? Math.round((c.totalEnviados || 0) / total * 100) : 0;
+                        return (
+                          <tr key={c.id} className="border-b border-border/50 hover:bg-muted/20">
+                            <td className="py-2 text-foreground">{c.nome}</td>
+                            <td className="py-2 text-right text-muted-foreground">{c.totalContatos || 0}</td>
+                            <td className="py-2 text-right text-green-500">{c.totalEnviados || 0}</td>
+                            <td className="py-2 text-right text-red-500">{c.totalFalhas || 0}</td>
+                            <td className="py-2 text-right text-foreground">{taxa}%</td>
+                            <td className="py-2 text-right text-muted-foreground">
+                              {new Date(c.createdAt).toLocaleDateString("pt-BR")}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      ) : (
+        <Card className="bg-card border-border">
+          <CardContent className="p-8 text-center">
+            <BarChart3 className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm font-medium text-foreground mb-1">Nenhum dado disponível</p>
+            <p className="text-xs text-muted-foreground">Crie campanhas para ver relatórios aqui</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

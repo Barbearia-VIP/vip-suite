@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,8 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Trash2, RefreshCw, CheckCircle2, XCircle, Globe, Star, Key, Info } from "lucide-react";
+import { Plus, Trash2, RefreshCw, CheckCircle2, XCircle, Globe, Star, Key, Info, AlertTriangle, ExternalLink, Copy, Wifi, WifiOff } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -28,7 +29,6 @@ export default function IntegracoesPage() {
   const { selectedUnit } = useApp();
   const utils = trpc.useUtils();
   const unitId = selectedUnit?.id ?? 0;
-
   const [novaIntegracao, setNovaIntegracao] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>({
@@ -39,6 +39,7 @@ export default function IntegracoesPage() {
     clientSecret: "",
   });
   const [importManual, setImportManual] = useState(false);
+  const [showOAuthGuide, setShowOAuthGuide] = useState(false);
   const [manualForm, setManualForm] = useState({
     autorNome: "",
     nota: "5",
@@ -47,12 +48,10 @@ export default function IntegracoesPage() {
   });
 
   const conexoesQuery = trpc.reputacao.getConexoes.useQuery({ unitId }, { enabled: !!unitId });
-
   const getAuthUrlQuery = trpc.reputacao.getGoogleAuthUrl.useQuery(
     { unitId, redirectOrigin: typeof window !== "undefined" ? window.location.origin : "" },
     { enabled: false }
   );
-
   const fetchReviewsMut = trpc.reputacao.fetchGoogleReviews.useMutation({
     onSuccess: (data) => {
       toast.success(`Sincronizado! ${data.importadas} novas, ${data.atualizadas} atualizadas`);
@@ -89,21 +88,18 @@ export default function IntegracoesPage() {
     },
     onError: (err) => toast.error(err.message),
   });
-
   const excluirMutation = trpc.reputacao.deleteConexao.useMutation({
     onSuccess: () => { toast.success("Integração removida."); utils.reputacao.getConexoes.invalidate(); },
     onError: (err) => toast.error(err.message),
   });
-
   const sincronizarMutation = trpc.reputacao.importarGooglePlaces.useMutation({
     onSuccess: (data) => {
-      toast.success(`${data.importadas} novas avaliações importadas.`);
+      toast.success(`${data.importadas} novas avaliações importadas, ${data.atualizadas} atualizadas.`);
       utils.reputacao.getConexoes.invalidate();
       utils.reputacao.getDashboard.invalidate();
     },
     onError: (err) => toast.error(err.message),
   });
-
   const addAvaliacaoMutation = trpc.reputacao.addAvaliacao.useMutation({
     onSuccess: () => {
       toast.success("Avaliação adicionada!");
@@ -115,6 +111,7 @@ export default function IntegracoesPage() {
   });
 
   const conexoes = conexoesQuery.data || [];
+  const redirectUri = `${typeof window !== "undefined" ? window.location.origin : ""}/api/google-oauth/callback`;
 
   function openEdit(c: any) {
     setForm({
@@ -141,6 +138,49 @@ export default function IntegracoesPage() {
     });
   }
 
+  async function handleConectarGoogle() {
+    const result = await getAuthUrlQuery.refetch();
+    if (result.data?.url) {
+      window.location.href = result.data.url;
+    } else {
+      toast.error("Não foi possível gerar URL de autorização. Verifique o Client ID.");
+    }
+  }
+
+  function copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text);
+    toast.success("Copiado!");
+  }
+
+  function getStatusBadge(c: any) {
+    if (c.googleAccessToken) {
+      return (
+        <Badge className="bg-green-500/10 text-green-600 border-green-500/20 text-xs">
+          <Wifi className="w-3 h-3 mr-1" />OAuth Ativo
+        </Badge>
+      );
+    }
+    if (c.googleClientId) {
+      return (
+        <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-xs">
+          <AlertTriangle className="w-3 h-3 mr-1" />Aguardando OAuth
+        </Badge>
+      );
+    }
+    if (c.isAtivo) {
+      return (
+        <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20 text-xs">
+          <CheckCircle2 className="w-3 h-3 mr-1" />Ativa
+        </Badge>
+      );
+    }
+    return (
+      <Badge className="bg-red-500/10 text-red-600 border-red-500/20 text-xs">
+        <WifiOff className="w-3 h-3 mr-1" />Inativa
+      </Badge>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -163,9 +203,64 @@ export default function IntegracoesPage() {
       />
 
       {!unitId && (
-        <div className="p-4 rounded-lg bg-amber-500/10 text-amber-700 border border-amber-500/20 text-sm">
-          Selecione uma unidade para gerenciar as integrações.
-        </div>
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>Selecione uma unidade para gerenciar as integrações.</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Guia de configuração OAuth */}
+      {conexoes.some((c: any) => c.plataforma === "google" && c.googleClientId && !c.googleAccessToken) && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="w-4 h-4" />
+              Autorização Google Pendente
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              O Client ID do Google está configurado, mas a autorização OAuth ainda não foi concluída.
+              Para importar avaliações do Google Business Profile, siga os passos abaixo:
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs"
+              onClick={() => setShowOAuthGuide(!showOAuthGuide)}
+            >
+              <Info className="w-3.5 h-3.5 mr-1.5" />
+              {showOAuthGuide ? "Ocultar instruções" : "Ver instruções de configuração"}
+            </Button>
+            {showOAuthGuide && (
+              <div className="space-y-3 text-xs text-muted-foreground bg-background/50 rounded-lg p-3 border">
+                <p className="font-medium text-foreground">Passo a passo para configurar o OAuth:</p>
+                <ol className="list-decimal list-inside space-y-2">
+                  <li>Acesse o <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="text-primary underline inline-flex items-center gap-0.5">Google Cloud Console <ExternalLink className="w-3 h-3" /></a></li>
+                  <li>Selecione seu projeto e vá em <strong>Credenciais → OAuth 2.0</strong></li>
+                  <li>Clique no Client ID configurado para editar</li>
+                  <li>Em <strong>"URIs de redirecionamento autorizados"</strong>, adicione exatamente esta URL:</li>
+                </ol>
+                <div className="flex items-center gap-2 bg-muted rounded p-2 mt-1">
+                  <code className="text-xs flex-1 break-all text-primary">{redirectUri}</code>
+                  <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => copyToClipboard(redirectUri)}>
+                    <Copy className="w-3 h-3" />
+                  </Button>
+                </div>
+                <ol className="list-decimal list-inside space-y-2" start={5}>
+                  <li>Salve as alterações no Google Cloud Console</li>
+                  <li>Volte aqui e clique no botão <strong>"Autorizar Google"</strong> na integração abaixo</li>
+                  <li>Faça login com a conta Google que gerencia o perfil da barbearia</li>
+                  <li>As avaliações serão importadas automaticamente após a autorização</li>
+                </ol>
+                <div className="mt-2 p-2 rounded bg-blue-500/10 border border-blue-500/20">
+                  <p className="text-blue-700 font-medium">Alternativa rápida (sem OAuth):</p>
+                  <p className="mt-1">Se preferir não configurar o OAuth agora, adicione uma <strong>Google Places API Key</strong> na integração. Com ela é possível importar as 5 avaliações mais recentes imediatamente, sem precisar de autorização OAuth.</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       <div className="space-y-3">
@@ -182,78 +277,60 @@ export default function IntegracoesPage() {
         ) : conexoes.map((c: any) => (
           <Card key={c.id}>
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="p-2 rounded-lg bg-primary/10 shrink-0">
                     <Globe className="w-5 h-5 text-primary" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium capitalize">{c.plataforma}</span>
-                      {c.isAtivo ? (
-                        <Badge className="bg-green-500/10 text-green-600 border-green-500/20 text-xs">
-                          <CheckCircle2 className="w-3 h-3 mr-1" />Ativa
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-red-500/10 text-red-600 border-red-500/20 text-xs">
-                          <XCircle className="w-3 h-3 mr-1" />Inativa
-                        </Badge>
-                      )}
-                      {c.googleClientId && (
-                        <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20 text-xs">
-                          <Key className="w-3 h-3 mr-1" />OAuth App
-                        </Badge>
-                      )}
+                      {getStatusBadge(c)}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Place ID: {c.googlePlaceId || c.externalId || "—"}
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{c.nome}</p>
+                    {c.googlePlaceId && (
+                      <p className="text-xs text-muted-foreground/70 mt-0.5">
+                        Place ID: <code className="text-xs">{c.googlePlaceId}</code>
+                      </p>
+                    )}
                     {c.googleClientId && (
-                      <p className="text-xs text-muted-foreground">
-                        Client ID: {c.googleClientId.substring(0, 20)}...
+                      <p className="text-xs text-muted-foreground/70 mt-0.5">
+                        Client ID: <code className="text-xs">{c.googleClientId.substring(0, 30)}...</code>
                       </p>
                     )}
                     {c.ultimaSincronizacao && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground/60 mt-0.5">
                         Última sync: {new Date(c.ultimaSincronizacao).toLocaleString("pt-BR")}
                       </p>
                     )}
                     {c.totalAvaliacoes > 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        {c.totalAvaliacoes} avaliações · Nota média: {parseFloat(c.notaMedia || "0").toFixed(1)} ★
+                      <p className="text-xs text-muted-foreground/60">
+                        {c.totalAvaliacoes} avaliações · Média: {Number(c.notaMedia || 0).toFixed(1)} ★
                       </p>
                     )}
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openEdit(c)}
-                  >
+                <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                  <Button variant="outline" size="sm" onClick={() => openEdit(c)}>
                     Editar
                   </Button>
-                  {/* Botão Conectar com Google OAuth */}
+
+                  {/* Botão Autorizar Google OAuth */}
                   {c.plataforma === "google" && c.googleClientId && (
                     <Button
-                      variant="outline"
+                      variant={c.googleAccessToken ? "outline" : "default"}
                       size="sm"
-                      onClick={async () => {
-                        const result = await getAuthUrlQuery.refetch();
-                        if (result.data?.url) {
-                          window.location.href = result.data.url;
-                        } else {
-                          toast.error("Não foi possível gerar URL de autorização");
-                        }
-                      }}
+                      onClick={handleConectarGoogle}
                       disabled={getAuthUrlQuery.isFetching}
+                      className={!c.googleAccessToken ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}
                     >
-                      <Globe className="w-3.5 h-3.5 mr-1.5" />
-                      {(c as any).googleAccessToken ? "Reconectar Google" : "Conectar Google"}
+                      <Key className="w-3.5 h-3.5 mr-1.5" />
+                      {c.googleAccessToken ? "Reautorizar" : "Autorizar Google"}
                     </Button>
                   )}
-                  {/* Botão Sincronizar via OAuth */}
-                  {c.plataforma === "google" && (c as any).googleAccessToken && (
+
+                  {/* Botão Sincronizar via OAuth (quando autorizado) */}
+                  {c.plataforma === "google" && c.googleAccessToken && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -264,8 +341,9 @@ export default function IntegracoesPage() {
                       Sincronizar
                     </Button>
                   )}
-                  {/* Botão Sincronizar via Places API (fallback) */}
-                  {c.googlePlaceId && c.googleApiKey && !(c as any).googleAccessToken && (
+
+                  {/* Botão Sincronizar via Places API (fallback com API Key) */}
+                  {c.plataforma === "google" && c.googlePlaceId && c.googleApiKey && !c.googleAccessToken && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -277,9 +355,10 @@ export default function IntegracoesPage() {
                       disabled={sincronizarMutation.isPending}
                     >
                       <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${sincronizarMutation.isPending ? "animate-spin" : ""}`} />
-                      Sincronizar
+                      Sync Places
                     </Button>
                   )}
+
                   <Button
                     variant="ghost"
                     size="sm"
@@ -290,6 +369,16 @@ export default function IntegracoesPage() {
                   </Button>
                 </div>
               </div>
+
+              {/* Alerta: OAuth não concluído e sem API Key */}
+              {c.plataforma === "google" && !c.googleAccessToken && !c.googleApiKey && (
+                <div className="mt-3 flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-muted-foreground">
+                    Para importar avaliações: <strong>1)</strong> Clique em "Autorizar Google" (requer configurar o redirect URI no Google Cloud Console), ou <strong>2)</strong> Edite e adicione uma <strong>Google Places API Key</strong> para importação imediata.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -297,7 +386,7 @@ export default function IntegracoesPage() {
 
       {/* Dialog: Nova / Editar Integração */}
       <Dialog open={novaIntegracao} onOpenChange={(open) => { setNovaIntegracao(open); if (!open) setEditingId(null); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? "Editar Integração" : "Nova Integração"}</DialogTitle>
           </DialogHeader>
@@ -311,20 +400,18 @@ export default function IntegracoesPage() {
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="google">Google</SelectItem>
+                  <SelectItem value="google">Google Business Profile</SelectItem>
                   <SelectItem value="ifood">iFood</SelectItem>
                   <SelectItem value="tripadvisor">TripAdvisor</SelectItem>
                   <SelectItem value="facebook">Facebook</SelectItem>
                   <SelectItem value="instagram">Instagram</SelectItem>
-                  <SelectItem value="manual">Manual</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
             <div>
-              <Label>Place ID / ID da Página</Label>
+              <Label>Place ID / ID Externo</Label>
               <Input
-                placeholder="Ex: ChIJN1t_tDeuEmsRUsoyG83frY4"
+                placeholder="Ex: ChIJ-TBxZ_s4J5URaJQWJ2zfqRA"
                 value={form.placeId}
                 onChange={(e) => setForm(f => ({ ...f, placeId: e.target.value }))}
               />
@@ -332,7 +419,7 @@ export default function IntegracoesPage() {
                 <p className="text-xs text-muted-foreground mt-1">
                   Encontre em{" "}
                   <a href="https://developers.google.com/maps/documentation/places/web-service/place-id" target="_blank" className="text-primary underline">
-                    Place ID Finder
+                    Google Place ID Finder
                   </a>
                 </p>
               )}
@@ -341,47 +428,63 @@ export default function IntegracoesPage() {
             {form.plataforma === "google" && (
               <>
                 <Separator />
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
-                  <Info className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-                  <p className="text-xs text-muted-foreground">
-                    <strong>Credenciais OAuth (Google Business Profile):</strong> Necessárias para importar avaliações via API oficial. Crie um projeto no{" "}
-                    <a href="https://console.cloud.google.com" target="_blank" className="text-primary underline">Google Cloud Console</a>{" "}
-                    e ative a API "Google My Business".
-                  </p>
-                </div>
-
-                <div>
-                  <Label>Google Client ID</Label>
-                  <Input
-                    placeholder="Ex: 59770064530-xxx.apps.googleusercontent.com"
-                    value={form.clientId}
-                    onChange={(e) => setForm(f => ({ ...f, clientId: e.target.value }))}
-                  />
-                </div>
-
-                <div>
-                  <Label>Google Client Secret</Label>
+                <div className="space-y-1">
+                  <Label className="flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5" />
+                    Google Places API Key
+                    <Badge variant="outline" className="text-xs font-normal">Recomendado</Badge>
+                  </Label>
                   <Input
                     type="password"
-                    placeholder="Ex: GOCSPX-..."
-                    value={form.clientSecret}
-                    onChange={(e) => setForm(f => ({ ...f, clientSecret: e.target.value }))}
-                  />
-                </div>
-
-                <Separator />
-
-                <div>
-                  <Label>API Key do Google Places (alternativa)</Label>
-                  <Input
-                    type="password"
-                    placeholder="Chave da API do Google Places (opcional)"
+                    placeholder="AIza..."
                     value={form.apiKey}
                     onChange={(e) => setForm(f => ({ ...f, apiKey: e.target.value }))}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Usada como fallback quando o OAuth não está configurado.
+                  <p className="text-xs text-muted-foreground">
+                    Permite importar as 5 avaliações mais recentes imediatamente, sem OAuth. Crie em{" "}
+                    <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="text-primary underline">
+                      Google Cloud Console
+                    </a>
+                    {" "}ativando a "Places API".
                   </p>
+                </div>
+
+                <Separator />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium">OAuth Google Business Profile</p>
+                    <Badge variant="outline" className="text-xs font-normal">Avançado</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Permite importar <strong>todas as avaliações</strong> sem limite. Requer configurar o redirect URI no Google Cloud Console.
+                  </p>
+                  <div className="p-2.5 rounded-lg bg-muted/50 border">
+                    <p className="text-xs font-medium mb-1">URI de redirecionamento autorizado:</p>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs flex-1 break-all text-primary">{redirectUri}</code>
+                      <Button variant="ghost" size="sm" className="h-6 px-2 shrink-0" onClick={() => copyToClipboard(redirectUri)}>
+                        <Copy className="w-3 h-3" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Adicione esta URL nas configurações OAuth do seu projeto no Google Cloud Console.</p>
+                  </div>
+                  <div>
+                    <Label>Google Client ID</Label>
+                    <Input
+                      placeholder="Ex: 59770064530-xxx.apps.googleusercontent.com"
+                      value={form.clientId}
+                      onChange={(e) => setForm(f => ({ ...f, clientId: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label>Google Client Secret</Label>
+                    <Input
+                      type="password"
+                      placeholder="Ex: GOCSPX-..."
+                      value={form.clientSecret}
+                      onChange={(e) => setForm(f => ({ ...f, clientSecret: e.target.value }))}
+                    />
+                  </div>
                 </div>
               </>
             )}

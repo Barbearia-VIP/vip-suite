@@ -202,6 +202,7 @@ const SIDEBAR_ITEMS: Record<ModuleId, Array<{ label: string; path: string; icon:
     { label: "Nova Campanha", path: "/we-send", icon: MessageSquare },
     { label: "Campanhas", path: "/we-send/campanhas", icon: ClipboardList },
     { label: "Relatórios", path: "/we-send/relatorios", icon: BarChart3 },
+    { label: "Configurações WAHA", path: "/we-send/configuracoes", icon: Settings },
   ],
 };
 

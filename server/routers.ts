@@ -9,6 +9,7 @@ import { gestaoTotalRouter } from "./routers/gestaoTotal";
 import { vipCamRouter } from "./routers/vipCam";
 import { reputacaoRouter } from "./routers/reputacao";
 import { igConfigRouter, igDashboardRouter, igLogsRouter, igApprovalRouter, igStoriesRouter, igPromptsRouter } from "./routers/instagram";
+import { weSendRouter } from "./routers/weSend";
 import { initSchedulers } from "./igScheduler";
 
 // Inicializar schedulers do Instagram ao subir o servidor
@@ -36,6 +37,7 @@ export const appRouter = router({
   igApproval: igApprovalRouter,
   igStories: igStoriesRouter,
   igPrompts: igPromptsRouter,
+  weSend: weSendRouter,
 });
 
 export type AppRouter = typeof appRouter;

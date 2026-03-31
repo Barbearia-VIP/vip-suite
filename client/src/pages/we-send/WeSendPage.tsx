@@ -1,196 +1,439 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import PageHeader from "@/components/PageHeader";
-import { MessageSquare, Upload, Send, Users, CheckCircle, XCircle, Clock, AlertCircle, ChevronRight, ChevronLeft } from "lucide-react";
+import {
+  MessageSquare, Send, Users, CheckCircle,
+  AlertCircle, ChevronRight, ChevronLeft, Upload, Plus, Trash2,
+  Settings, BarChart3, Wifi, WifiOff, RefreshCw, Download
+} from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
-import { useOrg } from "@/hooks/useOrg";
 import { trpc } from "@/lib/trpc";
+import { Link } from "wouter";
 
-const STEPS = ["Configurar sessão", "Importar contatos", "Criar mensagem", "Personalizar", "Revisar", "Enviar"];
+const STEPS = [
+  { label: "Contatos", icon: Users },
+  { label: "Mensagem", icon: MessageSquare },
+  { label: "Configurar", icon: Settings },
+  { label: "Revisar", icon: CheckCircle },
+  { label: "Enviar", icon: Send },
+];
+
+type Contato = { nome: string; telefone: string };
+
+function parseCsv(text: string): Contato[] {
+  const lines = text.trim().split("\n").filter(l => l.trim());
+  const contatos: Contato[] = [];
+  for (const line of lines) {
+    const parts = line.split(/[,;\t]/).map(p => p.trim().replace(/^["']|["']$/g, ""));
+    if (parts.length === 0) continue;
+    const hasPhone = (s: string) => /\d{8,}/.test(s.replace(/\D/g, ""));
+    if (parts.length === 1) {
+      if (hasPhone(parts[0])) contatos.push({ nome: "", telefone: parts[0] });
+    } else if (parts.length >= 2) {
+      if (hasPhone(parts[0])) {
+        contatos.push({ nome: parts[1] || "", telefone: parts[0] });
+      } else {
+        contatos.push({ nome: parts[0] || "", telefone: parts[1] });
+      }
+    }
+  }
+  return contatos.filter(c => c.telefone.replace(/\D/g, "").length >= 8);
+}
 
 export default function WeSendPage() {
   const { selectedUnit } = useApp();
-  const { org } = useOrg();
+  const unitId = selectedUnit?.id ?? 0;
+
   const [step, setStep] = useState(0);
-  const [contacts, setContacts] = useState<Array<{ name: string; phone: string }>>([
-    { name: "Carlos Silva", phone: "48999990001" },
-    { name: "Ana Souza", phone: "48999990002" },
-    { name: "Pedro Lima", phone: "48999990003" },
-  ]);
-  const [message, setMessage] = useState("Olá {nome}! Temos uma novidade especial para você. Venha nos visitar! 🎉");
-  const [sending, setSending] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [sent, setSent] = useState(0);
-  const [failed, setFailed] = useState(0);
+  const [contatos, setContatos] = useState<Contato[]>([]);
+  const [contatoManual, setContatoManual] = useState({ nome: "", telefone: "" });
+  const [mensagem, setMensagem] = useState("Olá {nome}! Temos uma novidade especial para você. Venha nos visitar! 🎉");
+  const [nomeCampanha, setNomeCampanha] = useState("");
+  const [intervalo, setIntervalo] = useState(3);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const configQuery = trpc.orgs.moduleConfigs.useQuery(
-    { unitId: selectedUnit?.id ?? 0, orgId: org?.id ?? 0 },
-    { enabled: !!selectedUnit?.id && !!org?.id }
-  );
-  const hasConfig = configQuery.data?.some(c => c.module === "we_send" && c.active);
+  const dashboardQuery = trpc.weSend.getDashboard.useQuery({ unitId }, { enabled: !!unitId });
+  const configQuery = trpc.weSend.getConfig.useQuery({ unitId }, { enabled: !!unitId });
+  const sessionQuery = trpc.weSend.getSessionStatus.useQuery({ unitId }, { enabled: !!unitId, refetchInterval: 10000 });
+  const utils = trpc.useUtils();
 
-  const startSending = () => {
-    setSending(true);
-    let done = 0;
-    const interval = setInterval(() => {
-      done++;
-      const s = Math.floor(Math.random() * done);
-      const f = done - s;
-      setSent(s);
-      setFailed(f);
-      setProgress(Math.round((done / contacts.length) * 100));
-      if (done >= contacts.length) {
-        clearInterval(interval);
-        setSending(false);
-        toast.success(`Envio concluído! ${s} enviados, ${f} falhas.`);
-      }
-    }, 600);
+  const criarCampanhaMutation = trpc.weSend.criarCampanha.useMutation({
+    onSuccess: (data) => {
+      toast.success("Campanha criada! Iniciando envio...");
+      enviarMutation.mutate({ campanhaId: data.campanhaId, unitId });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const enviarMutation = trpc.weSend.enviarCampanha.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      utils.weSend.getDashboard.invalidate({ unitId });
+      setStep(4);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const startSessionMutation = trpc.weSend.startSession.useMutation({
+    onSuccess: () => {
+      toast.success("Sessão iniciada! Aguarde o QR Code.");
+      utils.weSend.getSessionStatus.invalidate({ unitId });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const sessionStatus = sessionQuery.data?.status || "UNKNOWN";
+  const isSessionWorking = sessionStatus === "WORKING";
+  const isConfigured = !!configQuery.data;
+  const dashboard = dashboardQuery.data;
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const parsed = parseCsv(text);
+      setContatos(prev => [...prev, ...parsed]);
+      toast.success(`${parsed.length} contatos importados`);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
   };
+
+  const addContatoManual = () => {
+    const phone = contatoManual.telefone.replace(/\D/g, "");
+    if (phone.length < 8) { toast.error("Telefone inválido"); return; }
+    setContatos(prev => [...prev, { nome: contatoManual.nome, telefone: phone }]);
+    setContatoManual({ nome: "", telefone: "" });
+  };
+
+  const removeContato = (idx: number) => setContatos(prev => prev.filter((_, i) => i !== idx));
+
+  const handleEnviar = () => {
+    if (!nomeCampanha.trim()) { toast.error("Informe o nome da campanha"); return; }
+    if (contatos.length === 0) { toast.error("Adicione pelo menos um contato"); return; }
+    if (!mensagem.trim()) { toast.error("Escreva a mensagem"); return; }
+    criarCampanhaMutation.mutate({
+      unitId,
+      nome: nomeCampanha,
+      mensagem,
+      tipo: "texto",
+      intervaloSegundos: intervalo,
+      contatos: contatos.map(c => ({ nome: c.nome, telefone: c.telefone, variaveis: c.nome ? { nome: c.nome } : undefined })),
+    });
+  };
+
+  const statusColor: Record<string, string> = {
+    WORKING: "text-green-500",
+    SCAN_QR_CODE: "text-yellow-500",
+    STARTING: "text-blue-500",
+    STOPPED: "text-muted-foreground",
+    FAILED: "text-red-500",
+    UNREACHABLE: "text-red-500",
+    NOT_CONFIGURED: "text-muted-foreground",
+    UNKNOWN: "text-muted-foreground",
+  };
+
+  const statusLabel: Record<string, string> = {
+    WORKING: "Conectado",
+    SCAN_QR_CODE: "Aguardando QR",
+    STARTING: "Iniciando...",
+    STOPPED: "Parado",
+    FAILED: "Falhou",
+    UNREACHABLE: "Servidor inacessível",
+    NOT_CONFIGURED: "Não configurado",
+    UNKNOWN: "Desconhecido",
+  };
+
+  const currentStatusColor = statusColor[sessionStatus] || "text-muted-foreground";
+  const currentStatusLabel = statusLabel[sessionStatus] || sessionStatus;
 
   return (
     <div className="p-6 space-y-6">
       <PageHeader
         title="We Send WhatsApp"
-        description={selectedUnit ? `Envio em massa — ${selectedUnit.name}` : "Envio em massa de WhatsApp"}
+        description="Envio em massa via WhatsApp com WAHA API"
+        actions={
+          <div className="flex items-center gap-2">
+            <Link href="/we-send/campanhas">
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                <BarChart3 className="w-3.5 h-3.5" />Campanhas
+              </Button>
+            </Link>
+            <Link href="/we-send/configuracoes">
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                <Settings className="w-3.5 h-3.5" />Configurar WAHA
+              </Button>
+            </Link>
+          </div>
+        }
       />
 
-      {!hasConfig && !configQuery.isLoading && (
-        <Card className="bg-amber-500/5 border-amber-500/20"><CardContent className="p-4 flex items-center gap-3">
-          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-          <div><p className="text-xs font-medium text-foreground">WAHA não configurado</p>
-          <p className="text-xs text-muted-foreground">Configure a URL e chave da API WAHA em Configurações para enviar mensagens.</p></div>
-        </CardContent></Card>
-      )}
-
-      {/* Wizard Steps */}
-      <div className="flex items-center gap-1 overflow-x-auto pb-1">
-        {STEPS.map((s, i) => (
-          <div key={s} className="flex items-center gap-1 shrink-0">
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
-              i === step ? "bg-primary text-primary-foreground" :
-              i < step ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
-            }`}>
-              <span className="w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold">{i < step ? "✓" : i + 1}</span>
-              {s}
-            </div>
-            {i < STEPS.length - 1 && <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />}
-          </div>
-        ))}
+      {/* Status da sessão */}
+      <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-border bg-card">
+        {isSessionWorking ? <Wifi className="w-4 h-4 text-green-500" /> : <WifiOff className="w-4 h-4 text-muted-foreground" />}
+        <span className="text-xs text-muted-foreground">Status WhatsApp:</span>
+        <span className={`text-xs font-medium ${currentStatusColor}`}>{currentStatusLabel}</span>
+        {!isConfigured && (
+          <Link href="/we-send/configuracoes">
+            <Button variant="link" size="sm" className="text-xs h-auto p-0 ml-2">Configurar agora →</Button>
+          </Link>
+        )}
+        {isConfigured && !isSessionWorking && sessionStatus !== "SCAN_QR_CODE" && sessionStatus !== "STARTING" && (
+          <Button variant="outline" size="sm" className="text-xs h-7 ml-2 gap-1"
+            onClick={() => startSessionMutation.mutate({ unitId })}
+            disabled={startSessionMutation.isPending}>
+            <RefreshCw className="w-3 h-3" />Iniciar sessão
+          </Button>
+        )}
+        {sessionStatus === "SCAN_QR_CODE" && (
+          <Link href="/we-send/configuracoes">
+            <Button variant="link" size="sm" className="text-xs h-auto p-0 ml-2">Escanear QR →</Button>
+          </Link>
+        )}
       </div>
 
-      {/* Step Content */}
+      {/* KPIs */}
+      {dashboard && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Campanhas", value: dashboard.totalCampanhas, icon: MessageSquare, color: "text-primary" },
+            { label: "Enviados (total)", value: dashboard.totalEnviados.toLocaleString(), icon: Send, color: "text-green-500" },
+            { label: "Este mês", value: dashboard.enviadosMes.toLocaleString(), icon: BarChart3, color: "text-blue-500" },
+            { label: "Taxa de sucesso", value: `${dashboard.taxaSucesso}%`, icon: CheckCircle, color: "text-emerald-500" },
+          ].map(kpi => (
+            <Card key={kpi.label} className="bg-card border-border">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
+                  <span className="text-xs text-muted-foreground">{kpi.label}</span>
+                </div>
+                <p className="text-xl font-bold text-foreground">{kpi.value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Wizard nova campanha */}
       <Card className="bg-card border-border">
-        <CardContent className="p-5">
-          {step === 0 && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground">Verificar sessão WhatsApp</h3>
-              <div className={`flex items-center gap-3 p-3 rounded-lg border ${hasConfig ? "border-green-500/20 bg-green-500/5" : "border-amber-500/20 bg-amber-500/5"}`}>
-                <div className={`w-2 h-2 rounded-full ${hasConfig ? "bg-green-500" : "bg-amber-500"}`} />
-                <p className="text-xs text-foreground">{hasConfig ? "Sessão WAHA configurada e pronta" : "Configure a sessão WAHA em Configurações"}</p>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Plus className="w-4 h-4 text-primary" />Nova Campanha
+          </CardTitle>
+          <div className="flex items-center gap-1 mt-2 flex-wrap">
+            {STEPS.map((s, i) => (
+              <div key={i} className="flex items-center gap-1">
+                <button
+                  onClick={() => i < step && setStep(i)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
+                    i === step ? "bg-primary text-primary-foreground" :
+                    i < step ? "bg-primary/20 text-primary cursor-pointer" :
+                    "text-muted-foreground"
+                  }`}
+                >
+                  <s.icon className="w-3 h-3" />
+                  <span className="hidden sm:inline">{s.label}</span>
+                </button>
+                {i < STEPS.length - 1 && <ChevronRight className="w-3 h-3 text-muted-foreground" />}
               </div>
-              <p className="text-xs text-muted-foreground">A sessão WhatsApp precisa estar ativa no servidor WAHA para enviar mensagens.</p>
+            ))}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {step === 0 && (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Nome da campanha</Label>
+                <Input
+                  placeholder="Ex: Promoção de Aniversário"
+                  value={nomeCampanha}
+                  onChange={e => setNomeCampanha(e.target.value)}
+                  className="text-xs h-8"
+                />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1 space-y-1.5">
+                  <Label className="text-xs">Nome</Label>
+                  <Input placeholder="Nome do contato" value={contatoManual.nome} onChange={e => setContatoManual(p => ({ ...p, nome: e.target.value }))} className="text-xs h-8" />
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  <Label className="text-xs">Telefone</Label>
+                  <Input placeholder="48999990001" value={contatoManual.telefone} onChange={e => setContatoManual(p => ({ ...p, telefone: e.target.value }))} className="text-xs h-8" />
+                </div>
+                <div className="flex items-end">
+                  <Button size="sm" className="h-8 text-xs gap-1" onClick={addContatoManual}>
+                    <Plus className="w-3 h-3" />Add
+                  </Button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs text-muted-foreground">ou importar CSV</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+              <div className="flex gap-2">
+                <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileUpload} />
+                <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8" onClick={() => fileRef.current?.click()}>
+                  <Upload className="w-3.5 h-3.5" />Importar CSV
+                </Button>
+                <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8" onClick={() => {
+                  const csv = "nome,telefone\nCarlos Silva,48999990001\nAna Souza,48999990002";
+                  const blob = new Blob([csv], { type: "text/csv" });
+                  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "modelo_contatos.csv"; a.click();
+                }}>
+                  <Download className="w-3.5 h-3.5" />Modelo CSV
+                </Button>
+              </div>
+              {contatos.length > 0 && (
+                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5 max-h-40 overflow-y-auto">
+                  <p className="text-xs font-medium text-foreground">{contatos.length} contatos</p>
+                  {contatos.map((c, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs">
+                      <span className="text-foreground">{c.nome || "(sem nome)"} — {c.telefone}</span>
+                      <button onClick={() => removeContato(i)} className="text-muted-foreground hover:text-red-500 transition-colors">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
+
           {step === 1 && (
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground">Importar contatos</h3>
-              <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
-                <Upload className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
-                <p className="text-xs text-muted-foreground mb-2">Arraste uma planilha CSV/Excel ou clique para selecionar</p>
-                <Button variant="outline" size="sm" className="text-xs h-7">Selecionar arquivo</Button>
-              </div>
-              <div className="space-y-1.5">
-                <p className="text-xs font-medium text-foreground">{contacts.length} contatos carregados (exemplo):</p>
-                {contacts.slice(0, 3).map((c, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <CheckCircle className="w-3 h-3 text-green-500" />{c.name} — {c.phone}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {step === 2 && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground">Criar mensagem</h3>
               <div className="space-y-1.5">
                 <Label className="text-xs">Mensagem (use {"{nome}"} para personalizar)</Label>
-                <Textarea value={message} onChange={e => setMessage(e.target.value)} rows={4} className="text-xs resize-none" />
+                <Textarea
+                  value={mensagem}
+                  onChange={e => setMensagem(e.target.value)}
+                  rows={5}
+                  className="text-xs resize-none"
+                  placeholder="Olá {nome}! Temos uma novidade para você..."
+                />
+                <p className="text-xs text-muted-foreground">{mensagem.length} caracteres</p>
               </div>
               <div className="rounded-lg bg-primary/5 border border-primary/20 p-3">
                 <p className="text-xs font-medium text-foreground mb-1">Preview:</p>
-                <p className="text-xs text-muted-foreground">{message.replace("{nome}", contacts[0]?.name ?? "Cliente")}</p>
+                <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                  {mensagem.replace(/\{nome\}/g, contatos[0]?.nome || "Cliente")}
+                </p>
               </div>
             </div>
           )}
-          {step === 3 && (
+
+          {step === 2 && (
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground">Personalização</h3>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5"><Label className="text-xs">Intervalo entre envios (seg)</Label><Input type="number" defaultValue="3" className="text-xs h-8" /></div>
-                <div className="space-y-1.5"><Label className="text-xs">Horário de início</Label><Input type="time" defaultValue="09:00" className="text-xs h-8" /></div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Intervalo entre envios (seg)</Label>
+                  <Input type="number" min={1} max={60} value={intervalo} onChange={e => setIntervalo(Number(e.target.value))} className="text-xs h-8" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Tempo estimado</Label>
+                  <div className="h-8 flex items-center text-xs text-muted-foreground">
+                    ~{Math.ceil(contatos.length * intervalo / 60)} minutos
+                  </div>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">Recomendamos um intervalo mínimo de 3 segundos entre envios para evitar bloqueios.</p>
+              <Alert>
+                <AlertCircle className="w-3.5 h-3.5" />
+                <AlertDescription className="text-xs">
+                  Recomendamos intervalo mínimo de 3 segundos para evitar bloqueios pelo WhatsApp.
+                </AlertDescription>
+              </Alert>
+              {!isSessionWorking && (
+                <Alert>
+                  <WifiOff className="w-3.5 h-3.5" />
+                  <AlertDescription className="text-xs">
+                    A sessão WhatsApp não está ativa.{" "}
+                    <Link href="/we-send/configuracoes" className="underline">Configure o WAHA</Link> antes de enviar.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           )}
-          {step === 4 && (
+
+          {step === 3 && (
             <div className="space-y-3">
               <h3 className="text-sm font-semibold text-foreground">Revisar antes de enviar</h3>
               {[
-                { label: "Contatos", value: `${contacts.length} destinatários` },
-                { label: "Mensagem", value: message.slice(0, 60) + "..." },
-                { label: "Intervalo", value: "3 segundos entre envios" },
-                { label: "Tempo estimado", value: `~${Math.ceil(contacts.length * 3 / 60)} minutos` },
+                { label: "Campanha", value: nomeCampanha || "(sem nome)" },
+                { label: "Contatos", value: `${contatos.length} destinatários` },
+                { label: "Mensagem", value: mensagem.slice(0, 80) + (mensagem.length > 80 ? "..." : "") },
+                { label: "Intervalo", value: `${intervalo} segundos entre envios` },
+                { label: "Tempo estimado", value: `~${Math.ceil(contatos.length * intervalo / 60)} minutos` },
+                { label: "Status WhatsApp", value: currentStatusLabel },
               ].map(item => (
                 <div key={item.label} className="flex justify-between text-xs py-1.5 border-b border-border/50">
                   <span className="text-muted-foreground">{item.label}</span>
-                  <span className="text-foreground font-medium">{item.value}</span>
+                  <span className="text-foreground font-medium text-right max-w-[60%]">{item.value}</span>
                 </div>
               ))}
+              {!isSessionWorking && (
+                <Alert>
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <AlertDescription className="text-xs text-yellow-600 dark:text-yellow-400">
+                    Atenção: A sessão WhatsApp não está ativa. O envio pode falhar.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           )}
-          {step === 5 && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-foreground">Envio em andamento</h3>
-              {sending || progress > 0 ? (
-                <div className="space-y-3">
-                  <Progress value={progress} className="h-2" />
-                  <div className="grid grid-cols-3 gap-3 text-center">
-                    <div><p className="text-lg font-bold text-foreground">{progress}%</p><p className="text-xs text-muted-foreground">Progresso</p></div>
-                    <div><p className="text-lg font-bold text-green-500">{sent}</p><p className="text-xs text-muted-foreground">Enviados</p></div>
-                    <div><p className="text-lg font-bold text-red-500">{failed}</p><p className="text-xs text-muted-foreground">Falhas</p></div>
-                  </div>
-                  {!sending && progress === 100 && (
-                    <div className="flex items-center gap-2 text-xs text-green-500"><CheckCircle className="w-4 h-4" />Envio concluído com sucesso!</div>
-                  )}
-                </div>
+
+          {step === 4 && (
+            <div className="space-y-4 text-center py-4">
+              <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
+                <Send className="w-6 h-6 text-green-500" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Envio iniciado!</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  As mensagens estão sendo enviadas em segundo plano.
+                  Acompanhe o progresso em{" "}
+                  <Link href="/we-send/campanhas" className="underline text-primary">Campanhas</Link>.
+                </p>
+              </div>
+              <Button size="sm" className="text-xs gap-1.5" onClick={() => {
+                setStep(0); setContatos([]); setNomeCampanha("");
+                setMensagem("Olá {nome}! Temos uma novidade especial para você. Venha nos visitar! 🎉");
+              }}>
+                <Plus className="w-3.5 h-3.5" />Nova campanha
+              </Button>
+            </div>
+          )}
+
+          {step < 4 && (
+            <div className="flex justify-between pt-2">
+              <Button variant="outline" size="sm" className="gap-1 text-xs" disabled={step === 0} onClick={() => setStep(s => s - 1)}>
+                <ChevronLeft className="w-3.5 h-3.5" />Anterior
+              </Button>
+              {step < STEPS.length - 2 ? (
+                <Button size="sm" className="gap-1 text-xs" onClick={() => setStep(s => s + 1)}
+                  disabled={step === 0 && (contatos.length === 0 || !nomeCampanha.trim())}>
+                  Próximo<ChevronRight className="w-3.5 h-3.5" />
+                </Button>
               ) : (
-                <div className="text-center py-4">
-                  <MessageSquare className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground mb-4">Pronto para enviar {contacts.length} mensagens</p>
-                  <Button className="gap-2" onClick={startSending}><Send className="w-4 h-4" />Iniciar envio</Button>
-                </div>
+                <Button size="sm" className="gap-1 text-xs bg-green-600 hover:bg-green-700"
+                  onClick={handleEnviar}
+                  disabled={criarCampanhaMutation.isPending || enviarMutation.isPending || !isSessionWorking}>
+                  {criarCampanhaMutation.isPending || enviarMutation.isPending ? (
+                    <><RefreshCw className="w-3.5 h-3.5 animate-spin" />Enviando...</>
+                  ) : (
+                    <><Send className="w-3.5 h-3.5" />Enviar agora</>
+                  )}
+                </Button>
               )}
             </div>
           )}
         </CardContent>
       </Card>
-
-      {/* Navigation */}
-      <div className="flex justify-between">
-        <Button variant="outline" size="sm" className="gap-1 text-xs" disabled={step === 0} onClick={() => setStep(s => s - 1)}>
-          <ChevronLeft className="w-3.5 h-3.5" />Anterior
-        </Button>
-        <Button size="sm" className="gap-1 text-xs" disabled={step === STEPS.length - 1} onClick={() => setStep(s => s + 1)}>
-          Próximo<ChevronRight className="w-3.5 h-3.5" />
-        </Button>
-      </div>
     </div>
   );
 }

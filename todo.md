@@ -309,3 +309,46 @@
 - [ ] Corrigir pipeline de importação Google Places API (endpoint, mapeamento de campos)
 - [ ] Corrigir getDashboard/getAvaliacoes/getAnalise para retornar dados após importação
 - [ ] Sincronizar automaticamente após salvar integração com sucesso
+
+## Módulo We Send — Implementação Completa (WAHA)
+
+### Banco de Dados
+- [x] Tabela ws_config (wahaUrl, wahaApiKey, sessionName, intervaloSegundos, horarioInicio, horarioFim, maxEnviosDia)
+- [x] Tabela ws_campanhas (nome, mensagem, tipo, status, totalContatos, totalEnviados, totalFalhas, intervaloSegundos)
+- [x] Tabela ws_lista_itens (campanhaId, unitId, nome, telefone, variaveis, status, erroMsg)
+- [x] Migration aplicada no banco de dados
+
+### Routers tRPC
+- [x] Router weSend.getConfig (buscar configurações WAHA da unidade)
+- [x] Router weSend.saveConfig (salvar configurações WAHA)
+- [x] Router weSend.getSessionStatus (status da sessão WhatsApp + QR Code)
+- [x] Router weSend.startSession (iniciar sessão WAHA)
+- [x] Router weSend.stopSession (encerrar sessão WAHA)
+- [x] Router weSend.getDashboard (KPIs: totalCampanhas, totalEnviados, enviadosMes, taxaSucesso, totalFalhas)
+- [x] Router weSend.getCampanhas (listar campanhas com métricas)
+- [x] Router weSend.getCampanha (detalhes de uma campanha + lista de contatos)
+- [x] Router weSend.criarCampanha (criar campanha com lista de contatos)
+- [x] Router weSend.enviarCampanha (disparar envio em background via WAHA API)
+- [x] Router weSend.pausarCampanha (pausar campanha em andamento)
+- [x] Router weSend.deleteCampanha (remover campanha)
+- [x] Router weSend.importarContatos (importar contatos para uma lista)
+
+### Páginas
+- [x] Página /we-send — Dashboard com KPIs + wizard de nova campanha (5 etapas)
+  - [x] Step 0: Nome da campanha + adicionar contatos manualmente + importar CSV
+  - [x] Step 1: Editor de mensagem com personalização {nome} + preview
+  - [x] Step 2: Configurar intervalo entre envios + alertas de sessão
+  - [x] Step 3: Revisão completa antes de enviar
+  - [x] Step 4: Confirmação de envio iniciado
+- [x] Página /we-send/campanhas — Histórico com status, progresso, detalhes e ações (pausar/deletar)
+- [x] Página /we-send/relatorios — Métricas consolidadas, campanhas por status, top 5 campanhas
+- [x] Página /we-send/configuracoes — Config WAHA (URL, API Key, sessão, horários), QR Code, guia de instalação
+- [x] Navegação lateral atualizada com 4 links (Nova Campanha, Campanhas, Relatórios, Configurações WAHA)
+
+### Melhorias Módulo Reputação
+- [x] Página /reputacao/integracoes reescrita com melhor UX
+  - [x] Status da conexão Google (OAuth vs Places API)
+  - [x] Instruções claras sobre redirect URI para Google Cloud Console
+  - [x] Botão para copiar redirect URI
+  - [x] Seção de configuração da Places API Key
+  - [x] Botão de sincronização com feedback visual

@@ -1065,3 +1065,137 @@ export const repRespostasIA = mysqlTable("rep_respostas_ia", {
   index("idx_rep_resp_ia_avaliacao").on(t.avaliacaoId),
   index("idx_rep_resp_ia_unit").on(t.unitId),
 ]);
+
+// ═════════════════════════════════════════════════════════════════════════════
+// WE SEND — WhatsApp Campaign Management (WAHA API)
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────
+// WE SEND — Configuração WAHA por unidade
+// ─────────────────────────────────────────────
+export const wsConfig = mysqlTable("ws_config", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull().unique(),
+  wahaUrl: varchar("wahaUrl", { length: 512 }).notNull().default("http://localhost:3001"),
+  wahaApiKey: varchar("wahaApiKey", { length: 512 }),
+  sessionName: varchar("sessionName", { length: 255 }).notNull().default("default"),
+  // Status da sessão (cached)
+  sessionStatus: varchar("sessionStatus", { length: 50 }).default("STOPPED"),
+  sessionStatusAt: timestamp("sessionStatusAt"),
+  // Configurações de envio
+  intervaloSegundos: int("intervaloSegundos").default(3).notNull(),
+  horarioInicio: varchar("horarioInicio", { length: 5 }).default("09:00"),
+  horarioFim: varchar("horarioFim", { length: 5 }).default("18:00"),
+  maxEnviosDia: int("maxEnviosDia").default(500),
+  isAtivo: boolean("isAtivo").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_ws_config_unit").on(t.unitId),
+]);
+
+// ─────────────────────────────────────────────
+// WE SEND — Templates de mensagem
+// ─────────────────────────────────────────────
+export const wsTemplates = mysqlTable("ws_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  conteudo: text("conteudo").notNull(),
+  tipo: mysqlEnum("tipo", ["texto", "imagem", "arquivo"]).default("texto").notNull(),
+  mediaUrl: varchar("mediaUrl", { length: 512 }),
+  variaveis: text("variaveis"), // JSON: ["nome", "telefone", etc.]
+  isAtivo: boolean("isAtivo").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_ws_templates_unit").on(t.unitId),
+]);
+
+// ─────────────────────────────────────────────
+// WE SEND — Campanhas
+// ─────────────────────────────────────────────
+export const wsCampanhas = mysqlTable("ws_campanhas", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  templateId: int("templateId"),
+  mensagem: text("mensagem").notNull(),
+  tipo: mysqlEnum("tipo", ["texto", "imagem", "arquivo"]).default("texto").notNull(),
+  mediaUrl: varchar("mediaUrl", { length: 512 }),
+  status: mysqlEnum("status", ["rascunho", "agendada", "em_andamento", "pausada", "concluida", "cancelada"]).default("rascunho").notNull(),
+  // Agendamento
+  agendadaPara: timestamp("agendadaPara"),
+  iniciadaEm: timestamp("iniciadaEm"),
+  concluidaEm: timestamp("concluidaEm"),
+  // Métricas
+  totalContatos: int("totalContatos").default(0),
+  totalEnviados: int("totalEnviados").default(0),
+  totalFalhas: int("totalFalhas").default(0),
+  totalEntregues: int("totalEntregues").default(0),
+  totalLidos: int("totalLidos").default(0),
+  // Configurações
+  intervaloSegundos: int("intervaloSegundos").default(3),
+  criadoPor: varchar("criadoPor", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_ws_campanhas_unit").on(t.unitId),
+  index("idx_ws_campanhas_status").on(t.status),
+]);
+
+// ─────────────────────────────────────────────
+// WE SEND — Contatos da campanha
+// ─────────────────────────────────────────────
+export const wsContatos = mysqlTable("ws_contatos", {
+  id: int("id").autoincrement().primaryKey(),
+  campanhaId: int("campanhaId").notNull(),
+  unitId: int("unitId").notNull(),
+  nome: varchar("nome", { length: 255 }),
+  telefone: varchar("telefone", { length: 20 }).notNull(),
+  // Variáveis personalizadas (JSON)
+  variaveis: text("variaveis"),
+  // Status do envio
+  status: mysqlEnum("status", ["pendente", "enviado", "falha", "entregue", "lido", "bloqueado"]).default("pendente").notNull(),
+  mensagemPersonalizada: text("mensagemPersonalizada"),
+  erroMensagem: varchar("erroMensagem", { length: 512 }),
+  enviadoEm: timestamp("enviadoEm"),
+  messageId: varchar("messageId", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_ws_contatos_campanha").on(t.campanhaId),
+  index("idx_ws_contatos_unit").on(t.unitId),
+  index("idx_ws_contatos_status").on(t.status),
+]);
+
+// ─────────────────────────────────────────────
+// WE SEND — Listas de contatos reutilizáveis
+// ─────────────────────────────────────────────
+export const wsListasContatos = mysqlTable("ws_listas_contatos", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  totalContatos: int("totalContatos").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_ws_listas_unit").on(t.unitId),
+]);
+
+// ─────────────────────────────────────────────
+// WE SEND — Itens das listas de contatos
+// ─────────────────────────────────────────────
+export const wsListaItens = mysqlTable("ws_lista_itens", {
+  id: int("id").autoincrement().primaryKey(),
+  listaId: int("listaId").notNull(),
+  unitId: int("unitId").notNull(),
+  nome: varchar("nome", { length: 255 }),
+  telefone: varchar("telefone", { length: 20 }).notNull(),
+  variaveis: text("variaveis"), // JSON com campos extras
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_ws_lista_itens_lista").on(t.listaId),
+  index("idx_ws_lista_itens_unit").on(t.unitId),
+]);
