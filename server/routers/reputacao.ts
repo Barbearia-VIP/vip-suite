@@ -428,6 +428,8 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       url: z.string().optional(),
       googlePlaceId: z.string().optional(),
       googleApiKey: z.string().optional(),
+      googleClientId: z.string().optional(),
+      googleClientSecret: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

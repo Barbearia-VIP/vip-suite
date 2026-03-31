@@ -294,3 +294,12 @@
 - [x] /reputacao/config-ia — Configuração da IA (tom, nome, autoResponder, prompt personalizado)
 - [x] Navegação lateral atualizada com 6 itens
 - [x] Testes Vitest: 99 testes passando (23 novos Reputação + 76 existentes)
+
+## Credenciais Google Business Profile por Unidade
+
+- [ ] Adicionar campos Google na tabela unit_configs (googleClientId, googleClientSecret, googlePlaceId, googleAccessToken, googleRefreshToken, googleTokenExpiry)
+- [ ] Aplicar migration no banco
+- [ ] Router tRPC: saveGoogleConfig, getGoogleConfig, testGoogleConnection por unidade
+- [ ] UI de configurações da unidade com seção Google Business Profile
+- [ ] Pré-cadastrar credenciais da unidade Santa Mônica (Place ID: ChIJ-TBxZ_s4J5URaJQWJ2zfqRA)
+- [ ] Atualizar router reputacao.importarGooglePlaces para usar credenciais da unidade

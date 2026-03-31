@@ -964,6 +964,9 @@ export const repConexoes = mysqlTable("rep_conexoes", {
   // Config Google Places API (fallback)
   googlePlaceId: varchar("googlePlaceId", { length: 255 }),
   googleApiKey: varchar("googleApiKey", { length: 255 }),
+  // OAuth App credentials (por unidade — permite cada unidade ter seu próprio app Google)
+  googleClientId: varchar("googleClientId", { length: 512 }),
+  googleClientSecret: varchar("googleClientSecret", { length: 512 }),
   // Métricas
   totalAvaliacoes: int("totalAvaliacoes").default(0),
   notaMedia: decimal("notaMedia", { precision: 3, scale: 2 }),

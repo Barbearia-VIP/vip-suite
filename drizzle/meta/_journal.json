@@ -43,6 +43,13 @@
       "when": 1774990223297,
       "tag": "0005_bent_madripoor",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1774991795648,
+      "tag": "0006_mighty_sebastian_shaw",
+      "breakpoints": true
     }
   ]
 }
