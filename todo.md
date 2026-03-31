@@ -303,3 +303,9 @@
 - [ ] UI de configurações da unidade com seção Google Business Profile
 - [ ] Pré-cadastrar credenciais da unidade Santa Mônica (Place ID: ChIJ-TBxZ_s4J5URaJQWJ2zfqRA)
 - [ ] Atualizar router reputacao.importarGooglePlaces para usar credenciais da unidade
+
+## Bug: Reputação sem dados após configurar credenciais Google
+- [ ] Diagnosticar por que importarGooglePlaces não retorna dados reais
+- [ ] Corrigir pipeline de importação Google Places API (endpoint, mapeamento de campos)
+- [ ] Corrigir getDashboard/getAvaliacoes/getAnalise para retornar dados após importação
+- [ ] Sincronizar automaticamente após salvar integração com sucesso

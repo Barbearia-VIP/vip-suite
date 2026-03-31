@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +47,37 @@ export default function IntegracoesPage() {
   });
 
   const conexoesQuery = trpc.reputacao.getConexoes.useQuery({ unitId }, { enabled: !!unitId });
+
+  const getAuthUrlQuery = trpc.reputacao.getGoogleAuthUrl.useQuery(
+    { unitId, redirectOrigin: typeof window !== "undefined" ? window.location.origin : "" },
+    { enabled: false }
+  );
+
+  const fetchReviewsMut = trpc.reputacao.fetchGoogleReviews.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Sincronizado! ${data.importadas} novas, ${data.atualizadas} atualizadas`);
+      utils.reputacao.getDashboard.invalidate();
+      utils.reputacao.getConexoes.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  // Detectar retorno do OAuth Google
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("google_connected");
+    const oauthError = params.get("error");
+    if (connected === "1") {
+      toast.success("Google Business Profile conectado! Sincronizando avaliações...");
+      window.history.replaceState({}, "", window.location.pathname);
+      conexoesQuery.refetch().then(() => {
+        fetchReviewsMut.mutate({ unitId });
+      });
+    } else if (oauthError) {
+      toast.error(`Erro ao conectar com Google: ${decodeURIComponent(oauthError)}`);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const salvarMutation = trpc.reputacao.saveConexao.useMutation({
     onSuccess: () => {
@@ -202,7 +233,39 @@ export default function IntegracoesPage() {
                   >
                     Editar
                   </Button>
-                  {c.googlePlaceId && c.googleApiKey && (
+                  {/* Botão Conectar com Google OAuth */}
+                  {c.plataforma === "google" && c.googleClientId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        const result = await getAuthUrlQuery.refetch();
+                        if (result.data?.url) {
+                          window.location.href = result.data.url;
+                        } else {
+                          toast.error("Não foi possível gerar URL de autorização");
+                        }
+                      }}
+                      disabled={getAuthUrlQuery.isFetching}
+                    >
+                      <Globe className="w-3.5 h-3.5 mr-1.5" />
+                      {(c as any).googleAccessToken ? "Reconectar Google" : "Conectar Google"}
+                    </Button>
+                  )}
+                  {/* Botão Sincronizar via OAuth */}
+                  {c.plataforma === "google" && (c as any).googleAccessToken && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchReviewsMut.mutate({ unitId })}
+                      disabled={fetchReviewsMut.isPending}
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${fetchReviewsMut.isPending ? "animate-spin" : ""}`} />
+                      Sincronizar
+                    </Button>
+                  )}
+                  {/* Botão Sincronizar via Places API (fallback) */}
+                  {c.googlePlaceId && c.googleApiKey && !(c as any).googleAccessToken && (
                     <Button
                       variant="outline"
                       size="sm"

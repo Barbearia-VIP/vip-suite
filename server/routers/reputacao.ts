@@ -8,7 +8,7 @@ import {
   repConfigIA,
   repRespostasIA,
 } from "../../drizzle/schema";
-import { eq, and, desc, sql, like, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, like, gte, lte, inArray, isNotNull } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 import { TRPCError } from "@trpc/server";
 
@@ -94,7 +94,6 @@ async function fetchGooglePlaceDetails(placeId: string, apiKey: string) {
 
 const GOOGLE_OAUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-const GOOGLE_REVIEWS_API = "https://mybusiness.googleapis.com/v4";
 
 async function refreshGoogleToken(refreshToken: string, clientId: string, clientSecret: string) {
   const res = await fetch(GOOGLE_TOKEN_URL, {
@@ -108,6 +107,76 @@ async function refreshGoogleToken(refreshToken: string, clientId: string, client
     }),
   });
   return res.json();
+}
+
+// Troca code por access_token + refresh_token
+export async function exchangeGoogleCode(
+  code: string,
+  clientId: string,
+  clientSecret: string,
+  redirectUri: string
+) {
+  const res = await fetch(GOOGLE_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: redirectUri,
+    }),
+  });
+  return res.json();
+}
+
+// Busca accounts e locations via Google Business Profile API
+async function fetchGoogleBusinessReviews(accessToken: string, locationName?: string) {
+  // 1. Listar accounts
+  const accountsRes = await fetch(
+    "https://mybusinessaccountmanagement.googleapis.com/v1/accounts",
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const accountsData = await accountsRes.json();
+  if (!accountsData.accounts?.length) {
+    return { success: false, error: "Nenhuma conta Google Business encontrada", reviews: [], locationName: null };
+  }
+  const accountName = accountsData.accounts[0].name; // ex: "accounts/123456"
+
+  // 2. Listar locations
+  const locRes = await fetch(
+    `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations?readMask=name,title,storefrontAddress`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const locData = await locRes.json();
+  if (!locData.locations?.length) {
+    return { success: false, error: "Nenhuma localização encontrada na conta", reviews: [], locationName: null };
+  }
+
+  // Usar locationName salvo ou a primeira location
+  const location = locationName
+    ? locData.locations.find((l: any) => l.name === locationName) || locData.locations[0]
+    : locData.locations[0];
+
+  // 3. Buscar avaliações
+  let allReviews: any[] = [];
+  let pageToken: string | undefined;
+  do {
+    const url = new URL(`https://mybusiness.googleapis.com/v4/${location.name}/reviews`);
+    url.searchParams.set("pageSize", "50");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const revRes = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const revData = await revRes.json();
+    if (revData.error) {
+      return { success: false, error: revData.error.message || "Erro ao buscar avaliações", reviews: [], locationName: location.name };
+    }
+    allReviews = allReviews.concat(revData.reviews || []);
+    pageToken = revData.nextPageToken;
+  } while (pageToken);
+
+  return { success: true, reviews: allReviews, locationName: location.name, locationTitle: location.title };
 }
 
 // ─── Router ──────────────────────────────────────────────────────────────────
@@ -597,6 +666,122 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       await db.delete(repAvaliacoes).where(and(eq(repAvaliacoes.id, input.id), eq(repAvaliacoes.unitId, input.unitId)));
       await recalcularResumo(db, input.unitId);
       return { success: true };
+    }),
+
+  // ── Google OAuth: gerar URL de autorização ──────────────────────────────
+  getGoogleAuthUrl: protectedProcedure
+    .input(z.object({
+      unitId: z.number(),
+      redirectOrigin: z.string(), // window.location.origin do frontend
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Buscar credenciais da conexão Google desta unidade
+      const [conexao] = await db.select()
+        .from(repConexoes)
+        .where(and(eq(repConexoes.unitId, input.unitId), eq(repConexoes.plataforma, "google")))
+        .limit(1);
+      const clientId = conexao?.googleClientId;
+      if (!clientId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Configure o Google Client ID primeiro na aba Integrações" });
+      }
+      const redirectUri = `${input.redirectOrigin}/api/google-oauth/callback`;
+      const state = Buffer.from(JSON.stringify({ unitId: input.unitId, origin: input.redirectOrigin })).toString("base64");
+      const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope: [
+          "https://www.googleapis.com/auth/business.manage",
+          "https://www.googleapis.com/auth/plus.business.manage",
+        ].join(" "),
+        access_type: "offline",
+        prompt: "consent",
+        state,
+      });
+      return { url: `${GOOGLE_OAUTH_BASE}?${params.toString()}`, redirectUri };
+    }),
+
+  // ── Buscar avaliações via OAuth (Business Profile API) ───────────────────
+  fetchGoogleReviews: protectedProcedure
+    .input(z.object({ unitId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [conexao] = await db.select()
+        .from(repConexoes)
+        .where(and(eq(repConexoes.unitId, input.unitId), eq(repConexoes.plataforma, "google")))
+        .limit(1);
+      if (!conexao) throw new TRPCError({ code: "NOT_FOUND", message: "Integração Google não configurada" });
+      if (!conexao.googleAccessToken && !conexao.googleRefreshToken) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Autorize o Google Business Profile primeiro" });
+      }
+      let accessToken = conexao.googleAccessToken;
+      // Refresh token se expirado
+      if (conexao.googleRefreshToken && conexao.googleClientId && conexao.googleClientSecret) {
+        const tokenExpiry = conexao.googleTokenExpiry ? new Date(conexao.googleTokenExpiry).getTime() : 0;
+        if (!accessToken || Date.now() > tokenExpiry - 60000) {
+          const refreshed = await refreshGoogleToken(conexao.googleRefreshToken, conexao.googleClientId, conexao.googleClientSecret);
+          if (refreshed.access_token) {
+            accessToken = refreshed.access_token;
+            await db.update(repConexoes).set({
+              googleAccessToken: refreshed.access_token,
+              googleTokenExpiry: new Date(Date.now() + (refreshed.expires_in || 3600) * 1000),
+            }).where(eq(repConexoes.id, conexao.id));
+          }
+        }
+      }
+      if (!accessToken) throw new TRPCError({ code: "UNAUTHORIZED", message: "Token de acesso inválido" });
+      const result = await fetchGoogleBusinessReviews(accessToken, conexao.googleLocationName || undefined);
+      if (!result.success) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: result.error || "Erro ao buscar avaliações" });
+      }
+      // Salvar locationName se ainda não tiver
+      if (result.locationName && !conexao.googleLocationName) {
+        await db.update(repConexoes).set({
+          googleLocationName: result.locationName,
+          nome: result.locationTitle || conexao.nome,
+        }).where(eq(repConexoes.id, conexao.id));
+      }
+      let importadas = 0, atualizadas = 0, ignoradas = 0;
+      for (const review of result.reviews) {
+        const reviewId = review.reviewId || review.name?.split("/").pop() || String(Date.now());
+        const externalId = `google-business-${reviewId}`;
+        const nota = review.starRating === "FIVE" ? 5 : review.starRating === "FOUR" ? 4 : review.starRating === "THREE" ? 3 : review.starRating === "TWO" ? 2 : 1;
+        const sentimento = determineSentimento(nota);
+        const dataAvaliacao = review.createTime ? new Date(review.createTime) : new Date();
+        const avalData = {
+          unitId: input.unitId,
+          plataforma: "google" as const,
+          externalId,
+          autorNome: review.reviewer?.displayName || "Anônimo",
+          autorFoto: review.reviewer?.profilePhotoUrl || null,
+          nota: String(nota),
+          comentario: review.comment || "",
+          sentimento,
+          dataAvaliacao,
+          urlAvaliacao: null,
+          isVerificado: true,
+        };
+        const existing = await db.select({ id: repAvaliacoes.id })
+          .from(repAvaliacoes)
+          .where(and(eq(repAvaliacoes.unitId, input.unitId), eq(repAvaliacoes.externalId, externalId)))
+          .limit(1);
+        if (existing.length > 0) {
+          await db.update(repAvaliacoes).set(avalData).where(eq(repAvaliacoes.id, existing[0].id));
+          atualizadas++;
+        } else {
+          await db.insert(repAvaliacoes).values(avalData);
+          importadas++;
+        }
+      }
+      await db.update(repConexoes).set({
+        ultimaSincronizacao: new Date(),
+        totalAvaliacoes: result.reviews.length,
+      }).where(eq(repConexoes.id, conexao.id));
+      await recalcularResumo(db, input.unitId);
+      return { success: true, importadas, atualizadas, ignoradas, total: result.reviews.length };
     }),
 
   // ── Resumo para o Dashboard Central ──────────────────────────────────────
