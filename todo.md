@@ -83,3 +83,8 @@
 
 - [x] orgs.myProfile retorna undefined quando usuário não tem userProfile no banco
 - [x] orgs.units retorna "Sem acesso a esta organização" para usuário admin sem userProfile
+- [x] Botão de sincronização do Data VIP não funciona — implementar chamada real à API externa
+- [x] Implementar router de sincronização Data VIP com API https://franquiabv.com.br/api/unidade/vendasV2
+- [x] Conectar botão Sincronizar no DataVipPage ao router de sync
+- [x] Seletor de data de início e fim no modal de sincronização do Data VIP
+- [x] Feedback de progresso em tempo real durante sincronização
