@@ -1,0 +1,59 @@
+/**
+ * RelatoriosPage.tsx — Relatórios semanais de performance
+ */
+import { trpc } from "@/lib/trpc";
+import { useApp } from "@/contexts/AppContext";
+import { useOrg } from "@/hooks/useOrg";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { FileText } from "lucide-react";
+
+function fmt(v: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
+}
+function fmtDate(d: string | null) {
+  if (!d) return "—";
+  return new Date(d + "T12:00:00").toLocaleDateString("pt-BR");
+}
+
+export default function RelatoriosPage() {
+  const { selectedUnit } = useApp();
+  const { org } = useOrg();
+  const q = trpc.dataVip.relatoriosSemanais.useQuery(
+    { orgId: org?.id, unitId: selectedUnit?.id, limit: 20 },
+    { enabled: !!org?.id }
+  );
+  const relatorios = q.data ?? [];
+  return (
+    <div className="p-6 space-y-5">
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2"><FileText className="w-6 h-6 text-primary" /> Relatórios Semanais</h1>
+        <p className="text-sm text-muted-foreground">{selectedUnit ? selectedUnit.name : "Todas as unidades"}</p>
+      </div>
+      <Card>
+        <CardContent className="p-0">
+          {q.isLoading
+            ? <div className="p-4 space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
+            : relatorios.length === 0
+              ? <div className="p-8 text-center text-muted-foreground text-sm">Nenhum relatório disponível. Os relatórios são gerados automaticamente após a sincronização.</div>
+              : <div className="divide-y divide-border">
+                  {relatorios.map((r: any) => (
+                    <div key={r.id} className="flex items-center gap-4 px-4 py-3">
+                      <div className="flex-1">
+                        <p className="font-medium">{r.unitName || "Rede"}</p>
+                        <p className="text-xs text-muted-foreground">{fmtDate(r.semanaInicio)} a {fmtDate(r.semanaFim)}</p>
+                      </div>
+                      <div className="text-right text-sm">
+                        <p className="font-semibold text-green-400">{fmt(Number(r.faturamento || 0))}</p>
+                        <p className="text-xs text-muted-foreground">{Number(r.atendimentos || 0).toLocaleString("pt-BR")} atend.</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+          }
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

@@ -21,12 +21,21 @@ import PermissoesPage from "./pages/dashboard/PermissoesPage";
 
 // Data VIP
 import DataVipPage from "./pages/data-vip/DataVipPage";
+import DataVipDashboard from "./pages/data-vip/DataVipDashboard";
 import FaturamentoPage from "./pages/data-vip/FaturamentoPage";
 import ColaboradoresPage from "./pages/data-vip/ColaboradoresPage";
 import ClientesPage from "./pages/data-vip/ClientesPage";
 import MetasPage from "./pages/data-vip/MetasPage";
 import RankingPage from "./pages/data-vip/RankingPage";
 import SyncPage from "./pages/data-vip/SyncPage";
+import MensalPage from "./pages/data-vip/MensalPage";
+import RaioXPage from "./pages/data-vip/RaioXPage";
+import ComissoesPage from "./pages/data-vip/ComissoesPage";
+import SincronizacaoPage from "./pages/data-vip/SincronizacaoPage";
+import ServicosPage from "./pages/data-vip/ServicosPage";
+import CalendarioPage from "./pages/data-vip/CalendarioPage";
+import RelatoriosPage from "./pages/data-vip/RelatoriosPage";
+import AdministracaoPage from "./pages/data-vip/AdministracaoPage";
 
 // Gestão Total
 import GestaoTotalPage from "./pages/gestao-total/GestaoTotalPage";
@@ -137,7 +146,7 @@ function Router() {
 
       {/* Data VIP */}
       <Route path="/data-vip">
-        <ProtectedLayout><DataVipPage /></ProtectedLayout>
+        <ProtectedLayout><DataVipDashboard /></ProtectedLayout>
       </Route>
       <Route path="/data-vip/faturamento">
         <ProtectedLayout><FaturamentoPage /></ProtectedLayout>
@@ -156,6 +165,33 @@ function Router() {
       </Route>
       <Route path="/data-vip/sync">
         <ProtectedLayout><SyncPage /></ProtectedLayout>
+      </Route>
+      <Route path="/data-vip/dashboard">
+        <ProtectedLayout><DataVipDashboard /></ProtectedLayout>
+      </Route>
+      <Route path="/data-vip/mensal">
+        <ProtectedLayout><MensalPage /></ProtectedLayout>
+      </Route>
+      <Route path="/data-vip/raio-x">
+        <ProtectedLayout><RaioXPage /></ProtectedLayout>
+      </Route>
+      <Route path="/data-vip/comissoes">
+        <ProtectedLayout><ComissoesPage /></ProtectedLayout>
+      </Route>
+      <Route path="/data-vip/sincronizacao">
+        <ProtectedLayout><SincronizacaoPage /></ProtectedLayout>
+      </Route>
+      <Route path="/data-vip/servicos">
+        <ProtectedLayout><ServicosPage /></ProtectedLayout>
+      </Route>
+      <Route path="/data-vip/calendario">
+        <ProtectedLayout><CalendarioPage /></ProtectedLayout>
+      </Route>
+      <Route path="/data-vip/relatorios">
+        <ProtectedLayout><RelatoriosPage /></ProtectedLayout>
+      </Route>
+      <Route path="/data-vip/administracao">
+        <ProtectedLayout><AdministracaoPage /></ProtectedLayout>
       </Route>
 
       {/* Gestão Total */}

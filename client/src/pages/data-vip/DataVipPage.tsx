@@ -224,7 +224,7 @@ export default function DataVipPage() {
   const syncMutation = trpc.dataVip.sync.useMutation({
     onSuccess: (data) => {
       toast.success(data.message, {
-        description: `${data.insertedCount} registros em ${((data.durationMs ?? 0) / 1000).toFixed(1)}s`,
+  
       });
       setSyncModalOpen(false);
       utils.dataVip.kpis.invalidate();

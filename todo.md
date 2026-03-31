@@ -118,3 +118,35 @@
 - [x] Página /auto-instagram/stories — Config e logs de respostas a stories
 - [x] Página /auto-instagram/diagnostico — Teste de conexão, info da conta, forçar ciclo
 - [x] Testes Vitest: 15 testes passando
+
+## Módulo Data VIP — Implementação Completa
+
+- [x] Verificar/criar tabelas: vendas_api_raw, dimensao_clientes, dimensao_colaboradores, metas, sync_log, servicos, comissoes, regras_comissao, folgas, feriados, relatorios_semanais
+- [x] Sync engine: syncVendas(), updateDimensoes(), syncVendasChunked() com retry e backoff
+- [x] Scheduler automático às 08:00 BRT (últimos 2 dias) com Map<orgId, UnitSyncStatus>
+- [x] Router dataVip.dashboard — KPIs: faturamento, atendimentos, ticket médio, clientes novos, extras
+- [x] Router dataVip.faturamento — análise por produto, forma pagamento, período
+- [x] Router dataVip.clientes — lista com filtros, paginação, busca
+- [x] Router dataVip.raioX — classificação Ativo/Em Risco/Perdido/Novo
+- [x] Router dataVip.colaboradores — lista, tipo (barbeiro/recepção), métricas
+- [x] Router dataVip.comissoes — cálculo por regras configuráveis
+- [x] Router dataVip.metas — CRUD metas mensais com alertas
+- [x] Router dataVip.ranking — ranking da rede com controle de visibilidade
+- [x] Router dataVip.sync — 3 modos: 2 dias, 13 meses, histórico completo
+- [x] Controle de acesso: dados por unidade, visão geral apenas admin + "Todas as Unidades"
+- [x] Página /data-vip — Dashboard com KPIs e gráficos
+- [x] Página /data-vip/mensal — Análise mensal com gráficos
+- [x] Página /data-vip/ranking — Ranking da rede
+- [x] Página /data-vip/faturamento — Análise detalhada de faturamento
+- [x] Página /data-vip/clientes — Lista de clientes com filtros
+- [x] Página /data-vip/raio-x — Raio X de retenção
+- [x] Página /data-vip/colaboradores — Gestão de colaboradores
+- [x] Página /data-vip/comissoes — Cálculo de comissões
+- [x] Página /data-vip/metas — Metas mensais com alertas
+- [x] Página /data-vip/servicos — Catálogo de serviços
+- [x] Página /data-vip/relatorios — Relatórios semanais
+- [x] Página /data-vip/calendario — Folgas e feriados
+- [x] Página /data-vip/sincronizacao — Painel de sync com 3 modos
+- [x] Página /data-vip/administracao — CRUD orgs com teste de credenciais
+- [x] Navegação lateral do módulo atualizada com todos os links
+- [x] Testes Vitest: 34 testes passando (15 novos Data VIP + 19 existentes)
