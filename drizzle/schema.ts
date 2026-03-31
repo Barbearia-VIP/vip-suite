@@ -499,3 +499,373 @@ export const igRepliedComments = mysqlTable("ig_replied_comments", {
 }, (t) => [
   index("idx_ig_replied_unit_comment").on(t.unitId, t.commentId),
 ]);
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GESTÃO TOTAL — Módulo de Gestão Empresarial
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Tarefas
+// ─────────────────────────────────────────────
+export const gtTarefas = mysqlTable("gt_tarefas", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  titulo: varchar("titulo", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  status: mysqlEnum("status", ["pendente", "em_andamento", "em_revisao", "concluida"]).default("pendente").notNull(),
+  prioridade: mysqlEnum("prioridade", ["baixa", "media", "alta", "critica"]).default("media").notNull(),
+  responsavel: varchar("responsavel", { length: 255 }),
+  prazo: date("prazo"),
+  concluidaEm: timestamp("concluidaEm"),
+  ordem: int("ordem").default(0).notNull(),
+  createdBy: int("createdBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_tarefas_org_unit").on(t.orgId, t.unitId),
+  index("idx_gt_tarefas_status").on(t.status),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Processos Operacionais
+// ─────────────────────────────────────────────
+export const gtProcessos = mysqlTable("gt_processos", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  categoria: varchar("categoria", { length: 100 }),
+  responsavel: varchar("responsavel", { length: 255 }),
+  etapas: json("etapas"), // Array de { titulo, descricao, responsavel, concluida }
+  ativo: int("ativo").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_processos_org").on(t.orgId),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Instruções de Trabalho
+// ─────────────────────────────────────────────
+export const gtInstrucoes = mysqlTable("gt_instrucoes", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  titulo: varchar("titulo", { length: 255 }).notNull(),
+  conteudo: text("conteudo"),
+  categoria: varchar("categoria", { length: 100 }),
+  versao: varchar("versao", { length: 20 }).default("1.0"),
+  ativo: int("ativo").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_instrucoes_org").on(t.orgId),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Indicadores Estratégicos
+// ─────────────────────────────────────────────
+export const gtIndicadores = mysqlTable("gt_indicadores", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  tipo: mysqlEnum("tipo", ["numero", "percentual", "moeda", "tempo"]).default("numero").notNull(),
+  valorAtual: decimal("valorAtual", { precision: 15, scale: 2 }),
+  meta: decimal("meta", { precision: 15, scale: 2 }),
+  periodo: varchar("periodo", { length: 7 }), // YYYY-MM
+  tendencia: mysqlEnum("tendencia", ["subindo", "estavel", "caindo"]).default("estavel"),
+  cor: varchar("cor", { length: 7 }).default("#70dc8f"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_indicadores_org_periodo").on(t.orgId, t.periodo),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Planejamento Estratégico
+// ─────────────────────────────────────────────
+export const gtPlanejamento = mysqlTable("gt_planejamento", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  missao: text("missao"),
+  visao: text("visao"),
+  valores: text("valores"),
+  swotForcas: json("swotForcas"),     // string[]
+  swotFraquezas: json("swotFraquezas"),
+  swotOportunidades: json("swotOportunidades"),
+  swotAmeacas: json("swotAmeacas"),
+  objetivos: json("objetivos"),       // { titulo, prazo, responsavel, status }[]
+  ano: int("ano").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_planejamento_org_ano").on(t.orgId, t.ano),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Reuniões
+// ─────────────────────────────────────────────
+export const gtReunioes = mysqlTable("gt_reunioes", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  titulo: varchar("titulo", { length: 255 }).notNull(),
+  data: timestamp("data").notNull(),
+  duracao: int("duracao"), // minutos
+  local: varchar("local", { length: 255 }),
+  pauta: text("pauta"),
+  ata: text("ata"),
+  participantes: json("participantes"), // string[]
+  status: mysqlEnum("status", ["agendada", "realizada", "cancelada"]).default("agendada").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_reunioes_org_data").on(t.orgId, t.data),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Cargos
+// ─────────────────────────────────────────────
+export const gtCargos = mysqlTable("gt_cargos", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  nivel: mysqlEnum("nivel", ["operacional", "tatico", "estrategico"]).default("operacional").notNull(),
+  salarioBase: decimal("salarioBase", { precision: 10, scale: 2 }),
+  ativo: int("ativo").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_cargos_org").on(t.orgId),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Colaboradores (gestão interna)
+// ─────────────────────────────────────────────
+export const gtColaboradores = mysqlTable("gt_colaboradores", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }),
+  telefone: varchar("telefone", { length: 20 }),
+  cargoId: int("cargoId"),
+  salario: decimal("salario", { precision: 10, scale: 2 }),
+  dataAdmissao: date("dataAdmissao"),
+  status: mysqlEnum("status", ["ativo", "ferias", "afastado", "desligado"]).default("ativo").notNull(),
+  avatarUrl: text("avatarUrl"),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_colab_org_unit").on(t.orgId, t.unitId),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Financeiro (entradas e saídas)
+// ─────────────────────────────────────────────
+export const gtFinanceiro = mysqlTable("gt_financeiro", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  tipo: mysqlEnum("tipo", ["receita", "despesa"]).notNull(),
+  categoria: varchar("categoria", { length: 100 }),
+  descricao: varchar("descricao", { length: 255 }).notNull(),
+  valor: decimal("valor", { precision: 15, scale: 2 }).notNull(),
+  vencimento: date("vencimento"),
+  pago: int("pago").default(0).notNull(),
+  paidAt: date("paidAt"),
+  formaPagamento: varchar("formaPagamento", { length: 50 }),
+  referencia: varchar("referencia", { length: 7 }), // YYYY-MM
+  observacoes: text("observacoes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_fin_org_ref").on(t.orgId, t.referencia),
+  index("idx_gt_fin_tipo").on(t.tipo),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Fornecedores
+// ─────────────────────────────────────────────
+export const gtFornecedores = mysqlTable("gt_fornecedores", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  cnpj: varchar("cnpj", { length: 20 }),
+  email: varchar("email", { length: 320 }),
+  telefone: varchar("telefone", { length: 20 }),
+  categoria: varchar("categoria", { length: 100 }),
+  ativo: int("ativo").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_forn_org").on(t.orgId),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Pedidos de Compra
+// ─────────────────────────────────────────────
+export const gtCompras = mysqlTable("gt_compras", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  fornecedorId: int("fornecedorId"),
+  fornecedorNome: varchar("fornecedorNome", { length: 255 }),
+  status: mysqlEnum("status", ["rascunho", "aguardando_aprovacao", "aprovado", "recebido", "cancelado"]).default("rascunho").notNull(),
+  itens: json("itens"), // { descricao, qtd, valorUnit, total }[]
+  total: decimal("total", { precision: 15, scale: 2 }),
+  observacoes: text("observacoes"),
+  aprovadoPor: varchar("aprovadoPor", { length: 255 }),
+  aprovadoEm: timestamp("aprovadoEm"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_compras_org_status").on(t.orgId, t.status),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Problemas
+// ─────────────────────────────────────────────
+export const gtProblemas = mysqlTable("gt_problemas", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  titulo: varchar("titulo", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  severidade: mysqlEnum("severidade", ["baixa", "media", "alta", "critica"]).default("media").notNull(),
+  status: mysqlEnum("status", ["aberto", "em_analise", "resolvido", "fechado"]).default("aberto").notNull(),
+  responsavel: varchar("responsavel", { length: 255 }),
+  resolucao: text("resolucao"),
+  resolvidoEm: timestamp("resolvidoEm"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_prob_org_status").on(t.orgId, t.status),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Oportunidades
+// ─────────────────────────────────────────────
+export const gtOportunidades = mysqlTable("gt_oportunidades", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  titulo: varchar("titulo", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  prioridade: mysqlEnum("prioridade", ["baixa", "media", "alta"]).default("media").notNull(),
+  status: mysqlEnum("status", ["identificada", "em_avaliacao", "aprovada", "implementando", "concluida", "descartada"]).default("identificada").notNull(),
+  valorEstimado: decimal("valorEstimado", { precision: 15, scale: 2 }),
+  responsavel: varchar("responsavel", { length: 255 }),
+  prazo: date("prazo"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_opor_org_status").on(t.orgId, t.status),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Riscos
+// ─────────────────────────────────────────────
+export const gtRiscos = mysqlTable("gt_riscos", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  titulo: varchar("titulo", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  probabilidade: mysqlEnum("probabilidade", ["baixa", "media", "alta"]).default("media").notNull(),
+  impacto: mysqlEnum("impacto", ["baixo", "medio", "alto"]).default("medio").notNull(),
+  status: mysqlEnum("status", ["identificado", "monitorando", "mitigado", "aceito"]).default("identificado").notNull(),
+  mitigacao: text("mitigacao"),
+  responsavel: varchar("responsavel", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_riscos_org").on(t.orgId),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Documentos
+// ─────────────────────────────────────────────
+export const gtDocumentos = mysqlTable("gt_documentos", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  titulo: varchar("titulo", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  categoria: varchar("categoria", { length: 100 }),
+  urlArquivo: text("urlArquivo"),
+  nomeArquivo: varchar("nomeArquivo", { length: 255 }),
+  tamanho: int("tamanho"), // bytes
+  versao: varchar("versao", { length: 20 }).default("1.0"),
+  createdBy: int("createdBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_docs_org").on(t.orgId),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Campanhas de Marketing
+// ─────────────────────────────────────────────
+export const gtMarketing = mysqlTable("gt_marketing", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  canal: mysqlEnum("canal", ["instagram", "facebook", "whatsapp", "email", "google", "offline", "outro"]).default("instagram").notNull(),
+  status: mysqlEnum("status", ["planejamento", "ativa", "pausada", "concluida"]).default("planejamento").notNull(),
+  budget: decimal("budget", { precision: 15, scale: 2 }),
+  gasto: decimal("gasto", { precision: 15, scale: 2 }),
+  alcance: int("alcance"),
+  cliques: int("cliques"),
+  conversoes: int("conversoes"),
+  dataInicio: date("dataInicio"),
+  dataFim: date("dataFim"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_mkt_org_status").on(t.orgId, t.status),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Conversas com IA Conselheiro
+// ─────────────────────────────────────────────
+export const gtAdvisorConversations = mysqlTable("gt_advisor_conversations", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  userId: int("userId").notNull(),
+  messages: json("messages").notNull(), // { role, content, timestamp }[]
+  titulo: varchar("titulo", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_advisor_org_user").on(t.orgId, t.userId),
+]);
+
+// ─────────────────────────────────────────────
+// GESTÃO TOTAL — Log de Auditoria
+// ─────────────────────────────────────────────
+export const gtAuditLog = mysqlTable("gt_audit_log", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  userId: int("userId"),
+  userName: varchar("userName", { length: 255 }),
+  acao: varchar("acao", { length: 50 }).notNull(), // created, updated, deleted
+  entidade: varchar("entidade", { length: 100 }).notNull(),
+  entidadeId: int("entidadeId"),
+  descricao: text("descricao"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_gt_audit_org").on(t.orgId),
+]);

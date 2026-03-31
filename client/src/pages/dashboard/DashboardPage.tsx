@@ -182,9 +182,17 @@ export default function DashboardPage() {
           onConfigure={() => navigate("/configuracoes")}
         />
         <KPICard
-          title="Tarefas Abertas"
+          title="Gestão Total"
           value={kpis ? fmtNum(kpis.gestaoTotal.tarefasAbertas) : "—"}
-          subtitle={kpis?.gestaoTotal.tarefasCriticas ? `${kpis.gestaoTotal.tarefasCriticas} críticas` : "Gestão Total"}
+          subtitle={
+            kpis
+              ? [
+                  kpis.gestaoTotal.tarefasCriticas > 0 ? `${kpis.gestaoTotal.tarefasCriticas} críticas` : null,
+                  kpis.gestaoTotal.problemasAbertos > 0 ? `${kpis.gestaoTotal.problemasAbertos} problemas` : null,
+                  kpis.gestaoTotal.reunioesHoje > 0 ? `${kpis.gestaoTotal.reunioesHoje} reuniões hoje` : null,
+                ].filter(Boolean).join(" · ") || "Tarefas abertas"
+              : "Gestão Total"
+          }
           icon={CheckSquare}
           color="oklch(0.65 0.15 145)"
           configured={true}

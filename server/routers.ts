@@ -5,6 +5,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { orgsRouter } from "./routers/orgs";
 import { dataVipRouter } from "./routers/dataVip";
 import { dashboardRouter } from "./routers/dashboard";
+import { gestaoTotalRouter } from "./routers/gestaoTotal";
 import { igConfigRouter, igDashboardRouter, igLogsRouter, igApprovalRouter, igStoriesRouter, igPromptsRouter } from "./routers/instagram";
 import { initSchedulers } from "./igScheduler";
 
@@ -24,6 +25,7 @@ export const appRouter = router({
   orgs: orgsRouter,
   dataVip: dataVipRouter,
   dashboard: dashboardRouter,
+  gestaoTotal: gestaoTotalRouter,
   ig: igConfigRouter,
   igDashboard: igDashboardRouter,
   igLogs: igLogsRouter,

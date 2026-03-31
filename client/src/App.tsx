@@ -46,6 +46,16 @@ import FinanceiroPage from "./pages/gestao-total/FinanceiroPage";
 import ComprasPage from "./pages/gestao-total/ComprasPage";
 import ReunioesPage from "./pages/gestao-total/ReunioesPage";
 import IAConselheiroPage from "./pages/gestao-total/IAConselheiroPage";
+import GestaoTotalDashboard from "./pages/gestao-total/GestaoTotalDashboard";
+import CargosPage from "./pages/gestao-total/CargosPage";
+import ColaboradoresGtPage from "./pages/gestao-total/ColaboradoresGtPage";
+import InstrucoesPage from "./pages/gestao-total/InstrucoesPage";
+import ProblemasPage from "./pages/gestao-total/ProblemasPage";
+import OportunidadesPage from "./pages/gestao-total/OportunidadesPage";
+import RiscosPage from "./pages/gestao-total/RiscosPage";
+import DocumentosPage from "./pages/gestao-total/DocumentosPage";
+import MarketingPage from "./pages/gestao-total/MarketingPage";
+import PlanejamentoPage from "./pages/gestao-total/PlanejamentoPage";
 
 // VIP Cam
 import VipCamPage from "./pages/vip-cam/VipCamPage";
@@ -196,7 +206,7 @@ function Router() {
 
       {/* Gestão Total */}
       <Route path="/gestao-total">
-        <ProtectedLayout><GestaoTotalPage /></ProtectedLayout>
+        <ProtectedLayout><GestaoTotalDashboard /></ProtectedLayout>
       </Route>
       <Route path="/gestao-total/tarefas">
         <ProtectedLayout><TarefasPage /></ProtectedLayout>
@@ -218,6 +228,33 @@ function Router() {
       </Route>
       <Route path="/gestao-total/ia">
         <ProtectedLayout><IAConselheiroPage /></ProtectedLayout>
+      </Route>
+      <Route path="/gestao-total/cargos">
+        <ProtectedLayout><CargosPage /></ProtectedLayout>
+      </Route>
+      <Route path="/gestao-total/colaboradores">
+        <ProtectedLayout><ColaboradoresGtPage /></ProtectedLayout>
+      </Route>
+      <Route path="/gestao-total/instrucoes">
+        <ProtectedLayout><InstrucoesPage /></ProtectedLayout>
+      </Route>
+      <Route path="/gestao-total/problemas">
+        <ProtectedLayout><ProblemasPage /></ProtectedLayout>
+      </Route>
+      <Route path="/gestao-total/oportunidades">
+        <ProtectedLayout><OportunidadesPage /></ProtectedLayout>
+      </Route>
+      <Route path="/gestao-total/riscos">
+        <ProtectedLayout><RiscosPage /></ProtectedLayout>
+      </Route>
+      <Route path="/gestao-total/documentos">
+        <ProtectedLayout><DocumentosPage /></ProtectedLayout>
+      </Route>
+      <Route path="/gestao-total/marketing">
+        <ProtectedLayout><MarketingPage /></ProtectedLayout>
+      </Route>
+      <Route path="/gestao-total/planejamento">
+        <ProtectedLayout><PlanejamentoPage /></ProtectedLayout>
       </Route>
 
       {/* VIP Cam */}

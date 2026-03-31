@@ -150,3 +150,68 @@
 - [x] Página /data-vip/administracao — CRUD orgs com teste de credenciais
 - [x] Navegação lateral do módulo atualizada com todos os links
 - [x] Testes Vitest: 34 testes passando (15 novos Data VIP + 19 existentes)
+
+## Módulo Gestão Total — Implementação Completa
+
+### Banco de Dados
+- [x] Tabela gt_tarefas (status, prioridade, responsável, prazo)
+- [x] Tabela gt_processos (etapas, responsáveis, checklists)
+- [x] Tabela gt_instrucoes_trabalho (título, conteúdo, categoria)
+- [x] Tabela gt_indicadores (nome, tipo, valor_atual, meta, período)
+- [x] Tabela gt_planejamento_estrategico (missão, visão, valores, SWOT)
+- [x] Tabela gt_reunioes (data, pauta, ata, participantes)
+- [x] Tabela gt_colaboradores_gt (nome, cargo_id, salário, status)
+- [x] Tabela gt_cargos (nome, descrição, nível)
+- [x] Tabela gt_financeiro (tipo receita/despesa, categoria, valor, vencimento)
+- [x] Tabela gt_compras (fornecedor, status, itens, total)
+- [x] Tabela gt_fornecedores
+- [x] Tabela gt_problemas (severidade, status, responsável)
+- [x] Tabela gt_oportunidades (prioridade, status, valor_estimado)
+- [x] Tabela gt_riscos (probabilidade, impacto, mitigação)
+- [x] Tabela gt_documentos (título, categoria, url_arquivo)
+- [x] Tabela gt_marketing (canal, status, budget, métricas)
+- [x] Tabela gt_audit_log (ação, entidade, usuário, timestamp)
+- [x] Tabela gt_advisor_conversations (mensagens, contexto)
+
+### Routers tRPC
+- [x] Router gestaoTotal.tarefas (CRUD + kanban status update)
+- [x] Router gestaoTotal.processos (CRUD + etapas)
+- [x] Router gestaoTotal.instrucoes (CRUD)
+- [x] Router gestaoTotal.indicadores (CRUD + histórico)
+- [x] Router gestaoTotal.planejamento (CRUD + SWOT)
+- [x] Router gestaoTotal.reunioes (CRUD + ata)
+- [x] Router gestaoTotal.colaboradores (CRUD + cargos)
+- [x] Router gestaoTotal.cargos (CRUD)
+- [x] Router gestaoTotal.financeiro (CRUD + DRE)
+- [x] Router gestaoTotal.fornecedores (CRUD)
+- [x] Router gestaoTotal.compras (CRUD + aprovação)
+- [x] Router gestaoTotal.problemas (CRUD)
+- [x] Router gestaoTotal.oportunidades (CRUD)
+- [x] Router gestaoTotal.riscos (CRUD)
+- [x] Router gestaoTotal.documentos (CRUD)
+- [x] Router gestaoTotal.marketing (CRUD + métricas)
+- [x] Router gestaoTotal.dashboard (KPIs consolidados)
+- [x] Router gestaoTotal.ia (chat + histórico de conversas)
+- [x] Router gestaoTotal.auditoria (log de ações)
+
+### Páginas
+- [x] Página /gestao-total — Dashboard com KPIs integrados (GestaoTotalDashboard)
+- [x] Página /gestao-total/tarefas — Lista + Kanban drag-and-drop
+- [x] Página /gestao-total/indicadores — Indicadores estratégicos
+- [x] Página /gestao-total/planejamento — Planejamento estratégico + SWOT
+- [x] Página /gestao-total/processos — Processos operacionais
+- [x] Página /gestao-total/instrucoes — Instruções de trabalho
+- [x] Página /gestao-total/reunioes — Reuniões com pauta e ata
+- [x] Página /gestao-total/colaboradores — Gestão de colaboradores
+- [x] Página /gestao-total/cargos — Cargos e funções
+- [x] Página /gestao-total/financeiro — DRE + lançamentos
+- [x] Página /gestao-total/compras — Fornecedores + pedidos + aprovação
+- [x] Página /gestao-total/problemas — Registro de problemas
+- [x] Página /gestao-total/oportunidades — Oportunidades identificadas
+- [x] Página /gestao-total/riscos — Mapa de riscos
+- [x] Página /gestao-total/documentos — Gestão de documentos
+- [x] Página /gestao-total/marketing — Campanhas e métricas
+- [x] Página /gestao-total/ia — IA Conselheiro (chat com contexto da unidade)
+- [x] Navegação lateral atualizada com 17 links e ícones distintos
+- [x] Dashboard Central atualizado com KPIs do Gestão Total (tarefas, problemas, reuniões, financeiro)
+- [x] Testes Vitest: 56 testes passando (22 novos Gestão Total + 34 existentes)

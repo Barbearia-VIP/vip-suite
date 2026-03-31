@@ -13,6 +13,10 @@ import {
   units,
   moduleConfigs,
   metas,
+  gtTarefas,
+  gtProblemas,
+  gtReunioes,
+  gtFinanceiro,
 } from "../../drizzle/schema";
 
 // Importar whatsappCampanhas do schema (criado via SQL direto)
@@ -98,6 +102,34 @@ export const dashboardRouter = router({
         ...(unitFilterTasks ? [unitFilterTasks] : []),
       ));
 
+      // ── GESTÃO TOTAL: problemas abertos, reuniões hoje, financeiro ──
+      const orgIdGt = input.orgId;
+      const [problemasStats] = await db.select({ abertos: count(gtProblemas.id) })
+        .from(gtProblemas)
+        .where(and(
+          eq(gtProblemas.orgId, orgIdGt),
+          inArray(gtProblemas.status, ["aberto", "em_analise"]),
+          ...(input.unitId ? [eq(gtProblemas.unitId, input.unitId)] : []),
+        ));
+      const hojeStr = hoje.toISOString().split("T")[0];
+      const [reunioesHojeStats] = await db.select({ total: count(gtReunioes.id) })
+        .from(gtReunioes)
+        .where(and(
+          eq(gtReunioes.orgId, orgIdGt),
+          sql`DATE(${gtReunioes.data}) = ${hojeStr}`,
+          ...(input.unitId ? [eq(gtReunioes.unitId, input.unitId)] : []),
+        ));
+      const refMes = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+      const finRows = await db.select({ tipo: gtFinanceiro.tipo, valor: gtFinanceiro.valor })
+        .from(gtFinanceiro)
+        .where(and(
+          eq(gtFinanceiro.orgId, orgIdGt),
+          eq(gtFinanceiro.referencia, refMes),
+          ...(input.unitId ? [eq(gtFinanceiro.unitId, input.unitId)] : []),
+        ));
+      const receitasGt = finRows.filter(f => f.tipo === "receita").reduce((s, f) => s + Number(f.valor), 0);
+      const despesasGt = finRows.filter(f => f.tipo === "despesa").reduce((s, f) => s + Number(f.valor), 0);
+
       // ── VIP CAM: reconhecimentos hoje ──
       const camWhere = input.unitId
         ? sql`${camMetricasDiarias.data} >= ${hoje.toISOString().split("T")[0]} AND ${camMetricasDiarias.data} <= ${hojeEnd.toISOString().split("T")[0]} AND ${camMetricasDiarias.unitId} = ${input.unitId}`
@@ -155,6 +187,11 @@ export const dashboardRouter = router({
         gestaoTotal: {
           tarefasAbertas: Number(taskStats?.abertas ?? 0),
           tarefasCriticas: Number(taskCriticas?.criticas ?? 0),
+          problemasAbertos: Number(problemasStats?.abertos ?? 0),
+          reunioesHoje: Number(reunioesHojeStats?.total ?? 0),
+          receitasMes: receitasGt,
+          despesasMes: despesasGt,
+          lucroMes: receitasGt - despesasGt,
           hasData: true,
         },
         vipCam: {
