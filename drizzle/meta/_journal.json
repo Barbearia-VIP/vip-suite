@@ -29,6 +29,13 @@
       "when": 1774981771714,
       "tag": "0003_foamy_cassandra_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1774988845015,
+      "tag": "0004_bitter_kitty_pryde",
+      "breakpoints": true
     }
   ]
 }

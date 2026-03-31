@@ -6,6 +6,7 @@ import { orgsRouter } from "./routers/orgs";
 import { dataVipRouter } from "./routers/dataVip";
 import { dashboardRouter } from "./routers/dashboard";
 import { gestaoTotalRouter } from "./routers/gestaoTotal";
+import { vipCamRouter } from "./routers/vipCam";
 import { igConfigRouter, igDashboardRouter, igLogsRouter, igApprovalRouter, igStoriesRouter, igPromptsRouter } from "./routers/instagram";
 import { initSchedulers } from "./igScheduler";
 
@@ -26,6 +27,7 @@ export const appRouter = router({
   dataVip: dataVipRouter,
   dashboard: dashboardRouter,
   gestaoTotal: gestaoTotalRouter,
+  vipCam: vipCamRouter,
   ig: igConfigRouter,
   igDashboard: igDashboardRouter,
   igLogs: igLogsRouter,

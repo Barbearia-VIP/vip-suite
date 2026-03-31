@@ -5,6 +5,8 @@ import {
   BarChart3,
   ClipboardList,
   Camera,
+  Wifi,
+  Play,
   Star,
   Instagram,
   MessageSquare,
@@ -173,9 +175,11 @@ const SIDEBAR_ITEMS: Record<ModuleId, Array<{ label: string; path: string; icon:
   ],
   vip_cam: [
     { label: "Dashboard", path: "/vip-cam", icon: LayoutDashboard },
+    { label: "Câmera ao Vivo", path: "/vip-cam/ao-vivo", icon: Play },
     { label: "Clientes", path: "/vip-cam/clientes", icon: Users },
     { label: "Histórico", path: "/vip-cam/historico", icon: ClipboardList },
-    { label: "Relatórios", path: "/vip-cam/relatorios", icon: BarChart3 },
+    { label: "Métricas", path: "/vip-cam/relatorios", icon: BarChart3 },
+    { label: "Configurações", path: "/vip-cam/configuracoes", icon: Wifi },
   ],
   reputacao: [
     { label: "Dashboard", path: "/reputacao", icon: LayoutDashboard },

@@ -275,8 +275,24 @@ export const processos = mysqlTable("processos", {
 export const camClientes = mysqlTable("cam_clientes", {
   id: int("id").autoincrement().primaryKey(),
   unitId: int("unitId").notNull(),
-  externalId: varchar("externalId", { length: 100 }),
+  // Campos de reconhecimento facial
+  faceDescriptor: json("faceDescriptor"), // array Float32Array serializado
+  faceImageUrl: text("faceImageUrl"),     // URL S3 da foto do rosto
+  // Campos de identidade
   nome: varchar("nome", { length: 255 }),
+  email: varchar("email", { length: 255 }),
+  telefone: varchar("telefone", { length: 50 }),
+  faixaEtaria: varchar("faixaEtaria", { length: 50 }),
+  genero: varchar("genero", { length: 20 }),
+  // Campos de emoção/satisfação
+  satisfactionLevel: mysqlEnum("satisfactionLevel", ["satisfied", "neutral", "unsatisfied"]).default("neutral"),
+  expression: mysqlEnum("expression", ["happy", "neutral", "angry", "surprised", "sad", "disgusted", "fearful"]).default("neutral"),
+  confidenceScore: decimal("confidenceScore", { precision: 5, scale: 4 }),
+  // Visitas
+  visitCount: int("visitCount").default(0),
+  lastSeenAt: timestamp("lastSeenAt"),
+  // Compat legado
+  externalId: varchar("externalId", { length: 100 }),
   fotoUrl: text("fotoUrl"),
   expressao: mysqlEnum("expressao", ["satisfeito", "neutro", "insatisfeito"]),
   totalVisitas: int("totalVisitas").default(0),
@@ -285,6 +301,65 @@ export const camClientes = mysqlTable("cam_clientes", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (t) => [
   index("idx_cam_clientes_unit").on(t.unitId),
+  index("idx_cam_clientes_last_seen").on(t.unitId, t.lastSeenAt),
+]);
+
+// ─────────────────────────────────────────────
+// VIP CAM — timeline de capturas (cada detecção)
+// ─────────────────────────────────────────────
+export const camSentimentTimeline = mysqlTable("cam_sentiment_timeline", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  clienteId: int("clienteId").notNull(), // FK cam_clientes
+  satisfactionLevel: mysqlEnum("satisfactionLevel", ["satisfied", "neutral", "unsatisfied"]).notNull(),
+  expression: varchar("expression", { length: 50 }),
+  confidence: decimal("confidence", { precision: 5, scale: 4 }),
+  faceImageUrl: text("faceImageUrl"),
+  recordedAt: timestamp("recordedAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_cam_timeline_cliente").on(t.clienteId),
+  index("idx_cam_timeline_unit_date").on(t.unitId, t.recordedAt),
+]);
+
+// ─────────────────────────────────────────────
+// VIP CAM — métricas horárias
+// ─────────────────────────────────────────────
+export const camMetricasHorarias = mysqlTable("cam_metricas_horarias", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  data: date("data").notNull(),
+  hora: int("hora").notNull(), // 0-23
+  totalDeteccoes: int("totalDeteccoes").default(0),
+  satisfeitos: int("satisfeitos").default(0),
+  neutros: int("neutros").default(0),
+  insatisfeitos: int("insatisfeitos").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_cam_horarias_unit_data").on(t.unitId, t.data, t.hora),
+]);
+
+// ─────────────────────────────────────────────
+// VIP CAM — configuração de câmera por unidade
+// ─────────────────────────────────────────────
+export const camCameraConfig = mysqlTable("cam_camera_config", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull().unique(),
+  // Tipo de câmera: usb (webcam local) ou ip (RTSP/RTSPS)
+  cameraType: mysqlEnum("cameraType", ["usb", "ip"]).default("usb").notNull(),
+  // Config para câmera IP
+  rtspUrl: text("rtspUrl"),           // ex: rtsp://192.168.1.10:554/stream
+  rtspLogin: varchar("rtspLogin", { length: 255 }),
+  rtspPassword: varchar("rtspPassword", { length: 255 }),
+  rtspProtocol: mysqlEnum("rtspProtocol", ["rtsp", "rtsps"]).default("rtsp"),
+  // Config geral
+  active: boolean("active").default(true),
+  detectionThreshold: decimal("detectionThreshold", { precision: 3, scale: 2 }).default("0.55"),
+  cooldownSeconds: int("cooldownSeconds").default(4),
+  captureWindowMs: int("captureWindowMs").default(1500),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_cam_config_unit").on(t.unitId),
 ]);
 
 // ─────────────────────────────────────────────

@@ -215,3 +215,42 @@
 - [x] Navegação lateral atualizada com 17 links e ícones distintos
 - [x] Dashboard Central atualizado com KPIs do Gestão Total (tarefas, problemas, reuniões, financeiro)
 - [x] Testes Vitest: 56 testes passando (22 novos Gestão Total + 34 existentes)
+
+## Módulo VIP Cam — Implementação Completa
+
+### Banco de Dados
+- [x] Tabela cam_clientes atualizada (faceDescriptor, faceImageUrl, visitCount, lastSeenAt, satisfactionLevel)
+- [x] Tabela cam_sentiment_timeline (detecções em tempo real com expression, confidence, satisfactionLevel)
+- [x] Tabela cam_hourly_metrics (métricas por hora: satisfeitos, neutros, insatisfeitos, totalDeteccoes)
+- [x] Tabela cam_camera_config (tipo USB/IP, rtspUrl, rtspLogin, rtspPassword, rtspProtocol, threshold, cooldown)
+- [x] Tabela cam_metricas_diarias atualizada (satisfeitos, neutros, insatisfeitos, satisfactionRate)
+
+### Modelos face-api
+- [x] Upload dos 8 modelos face-api para CDN (TinyFaceDetector, FaceRecognitionNet, FaceLandmark68Net, etc.)
+- [x] Arquivo faceApiModels.ts com URLs do CDN para carregamento no frontend
+
+### Router tRPC
+- [x] vipCam.getClientes (lista com filtro por satisfação, busca, paginação)
+- [x] vipCam.getClienteDetail (detalhes + histórico de visitas)
+- [x] vipCam.registerDetection (registra detecção, salva foto no S3, atualiza métricas)
+- [x] vipCam.getTimeline (histórico paginado com filtro de data)
+- [x] vipCam.getMetricas (KPIs diários com totais e taxa de satisfação)
+- [x] vipCam.getDashboard (KPIs do dashboard: detecções hoje, satisfação, clientes únicos)
+- [x] vipCam.getCameraConfig (busca configuração da câmera da unidade)
+- [x] vipCam.saveCameraConfig (salva configuração: tipo, RTSP, threshold, cooldown)
+- [x] vipCam.updateCliente (atualiza nome do cliente reconhecido)
+
+### Componentes e Hooks
+- [x] Hook useFaceApi (carrega modelos do CDN com progresso)
+- [x] emotionClassifier.ts (classifica emoções: satisfied/neutral/unsatisfied com limiares)
+- [x] EmotionCamera.tsx (componente principal: webcam USB + câmera IP via HLS proxy)
+
+### Páginas
+- [x] /vip-cam — Dashboard com KPIs de satisfação e detecções
+- [x] /vip-cam/ao-vivo — Câmera ao vivo com reconhecimento facial em tempo real
+- [x] /vip-cam/clientes — Lista de clientes reconhecidos com filtros
+- [x] /vip-cam/historico — Timeline paginada de detecções
+- [x] /vip-cam/relatorios — Métricas e gráficos de satisfação
+- [x] /vip-cam/configuracoes — Configuração de câmera (USB ou IP RTSP/RTSPS)
+- [x] Navegação lateral atualizada com 6 itens e ícones distintos
+- [x] Testes Vitest: 82 testes passando (26 novos VIP Cam + 56 existentes)

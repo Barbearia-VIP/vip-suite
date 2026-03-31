@@ -62,6 +62,8 @@ import VipCamPage from "./pages/vip-cam/VipCamPage";
 import CamClientesPage from "./pages/vip-cam/CamClientesPage";
 import CamHistoricoPage from "./pages/vip-cam/CamHistoricoPage";
 import CamRelatoriosPage from "./pages/vip-cam/CamRelatoriosPage";
+import CamConfigPage from "./pages/vip-cam/CamConfigPage";
+import VipCamLivePage from "./pages/vip-cam/VipCamLivePage";
 
 // Reputação
 import ReputacaoPage from "./pages/reputacao/ReputacaoPage";
@@ -267,10 +269,15 @@ function Router() {
       <Route path="/vip-cam/historico">
         <ProtectedLayout><CamHistoricoPage /></ProtectedLayout>
       </Route>
-      <Route path="/vip-cam/relatorios">
+       <Route path="/vip-cam/relatorios">
         <ProtectedLayout><CamRelatoriosPage /></ProtectedLayout>
       </Route>
-
+      <Route path="/vip-cam/ao-vivo">
+        <ProtectedLayout><VipCamLivePage /></ProtectedLayout>
+      </Route>
+      <Route path="/vip-cam/configuracoes">
+        <ProtectedLayout><CamConfigPage /></ProtectedLayout>
+      </Route>
       {/* Reputação */}
       <Route path="/reputacao">
         <ProtectedLayout><ReputacaoPage /></ProtectedLayout>

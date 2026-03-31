@@ -1,23 +1,88 @@
-import PageHeader from "@/components/PageHeader";
+/**
+ * VIP Cam — Histórico de detecções (timeline paginada).
+ */
+import { useState } from 'react';
+import { trpc } from '@/lib/trpc';
+import { useApp } from '@/contexts/AppContext';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import PageHeader from '@/components/PageHeader';
+import { SATISFACTION_LABELS, SATISFACTION_COLORS, SATISFACTION_EMOJIS, SatisfactionLevel } from '@/lib/emotionClassifier';
 
 export default function CamHistoricoPage() {
+  const { selectedUnit } = useApp();
+  const unitId = selectedUnit?.orgId;
+  const [page, setPage] = useState(1);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  const { data, isLoading } = trpc.vipCam.getTimeline.useQuery({
+    unitId, page, limit: 50,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+  });
+
   return (
-    <div className="p-6">
-      <PageHeader
-        title="Histórico"
-        description="Histórico de detecções e visitas"
-      />
-      <div className="rounded-lg border border-border bg-card p-8 text-center">
-        <div
-          className="w-12 h-12 rounded-xl mx-auto mb-4 flex items-center justify-center"
-          style={{ background: "oklch(0.65 0.15 280)20" }}
-        >
-          <div className="w-6 h-6 rounded-full" style={{ background: "oklch(0.65 0.15 280)" }} />
+    <div className="p-6 space-y-6">
+      <PageHeader title="Histórico de Detecções" description="Todas as capturas registradas pela câmera" />
+      <div className="flex gap-3 flex-wrap items-center">
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-muted-foreground">De:</label>
+          <Input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setPage(1); }} className="w-40" />
         </div>
-        <h3 className="text-sm font-medium text-foreground mb-1">Histórico</h3>
-        <p className="text-xs text-muted-foreground">Histórico de detecções e visitas</p>
-        <p className="text-xs text-muted-foreground mt-4 opacity-60">Módulo em implementação</p>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-muted-foreground">Até:</label>
+          <Input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); setPage(1); }} className="w-40" />
+        </div>
+        {(startDate || endDate) && (
+          <Button variant="ghost" size="sm" onClick={() => { setStartDate(''); setEndDate(''); setPage(1); }}>Limpar</Button>
+        )}
       </div>
+      {isLoading ? (
+        <div className="space-y-2">{[...Array(10)].map((_, i) => <Skeleton key={i} className="h-14" />)}</div>
+      ) : (
+        <>
+          <div className="text-sm text-muted-foreground flex items-center gap-2">
+            <Clock className="h-4 w-4" />{data?.total ?? 0} detecções registradas
+          </div>
+          <div className="space-y-2">
+            {(data?.timeline ?? []).map((t, i) => {
+              const level = (t.satisfactionLevel ?? 'neutral') as SatisfactionLevel;
+              return (
+                <Card key={i}><CardContent className="p-3 flex items-center gap-3">
+                  <span className="text-2xl">{SATISFACTION_EMOJIS[level]}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium" style={{ color: SATISFACTION_COLORS[level] }}>{SATISFACTION_LABELS[level]}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t.expression ?? 'N/A'}{t.confidence ? ` · ${Math.round(Number(t.confidence) * 100)}%` : ''}
+                      {t.clienteId ? ` · Cliente #${t.clienteId}` : ' · Novo'}
+                    </p>
+                  </div>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {t.recordedAt ? new Date(t.recordedAt).toLocaleString('pt-BR') : ''}
+                  </span>
+                </CardContent></Card>
+              );
+            })}
+            {(data?.timeline ?? []).length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <Clock className="h-12 w-12 opacity-30 mb-3" />
+                <p className="text-sm">Nenhuma detecção no período</p>
+              </div>
+            )}
+          </div>
+          {(data?.totalPages ?? 0) > 1 && (
+            <div className="flex items-center justify-center gap-3">
+              <Button variant="outline" size="sm" onClick={() => setPage(p => p - 1)} disabled={page === 1}><ChevronLeft className="h-4 w-4" /></Button>
+              <span className="text-sm text-muted-foreground">Página {page} de {data?.totalPages}</span>
+              <Button variant="outline" size="sm" onClick={() => setPage(p => p + 1)} disabled={page === data?.totalPages}><ChevronRight className="h-4 w-4" /></Button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
