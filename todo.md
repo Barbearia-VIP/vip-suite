@@ -88,3 +88,14 @@
 - [x] Conectar botão Sincronizar no DataVipPage ao router de sync
 - [x] Seletor de data de início e fim no modal de sincronização do Data VIP
 - [x] Feedback de progresso em tempo real durante sincronização
+
+## Integração Dashboard Central
+- [ ] Dashboard integrado com KPIs reais do Data VIP (vendas do BD)
+- [ ] Dashboard integrado com KPIs do Gestão Total (tarefas, processos)
+- [ ] Dashboard integrado com KPIs do VIP Cam (reconhecimentos do BD)
+- [ ] Dashboard integrado com KPIs da Reputação (avaliações do BD)
+- [ ] Dashboard integrado com KPIs do Auto Instagram (métricas do BD)
+- [ ] Dashboard integrado com KPIs do We Send WhatsApp (campanhas do BD)
+- [ ] Estado "aguardando configuração" para módulos sem chaves configuradas
+- [ ] Gráfico de faturamento mensal com dados reais do BD
+- [ ] Ranking de unidades com dados reais do BD
