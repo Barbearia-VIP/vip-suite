@@ -37,6 +37,7 @@ import {
   Brain,
   Map,
   ShoppingCart,
+  Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -186,6 +187,8 @@ const SIDEBAR_ITEMS: Record<ModuleId, Array<{ label: string; path: string; icon:
     { label: "Avaliações", path: "/reputacao/avaliacoes", icon: Star },
     { label: "Respostas", path: "/reputacao/respostas", icon: MessageSquare },
     { label: "Análise", path: "/reputacao/analise", icon: BarChart3 },
+    { label: "Integrações", path: "/reputacao/integracoes", icon: Settings },
+    { label: "Config. IA", path: "/reputacao/config-ia", icon: Bot },
   ],
   auto_instagram: [
     { label: "Dashboard", path: "/auto-instagram", icon: LayoutDashboard },

@@ -944,3 +944,121 @@ export const gtAuditLog = mysqlTable("gt_audit_log", {
 }, (t) => [
   index("idx_gt_audit_org").on(t.orgId),
 ]);
+
+// ─────────────────────────────────────────────
+// REPUTAÇÃO — Conexões de plataformas
+// ─────────────────────────────────────────────
+export const repConexoes = mysqlTable("rep_conexoes", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  plataforma: mysqlEnum("plataforma", ["google", "ifood", "tripadvisor", "ubereats", "rappi", "facebook", "instagram", "manual"]).notNull(),
+  externalId: varchar("externalId", { length: 255 }).notNull(), // placeId do Google, etc.
+  nome: varchar("nome", { length: 255 }),
+  url: varchar("url", { length: 512 }),
+  // Credenciais OAuth Google Business Profile
+  googleAccessToken: text("googleAccessToken"),
+  googleRefreshToken: text("googleRefreshToken"),
+  googleTokenExpiry: timestamp("googleTokenExpiry"),
+  googleAccountName: varchar("googleAccountName", { length: 255 }), // accounts/xxx
+  googleLocationName: varchar("googleLocationName", { length: 255 }), // accounts/xxx/locations/yyy
+  // Config Google Places API (fallback)
+  googlePlaceId: varchar("googlePlaceId", { length: 255 }),
+  googleApiKey: varchar("googleApiKey", { length: 255 }),
+  // Métricas
+  totalAvaliacoes: int("totalAvaliacoes").default(0),
+  notaMedia: decimal("notaMedia", { precision: 3, scale: 2 }),
+  ultimaSincronizacao: timestamp("ultimaSincronizacao"),
+  isAtivo: boolean("isAtivo").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_rep_conexoes_unit").on(t.unitId),
+  index("idx_rep_conexoes_unit_plat").on(t.unitId, t.plataforma),
+]);
+
+// ─────────────────────────────────────────────
+// REPUTAÇÃO — Avaliações (tabela principal enriquecida)
+// ─────────────────────────────────────────────
+export const repAvaliacoes = mysqlTable("rep_avaliacoes", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  conexaoId: int("conexaoId"),
+  plataforma: mysqlEnum("plataforma", ["google", "ifood", "tripadvisor", "ubereats", "rappi", "facebook", "instagram", "manual"]).notNull(),
+  externalId: varchar("externalId", { length: 512 }), // ID único na plataforma
+  autorNome: varchar("autorNome", { length: 255 }),
+  autorFoto: varchar("autorFoto", { length: 512 }),
+  nota: decimal("nota", { precision: 3, scale: 1 }).notNull(),
+  titulo: varchar("titulo", { length: 512 }),
+  comentario: text("comentario"),
+  sentimento: mysqlEnum("sentimento", ["positivo", "neutro", "negativo"]),
+  // Resposta
+  resposta: text("resposta"),
+  respondidoEm: timestamp("respondidoEm"),
+  respondidoPor: varchar("respondidoPor", { length: 255 }),
+  respostaPublicada: boolean("respostaPublicada").default(false),
+  // Metadados
+  dataAvaliacao: timestamp("dataAvaliacao").notNull(),
+  urlAvaliacao: varchar("urlAvaliacao", { length: 512 }),
+  isVerificado: boolean("isVerificado").default(false),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_rep_aval_unit_plat").on(t.unitId, t.plataforma),
+  index("idx_rep_aval_unit_data").on(t.unitId, t.dataAvaliacao),
+  index("idx_rep_aval_unit_nota").on(t.unitId, t.nota),
+  index("idx_rep_aval_external").on(t.externalId),
+]);
+
+// ─────────────────────────────────────────────
+// REPUTAÇÃO — Resumo por unidade (cache de métricas)
+// ─────────────────────────────────────────────
+export const repResumo = mysqlTable("rep_resumo", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull().unique(),
+  totalAvaliacoes: int("totalAvaliacoes").default(0).notNull(),
+  notaMedia: decimal("notaMedia", { precision: 4, scale: 2 }).default("0").notNull(),
+  taxaResposta: decimal("taxaResposta", { precision: 5, scale: 2 }).default("0"),
+  totalPositivas: int("totalPositivas").default(0),
+  totalNeutras: int("totalNeutras").default(0),
+  totalNegativas: int("totalNegativas").default(0),
+  distribuicaoNotas: json("distribuicaoNotas"), // { "5": 10, "4": 5, ... }
+  notasPorPlataforma: json("notasPorPlataforma"), // { "google": { avg: 4.5, count: 20 }, ... }
+  ultimoCalculo: timestamp("ultimoCalculo").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ─────────────────────────────────────────────
+// REPUTAÇÃO — Configurações de IA para respostas
+// ─────────────────────────────────────────────
+export const repConfigIA = mysqlTable("rep_config_ia", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull().unique(),
+  nomeEstabelecimento: varchar("nomeEstabelecimento", { length: 255 }),
+  nomeProprietario: varchar("nomeProprietario", { length: 255 }),
+  tom: mysqlEnum("tom", ["formal", "casual", "amigavel"]).default("amigavel").notNull(),
+  incluirAssinatura: boolean("incluirAssinatura").default(true),
+  autoResponder: boolean("autoResponder").default(false),
+  autoResponderPositivas: boolean("autoResponderPositivas").default(false),
+  autoResponderNegativas: boolean("autoResponderNegativas").default(false),
+  promptPersonalizado: text("promptPersonalizado"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ─────────────────────────────────────────────
+// REPUTAÇÃO — Histórico de respostas geradas por IA
+// ─────────────────────────────────────────────
+export const repRespostasIA = mysqlTable("rep_respostas_ia", {
+  id: int("id").autoincrement().primaryKey(),
+  avaliacaoId: int("avaliacaoId").notNull(),
+  unitId: int("unitId").notNull(),
+  textoGerado: text("textoGerado").notNull(),
+  textoFinal: text("textoFinal"),
+  tom: varchar("tom", { length: 50 }),
+  usouIA: boolean("usouIA").default(true),
+  publicado: boolean("publicado").default(false),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_rep_resp_ia_avaliacao").on(t.avaliacaoId),
+  index("idx_rep_resp_ia_unit").on(t.unitId),
+]);

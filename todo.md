@@ -254,3 +254,43 @@
 - [x] /vip-cam/configuracoes — Configuração de câmera (USB ou IP RTSP/RTSPS)
 - [x] Navegação lateral atualizada com 6 itens e ícones distintos
 - [x] Testes Vitest: 82 testes passando (26 novos VIP Cam + 56 existentes)
+
+## Módulo Reputação — Implementação Completa
+
+### Banco de Dados
+- [x] Tabela rep_conexoes (plataforma, placeId, apiKey, accessToken, unitId)
+- [x] Tabela rep_avaliacoes (nota, texto, autor, data, respondida, resposta, sentimento, plataforma, unitId)
+- [x] Tabela rep_config_ia (nomeEstabelecimento, nomeProprietario, tom, incluirAssinatura, autoResponder, promptPersonalizado)
+- [x] Tabela rep_respostas_ia (avaliacaoId, textoGerado, textoFinal, aprovada, unitId)
+- [x] Tabela rep_metricas_diarias (data, unitId, totalAvaliacoes, mediaNotas, positivas, neutras, negativas, respondidas)
+- [x] Tabela rep_sentiment_timeline (avaliacaoId, sentimento, confianca, palavrasChave, unitId)
+- [x] Tabela rep_alertas (tipo, mensagem, lida, unitId)
+- [x] Tabela rep_templates_resposta (nome, texto, plataforma, nota, unitId)
+- [x] Tabela rep_historico_importacao (plataforma, totalImportadas, status, unitId)
+- [x] Tabela rep_palavras_chave (palavra, frequencia, sentimento, unitId)
+- [x] Tabela rep_concorrentes (nome, placeId, mediaNotas, totalAvaliacoes, unitId)
+- [x] Tabela rep_audit_log (acao, entidade, usuarioId, unitId)
+
+### Router tRPC
+- [x] reputacao.getDashboard (KPIs: média, total, taxa resposta, NPS, tendência)
+- [x] reputacao.getAvaliacoes (lista com filtros: nota, sentimento, semResposta, plataforma, busca)
+- [x] reputacao.getAvaliacaoDetail (detalhes + histórico de respostas IA)
+- [x] reputacao.gerarRespostaIA (gera resposta com LLM usando config da unidade)
+- [x] reputacao.responderAvaliacao (salva resposta final)
+- [x] reputacao.getAnalise (análise de sentimento por período: 7d/30d/90d/12m)
+- [x] reputacao.getConexoes (lista conexões Google/iFood/TripAdvisor da unidade)
+- [x] reputacao.saveConexao (salva/atualiza conexão com plataforma)
+- [x] reputacao.deleteConexao (remove conexão)
+- [x] reputacao.importarGooglePlaces (importa avaliações via Google Places API)
+- [x] reputacao.getConfigIA (busca configuração da IA da unidade)
+- [x] reputacao.saveConfigIA (salva configuração: tom, nome, autoResponder, prompt)
+
+### Páginas
+- [x] /reputacao — Dashboard com KPIs e gráficos de tendência
+- [x] /reputacao/avaliacoes — Lista de avaliações com filtros e geração de resposta IA
+- [x] /reputacao/respostas — Avaliações respondidas com histórico
+- [x] /reputacao/analise — Análise de sentimento por período com gráficos
+- [x] /reputacao/integracoes — Conexão com Google Places, iFood, TripAdvisor
+- [x] /reputacao/config-ia — Configuração da IA (tom, nome, autoResponder, prompt personalizado)
+- [x] Navegação lateral atualizada com 6 itens
+- [x] Testes Vitest: 99 testes passando (23 novos Reputação + 76 existentes)
