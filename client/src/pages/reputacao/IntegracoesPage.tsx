@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import PageHeader from "@/components/PageHeader";
 import { Plus, Trash2, RefreshCw, CheckCircle2, XCircle, Globe, Star, Key, Info, AlertTriangle, ExternalLink, Copy, Wifi, WifiOff } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
+import { useOrg } from "@/hooks/useOrg";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -26,8 +27,11 @@ interface FormState {
 }
 
 export default function IntegracoesPage() {
-  const { selectedUnit } = useApp();
+  const { selectedUnit, availableUnits } = useApp();
   const utils = trpc.useUtils();
+  useOrg(); // garante que as unidades sejam carregadas no contexto
+  // Para o formulário, usa a unidade selecionada globalmente ou permite escolher
+  const [formUnitId, setFormUnitId] = useState<number>(selectedUnit?.id ?? 0);
   const unitId = selectedUnit?.id ?? 0;
   const [novaIntegracao, setNovaIntegracao] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -121,16 +125,21 @@ export default function IntegracoesPage() {
       clientId: c.googleClientId || "",
       clientSecret: c.googleClientSecret || "",
     });
+    setFormUnitId(c.unitId || unitId);
     setEditingId(c.id);
     setNovaIntegracao(true);
   }
 
   function handleSalvar() {
+    if (!formUnitId) {
+      toast.error("Selecione uma unidade antes de salvar.");
+      return;
+    }
     salvarMutation.mutate({
-      unitId,
+      unitId: formUnitId,
       plataforma: form.plataforma,
       externalId: form.placeId,
-      nome: selectedUnit?.name || "Unidade",
+      nome: availableUnits.find(u => u.id === formUnitId)?.name || selectedUnit?.name || "Unidade",
       googlePlaceId: form.plataforma === "google" ? form.placeId : undefined,
       googleApiKey: form.plataforma === "google" && form.apiKey ? form.apiKey : undefined,
       googleClientId: form.plataforma === "google" && form.clientId ? form.clientId : undefined,
@@ -193,6 +202,7 @@ export default function IntegracoesPage() {
             </Button>
             <Button size="sm" onClick={() => {
               setEditingId(null);
+              setFormUnitId(selectedUnit?.id ?? 0);
               setForm({ plataforma: "google", placeId: "", apiKey: "", clientId: "", clientSecret: "" });
               setNovaIntegracao(true);
             }}>
@@ -391,6 +401,27 @@ export default function IntegracoesPage() {
             <DialogTitle>{editingId ? "Editar Integração" : "Nova Integração"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Seletor de unidade — obrigatório */}
+            <div>
+              <Label>Unidade <span className="text-destructive">*</span></Label>
+              <Select
+                value={formUnitId ? String(formUnitId) : ""}
+                onValueChange={(v) => setFormUnitId(Number(v))}
+                disabled={!!editingId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a unidade..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableUnits.map(u => (
+                    <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!formUnitId && (
+                <p className="text-xs text-destructive mt-1">Selecione a unidade para esta integração.</p>
+              )}
+            </div>
             <div>
               <Label>Plataforma</Label>
               <Select
@@ -495,7 +526,7 @@ export default function IntegracoesPage() {
             </Button>
             <Button
               onClick={handleSalvar}
-              disabled={!form.placeId || salvarMutation.isPending}
+              disabled={!form.placeId || !formUnitId || salvarMutation.isPending}
             >
               {salvarMutation.isPending ? "Salvando..." : "Salvar Integração"}
             </Button>
