@@ -577,7 +577,9 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">Faturamento Mensal</h3>
-                  <p className="text-xs text-muted-foreground">Últimos 6 meses</p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedUnit ? selectedUnit.name : "Toda a rede"} · Últimos 6 meses
+                  </p>
                 </div>
                 <Badge variant="secondary" className="text-xs">Data VIP</Badge>
               </div>
