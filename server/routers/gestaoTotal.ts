@@ -809,6 +809,73 @@ const financeiroGtRouter = router({
       await db.delete(gtFinanceiro).where(and(eq(gtFinanceiro.id, input.id), eq(gtFinanceiro.orgId, input.orgId)));
       return { success: true };
     }),
+
+  // Sincroniza faturamento do Data VIP para o Financeiro
+  syncDataVip: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      unitId: z.number(),
+      inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const { syncGtFinanceiro } = await import("../vipDataSync");
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+
+      // Intervalo padrão: mês corrente completo
+      const hoje = new Date();
+      const inicio = input.inicio ?? `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-01`;
+      const fim = input.fim ?? hoje.toISOString().split("T")[0];
+
+      await syncGtFinanceiro(input.orgId, input.unitId, inicio, fim);
+
+      // Conta quantos registros foram criados/atualizados no período
+      const [rows] = await db.execute(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (await import("drizzle-orm")).sql`
+          SELECT COUNT(*) as total
+          FROM gt_financeiro
+          WHERE orgId = ${input.orgId}
+            AND unitId = ${input.unitId}
+            AND dataVipRef IS NOT NULL
+            AND DATE(vencimento) BETWEEN ${inicio} AND ${fim}
+        `
+      ) as any;
+      const total = Number((rows as any[])[0]?.total ?? 0);
+
+      return { success: true, total, inicio, fim };
+    }),
+
+  // Retorna o status da última sincronização Data VIP para esta unidade
+  syncDataVipStatus: protectedProcedure
+    .input(z.object({ orgId: z.number(), unitId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const [rows] = await db.execute(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (await import("drizzle-orm")).sql`
+          SELECT
+            COUNT(*) as totalRegistros,
+            MAX(updatedAt) as ultimaAtualizacao,
+            MIN(DATE(vencimento)) as periodoInicio,
+            MAX(DATE(vencimento)) as periodoFim
+          FROM gt_financeiro
+          WHERE orgId = ${input.orgId}
+            AND unitId = ${input.unitId}
+            AND dataVipRef IS NOT NULL
+        `
+      ) as any;
+      const r = (rows as any[])[0];
+      if (!r || Number(r.totalRegistros) === 0) return null;
+      return {
+        totalRegistros: Number(r.totalRegistros),
+        ultimaAtualizacao: r.ultimaAtualizacao,
+        periodoInicio: r.periodoInicio,
+        periodoFim: r.periodoFim,
+      };
+    }),
 });
 
 // ── Fornecedores ──────────────────────────────────────────────────────────────

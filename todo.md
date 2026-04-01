@@ -399,3 +399,16 @@
 - [x] Tendência por indicador (seta subindo/estável/caindo)
 - [x] Link direto para o módulo de cada categoria (Produtividade → Tarefas, Financeiro → Financeiro, etc.)
 - [x] Atualização automática a cada 60 segundos
+
+## Sincronização Data VIP → Financeiro (Concluído)
+
+- [x] Analisar estrutura de vendas_api_raw e gt_financeiro para mapear campos
+- [x] Adicionar coluna `dataVipRef` (VARCHAR 100) e índice único `uq_datavip_ref` em gt_financeiro
+- [x] Criar procedure `gestaoTotal.financeiro.syncDataVip` (mutation manual) no servidor
+- [x] Criar procedure `gestaoTotal.financeiro.syncDataVipStatus` (query de status) no servidor
+- [x] Integrar chamada `syncGtFinanceiro` nos 3 modos de sync do Data VIP (auto, 13m, histórico)
+- [x] Exibir badge "Data VIP" nas entradas sincronizadas na página Financeiro
+- [x] Botão "Sincronizar Data VIP" na FinanceiroPage com feedback de progresso
+- [x] Painel de status da sincronização (total de registros, período, última atualização)
+- [x] Impedir duplicação (upsert por chave datavip:{unitId}:{YYYY-MM-DD})
+- [x] 19 testes vitest passando para a lógica de sincronização

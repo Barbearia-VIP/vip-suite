@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Trash2, Edit2, TrendingUp, TrendingDown, DollarSign, CheckCircle2, Clock } from "lucide-react";
+import { Plus, Trash2, Edit2, TrendingUp, TrendingDown, DollarSign, CheckCircle2, Clock, RefreshCw, Database } from "lucide-react";
 
 type Lancamento = {
   id: number; tipo: "receita" | "despesa"; categoria: string | null;
@@ -107,6 +107,7 @@ export default function FinanceiroPage() {
   const [tab, setTab] = useState<"lancamentos"|"dre">("lancamentos");
   const listQ = trpc.gestaoTotal.financeiro.list.useQuery({ orgId:org?.id??0, unitId:selectedUnit?.id, referencia, tipo:filterTipo==="todos"?undefined:filterTipo }, { enabled:!!org?.id });
   const dreQ = trpc.gestaoTotal.financeiro.dre.useQuery({ orgId:org?.id??0, unitId:selectedUnit?.id, referencia }, { enabled:!!org?.id&&tab==="dre" });
+  const syncStatusQ = trpc.gestaoTotal.financeiro.syncDataVipStatus.useQuery({ orgId:org?.id??0, unitId:selectedUnit?.id??0 }, { enabled:!!org?.id&&!!selectedUnit?.id });
   const lancamentos = (listQ.data??[]) as Lancamento[];
   const dre = dreQ.data;
   const totalR = lancamentos.filter(l=>l.tipo==="receita").reduce((s,l)=>s+Number(l.valor),0);
@@ -119,15 +120,21 @@ export default function FinanceiroPage() {
     onSuccess:()=>{ utils.gestaoTotal.financeiro.list.invalidate(); utils.gestaoTotal.financeiro.dre.invalidate(); toast.success("Removido"); },
     onError:()=>toast.error("Erro ao remover"),
   });
+  const syncM = trpc.gestaoTotal.financeiro.syncDataVip.useMutation({
+    onSuccess:(data)=>{ utils.gestaoTotal.financeiro.list.invalidate(); utils.gestaoTotal.financeiro.dre.invalidate(); utils.gestaoTotal.financeiro.syncDataVipStatus.invalidate(); toast.success(`Sincronizado: ${data.total} registros`); },
+    onError:()=>toast.error("Erro ao sincronizar"),
+  });
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div><h1 className="text-xl font-bold text-foreground">Financeiro</h1><p className="text-sm text-muted-foreground">Receitas e despesas operacionais</p></div>
         <div className="flex items-center gap-2">
           <Input type="month" value={referencia} onChange={e=>setReferencia(e.target.value)} className="text-sm w-40" />
+          {selectedUnit && <Button size="sm" variant="outline" onClick={()=>syncM.mutate({orgId:org?.id??0,unitId:selectedUnit.id})} disabled={syncM.isPending} className="gap-1.5"><RefreshCw className={`w-3.5 h-3.5 ${syncM.isPending?'animate-spin':''}` } /> Sincronizar Data VIP</Button>}
           <Button size="sm" onClick={()=>setShowForm(true)} className="gap-1.5"><Plus className="w-3.5 h-3.5" /> Novo</Button>
         </div>
       </div>
+      {syncStatusQ.data && <Card className="bg-blue-500/10 border-blue-500/30"><CardContent className="p-3 flex items-center gap-3"><Database className="w-4 h-4 text-blue-400 shrink-0" /><div className="min-w-0 flex-1"><p className="text-xs text-blue-300 font-medium">Sincronização Data VIP ativa</p><p className="text-[10px] text-blue-400/70 mt-0.5">{syncStatusQ.data.totalRegistros} registros · Período: {syncStatusQ.data.periodoInicio} a {syncStatusQ.data.periodoFim} · Última atualização: {new Date(syncStatusQ.data.ultimaAtualizacao).toLocaleString('pt-BR')}</p></div></CardContent></Card>}
       <div className="grid grid-cols-3 gap-3">
         {[{label:"Receitas",val:totalR,icon:TrendingUp,cls:"text-green-400"},{label:"Despesas",val:totalD,icon:TrendingDown,cls:"text-red-400"},{label:"Resultado",val:totalR-totalD,icon:DollarSign,cls:totalR-totalD>=0?"text-green-400":"text-red-400"}].map(k=>(
           <Card key={k.label} className="bg-card border-border"><CardContent className="p-4">
