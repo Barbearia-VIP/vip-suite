@@ -415,17 +415,19 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
       {/* Controles de câmera USB */}
       {isUSB && (
         <div className="flex items-center gap-2 flex-wrap">
-          {availableCameras.length > 0 && (
-            <Select value={selectedCameraId} onValueChange={setSelectedCameraId}>
+          {availableCameras.filter(cam => !!cam.deviceId).length > 0 && (
+            <Select value={selectedCameraId || undefined} onValueChange={setSelectedCameraId}>
               <SelectTrigger className="w-64">
                 <SelectValue placeholder="Selecionar câmera" />
               </SelectTrigger>
               <SelectContent>
-                {availableCameras.map(cam => (
-                  <SelectItem key={cam.deviceId} value={cam.deviceId}>
-                    {cam.label || `Câmera ${cam.deviceId.slice(0, 8)}`}
-                  </SelectItem>
-                ))}
+                {availableCameras
+                  .filter(cam => !!cam.deviceId)
+                  .map((cam, idx) => (
+                    <SelectItem key={cam.deviceId} value={cam.deviceId}>
+                      {cam.label || `Câmera ${idx + 1}`}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           )}
