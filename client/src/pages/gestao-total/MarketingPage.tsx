@@ -1,6 +1,5 @@
 /**
- * MarketingPage.tsx — Gestão de campanhas de marketing
- * Schema: id, orgId, unitId, nome, descricao, canal, status, budget, gasto, alcance, cliques, conversoes, dataInicio, dataFim
+ * MarketingPage.tsx — Marketing com IA + Campanhas manuais
  */
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -15,8 +14,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Plus, Trash2, Edit2, Megaphone } from "lucide-react";
+import {
+  Plus, Trash2, Edit2, Megaphone, Wand2, Eye, UserCheck,
+  Calendar, Target, Sparkles,
+} from "lucide-react";
+import MarketingCampaignWizard, { type WizardData } from "@/components/MarketingCampaignWizard";
+import CampaignPreview from "@/components/CampaignPreview";
+import AssignCampaignModal from "@/components/AssignCampaignModal";
 
 type Campanha = {
   id: number; orgId: number; unitId: number | null;
@@ -28,11 +34,18 @@ type Campanha = {
   dataInicio: Date | null; dataFim: Date | null;
   createdAt: Date; updatedAt: Date;
 };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AICampaign = Record<string, any>;
+
 const STATUS_COLORS: Record<string, string> = {
   planejamento: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   ativa: "bg-green-500/20 text-green-400 border-green-500/30",
   pausada: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
   concluida: "bg-muted text-muted-foreground border-border",
+  draft: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+  active: "bg-green-500/20 text-green-400 border-green-500/30",
+  archived: "bg-muted text-muted-foreground border-border",
 };
 const CANAL_ICONS: Record<string, string> = {
   instagram: "IG", facebook: "FB", whatsapp: "WA", email: "EM", google: "GG", offline: "OF", outro: "OT",
@@ -104,7 +117,7 @@ function FormCampanha({ initial, onSave, onClose }: {
       </div>
       <DialogFooter>
         <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-        <Button size="sm" onClick={() => onSave({ nome, descricao: descricao || undefined, canal, status, budget: budget ? parseFloat(budget) : undefined, gasto: gasto ? parseFloat(gasto) : undefined, dataInicio: dataInicio || undefined, dataFim: dataFim || undefined })} disabled={!nome.trim()}>
+        <Button size="sm" onClick={() => onSave({ nome, descricao: descricao || undefined, canal, status, budget: budget ? parseFloat(budget as string) : undefined, gasto: gasto ? parseFloat(gasto as string) : undefined, dataInicio: dataInicio || undefined, dataFim: dataFim || undefined })} disabled={!nome.trim()}>
           Salvar
         </Button>
       </DialogFooter>
@@ -113,19 +126,34 @@ function FormCampanha({ initial, onSave, onClose }: {
 }
 
 export default function MarketingPage() {
-  const { selectedUnit } = useApp();
+  const { selectedUnit, organization } = useApp();
   const { org } = useOrg();
   const utils = trpc.useUtils();
+
+  // Estado do wizard e modais
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [previewCampaign, setPreviewCampaign] = useState<AICampaign | null>(null);
+  const [assignModal, setAssignModal] = useState<{ id: number; name: string } | null>(null);
+
+  // Estado das campanhas manuais
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Campanha | null>(null);
   const [filterStatus, setFilterStatus] = useState("todos");
 
-  const q = trpc.gestaoTotal.marketing.list.useQuery(
+  // Queries
+  const manualQ = trpc.gestaoTotal.marketing.list.useQuery(
     { orgId: org?.id ?? 0, unitId: selectedUnit?.id, status: filterStatus !== "todos" ? filterStatus : undefined },
     { enabled: !!org?.id }
   );
-  const campanhas = (q.data ?? []) as unknown as Campanha[];
+  const aiQ = trpc.gestaoTotal.marketingCampaigns.listCampaigns.useQuery(
+    { orgId: org?.id ?? 0, unitId: selectedUnit?.id },
+    { enabled: !!org?.id }
+  );
 
+  const campanhas = (manualQ.data ?? []) as unknown as Campanha[];
+  const aiCampaigns = (aiQ.data ?? []) as AICampaign[];
+
+  // Mutations manuais
   const saveM = trpc.gestaoTotal.marketing.save.useMutation({
     onSuccess: () => { utils.gestaoTotal.marketing.list.invalidate(); toast.success("Campanha salva!"); setShowForm(false); setEditing(null); },
     onError: () => toast.error("Erro ao salvar"),
@@ -135,80 +163,302 @@ export default function MarketingPage() {
     onError: () => toast.error("Erro ao remover"),
   });
 
+  // Mutation de geração com IA
+  const generateM = trpc.gestaoTotal.marketingCampaigns.generateCampaign.useMutation({
+    onSuccess: (result) => {
+      toast.success("Campanha gerada com sucesso!");
+      setWizardOpen(false);
+      utils.gestaoTotal.marketingCampaigns.listCampaigns.invalidate();
+      // Abre o preview com a campanha recém-criada
+      if (result.campaign) {
+        setPreviewCampaign({
+          id: result.id,
+          campaignName: result.campaignName,
+          status: "draft",
+          createdAt: new Date(),
+          jsonBlob: result.campaign,
+          ...result.campaign,
+        });
+      }
+    },
+    onError: (err) => {
+      toast.error("Erro ao gerar campanha: " + err.message);
+    },
+  });
+
+  // Mutation de exclusão de campanha IA
+  const deleteAiM = trpc.gestaoTotal.marketingCampaigns.deleteCampaign.useMutation({
+    onSuccess: () => { utils.gestaoTotal.marketingCampaigns.listCampaigns.invalidate(); toast.success("Campanha removida"); },
+    onError: () => toast.error("Erro ao remover"),
+  });
+
+  // Query de detalhe da campanha IA (para abrir preview)
+  const [selectedAiId, setSelectedAiId] = useState<number | null>(null);
+  const aiDetailQ = trpc.gestaoTotal.marketingCampaigns.getCampaign.useQuery(
+    { id: selectedAiId ?? 0, orgId: org?.id ?? 0 },
+    { enabled: !!selectedAiId && !!org?.id }
+  );
+
+  function handleViewCampaign(id: number) {
+    setSelectedAiId(id);
+  }
+
+  // Quando o detalhe carrega, abre o preview
+  if (aiDetailQ.data && selectedAiId && !previewCampaign) {
+    setPreviewCampaign(aiDetailQ.data as AICampaign);
+    setSelectedAiId(null);
+  }
+
+  function handleGenerate(wizardData: WizardData) {
+    if (!org?.id) return;
+    generateM.mutate({
+      orgId: org.id,
+      unitId: selectedUnit?.id,
+      wizardData,
+      internalData: {
+        company: {
+          name: org?.name,
+        },
+      },
+    });
+  }
+
   const ativas = campanhas.filter(c => c.status === "ativa").length;
   const totalBudget = campanhas.reduce((s, c) => s + Number(c.budget ?? 0), 0);
 
   return (
     <div className="p-6 space-y-4">
+      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground">Marketing</h1>
-          <p className="text-sm text-muted-foreground">{ativas} campanhas ativas • {fmt(totalBudget)} budget total</p>
+          <p className="text-sm text-muted-foreground">
+            {ativas} campanhas ativas • {fmt(totalBudget)} budget total • {aiCampaigns.length} estratégias com IA
+          </p>
         </div>
-        <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
-          <Plus className="w-3.5 h-3.5" /> Nova Campanha
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setShowForm(true)} className="gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> Nova Campanha
+          </Button>
+          <Button size="sm" onClick={() => setWizardOpen(true)} className="gap-1.5">
+            <Wand2 className="w-3.5 h-3.5" /> Gerar com IA
+          </Button>
+        </div>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
-        {["todos", "planejamento", "ativa", "pausada", "concluida"].map(s => (
-          <button key={s} onClick={() => setFilterStatus(s)} className={`text-xs px-3 py-1 rounded-full border transition-colors capitalize ${filterStatus === s ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>{s}</button>
-        ))}
-      </div>
+      <Tabs defaultValue="estrategias">
+        <TabsList>
+          <TabsTrigger value="estrategias" className="gap-1.5">
+            <Sparkles className="h-3.5 w-3.5" /> Estratégias com IA
+            {aiCampaigns.length > 0 && <Badge variant="secondary" className="ml-1 text-xs">{aiCampaigns.length}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="campanhas" className="gap-1.5">
+            <Megaphone className="h-3.5 w-3.5" /> Campanhas Manuais
+            {campanhas.length > 0 && <Badge variant="secondary" className="ml-1 text-xs">{campanhas.length}</Badge>}
+          </TabsTrigger>
+        </TabsList>
 
-      {q.isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-36 rounded-lg" />)}</div>
-      ) : campanhas.length === 0 ? (
-        <Card className="bg-card border-border">
-          <CardContent className="p-8 text-center">
-            <Megaphone className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">Nenhuma campanha cadastrada</p>
-            <Button size="sm" variant="outline" className="mt-3" onClick={() => setShowForm(true)}>Criar campanha</Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {campanhas.map(c => (
-            <Card key={c.id} className="bg-card border-border hover:border-primary/40 transition-colors">
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-2 min-w-0">
-                    <div className="w-7 h-7 rounded bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                      {CANAL_ICONS[c.canal] ?? "??"}
-                    </div>
-                    <div className="min-w-0">
-                      <CardTitle className="text-sm truncate">{c.nome}</CardTitle>
-                      <p className="text-xs text-muted-foreground capitalize mt-0.5">{c.canal}</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-1 shrink-0 ml-2">
-                    <Badge variant="outline" className={`text-xs ${STATUS_COLORS[c.status] ?? ""}`}>{c.status}</Badge>
-                    <button onClick={() => setEditing(c)} className="text-muted-foreground hover:text-foreground p-0.5 ml-1"><Edit2 className="w-3 h-3" /></button>
-                    <button onClick={() => deleteM.mutate({ id: c.id, orgId: c.orgId })} className="text-muted-foreground hover:text-red-400 p-0.5"><Trash2 className="w-3 h-3" /></button>
-                  </div>
+        {/* ABA: Estratégias com IA */}
+        <TabsContent value="estrategias" className="mt-4 space-y-4">
+          {/* Card de geração */}
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="p-5 flex items-center justify-between gap-4 flex-wrap">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Wand2 className="h-5 w-5 text-primary" />
+                  <p className="font-semibold">Gerador de Estratégia com IA</p>
                 </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="grid grid-cols-2 gap-2">
-                  {c.budget && <div><p className="text-xs text-muted-foreground">Budget</p><p className="text-sm font-semibold">{fmt(Number(c.budget))}</p></div>}
-                  {c.gasto && <div><p className="text-xs text-muted-foreground">Gasto</p><p className="text-sm font-semibold">{fmt(Number(c.gasto))}</p></div>}
-                  {c.alcance && <div><p className="text-xs text-muted-foreground">Alcance</p><p className="text-sm font-semibold">{c.alcance.toLocaleString("pt-BR")}</p></div>}
-                  {c.conversoes && <div><p className="text-xs text-muted-foreground">Conversões</p><p className="text-sm font-semibold text-green-400">{c.conversoes}</p></div>}
-                </div>
+                <p className="text-sm text-muted-foreground">
+                  Crie uma campanha completa com personas, calendário de 90 dias, anúncios, fluxos de CRM e muito mais.
+                </p>
+              </div>
+              <Button onClick={() => setWizardOpen(true)} className="gap-2 shrink-0">
+                <Wand2 className="h-4 w-4" /> Gerar Nova Campanha com IA
+              </Button>
+            </CardContent>
+          </Card>
+
+          {aiQ.isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-lg" />)}
+            </div>
+          ) : aiCampaigns.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <Sparkles className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Nenhuma estratégia gerada ainda</p>
+                <Button size="sm" variant="outline" className="mt-3" onClick={() => setWizardOpen(true)}>
+                  Gerar primeira campanha
+                </Button>
               </CardContent>
             </Card>
-          ))}
-        </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {aiCampaigns.map((c: AICampaign) => {
+                const channels = (c.channelMix as AICampaign[] | undefined) ?? [];
+                const wr = c.wizardResponses as AICampaign | undefined;
+                return (
+                  <Card key={c.id} className="bg-card border-border hover:border-primary/40 transition-colors">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <CardTitle className="text-sm truncate">{c.campaignName}</CardTitle>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className={`text-xs ${STATUS_COLORS[c.status] ?? ""}`}>{c.status}</Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(c.createdAt).toLocaleDateString("pt-BR")}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => deleteAiM.mutate({ id: c.id, orgId: org?.id ?? 0 })}
+                          className="text-muted-foreground hover:text-red-400 p-0.5 shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-0 space-y-3">
+                      {c.executiveSummary && (
+                        <p className="text-xs text-muted-foreground line-clamp-2">{c.executiveSummary}</p>
+                      )}
+                      {channels.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {channels.slice(0, 4).map((ch: AICampaign, i: number) => (
+                            <Badge key={i} variant="secondary" className="text-xs">{ch.channel} {ch.budget_percentage}%</Badge>
+                          ))}
+                        </div>
+                      )}
+                      {wr?.budget?.total && (
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">{fmt(wr.budget.total)}</span> de orçamento
+                        </p>
+                      )}
+                      {c.assignedToName && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <UserCheck className="h-3 w-3" /> Atribuído a: <span className="font-medium">{c.assignedToName}</span>
+                        </p>
+                      )}
+                      <div className="flex gap-2 pt-1">
+                        <Button size="sm" variant="outline" className="flex-1 gap-1 text-xs" onClick={() => handleViewCampaign(c.id)}>
+                          <Eye className="h-3 w-3" /> Visualizar
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1 gap-1 text-xs" onClick={() => setAssignModal({ id: c.id, name: c.campaignName })}>
+                          <UserCheck className="h-3 w-3" /> Destinar
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ABA: Campanhas Manuais */}
+        <TabsContent value="campanhas" className="mt-4 space-y-4">
+          <div className="flex gap-2 flex-wrap">
+            {["todos", "planejamento", "ativa", "pausada", "concluida"].map(s => (
+              <button key={s} onClick={() => setFilterStatus(s)}
+                className={`text-xs px-3 py-1 rounded-full border transition-colors capitalize ${filterStatus === s ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
+                {s}
+              </button>
+            ))}
+          </div>
+
+          {manualQ.isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-36 rounded-lg" />)}</div>
+          ) : campanhas.length === 0 ? (
+            <Card className="bg-card border-border">
+              <CardContent className="p-8 text-center">
+                <Megaphone className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Nenhuma campanha cadastrada</p>
+                <Button size="sm" variant="outline" className="mt-3" onClick={() => setShowForm(true)}>Criar campanha</Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {campanhas.map(c => (
+                <Card key={c.id} className="bg-card border-border hover:border-primary/40 transition-colors">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <div className="w-7 h-7 rounded bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                          {CANAL_ICONS[c.canal] ?? "??"}
+                        </div>
+                        <div className="min-w-0">
+                          <CardTitle className="text-sm truncate">{c.nome}</CardTitle>
+                          <p className="text-xs text-muted-foreground capitalize mt-0.5">{c.canal}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-1 shrink-0 ml-2">
+                        <Badge variant="outline" className={`text-xs ${STATUS_COLORS[c.status] ?? ""}`}>{c.status}</Badge>
+                        <button onClick={() => setEditing(c)} className="text-muted-foreground hover:text-foreground p-0.5 ml-1"><Edit2 className="w-3 h-3" /></button>
+                        <button onClick={() => deleteM.mutate({ id: c.id, orgId: c.orgId })} className="text-muted-foreground hover:text-red-400 p-0.5"><Trash2 className="w-3 h-3" /></button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="grid grid-cols-2 gap-2">
+                      {c.budget && <div><p className="text-xs text-muted-foreground">Budget</p><p className="text-sm font-semibold">{fmt(Number(c.budget))}</p></div>}
+                      {c.gasto && <div><p className="text-xs text-muted-foreground">Gasto</p><p className="text-sm font-semibold">{fmt(Number(c.gasto))}</p></div>}
+                      {c.alcance && <div><p className="text-xs text-muted-foreground">Alcance</p><p className="text-sm font-semibold">{c.alcance.toLocaleString("pt-BR")}</p></div>}
+                      {c.conversoes && <div><p className="text-xs text-muted-foreground">Conversões</p><p className="text-sm font-semibold text-green-400">{c.conversoes}</p></div>}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Wizard de geração com IA */}
+      <MarketingCampaignWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onGenerate={handleGenerate}
+        isGenerating={generateM.isPending}
+      />
+
+      {/* Preview da campanha gerada */}
+      <CampaignPreview
+        open={!!previewCampaign}
+        onClose={() => setPreviewCampaign(null)}
+        campaign={previewCampaign}
+      />
+
+      {/* Modal de atribuição */}
+      {assignModal && (
+        <AssignCampaignModal
+          open={!!assignModal}
+          onClose={() => setAssignModal(null)}
+          campaignId={assignModal.id}
+          campaignName={assignModal.name}
+          onAssigned={() => utils.gestaoTotal.marketingCampaigns.listCampaigns.invalidate()}
+        />
       )}
 
+      {/* Formulário de campanha manual */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Nova Campanha</DialogTitle></DialogHeader>
-          <FormCampanha onSave={d => { if (!org?.id) return; saveM.mutate({ orgId: org.id, unitId: selectedUnit?.id, ...d }); }} onClose={() => setShowForm(false)} />
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Nova Campanha</DialogTitle></DialogHeader>
+          <FormCampanha
+            onSave={d => { if (!org?.id) return; saveM.mutate({ orgId: org.id, unitId: selectedUnit?.id, ...d }); }}
+            onClose={() => setShowForm(false)}
+          />
         </DialogContent>
       </Dialog>
       <Dialog open={!!editing} onOpenChange={v => !v && setEditing(null)}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Editar Campanha</DialogTitle></DialogHeader>
-          {editing && <FormCampanha initial={editing} onSave={d => saveM.mutate({ id: editing.id, orgId: editing.orgId, ...d })} onClose={() => setEditing(null)} />}
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Editar Campanha</DialogTitle></DialogHeader>
+          {editing && (
+            <FormCampanha
+              initial={editing}
+              onSave={d => saveM.mutate({ id: editing.id, orgId: editing.orgId, ...d })}
+              onClose={() => setEditing(null)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

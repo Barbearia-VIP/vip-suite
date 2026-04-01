@@ -8,7 +8,7 @@ import {
   gtTarefas, gtProcessos, gtInstrucoes, gtIndicadores, gtPlanejamento,
   gtReunioes, gtCargos, gtColaboradores, gtFinanceiro, gtFornecedores,
   gtCompras, gtProblemas, gtOportunidades, gtRiscos, gtDocumentos,
-  gtMarketing, gtAdvisorConversations, gtAuditLog,
+  gtMarketing, gtMarketingCampaigns, gtAdvisorConversations, gtAuditLog,
 } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
@@ -1198,7 +1198,206 @@ const marketingRouter = router({
     }),
 });
 
-// ── IA Conselheiro ────────────────────────────────────────────────────────────
+/// ── Campanhas de Marketing com IA ────────────────────────────────
+const marketingCampaignsRouter = router({
+  listCampaigns: protectedProcedure
+    .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const conds = [eq(gtMarketingCampaigns.orgId, input.orgId)];
+      if (input.unitId) conds.push(eq(gtMarketingCampaigns.unitId, input.unitId));
+      return db.select({
+        id: gtMarketingCampaigns.id,
+        campaignName: gtMarketingCampaigns.campaignName,
+        status: gtMarketingCampaigns.status,
+        version: gtMarketingCampaigns.version,
+        executiveSummary: gtMarketingCampaigns.executiveSummary,
+        channelMix: gtMarketingCampaigns.channelMix,
+        assignedToName: gtMarketingCampaigns.assignedToName,
+        assignedAt: gtMarketingCampaigns.assignedAt,
+        createdAt: gtMarketingCampaigns.createdAt,
+        wizardResponses: gtMarketingCampaigns.wizardResponses,
+      }).from(gtMarketingCampaigns).where(and(...conds)).orderBy(desc(gtMarketingCampaigns.createdAt)).limit(50);
+    }),
+
+  getCampaign: protectedProcedure
+    .input(z.object({ id: z.number(), orgId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const rows = await db.select().from(gtMarketingCampaigns)
+        .where(and(eq(gtMarketingCampaigns.id, input.id), eq(gtMarketingCampaigns.orgId, input.orgId)))
+        .limit(1);
+      return rows[0] ?? null;
+    }),
+
+  generateCampaign: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      unitId: z.number().optional(),
+      wizardData: z.object({
+        objective: z.string(),
+        audience: z.object({
+          age_range: z.string().optional(),
+          gender: z.string().optional(),
+          interests: z.string().optional(),
+          locations: z.array(z.string()).optional(),
+        }),
+        offer: z.string(),
+        budget: z.object({
+          total: z.number().optional(),
+          daily: z.number().optional(),
+          start_date: z.string().optional(),
+          end_date: z.string().optional(),
+        }),
+        channels: z.array(z.string()),
+        assets: z.object({
+          photos_videos: z.boolean().optional(),
+          testimonials: z.boolean().optional(),
+          awards: z.boolean().optional(),
+          certifications: z.boolean().optional(),
+        }),
+        tone: z.string().optional(),
+        restrictions: z.string().optional(),
+        kpis: z.array(z.string()),
+        differentiators: z.array(z.string()),
+        observations: z.string().optional(),
+      }),
+      internalData: z.object({
+        company: z.object({
+          name: z.string().optional(),
+          segment: z.string().optional(),
+          description: z.string().optional(),
+        }).optional(),
+      }).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+
+      const { wizardData, internalData, orgId, unitId } = input;
+      const company = internalData?.company;
+
+      const systemPrompt = `Você é um especialista em marketing digital para PMEs brasileiras. Gere uma campanha de marketing completa e acionável em português brasileiro. Responda APENAS com um JSON válido, sem markdown, sem explicações adicionais.`;
+
+      const userPrompt = `Crie uma campanha de marketing completa para a empresa abaixo.
+
+EMPRESA:
+- Nome: ${company?.name ?? "Não informado"}
+- Segmento: ${company?.segment ?? "Não informado"}
+- Descrição: ${company?.description ?? "Não informado"}
+
+DADOS DA CAMPANHA:
+- Objetivo: ${wizardData.objective}
+- Público-alvo: ${wizardData.audience.age_range ?? ""}, ${wizardData.audience.gender ?? "Todos"}, Interesses: ${wizardData.audience.interests ?? ""}, Regiões: ${(wizardData.audience.locations ?? []).join(", ")}
+- Oferta/Proposta de Valor: ${wizardData.offer}
+- Orçamento Total: R$ ${wizardData.budget.total ?? 0} | Diário: R$ ${wizardData.budget.daily ?? 0}
+- Período: ${wizardData.budget.start_date ?? ""} a ${wizardData.budget.end_date ?? ""}
+- Canais: ${wizardData.channels.join(", ")}
+- Ativos disponíveis: ${Object.entries(wizardData.assets ?? {}).filter(([,v])=>v).map(([k])=>k).join(", ") || "Nenhum"}
+- Tom de voz: ${wizardData.tone ?? "amigavel"}
+- Restrições: ${wizardData.restrictions ?? "Nenhuma"}
+- KPIs prioritários: ${wizardData.kpis.join(", ")}
+- Diferenciais: ${wizardData.differentiators.join("; ")}
+- Observações: ${wizardData.observations ?? "Nenhuma"}
+
+Gere o JSON com EXATAMENTE esta estrutura (sem campos extras, sem markdown):
+{
+  "executive_summary": "string",
+  "personas": [{"name":"string","demographics":"string","pain_points":["string"],"desires":["string"],"triggers":["string"],"objections":["string"],"key_messages":["string"]}],
+  "messages": {"central_promise":"string","pillars":["string"],"social_proof":["string"]},
+  "channel_mix": [{"channel":"string","budget_percentage":0,"justification":"string"}],
+  "budget_split": {"total_budget":0,"allocation":[{"category":"string","amount":0,"percentage":0}]},
+  "calendar_90d": [{"week":1,"items":[{"day":"string","theme":"string","format":"string","objective":"string","cta":"string","hook":"string"}]}],
+  "content_ideas": [{"title":"string","hook":"string","format":"string","objective":"string"}],
+  "ads_kits": {"meta_ads":{"headlines":["string"],"primary_texts":["string"],"descriptions":["string"],"ctas":["string"]},"google_search":{"keywords":["string"],"negative_keywords":["string"],"ad_titles":["string"],"descriptions":["string"],"extensions":["string"]}},
+  "crm_flows": {"whatsapp_templates":["string"],"email_flows":[{"name":"string","steps":[{"day":0,"subject":"string","body":"string"}]}]},
+  "landing_page": {"structure":[{"section":"string","headline":"string","subheadline":"string","cta":"string","items":["string"]}],"checklist":["string"]},
+  "kpis_targets": [{"metric":"string","target":0,"formula":"string"}],
+  "experiments_backlog": [{"hypothesis":"string","impact":0,"confidence":0,"ease":0,"ice_score":0,"next_step":"string"}],
+  "risks_compliance": ["string"],
+  "assumptions": ["string"]
+}
+
+REGRAS:
+- Mínimo 12 itens em calendar_90d (distribuídos em pelo menos 4 semanas)
+- Mínimo 8 content_ideas
+- 5 headlines e 5 primary_texts em meta_ads
+- Números realistas baseados no orçamento de R$ ${wizardData.budget.total ?? 0}
+- Tom: ${wizardData.tone ?? "amigavel"}
+- Foco em PMEs e no segmento: ${company?.segment ?? "serviços"}`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      });
+
+      const rawContentRaw = response.choices?.[0]?.message?.content ?? "{}";
+      const rawContent = typeof rawContentRaw === "string" ? rawContentRaw : JSON.stringify(rawContentRaw);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const campaign = parseJsonSafe(rawContent) as any;
+
+      const campaignName = `${wizardData.objective} - ${new Date().toLocaleDateString("pt-BR")}`;
+
+      const [r] = await db.insert(gtMarketingCampaigns).values({
+        orgId,
+        unitId,
+        campaignName,
+        status: "draft",
+        version: "v1",
+        wizardResponses: wizardData as unknown as Record<string, unknown>,
+        internalDataUsed: (internalData ?? {}) as Record<string, unknown>,
+        executiveSummary: campaign.executive_summary ?? null,
+        personas: campaign.personas ?? null,
+        messages: campaign.messages ?? null,
+        channelMix: campaign.channel_mix ?? null,
+        budgetSplit: campaign.budget_split ?? null,
+        calendar90d: campaign.calendar_90d ?? null,
+        contentIdeas: campaign.content_ideas ?? null,
+        adsKits: campaign.ads_kits ?? null,
+        crmFlows: campaign.crm_flows ?? null,
+        landingPage: campaign.landing_page ?? null,
+        kpisTargets: campaign.kpis_targets ?? null,
+        experimentsBacklog: campaign.experiments_backlog ?? null,
+        risksCompliance: campaign.risks_compliance ?? null,
+        assumptions: campaign.assumptions ?? null,
+        jsonBlob: campaign as Record<string, unknown>,
+      }) as any;
+
+      return { id: (r as any).insertId, campaignName, campaign };
+    }),
+
+  assignCampaign: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      orgId: z.number(),
+      assignedToId: z.number().optional(),
+      assignedToName: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await db.update(gtMarketingCampaigns)
+        .set({ assignedToId: input.assignedToId, assignedToName: input.assignedToName, assignedAt: new Date() })
+        .where(and(eq(gtMarketingCampaigns.id, input.id), eq(gtMarketingCampaigns.orgId, input.orgId)));
+      return { success: true };
+    }),
+
+  deleteCampaign: protectedProcedure
+    .input(z.object({ id: z.number(), orgId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await db.delete(gtMarketingCampaigns)
+        .where(and(eq(gtMarketingCampaigns.id, input.id), eq(gtMarketingCampaigns.orgId, input.orgId)));
+      return { success: true };
+    }),
+});
+
+// ── IA Conselheiro ────────────────────────────────────────────
 const iaRouter = router({
   listConversations: protectedProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
@@ -1416,6 +1615,7 @@ export const gestaoTotalRouter = router({
   riscos: riscosRouter,
   documentos: documentosRouter,
   marketing: marketingRouter,
+  marketingCampaigns: marketingCampaignsRouter,
   ia: iaRouter,
   auditoria: auditoriaRouter,
 });

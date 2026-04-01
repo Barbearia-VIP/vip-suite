@@ -928,6 +928,45 @@ export const gtMarketing = mysqlTable("gt_marketing", {
 ]);
 
 // ─────────────────────────────────────────────
+// GESTÃO TOTAL — Campanhas de Marketing com IA
+// ─────────────────────────────────────────────
+export const gtMarketingCampaigns = mysqlTable("gt_marketing_campaigns", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  campaignName: varchar("campaignName", { length: 500 }).notNull(),
+  status: varchar("status", { length: 50 }).default("draft").notNull(), // draft | active | archived
+  version: varchar("version", { length: 20 }).default("v1").notNull(),
+  // Inputs do wizard
+  wizardResponses: json("wizardResponses"), // WizardData completo
+  internalDataUsed: json("internalDataUsed"), // { company, social_accounts }
+  // Outputs da IA (campos individuais para consulta)
+  executiveSummary: text("executiveSummary"),
+  personas: json("personas"),
+  messages: json("messages"),
+  channelMix: json("channelMix"),
+  budgetSplit: json("budgetSplit"),
+  calendar90d: json("calendar90d"),
+  contentIdeas: json("contentIdeas"),
+  adsKits: json("adsKits"),
+  crmFlows: json("crmFlows"),
+  landingPage: json("landingPage"),
+  kpisTargets: json("kpisTargets"),
+  experimentsBacklog: json("experimentsBacklog"),
+  risksCompliance: json("risksCompliance"),
+  assumptions: json("assumptions"),
+  jsonBlob: json("jsonBlob"), // cópia integral
+  // Atribuição
+  assignedToId: int("assignedToId"), // FK → gt_colaboradores_gt.id
+  assignedToName: varchar("assignedToName", { length: 255 }),
+  assignedAt: timestamp("assignedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_mkt_camp_org").on(t.orgId, t.status),
+]);
+
+// ─────────────────────────────────────────────
 // GESTÃO TOTAL — Conversas com IA Conselheiro
 // ─────────────────────────────────────────────
 export const gtAdvisorConversations = mysqlTable("gt_advisor_conversations", {

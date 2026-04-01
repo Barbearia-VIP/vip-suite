@@ -412,3 +412,27 @@
 - [x] Painel de status da sincronização (total de registros, período, última atualização)
 - [x] Impedir duplicação (upsert por chave datavip:{unitId}:{YYYY-MM-DD})
 - [x] 19 testes vitest passando para a lógica de sincronização
+
+## Módulo Marketing com IA — Implementação Completa
+
+### Banco de Dados
+- [x] Tabela gt_marketing_campaigns (campos JSONB individuais + json_blob)
+- [x] Migration SQL aplicada no banco
+
+### Routers tRPC
+- [x] gestaoTotal.marketingCampaigns.listCampaigns (lista campanhas da org)
+- [x] gestaoTotal.marketingCampaigns.getCampaign (detalhe de uma campanha)
+- [x] gestaoTotal.marketingCampaigns.generateCampaign (wizard data → LLM → salva no banco)
+- [x] gestaoTotal.marketingCampaigns.deleteCampaign
+- [x] gestaoTotal.marketingCampaigns.assignCampaign (atribuir a colaborador)
+
+### Componentes
+- [x] MarketingCampaignWizard.tsx — wizard modal 10 etapas com barra de progresso
+- [x] CampaignPreview.tsx — modal de visualização com 7 abas
+- [x] AssignCampaignModal.tsx — modal de atribuição a colaborador
+
+### Páginas
+- [x] Atualizar /gestao-total/marketing — botão "Gerar Nova Campanha com IA", lista de campanhas geradas
+
+### Testes
+- [x] 27 testes vitest passando (145 total)
