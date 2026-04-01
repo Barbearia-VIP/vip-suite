@@ -197,7 +197,7 @@ export default function DashboardPage() {
   );
   const rankingQuery = trpc.dashboard.rankingUnidades.useQuery(
     { orgId },
-    { enabled: orgId > 0 && isMasterOrAdmin, refetchOnWindowFocus: false, refetchInterval: 5 * 60 * 1000 }
+    { enabled: orgId > 0 && isMasterOrAdmin && !selectedUnit, refetchOnWindowFocus: false, refetchInterval: 5 * 60 * 1000 }
   );
 
   const kpis = kpisQuery.data;
@@ -657,7 +657,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Ranking + Unidades (admin) ── */}
-      {isMasterOrAdmin && (
+      {isMasterOrAdmin && !selectedUnit && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card className="bg-card border-border">
             <CardContent className="p-5">
