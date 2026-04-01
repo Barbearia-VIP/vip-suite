@@ -7,7 +7,9 @@ import {
   tasks,
   camClientes,
   camMetricasDiarias,
+  camSentimentTimeline,
   avaliacoes,
+  repAvaliacoes,
   instagramMetricas,
   whatsappCampanhas,
   units,
@@ -42,13 +44,34 @@ export const dashboardRouter = router({
 
   // ─── KPIs CONSOLIDADOS ────────────────────────────────────────────────────
   kpis: protectedProcedure
-    .input(z.object({ unitId: z.number().optional(), orgId: z.number() }))
+    .input(z.object({
+      unitId: z.number().optional(),
+      orgId: z.number(),
+      // Filtro de período: dateFrom e dateTo em ISO string (YYYY-MM-DD)
+      // Se não informados, usa o mês atual
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+    }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return null;
 
-      const { start: mesStart, end: mesEnd } = getMonthRange(0);
-      const { start: mesAnteriorStart, end: mesAnteriorEnd } = getMonthRange(-1);
+      // ── Período selecionado ──
+      let mesStart: Date;
+      let mesEnd: Date;
+      if (input.dateFrom && input.dateTo) {
+        mesStart = new Date(input.dateFrom + "T00:00:00");
+        mesEnd = new Date(input.dateTo + "T23:59:59");
+      } else {
+        const range = getMonthRange(0);
+        mesStart = range.start;
+        mesEnd = range.end;
+      }
+      // Período anterior (mesmo número de dias, antes do período selecionado)
+      const periodDays = Math.ceil((mesEnd.getTime() - mesStart.getTime()) / (1000 * 60 * 60 * 24));
+      const mesAnteriorEnd = new Date(mesStart.getTime() - 1);
+      const mesAnteriorStart = new Date(mesAnteriorEnd.getTime() - periodDays * 24 * 60 * 60 * 1000);
+
       const { start: hoje, end: hojeEnd } = getToday();
 
       // Filtro de unidade
@@ -130,7 +153,39 @@ export const dashboardRouter = router({
       const receitasGt = finRows.filter(f => f.tipo === "receita").reduce((s, f) => s + Number(f.valor), 0);
       const despesasGt = finRows.filter(f => f.tipo === "despesa").reduce((s, f) => s + Number(f.valor), 0);
 
-      // ── VIP CAM: reconhecimentos hoje ──
+      // ── VIP CAM: reconhecimentos no período selecionado (via timeline) ──
+      const camTimelineConditions = [
+        gte(camSentimentTimeline.recordedAt, mesStart),
+        lte(camSentimentTimeline.recordedAt, mesEnd),
+        ...(input.unitId ? [eq(camSentimentTimeline.unitId, input.unitId)] : []),
+      ];
+      // Clientes únicos no período com a regra SenseVIP de prioridade
+      const camTimelineRows = await db.select({
+        clienteId: camSentimentTimeline.clienteId,
+        satisfactionLevel: camSentimentTimeline.satisfactionLevel,
+      }).from(camSentimentTimeline).where(and(...camTimelineConditions));
+
+      // Agrupa por cliente e aplica regra SenseVIP
+      const camClienteMap = new Map<number, { happy: number; neutral: number; angry: number }>();
+      for (const row of camTimelineRows) {
+        const c = camClienteMap.get(row.clienteId) ?? { happy: 0, neutral: 0, angry: 0 };
+        if (row.satisfactionLevel === "satisfied") c.happy++;
+        else if (row.satisfactionLevel === "neutral") c.neutral++;
+        else c.angry++;
+        camClienteMap.set(row.clienteId, c);
+      }
+      let camSatisfeitos = 0, camNeutros = 0, camInsatisfeitos = 0;
+      for (const [, counts] of Array.from(camClienteMap.entries())) {
+        if (counts.happy > 0) camSatisfeitos++;
+        else if (counts.neutral >= counts.angry) camNeutros++;
+        else camInsatisfeitos++;
+      }
+      const camTotal = camClienteMap.size;
+      const camSatisfacaoPercent = camTotal > 0
+        ? Math.round((camSatisfeitos / camTotal) * 100)
+        : 0;
+
+      // Também busca dados de hoje para compatibilidade
       const camWhere = input.unitId
         ? sql`${camMetricasDiarias.data} >= ${hoje.toISOString().split("T")[0]} AND ${camMetricasDiarias.data} <= ${hojeEnd.toISOString().split("T")[0]} AND ${camMetricasDiarias.unitId} = ${input.unitId}`
         : sql`${camMetricasDiarias.data} >= ${hoje.toISOString().split("T")[0]} AND ${camMetricasDiarias.data} <= ${hojeEnd.toISOString().split("T")[0]}`;
@@ -140,7 +195,23 @@ export const dashboardRouter = router({
         insatisfeitos: sql<string>`COALESCE(SUM(${camMetricasDiarias.insatisfeitos}), 0)`,
       }).from(camMetricasDiarias).where(camWhere);
 
-      // ── REPUTAÇÃO: avaliação média do mês ──
+      // ── REPUTAÇÃO: avaliação média do período (repAvaliacoes — Google e outras plataformas) ──
+      const repAvalConditions = [
+        gte(repAvaliacoes.dataAvaliacao, mesStart),
+        lte(repAvaliacoes.dataAvaliacao, mesEnd),
+        ...(input.unitId ? [eq(repAvaliacoes.unitId, input.unitId)] : []),
+      ];
+      const [repStats] = await db.select({
+        media: sql<string>`COALESCE(AVG(${repAvaliacoes.nota}), 0)`,
+        total: count(repAvaliacoes.id),
+        semResposta: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.resposta} IS NULL OR ${repAvaliacoes.resposta} = '' THEN 1 ELSE 0 END), 0)`,
+        positivas: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.sentimento} = 'positivo' THEN 1 ELSE 0 END), 0)`,
+        google: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.plataforma} = 'google' THEN 1 ELSE 0 END), 0)`,
+        mediaGoogle: sql<string>`COALESCE(AVG(CASE WHEN ${repAvaliacoes.plataforma} = 'google' THEN ${repAvaliacoes.nota} END), 0)`,
+        semRespostaGoogle: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.plataforma} = 'google' AND (${repAvaliacoes.resposta} IS NULL OR ${repAvaliacoes.resposta} = '') THEN 1 ELSE 0 END), 0)`,
+      }).from(repAvaliacoes).where(and(...repAvalConditions));
+
+      // Fallback para tabela antiga de avaliações
       const avalConditions = [
         gte(avaliacoes.dataAvaliacao, mesStart),
         lte(avaliacoes.dataAvaliacao, mesEnd),
@@ -151,6 +222,17 @@ export const dashboardRouter = router({
         total: count(avaliacoes.id),
         positivas: sql<string>`COALESCE(SUM(CASE WHEN ${avaliacoes.sentimento} = 'positivo' THEN 1 ELSE 0 END), 0)`,
       }).from(avaliacoes).where(and(...avalConditions));
+
+      // Usa repAvaliacoes se tiver dados, senão fallback para avaliacoes
+      const totalRepAval = Number(repStats?.total ?? 0);
+      const totalAval = Number(avalStats?.total ?? 0);
+      const mediaFinal = totalRepAval > 0
+        ? parseFloat(repStats?.media ?? "0")
+        : parseFloat(avalStats?.media ?? "0");
+      const totalFinal = totalRepAval > 0 ? totalRepAval : totalAval;
+      const positivasFinal = totalRepAval > 0
+        ? Number(repStats?.positivas ?? 0)
+        : Number(avalStats?.positivas ?? 0);
 
       // ── AUTO INSTAGRAM: seguidores e engajamento ──
       const igWhere = input.unitId
@@ -195,18 +277,30 @@ export const dashboardRouter = router({
           hasData: true,
         },
         vipCam: {
+          // Dados do período selecionado (clientes únicos com regra SenseVIP)
+          clientesNoPeriodo: camTotal,
+          satisfeitosNoPeriodo: camSatisfeitos,
+          neutrosNoPeriodo: camNeutros,
+          insatisfeitosNoPeriodo: camInsatisfeitos,
+          satisfacaoPercent: camSatisfacaoPercent,
+          // Dados de hoje (compatibilidade)
           reconhecidosHoje: Number(camHoje?.total ?? 0),
           satisfeitos: Number(camHoje?.satisfeitos ?? 0),
           insatisfeitos: Number(camHoje?.insatisfeitos ?? 0),
-          hasData: Number(camHoje?.total ?? 0) > 0,
+          hasData: camTotal > 0 || Number(camHoje?.total ?? 0) > 0,
         },
         reputacao: {
-          mediaAvaliacoes: parseFloat(avalStats?.media ?? "0"),
-          totalAvaliacoes: Number(avalStats?.total ?? 0),
-          positivasPercent: Number(avalStats?.total ?? 0) > 0
-            ? Math.round((Number(avalStats?.positivas ?? 0) / Number(avalStats?.total ?? 0)) * 100)
+          mediaAvaliacoes: mediaFinal,
+          totalAvaliacoes: totalFinal,
+          positivasPercent: totalFinal > 0
+            ? Math.round((positivasFinal / totalFinal) * 100)
             : 0,
-          hasData: Number(avalStats?.total ?? 0) > 0,
+          // Google específico
+          mediaGoogle: parseFloat(repStats?.mediaGoogle ?? "0"),
+          totalGoogle: Number(repStats?.google ?? 0),
+          semRespostaGoogle: Number(repStats?.semRespostaGoogle ?? 0),
+          semResposta: Number(repStats?.semResposta ?? 0),
+          hasData: totalFinal > 0,
         },
         autoInstagram: {
           seguidores: Number(igStats?.seguidores ?? 0),

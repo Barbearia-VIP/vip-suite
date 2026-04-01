@@ -503,3 +503,18 @@
 ## VIP Cam — Correção: Foto do cliente existente
 
 - [x] Corrigir saveCapture: atualizar faceImageUrl do cliente existente quando ele não tiver foto
+
+## Dashboard Geral — Visão Macro Integrada (Concluído)
+
+- [x] Procedure `dashboard.kpis` atualizado com filtro de período (dateFrom/dateTo)
+- [x] VIP Cam: clientes únicos no período, % satisfeitos/neutros/insatisfeitos com regra SenseVIP
+- [x] Google: nota média Google, total sem resposta (repAvaliacoes), fallback para tabela avaliacoes
+- [x] Gestão Total: tarefas pendentes, problemas ativos, reuniões hoje, resultado financeiro
+- [x] Data VIP: faturamento, atendimentos, ticket médio no período
+- [x] Reformulada página Dashboard com seletor de período (Hoje/Semana/Mês/Trimestre/Personalizado)
+- [x] 6 cards de módulo com link direto, badge de status (Ativo/Sem dados/Configurar)
+- [x] Gráfico de faturamento mensal (6 meses) com AreaChart
+- [x] Painel de status dos módulos com indicador Wifi/WifiOff
+- [x] Ranking de unidades (admin)
+- [x] Acesso rápido aos 6 módulos
+- [x] Atualização automática a cada 2 minutos (refetchInterval: 120000)
