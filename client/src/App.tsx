@@ -56,6 +56,9 @@ import RiscosPage from "./pages/gestao-total/RiscosPage";
 import DocumentosPage from "./pages/gestao-total/DocumentosPage";
 import MarketingPage from "./pages/gestao-total/MarketingPage";
 import PlanejamentoPage from "./pages/gestao-total/PlanejamentoPage";
+import ConfiguracoesGtPage from "./pages/gestao-total/ConfiguracoesGtPage";
+import PrivilegiosPage from "./pages/gestao-total/PrivilegiosPage";
+import GuiaSistemaPage from "./pages/gestao-total/GuiaSistemaPage";
 
 // VIP Cam
 import VipCamPage from "./pages/vip-cam/VipCamPage";
@@ -260,6 +263,15 @@ function Router() {
       </Route>
       <Route path="/gestao-total/planejamento">
         <ProtectedLayout><PlanejamentoPage /></ProtectedLayout>
+      </Route>
+      <Route path="/gestao-total/configuracoes">
+        <ProtectedLayout><ConfiguracoesGtPage /></ProtectedLayout>
+      </Route>
+      <Route path="/gestao-total/privilegios">
+        <ProtectedLayout><PrivilegiosPage /></ProtectedLayout>
+      </Route>
+      <Route path="/gestao-total/guia">
+        <ProtectedLayout><GuiaSistemaPage /></ProtectedLayout>
       </Route>
 
       {/* VIP Cam */}

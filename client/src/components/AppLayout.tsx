@@ -38,6 +38,7 @@ import {
   Map,
   ShoppingCart,
   Bot,
+  BookMarked,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -132,7 +133,12 @@ const MODULES: Module[] = [
   },
 ];
 
-const SIDEBAR_ITEMS: Record<ModuleId, Array<{ label: string; path: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }>> = {
+type SidebarItem =
+  | { type?: "link"; label: string; path: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }
+  | { type: "group"; label: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; children: { label: string; path: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }[] }
+  | { type: "separator" };
+
+const SIDEBAR_ITEMS: Record<ModuleId, SidebarItem[]> = {
   dashboard: [
     { label: "Visão Geral", path: "/dashboard", icon: LayoutDashboard },
     { label: "Unidades", path: "/dashboard/unidades", icon: Building2 },
@@ -157,22 +163,28 @@ const SIDEBAR_ITEMS: Record<ModuleId, Array<{ label: string; path: string; icon:
   ],
   gestao_total: [
     { label: "Dashboard", path: "/gestao-total", icon: LayoutDashboard },
-    { label: "Tarefas", path: "/gestao-total/tarefas", icon: ClipboardList },
-    { label: "Indicadores", path: "/gestao-total/indicadores", icon: BarChart3 },
-    { label: "Financeiro", path: "/gestao-total/financeiro", icon: DollarSign },
     { label: "Planejamento", path: "/gestao-total/planejamento", icon: Map },
     { label: "Processos", path: "/gestao-total/processos", icon: Activity },
-    { label: "Instruções", path: "/gestao-total/instrucoes", icon: BookOpen },
-    { label: "Colaboradores", path: "/gestao-total/colaboradores", icon: Users },
-    { label: "Cargos", path: "/gestao-total/cargos", icon: Briefcase },
-    { label: "Reuniões", path: "/gestao-total/reunioes", icon: Calendar },
-    { label: "Compras", path: "/gestao-total/compras", icon: ShoppingCart },
-    { label: "Marketing", path: "/gestao-total/marketing", icon: Megaphone },
+    { label: "Instruções de Trabalho", path: "/gestao-total/instrucoes", icon: BookOpen },
+    { label: "Tarefas", path: "/gestao-total/tarefas", icon: ClipboardList },
+    { type: "group", label: "Pessoas", icon: Users, children: [
+      { label: "Cargos", path: "/gestao-total/cargos", icon: Briefcase },
+      { label: "Colaboradores", path: "/gestao-total/colaboradores", icon: UserCheck },
+    ]},
+    { label: "Indicadores", path: "/gestao-total/indicadores", icon: BarChart3 },
     { label: "Documentos", path: "/gestao-total/documentos", icon: FileText },
     { label: "Problemas", path: "/gestao-total/problemas", icon: AlertTriangle },
     { label: "Oportunidades", path: "/gestao-total/oportunidades", icon: TrendingUp },
     { label: "Riscos", path: "/gestao-total/riscos", icon: ShieldAlert },
+    { label: "Marketing", path: "/gestao-total/marketing", icon: Megaphone },
+    { label: "Financeiro", path: "/gestao-total/financeiro", icon: DollarSign },
+    { label: "Reuniões", path: "/gestao-total/reunioes", icon: Calendar },
+    { label: "Compras", path: "/gestao-total/compras", icon: ShoppingCart },
     { label: "IA Conselheiro", path: "/gestao-total/ia", icon: Brain },
+    { label: "Configurações", path: "/gestao-total/configuracoes", icon: Settings },
+    { label: "Privilégios", path: "/gestao-total/privilegios", icon: Shield },
+    { type: "separator" },
+    { label: "Guia do Sistema", path: "/gestao-total/guia", icon: BookMarked },
   ],
   vip_cam: [
     { label: "Dashboard", path: "/vip-cam", icon: LayoutDashboard },
@@ -421,7 +433,49 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
           {/* Sidebar nav items */}
           <nav className="flex-1 py-2 overflow-y-auto">
-            {sidebarItems.map((item) => {
+            {sidebarItems.map((item, idx) => {
+              // Separator
+              if (item.type === "separator") {
+                return <div key={`sep-${idx}`} className="my-1.5 mx-3 border-t border-sidebar-border/50" />;
+              }
+              // Group with children
+              if (item.type === "group") {
+                const isChildActive = item.children.some(c => location === c.path);
+                const GroupIcon = item.icon;
+                return (
+                  <div key={`group-${item.label}`}>
+                    {!sidebarCollapsed && (
+                      <div className="flex items-center gap-1.5 px-4 py-1.5 mt-1">
+                        <GroupIcon className="w-3 h-3 text-muted-foreground/60" />
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">{item.label}</span>
+                      </div>
+                    )}
+                    {item.children.map((child) => {
+                      const ChildIcon = child.icon;
+                      const isActive = location === child.path;
+                      return (
+                        <Link
+                          key={child.path}
+                          href={child.path}
+                          className={cn(
+                            "flex items-center gap-2.5 py-2 mx-1 rounded-md text-xs transition-all",
+                            sidebarCollapsed ? "px-3" : "px-5",
+                            isActive
+                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                              : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                          )}
+                          style={isActive ? { color: currentModule.color } : {}}
+                          title={sidebarCollapsed ? child.label : undefined}
+                        >
+                          <ChildIcon className="w-3.5 h-3.5 shrink-0" />
+                          {!sidebarCollapsed && <span className="truncate">{child.label}</span>}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                );
+              }
+              // Regular link
               const Icon = item.icon;
               const isActive = location === item.path;
               return (

@@ -363,3 +363,12 @@
 - [x] Badge "Data VIP" adicionado nos lançamentos do Financeiro (Gestão Total) — identificação visual clara de lançamentos gerados automaticamente pelo Data VIP
 - [x] Botões de editar/excluir ocultados para lançamentos com `dataVipRef` preenchido (gerenciados automaticamente)
 - [x] Bug corrigido: auto-sync usava `o.status = 'active'` mas tabela usa `o.active = 1` — corrigido em vipDataSync.ts linha 498
+
+## Reorganização Menu Gestão Total (01/04/2026)
+- [x] Menu lateral reorganizado seguindo jornada real: Dashboard → Planejamento → Processos → Instruções de Trabalho → Tarefas → Pessoas (grupo: Cargos + Colaboradores) → Indicadores → Documentos → Problemas → Oportunidades → Riscos → Marketing → Financeiro → Reuniões → Compras → IA Conselheiro → Configurações → Privilégios → separador → Guia do Sistema
+- [x] Suporte a grupos no menu lateral (tipo "group" com label de seção e itens filhos com indentação)
+- [x] Suporte a separadores visuais no menu lateral (tipo "separator")
+- [x] Página Configurações GT criada (/gestao-total/configuracoes) — 5 seções: Notificações, Aparência, Idioma, Segurança, Exportação
+- [x] Página Privilégios criada (/gestao-total/privilegios) — 5 perfis com permissões visuais (Master, Admin, Gerente, Líder, Colaborador)
+- [x] Página Guia do Sistema criada (/gestao-total/guia) — accordion expansível com descrição de cada seção do módulo
+- [x] 3 novas rotas registradas no App.tsx
