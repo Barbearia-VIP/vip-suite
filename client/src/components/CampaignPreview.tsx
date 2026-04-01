@@ -77,12 +77,13 @@ export default function CampaignPreview({ open, onClose, campaign }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-5xl w-[95vw] h-[92vh] max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
+        {/* Header fixo — não scrollable */}
+        <div className="flex-shrink-0 px-6 pt-6 pb-3 border-b">
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <DialogTitle className="text-xl">{campaign.campaignName ?? "Campanha"}</DialogTitle>
-              <div className="flex items-center gap-2 mt-1">
+            <div className="min-w-0">
+              <DialogTitle className="text-xl truncate">{campaign.campaignName ?? "Campanha"}</DialogTitle>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <Badge variant="outline">{campaign.status ?? "draft"}</Badge>
                 {campaign.createdAt && (
                   <span className="text-xs text-muted-foreground">
@@ -100,9 +101,11 @@ export default function CampaignPreview({ open, onClose, campaign }: Props) {
               </Button>
             </div>
           </div>
-        </DialogHeader>
+        </div>
 
-        <Tabs defaultValue="resumo" className="mt-2">
+        {/* Abas fixas */}
+        <Tabs defaultValue="resumo" className="flex flex-col flex-1 min-h-0">
+          <div className="flex-shrink-0 px-6 pt-3 pb-0">
           <TabsList className="flex flex-wrap gap-1 h-auto">
             <TabsTrigger value="resumo" className="gap-1 text-xs"><Users className="h-3 w-3" />Resumo</TabsTrigger>
             <TabsTrigger value="calendario" className="gap-1 text-xs"><Calendar className="h-3 w-3" />Calendário</TabsTrigger>
@@ -112,6 +115,9 @@ export default function CampaignPreview({ open, onClose, campaign }: Props) {
             <TabsTrigger value="kpis" className="gap-1 text-xs"><Target className="h-3 w-3" />KPIs</TabsTrigger>
             <TabsTrigger value="experimentos" className="gap-1 text-xs"><FlaskConical className="h-3 w-3" />Experimentos</TabsTrigger>
           </TabsList>
+          </div>
+          {/* Área scrollable do conteúdo */}
+          <div className="flex-1 overflow-y-auto px-6 pb-6 pt-3">
 
           {/* ABA 1 — RESUMO */}
           <TabsContent value="resumo" className="space-y-4 mt-4">
@@ -438,6 +444,7 @@ export default function CampaignPreview({ open, onClose, campaign }: Props) {
               </Card>
             )}
           </TabsContent>
+          </div>{/* fim da área scrollável */}
         </Tabs>
       </DialogContent>
     </Dialog>

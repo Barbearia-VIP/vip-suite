@@ -493,3 +493,9 @@
 - [x] Média evolutiva do descriptor mantida (comportamento correto, melhora reconhecimento do mesmo cliente)
 - [x] Dados incorretos limpos: 307 capturas e 4 clientes removidos, auto_increment resetado
 - [x] VIP Cam pronto para recomeçar com threshold correto
+
+## Gestão Total — Marketing: Correção de Responsividade
+
+- [x] Corrigir conteúdo cortado no topo da campanha gerada (MarketingPage / CampaignPreview)
+- [x] CampaignPreview: header fixo (título + badges + botões PDF/JSON) + conteúdo scrollável separado
+- [x] MarketingCampaignWizard: header fixo (título + progresso) + conteúdo scrollável + footer fixo com botões

@@ -143,17 +143,20 @@ export default function MarketingCampaignWizard({ open, onClose, onGenerate, isG
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl w-[95vw] h-[90vh] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+        {/* Header fixo com progresso */}
+        <div className="flex-shrink-0 px-6 pt-6 pb-4 border-b">
           <DialogTitle className="flex items-center gap-2">
             <Wand2 className="h-5 w-5 text-primary" />
             Gerar Campanha com IA — Etapa {step}/{totalSteps}
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">{stepTitles[step - 1]}</p>
-          <Progress value={progress} className="h-2 mt-2" />
-        </DialogHeader>
+          <p className="text-sm text-muted-foreground mt-1">{stepTitles[step - 1]}</p>
+          <Progress value={progress} className="h-2 mt-3" />
+        </div>
 
-        <div className="py-4 space-y-4">
+        {/* Conteúdo scrollável */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="space-y-4">
           {/* Etapa 1 — Objetivo */}
           {step === 1 && (
             <div className="space-y-2">
@@ -367,9 +370,11 @@ export default function MarketingCampaignWizard({ open, onClose, onGenerate, isG
           )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
-        </div>
+        </div>{/* fim space-y-4 */}
+        </div>{/* fim scrollável */}
 
-        <div className="flex justify-between pt-2 border-t">
+        {/* Footer fixo com botões de navegação */}
+        <div className="flex-shrink-0 flex justify-between px-6 py-4 border-t bg-background">
           <Button variant="outline" onClick={prev} disabled={step === 1}>
             <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
           </Button>
