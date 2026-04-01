@@ -14,7 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, LayoutGrid, List, Trash2, Edit2, Clock, AlertCircle } from "lucide-react";
+import { Plus, LayoutGrid, List, Trash2, Edit2, Clock, AlertCircle, BookOpen, ExternalLink } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { useLocation } from "wouter";
 
 type Tarefa = {
   id: number; titulo: string; descricao: string | null;
@@ -24,6 +26,7 @@ type Tarefa = {
   orgId: number; unitId: number | null;
   ordem: number; createdAt: Date; updatedAt: Date;
   concluidaEm: Date | null; createdBy: number | null;
+  instrucaoId: number | null;
 };
 
 const COLUNAS: { id: Tarefa["status"]; label: string; color: string }[] = [
@@ -44,8 +47,17 @@ function TarefaCard({ tarefa, onEdit, onDelete, onStatusChange }: {
   onStatusChange: (id: number, status: Tarefa["status"]) => void;
 }) {
   const prazoVencido = tarefa.prazo && new Date(tarefa.prazo) < new Date() && tarefa.status !== "concluida";
+  const [, navigate] = useLocation();
+  const isIT = !!tarefa.instrucaoId;
   return (
-    <div className="bg-card border border-border rounded-lg p-3 space-y-2 hover:border-primary/40 transition-colors">
+    <div className={`bg-card border rounded-lg p-3 space-y-2 hover:border-primary/40 transition-colors ${isIT ? "border-violet-500/30" : "border-border"}`}>
+      {isIT && (
+        <div className="flex items-center gap-1.5">
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-400 border-violet-400/30 gap-1 h-4">
+            <BookOpen className="w-2.5 h-2.5" /> Instrução de Trabalho
+          </Badge>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-medium text-foreground leading-tight">{tarefa.titulo}</p>
         <div className="flex gap-1 shrink-0">
@@ -67,6 +79,14 @@ function TarefaCard({ tarefa, onEdit, onDelete, onStatusChange }: {
           {prazoVencido ? <AlertCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
           {new Date(tarefa.prazo).toLocaleDateString("pt-BR")}
         </div>
+      )}
+      {isIT && (
+        <button
+          onClick={() => navigate("/gestao-total/instrucoes")}
+          className="flex items-center gap-1 text-[10px] text-violet-400 hover:text-violet-300 transition-colors"
+        >
+          <ExternalLink className="w-2.5 h-2.5" /> Ver instrução de trabalho
+        </button>
       )}
       {tarefa.status !== "concluida" && (
         <Select value={tarefa.status} onValueChange={v => onStatusChange(tarefa.id, v as Tarefa["status"])}>

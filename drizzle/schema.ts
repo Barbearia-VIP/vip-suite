@@ -596,6 +596,7 @@ export const gtTarefas = mysqlTable("gt_tarefas", {
   prazo: date("prazo"),
   concluidaEm: timestamp("concluidaEm"),
   ordem: int("ordem").default(0).notNull(),
+  instrucaoId: int("instrucaoId"),
   createdBy: int("createdBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

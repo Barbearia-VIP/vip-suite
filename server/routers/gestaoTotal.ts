@@ -365,8 +365,23 @@ Seja detalhado, prático e específico. O conteúdo deve ser suficiente para um 
           responsavelNome: input.responsavelNome,
           geradoPorIA: 1, status: "pendente",
         });
-        const id = (r as { insertId: number }).insertId;
-        return { success: true, id, data: parsed };
+        const instrucaoId = (r as { insertId: number }).insertId;
+
+        // Criar tarefa automaticamente no Kanban vinculada à IT
+        const tituloTarefa = `IT: ${(parsed.titulo as string) ?? input.processoNome}`;
+        const descricaoTarefa = `Instrução de Trabalho gerada por IA para o processo "${input.processoNome}".\n\nResponsável: ${input.responsavelNome ?? "A definir"}\n\nAcesse Instruções de Trabalho para ver o plano detalhado.`;
+        await db.insert(gtTarefas).values({
+          orgId: input.orgId,
+          unitId: input.unitId,
+          titulo: tituloTarefa,
+          descricao: descricaoTarefa,
+          responsavel: input.responsavelNome,
+          prioridade: "media",
+          status: "pendente",
+          instrucaoId,
+        });
+
+        return { success: true, id: instrucaoId, data: parsed };
       } catch (err) {
         console.error("[generateFromProcesso] erro:", err);
         return { success: false, id: null, data: null, error: "Falha ao interpretar resposta da IA" };
