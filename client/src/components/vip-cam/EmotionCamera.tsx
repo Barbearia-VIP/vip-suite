@@ -113,30 +113,38 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
         faceDescriptor: c.faceDescriptor as number[] | null,
       }));
     }
-  }, [refetchDescriptors]);
+  }, [refetchDescriptors]);  // ── Listar câmeras disponíveis ──────────────────
 
-  // ── Listar câmeras disponíveis ──────────────
-
-  const listCameras = useCallback(async () => {
+  const listCameras = useCallback(async (autoSelect = true) => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(d => d.kind === 'videoinput');
       setAvailableCameras(videoDevices);
-
-      // Preferência por câmeras externas/USB
+      if (!autoSelect) return;
+      // Preferência por câmeras externas/USB (pelo label ou por ser a última da lista)
       const preferred = videoDevices.find(d =>
-        /usb|logitech|c920|external|webcam/i.test(d.label)
+        /usb|logitech|c920|c930|c270|c615|brio|external|webcam|hd pro|hd cam/i.test(d.label)
       );
       if (preferred) {
         setSelectedCameraId(preferred.deviceId);
-      } else if (videoDevices.length > 0) {
+      } else if (videoDevices.length > 0 && !selectedCameraId) {
+        // Não sobrescrever seleção manual do usuário
         setSelectedCameraId(videoDevices[0].deviceId);
       }
     } catch {
       // Sem permissão ainda — ok
     }
-  }, []);
+  }, [selectedCameraId]);
 
+  // Listar câmeras ao montar o componente (sem labels ainda, mas mostra quantas há)
+  useEffect(() => {
+    listCameras();
+    // Escutar mudanças de dispositivos (USB conectado/desconectado)
+    const handler = () => listCameras(false);
+    navigator.mediaDevices?.addEventListener('devicechange', handler);
+    return () => navigator.mediaDevices?.removeEventListener('devicechange', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // ── Iniciar câmera USB ──────────────────────
 
   const friendlyError = useCallback((err: unknown): string => {
@@ -463,42 +471,82 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
 
       {/* Controles de câmera USB */}
       {isUSB && (
-        <div className="flex items-center gap-2 flex-wrap">
-          {availableCameras.filter(cam => !!cam.deviceId).length > 0 && (
-            <Select value={selectedCameraId || undefined} onValueChange={setSelectedCameraId}>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Seletor de câmera — sempre visível */}
+            <Select
+              value={selectedCameraId || undefined}
+              onValueChange={(val) => {
+                setSelectedCameraId(val);
+                // Se a câmera já está ativa, reiniciar com a nova câmera
+                if (cameraActive) {
+                  stopCamera();
+                  setTimeout(() => startUSBCamera(), 300);
+                }
+              }}
+            >
               <SelectTrigger className="w-64">
-                <SelectValue placeholder="Selecionar câmera" />
+                <SelectValue placeholder="Selecionar câmera..." />
               </SelectTrigger>
               <SelectContent>
-                {availableCameras
-                  .filter(cam => !!cam.deviceId)
-                  .map((cam, idx) => (
-                    <SelectItem key={cam.deviceId} value={cam.deviceId}>
-                      {cam.label || `Câmera ${idx + 1}`}
-                    </SelectItem>
-                  ))}
+                {availableCameras.filter(cam => !!cam.deviceId).length === 0 ? (
+                  <SelectItem value="__none__" disabled>Nenhuma câmera detectada</SelectItem>
+                ) : (
+                  availableCameras
+                    .filter(cam => !!cam.deviceId)
+                    .map((cam, idx) => (
+                      <SelectItem key={cam.deviceId} value={cam.deviceId}>
+                        {cam.label || `Câmera ${idx + 1}`}
+                      </SelectItem>
+                    ))
+                )}
               </SelectContent>
             </Select>
-          )}
-          {!cameraActive ? (
+
+            {/* Botão atualizar lista (após conectar USB) */}
             <Button
+              variant="outline"
+              size="sm"
               onClick={async () => {
-                await listCameras();
-                await loadModels();
-                await startUSBCamera();
+                // Pedir permissão rápida para obter labels completos
+                try {
+                  const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
+                  tmp.getTracks().forEach(t => t.stop());
+                } catch { /* ignora */ }
+                await listCameras(true);
               }}
-              disabled={faceApiStatus === 'loading'}
+              title="Atualizar lista de câmeras"
             >
-              {faceApiStatus === 'loading' ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Carregando IA...</>
-              ) : (
-                <><Camera className="h-4 w-4 mr-2" />Iniciar Câmera</>
-              )}
+              <RefreshCw className="h-4 w-4" />
             </Button>
-          ) : (
-            <Button variant="destructive" onClick={stopCamera}>
-              <CameraOff className="h-4 w-4 mr-2" />Parar Câmera
-            </Button>
+
+            {!cameraActive ? (
+              <Button
+                onClick={async () => {
+                  await loadModels();
+                  await listCameras(true);
+                  await startUSBCamera();
+                }}
+                disabled={faceApiStatus === 'loading'}
+              >
+                {faceApiStatus === 'loading' ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Carregando IA...</>
+                ) : (
+                  <><Camera className="h-4 w-4 mr-2" />Iniciar Câmera</>
+                )}
+              </Button>
+            ) : (
+              <Button variant="destructive" onClick={stopCamera}>
+                <CameraOff className="h-4 w-4 mr-2" />Parar Câmera
+              </Button>
+            )}
+          </div>
+
+          {/* Dica quando há apenas uma câmera (provavelmente a interna) */}
+          {!cameraActive && availableCameras.filter(c => !!c.deviceId).length <= 1 && (
+            <p className="text-xs text-muted-foreground">
+              💡 Se a câmera USB não aparecer, conecte-a e clique em <strong>🔄</strong> para atualizar a lista.
+            </p>
           )}
         </div>
       )}
