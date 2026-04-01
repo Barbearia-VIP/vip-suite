@@ -7,16 +7,16 @@ import * as faceapi from '@vladmandic/face-api';
 
 const CDN_BASE = 'https://d2xsxph8kpxj0f.cloudfront.net/310419663029099127/Gw6CU8nRy9T64yBMvKuEjJ';
 
-// Mapeamento dos nomes padrão do face-api para os nomes com hash no CDN
+// Mapeamento dos nomes padrão do face-api para as URLs com hash no CDN permanente do projeto
 const MODEL_URL_MAP: Record<string, string> = {
-  'tiny_face_detector_model-weights_manifest.json': `${CDN_BASE}/tiny_face_detector_model-weights_manifest_25da6e32.json`,
-  'tiny_face_detector_model.bin': `${CDN_BASE}/tiny_face_detector_model_443e8936.bin`,
-  'face_landmark_68_model-weights_manifest.json': `${CDN_BASE}/face_landmark_68_model-weights_manifest_ae05382c.json`,
-  'face_landmark_68_model.bin': `${CDN_BASE}/face_landmark_68_model_3f8370af.bin`,
-  'face_recognition_model-weights_manifest.json': `${CDN_BASE}/face_recognition_model-weights_manifest_c14f8742.json`,
-  'face_recognition_model.bin': `${CDN_BASE}/face_recognition_model_d774b10d.bin`,
-  'face_expression_model-weights_manifest.json': `${CDN_BASE}/face_expression_model-weights_manifest_100e193d.json`,
-  'face_expression_model.bin': `${CDN_BASE}/face_expression_model_711bfd80.bin`,
+  'tiny_face_detector_model-weights_manifest.json': `${CDN_BASE}/tiny_face_detector_model-weights_manifest_847a3644.json`,
+  'tiny_face_detector_model.bin': `${CDN_BASE}/tiny_face_detector_model_fd2352ed.bin`,
+  'face_landmark_68_model-weights_manifest.json': `${CDN_BASE}/face_landmark_68_model-weights_manifest_8a3ed786.json`,
+  'face_landmark_68_model.bin': `${CDN_BASE}/face_landmark_68_model_7f49e429.bin`,
+  'face_recognition_model-weights_manifest.json': `${CDN_BASE}/face_recognition_model-weights_manifest_70a6666c.json`,
+  'face_recognition_model.bin': `${CDN_BASE}/face_recognition_model_56e5e09a.bin`,
+  'face_expression_model-weights_manifest.json': `${CDN_BASE}/face_expression_model-weights_manifest_eb20c890.json`,
+  'face_expression_model.bin': `${CDN_BASE}/face_expression_model_b137e32b.bin`,
 };
 
 /**
@@ -25,7 +25,7 @@ const MODEL_URL_MAP: Record<string, string> = {
  */
 function patchFetchForFaceApi() {
   const originalFetch = window.fetch;
-  (window as any)._faceApiOriginalFetch = originalFetch;
+  (window as unknown as Record<string, unknown>)._faceApiOriginalFetch = originalFetch;
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     let url = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url;
     // Extrair apenas o nome do arquivo da URL
@@ -39,8 +39,9 @@ function patchFetchForFaceApi() {
 }
 
 function restoreFetch() {
-  if ((window as any)._faceApiOriginalFetch) {
-    window.fetch = (window as any)._faceApiOriginalFetch;
+  const saved = (window as unknown as Record<string, unknown>)._faceApiOriginalFetch;
+  if (saved) {
+    window.fetch = saved as typeof fetch;
   }
 }
 
