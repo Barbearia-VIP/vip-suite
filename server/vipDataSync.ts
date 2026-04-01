@@ -41,9 +41,10 @@ export async function initSyncStatusMap(): Promise<void> {
     const db = await getDb();
     if (!db) return;
     const orgs = await db.execute(sql`
-      SELECT o.id, o.name as nome, mc.configValue as apiUnidadeId
+      SELECT o.id, o.name as nome,
+             JSON_UNQUOTE(JSON_EXTRACT(mc.config, '$.apiUnidadeId')) as apiUnidadeId
       FROM organizations o
-      LEFT JOIN module_configs mc ON mc.unitId = o.id AND mc.moduleKey = 'data_vip' AND mc.configKey = 'apiUnidadeId'
+      LEFT JOIN module_configs mc ON mc.unitId = o.id AND mc.module = 'data_vip'
       WHERE o.status = 'active'
     `);
     const rows = (orgs as any[])[0] as any[];
@@ -441,13 +442,14 @@ export function startAutoSyncScheduler(): void {
 
     const [orgs] = await db.execute(sql`
       SELECT o.id as orgId, u.id as unitId,
-             mc1.configValue as apiUnidadeId,
-             mc2.configValue as apiHash
+             JSON_UNQUOTE(JSON_EXTRACT(mc.config, '$.apiUnidadeId')) as apiUnidadeId,
+             JSON_UNQUOTE(JSON_EXTRACT(mc.config, '$.apiHash')) as apiHash
       FROM organizations o
       JOIN units u ON u.orgId = o.id
-      LEFT JOIN module_configs mc1 ON mc1.unitId = u.id AND mc1.moduleKey = 'data_vip' AND mc1.configKey = 'apiUnidadeId'
-      LEFT JOIN module_configs mc2 ON mc2.unitId = u.id AND mc2.moduleKey = 'data_vip' AND mc2.configKey = 'apiHash'
-      WHERE o.status = 'active' AND mc1.configValue IS NOT NULL AND mc2.configValue IS NOT NULL
+      LEFT JOIN module_configs mc ON mc.unitId = u.id AND mc.module = 'data_vip'
+      WHERE o.status = 'active'
+        AND JSON_UNQUOTE(JSON_EXTRACT(mc.config, '$.apiUnidadeId')) IS NOT NULL
+        AND JSON_UNQUOTE(JSON_EXTRACT(mc.config, '$.apiHash')) IS NOT NULL
     `) as any;
 
     for (const org of orgs as any[]) {

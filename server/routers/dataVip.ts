@@ -633,13 +633,12 @@ export const dataVipRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const [creds] = await db.execute(sql`
-        SELECT configKey, configValue FROM module_configs
-        WHERE unitId = ${input.unitId} AND moduleKey = 'data_vip'
-          AND configKey IN ('apiUnidadeId', 'apiHash')
+        SELECT config FROM module_configs
+        WHERE unitId = ${input.unitId} AND module = 'data_vip'
+        LIMIT 1
       `) as any;
-
-      const credMap: Record<string, string> = {};
-      for (const c of creds as any[]) credMap[c.configKey] = c.configValue;
+      const cfg = (creds as any[])[0]?.config ?? {};
+      const credMap = { apiUnidadeId: cfg.apiUnidadeId as string, apiHash: cfg.apiHash as string };
 
       if (!credMap.apiUnidadeId || !credMap.apiHash) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Credenciais da API não configuradas para esta unidade" });
@@ -672,13 +671,12 @@ export const dataVipRouter = router({
       if (!orgId) throw new TRPCError({ code: "NOT_FOUND", message: "Unidade não encontrada" });
 
       const [creds] = await db.execute(sql`
-        SELECT configKey, configValue FROM module_configs
-        WHERE unitId = ${input.unitId} AND moduleKey = 'data_vip'
-          AND configKey IN ('apiUnidadeId', 'apiHash')
+        SELECT config FROM module_configs
+        WHERE unitId = ${input.unitId} AND module = 'data_vip'
+        LIMIT 1
       `) as any;
-
-      const credMap: Record<string, string> = {};
-      for (const c of creds as any[]) credMap[c.configKey] = c.configValue;
+      const cfg = (creds as any[])[0]?.config ?? {};
+      const credMap = { apiUnidadeId: cfg.apiUnidadeId as string, apiHash: cfg.apiHash as string };
 
       if (!credMap.apiUnidadeId || !credMap.apiHash) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Credenciais da API não configuradas para esta unidade" });
@@ -732,13 +730,12 @@ export const dataVipRouter = router({
       if (!db) return [];
       const [unitsList] = await db.execute(sql`SELECT * FROM units WHERE orgId = ${input.orgId}`) as any;
       const [configs] = await db.execute(sql`
-        SELECT unitId, configKey, configValue FROM module_configs
-        WHERE moduleKey = 'data_vip' AND unitId IN (SELECT id FROM units WHERE orgId = ${input.orgId})
+        SELECT unitId, config FROM module_configs
+        WHERE module = 'data_vip' AND unitId IN (SELECT id FROM units WHERE orgId = ${input.orgId})
       `) as any;
       const configMap: Record<number, Record<string, string>> = {};
       for (const c of configs as any[]) {
-        if (!configMap[c.unitId]) configMap[c.unitId] = {};
-        configMap[c.unitId][c.configKey] = c.configValue;
+        configMap[c.unitId] = c.config ?? {};
       }
       return (unitsList as any[]).map(u => ({
         ...u,

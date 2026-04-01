@@ -504,15 +504,25 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      // Sanitizar credenciais: remover aspas extras e espaços em branco
+      const sanitize = (v?: string) => v ? v.trim().replace(/^"|"$/g, "").replace(/^'|'$/g, "") : v;
+      const sanitized = {
+        ...input,
+        googleClientId: sanitize(input.googleClientId),
+        googleClientSecret: sanitize(input.googleClientSecret),
+        googleApiKey: sanitize(input.googleApiKey),
+        googlePlaceId: sanitize(input.googlePlaceId),
+      };
+
       const existing = await db.select({ id: repConexoes.id })
         .from(repConexoes)
         .where(and(eq(repConexoes.unitId, input.unitId), eq(repConexoes.plataforma, input.plataforma)))
         .limit(1);
 
       if (existing.length > 0) {
-        await db.update(repConexoes).set(input).where(eq(repConexoes.id, existing[0].id));
+        await db.update(repConexoes).set(sanitized).where(eq(repConexoes.id, existing[0].id));
       } else {
-        await db.insert(repConexoes).values(input);
+        await db.insert(repConexoes).values(sanitized);
       }
       return { success: true };
     }),
