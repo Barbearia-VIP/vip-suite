@@ -183,7 +183,10 @@ export default function TarefasPage() {
     onError: () => toast.error("Erro ao remover"),
   });
   const statusM = trpc.gestaoTotal.tarefas.updateStatus.useMutation({
-    onSuccess: () => utils.gestaoTotal.tarefas.list.invalidate(),
+    onSuccess: () => {
+      utils.gestaoTotal.tarefas.list.invalidate();
+      utils.gestaoTotal.instrucoes.list.invalidate();
+    },
     onError: () => toast.error("Erro ao atualizar status"),
   });
 

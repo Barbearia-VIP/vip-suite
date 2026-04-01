@@ -113,6 +113,18 @@ const tarefasRouter = router({
       const updateData: Record<string, unknown> = { status: input.status };
       if (input.status === "concluida") updateData.concluidaEm = new Date();
       await db.update(gtTarefas).set(updateData).where(and(eq(gtTarefas.id, input.id), eq(gtTarefas.orgId, input.orgId)));
+      // Sincronizar status da IT vinculada
+      if (input.status === "concluida" || input.status === "em_andamento" || input.status === "pendente") {
+        const [tarefa] = await db.select({ instrucaoId: gtTarefas.instrucaoId }).from(gtTarefas)
+          .where(and(eq(gtTarefas.id, input.id), eq(gtTarefas.orgId, input.orgId)));
+        if (tarefa?.instrucaoId) {
+          const itStatus = input.status === "concluida" ? "concluida"
+            : input.status === "em_andamento" ? "em_andamento"
+            : "pendente";
+          await db.update(gtInstrucoes).set({ status: itStatus as "pendente" | "em_andamento" | "concluida" | "pausada" })
+            .where(and(eq(gtInstrucoes.id, tarefa.instrucaoId), eq(gtInstrucoes.orgId, input.orgId)));
+        }
+      }
       return { success: true };
     }),
 });
@@ -400,6 +412,14 @@ Seja detalhado, prático e específico. O conteúdo deve ser suficiente para um 
       if (!db) throw new Error("DB unavailable");
       const { id, orgId, ...data } = input;
       await db.update(gtInstrucoes).set(data).where(and(eq(gtInstrucoes.id, id), eq(gtInstrucoes.orgId, orgId)));
+      // Sincronizar status da tarefa vinculada
+      const tarefaStatus = input.status === "concluida" ? "concluida"
+        : input.status === "em_andamento" ? "em_andamento"
+        : "pendente";
+      const tarefaUpdate: Record<string, unknown> = { status: tarefaStatus };
+      if (tarefaStatus === "concluida") tarefaUpdate.concluidaEm = new Date();
+      await db.update(gtTarefas).set(tarefaUpdate)
+        .where(and(eq(gtTarefas.instrucaoId, id), eq(gtTarefas.orgId, orgId)));
       return { success: true };
     }),
 });

@@ -335,7 +335,10 @@ export default function InstrucoesPage() {
   });
 
   const updateStatusM = trpc.gestaoTotal.instrucoes.updateStatus?.useMutation?.({
-    onSuccess: () => { utils.gestaoTotal.instrucoes.list.invalidate(); },
+    onSuccess: () => {
+      utils.gestaoTotal.instrucoes.list.invalidate();
+      utils.gestaoTotal.tarefas.list.invalidate();
+    },
   });
 
   const generateM = trpc.gestaoTotal.instrucoes.generateFromProcesso.useMutation({
