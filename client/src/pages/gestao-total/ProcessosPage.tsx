@@ -256,6 +256,20 @@ export default function ProcessosPage() {
     ? colaboradores.filter(c => c.nome.toLowerCase().includes(itSearch.toLowerCase()))
     : colaboradores;
 
+  // Mutation para gerar IT automaticamente ao destinar
+  const generateITM = trpc.gestaoTotal.instrucoes.generateFromProcesso.useMutation({
+    onSuccess: (res) => {
+      if (res.success) {
+        toast.success("Instrução de Trabalho gerada com sucesso!");
+        setShowITModal(false);
+        navigate("/gestao-total/instrucoes");
+      } else {
+        toast.error("Erro ao gerar instrução. Tente novamente.");
+      }
+    },
+    onError: (e) => toast.error("Erro ao gerar IT: " + e.message),
+  });
+
   const handleEnviarIT = (p: Processo) => {
     setItProcesso(p);
     setItColaboradorId("");
@@ -264,18 +278,26 @@ export default function ProcessosPage() {
   };
 
   const handleConfirmarIT = () => {
-    if (!itProcesso) return;
+    if (!itProcesso || !org) return;
     const colab = colaboradores.find(c => String(c.id) === itColaboradorId);
-    const params = new URLSearchParams({
-      processoId: String(itProcesso.id),
-      processoNome: encodeURIComponent(itProcesso.nome),
+    // Extrair etapas do processo
+    const etapas = Array.isArray(itProcesso.etapas)
+      ? (itProcesso.etapas as { titulo: string; descricao?: string; responsavel?: string }[]).map(e => ({
+          titulo: e.titulo,
+          descricao: e.descricao,
+          responsavel: e.responsavel,
+        }))
+      : [];
+    generateITM.mutate({
+      orgId: org.id,
+      unitId: selectedUnit?.id,
+      processoId: itProcesso.id,
+      processoNome: itProcesso.nome,
+      processoDescricao: itProcesso.descricao ?? undefined,
+      etapas,
+      segmento: org.segment ?? "Barbearia",
+      responsavelNome: colab?.nome,
     });
-    if (colab) {
-      params.set("responsavelId", String(colab.id));
-      params.set("responsavelNome", encodeURIComponent(colab.nome));
-    }
-    setShowITModal(false);
-    navigate(`/gestao-total/instrucoes?${params.toString()}`);
   };
 
   const filtered = filterTipo === "todos" ? processos : processos.filter(p => p.tipo === filterTipo);
@@ -513,15 +535,27 @@ export default function ProcessosPage() {
                 ))}
               </div>
             )}
-            {colaboradores.length > 0 && (
+            {colaboradores.length > 0 && !generateITM.isPending && (
               <p className="text-xs text-muted-foreground">Você pode prosseguir sem selecionar um colaborador e atribuir depois.</p>
+            )}
+            {generateITM.isPending && (
+              <div className="rounded-lg bg-violet-500/10 border border-violet-500/20 p-3 flex items-center gap-3">
+                <Loader2 className="w-5 h-5 text-violet-400 animate-spin shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-violet-300">Gerando Instrução de Trabalho...</p>
+                  <p className="text-xs text-muted-foreground">A IA está criando o plano detalhado. Aguarde alguns segundos.</p>
+                </div>
+              </div>
             )}
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setShowITModal(false)}>Cancelar</Button>
-            <Button onClick={handleConfirmarIT} className="gap-1.5 bg-violet-600 hover:bg-violet-700">
-              <Send className="w-3.5 h-3.5" />
-              {itColaboradorId ? "Destinar e Gerar IT" : "Prosseguir sem Colaborador"}
+            <Button variant="outline" onClick={() => setShowITModal(false)} disabled={generateITM.isPending}>Cancelar</Button>
+            <Button onClick={handleConfirmarIT} disabled={generateITM.isPending} className="gap-1.5 bg-violet-600 hover:bg-violet-700">
+              {generateITM.isPending ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando IT com IA...</>
+              ) : (
+                <><Send className="w-3.5 h-3.5" /> {itColaboradorId ? "Destinar e Gerar IT" : "Gerar IT sem Colaborador"}</>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
