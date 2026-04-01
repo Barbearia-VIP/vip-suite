@@ -13,6 +13,19 @@ import {
 import { eq, and, desc } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 
+// ── Helper para parse robusto de JSON da IA ──────────────────────────────────
+function parseJsonSafe(raw: string): unknown {
+  // Tenta parse direto
+  try { return JSON.parse(raw); } catch { /* continua */ }
+  // Remove blocos de código markdown: ```json ... ``` ou ``` ... ```
+  const stripped = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+  try { return JSON.parse(stripped); } catch { /* continua */ }
+  // Extrai primeiro objeto JSON encontrado no texto
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (match) { try { return JSON.parse(match[0]); } catch { /* continua */ } }
+  throw new Error("Não foi possível interpretar a resposta da IA como JSON");
+}
+
 // ── Helper de auditoria ───────────────────────────────────────────────────────
 async function logAudit(
   orgId: number, unitId: number | null | undefined,
@@ -197,7 +210,7 @@ Gere 4-6 processos principais e 2-4 de apoio. Cada processo deve ter 3-6 etapas.
       const rawContent3 = response.choices?.[0]?.message?.content;
       const content = typeof rawContent3 === "string" ? rawContent3 : "{}";
       try {
-        const parsed = JSON.parse(content);
+        const parsed = parseJsonSafe(content) as Record<string, unknown>;
         return { success: true, data: parsed };
       } catch {
         return { success: false, data: null, error: "Falha ao interpretar resposta da IA" };
@@ -338,23 +351,24 @@ Seja detalhado, prático e específico. O conteúdo deve ser suficiente para um 
       const rawContent = response.choices?.[0]?.message?.content;
       const content = typeof rawContent === "string" ? rawContent : "{}";
       try {
-        const parsed = JSON.parse(content);
+        const parsed = parseJsonSafe(content) as Record<string, unknown>;
         // Salvar automaticamente no banco
         const db = await getDb();
         if (!db) throw new Error("DB unavailable");
         const [r] = await db.insert(gtInstrucoes).values({
           orgId: input.orgId, unitId: input.unitId,
           processoId: input.processoId,
-          titulo: parsed.titulo ?? `IT - ${input.processoNome}`,
-          conteudo: parsed.conteudo,
+          titulo: (parsed.titulo as string) ?? `IT - ${input.processoNome}`,
+          conteudo: parsed.conteudo as string | undefined,
           plano: parsed.plano,
-          categoria: parsed.categoria,
+          categoria: parsed.categoria as string | undefined,
           responsavelNome: input.responsavelNome,
           geradoPorIA: 1, status: "pendente",
         });
         const id = (r as { insertId: number }).insertId;
         return { success: true, id, data: parsed };
-      } catch {
+      } catch (err) {
+        console.error("[generateFromProcesso] erro:", err);
         return { success: false, id: null, data: null, error: "Falha ao interpretar resposta da IA" };
       }
     }),
@@ -503,10 +517,10 @@ Cada array SWOT deve ter 4-5 itens. Objetivos devem ter 4-6 itens. Seja específ
         response_format: { type: "json_object" },
       });
 
-       const rawContent2 = response.choices?.[0]?.message?.content;
+      const rawContent2 = response.choices?.[0]?.message?.content;
       const content = typeof rawContent2 === "string" ? rawContent2 : "{}";
       try {
-        const parsed = JSON.parse(content);
+        const parsed = parseJsonSafe(content) as Record<string, unknown>;
         return { success: true, data: parsed };
       } catch {
         return { success: false, data: null, error: "Falha ao interpretar resposta da IA" };
