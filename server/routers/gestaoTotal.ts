@@ -294,7 +294,7 @@ const instrucoesRouter = router({
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
-      processoId: z.number(),
+      processoId: z.number().optional(),
       processoNome: z.string(),
       processoDescricao: z.string().optional(),
       etapas: z.array(z.object({ titulo: z.string(), descricao: z.string().optional(), responsavel: z.string().optional() })).optional(),
