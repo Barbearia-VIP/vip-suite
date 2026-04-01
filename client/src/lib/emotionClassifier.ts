@@ -85,7 +85,13 @@ export function averageExpressions(frames: ExpressionScores[]): ExpressionScores
 
 /**
  * Calcula a distância euclidiana entre dois descritores faciais.
- * Threshold: 0.55 (abaixo = mesmo cliente)
+ * Threshold: 0.42 (abaixo = mesmo cliente)
+ *
+ * Calibrado para @vladmandic/face-api (descritores de 128 dimensões):
+ * - < 0.42: mesma pessoa (alta confiança)
+ * - 0.42–0.55: possivelmente a mesma pessoa (zona cinza)
+ * - > 0.55: pessoas diferentes
+ * O valor 0.55 era muito permissivo e causava agrupamento de rostos distintos.
  */
 export function euclideanDistance(a: Float32Array | number[], b: Float32Array | number[]): number {
   if (a.length !== b.length) return Infinity;
@@ -96,7 +102,7 @@ export function euclideanDistance(a: Float32Array | number[], b: Float32Array | 
   return Math.sqrt(sum);
 }
 
-export const FACE_MATCH_THRESHOLD = 0.55;
+export const FACE_MATCH_THRESHOLD = 0.42;
 
 /**
  * Encontra o cliente mais próximo no cache de descritores.

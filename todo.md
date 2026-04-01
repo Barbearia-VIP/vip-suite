@@ -484,3 +484,12 @@
 - [x] Etapa 2 reescrita com chunks de 500 clientes (busca timeline em batch com inArray)
 - [x] Adicionado import de inArray no vipCam.ts
 - [x] 198 testes passando
+
+## VIP Cam — Correção: Histórico órfão sem clientes associados (Concluído)
+
+- [x] Diagnosticado: não havia órfãos (clienteId sempre válido), mas 302 de 307 capturas estavam no cliente 2
+- [x] Causa raiz: FACE_MATCH_THRESHOLD = 0.55 muito permissivo — rostos diferentes eram agrupados como 1 cliente
+- [x] Corrigido FACE_MATCH_THRESHOLD de 0.55 para 0.42 (valor recomendado para face-api.js 128-dim)
+- [x] Média evolutiva do descriptor mantida (comportamento correto, melhora reconhecimento do mesmo cliente)
+- [x] Dados incorretos limpos: 307 capturas e 4 clientes removidos, auto_increment resetado
+- [x] VIP Cam pronto para recomeçar com threshold correto
