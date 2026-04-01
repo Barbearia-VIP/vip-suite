@@ -21,6 +21,7 @@ type Lancamento = {
   descricao: string; valor: string; pago: number;
   vencimento: Date | null; formaPagamento: string | null;
   referencia: string | null; orgId: number; unitId: number | null; createdAt: Date;
+  dataVipRef: string | null;
 };
 function fmt(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
@@ -150,17 +151,24 @@ export default function FinanceiroPage() {
         :lancamentos.length===0?<Card className="bg-card border-border"><CardContent className="p-8 text-center"><DollarSign className="w-8 h-8 text-muted-foreground mx-auto mb-2" /><p className="text-sm text-muted-foreground">Nenhum lançamento em {referencia}</p><Button size="sm" variant="outline" className="mt-3" onClick={()=>setShowForm(true)}>Adicionar</Button></CardContent></Card>
         :<Card className="bg-card border-border"><div className="divide-y divide-border">{lancamentos.map(l=>(
           <div key={l.id} className="flex items-center justify-between px-4 py-3 hover:bg-muted/30">
-            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center gap-3 min-w-0">
               <div className={`w-2 h-2 rounded-full shrink-0 ${l.tipo==="receita"?"bg-green-400":"bg-red-400"}`} />
-              <div className="min-w-0"><p className="text-sm text-foreground truncate">{l.descricao}</p><p className="text-xs text-muted-foreground">{l.categoria??l.tipo}</p></div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm text-foreground truncate">{l.descricao}</p>
+                  {l.dataVipRef && <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">Data VIP</span>}
+                </div>
+                <p className="text-xs text-muted-foreground">{l.categoria??l.tipo}</p>
+              </div>
             </div>
             <div className="flex items-center gap-3 shrink-0 ml-2">
               <div className="text-right">
                 <p className={`text-sm font-semibold ${l.tipo==="receita"?"text-green-400":"text-red-400"}`}>{l.tipo==="receita"?"+":"-"}{fmt(Number(l.valor))}</p>
                 <div className="flex items-center gap-1 justify-end">{l.pago?<CheckCircle2 className="w-3 h-3 text-green-400"/>:<Clock className="w-3 h-3 text-yellow-400"/>}<span className="text-xs text-muted-foreground">{l.pago?"Pago":"Pendente"}</span></div>
               </div>
-              <button onClick={()=>setEditing(l)} className="text-muted-foreground hover:text-foreground p-1"><Edit2 className="w-3.5 h-3.5" /></button>
-              <button onClick={()=>deleteM.mutate({id:l.id,orgId:l.orgId})} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+              {!l.dataVipRef && <button onClick={()=>setEditing(l)} className="text-muted-foreground hover:text-foreground p-1" title="Editar"><Edit2 className="w-3.5 h-3.5" /></button>}
+              {!l.dataVipRef && <button onClick={()=>deleteM.mutate({id:l.id,orgId:l.orgId})} className="text-muted-foreground hover:text-red-400 p-1" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>}
+              {l.dataVipRef && <span className="text-[10px] text-muted-foreground/50 px-1" title="Gerado automaticamente pelo Data VIP">auto</span>}
             </div>
           </div>
         ))}</div></Card>}

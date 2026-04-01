@@ -45,7 +45,7 @@ export async function initSyncStatusMap(): Promise<void> {
              JSON_UNQUOTE(JSON_EXTRACT(mc.config, '$.apiUnidadeId')) as apiUnidadeId
       FROM organizations o
       LEFT JOIN module_configs mc ON mc.unitId = o.id AND mc.module = 'data_vip'
-      WHERE o.status = 'active'
+      WHERE o.active = 1
     `);
     const rows = (orgs as any[])[0] as any[];
     syncStatusMap.clear();
@@ -233,6 +233,48 @@ export async function syncVendas(
   return { fetched: vendas.length, inserted: (result as any).affectedRows || vendas.length };
 }
 
+// ─── Sincroniza faturamento com Gestão Total (gt_financeiro) ─────────────────
+
+/**
+ * Agrega as vendas do Data VIP por dia e cria/atualiza lançamentos de receita
+ * no gt_financeiro. Usa INSERT ... ON DUPLICATE KEY UPDATE para idempotência.
+ * Chave de deduplicação: dataVipRef = 'datavip:{unitId}:{YYYY-MM-DD}'
+ */
+export async function syncGtFinanceiro(orgId: number, unitId: number, inicio: string, fim: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  // Usa INSERT ... SELECT com subquery para evitar only_full_group_by
+  await db.execute(sql`
+    INSERT INTO gt_financeiro
+      (orgId, unitId, tipo, categoria, descricao, valor, vencimento, pago, paidAt, referencia, dataVipRef)
+    SELECT
+      ${orgId}, ${unitId},
+      'receita',
+      'Faturamento Data VIP',
+      CONCAT('Faturamento Data VIP - ', dia, ' (', qtd, ' atendimentos)'),
+      totalLiquido,
+      dia,
+      1,
+      dia,
+      DATE_FORMAT(dia, '%Y-%m'),
+      CONCAT('datavip:', ${unitId}, ':', dia)
+    FROM (
+      SELECT DATE(vendaData) AS dia, SUM(valorLiquido) AS totalLiquido, COUNT(*) AS qtd
+      FROM vendas_api_raw
+      WHERE orgId = ${orgId}
+        AND unitId = ${unitId}
+        AND DATE(vendaData) BETWEEN ${inicio} AND ${fim}
+        AND valorLiquido > 0
+      GROUP BY DATE(vendaData)
+    ) AS sub
+    ON DUPLICATE KEY UPDATE
+      valor = VALUES(valor),
+      descricao = VALUES(descricao),
+      updatedAt = NOW()
+  `);
+}
+
 // ─── Atualiza dimensões (clientes e colaboradores) ────────────────────────────
 
 export async function updateDimensoes(orgId: number, unitId: number): Promise<void> {
@@ -379,6 +421,8 @@ export async function runSyncForOrg(
       totalFetched = r.fetched;
       totalInserted = r.inserted;
       await updateDimensoes(orgId, unitId);
+      // Sincroniza faturamento com Gestão Total
+      await syncGtFinanceiro(orgId, unitId, inicio, fim);
     } else if (modo === "manual_13m") {
       const hoje = new Date();
       const inicio = formatDate(addDays(hoje, -395));
@@ -386,12 +430,16 @@ export async function runSyncForOrg(
       const r = await syncVendasChunked(orgId, unitId, apiUnidadeId, apiHash, new Date(inicio), new Date(fim));
       totalFetched = r.totalFetched;
       totalInserted = r.totalInserted;
+      // Sincroniza faturamento com Gestão Total
+      await syncGtFinanceiro(orgId, unitId, inicio, fim);
     } else if (modo === "historico") {
       const inicio = new Date(dataInicio || "2015-01-01");
       const fim = new Date(dataFim || formatDate(new Date()));
       const r = await syncVendasChunked(orgId, unitId, apiUnidadeId, apiHash, inicio, fim);
       totalFetched = r.totalFetched;
       totalInserted = r.totalInserted;
+      // Sincroniza faturamento com Gestão Total
+      await syncGtFinanceiro(orgId, unitId, formatDate(inicio), formatDate(fim));
     }
 
     const durationMs = Date.now() - startTime;
@@ -447,7 +495,7 @@ export function startAutoSyncScheduler(): void {
       FROM organizations o
       JOIN units u ON u.orgId = o.id
       LEFT JOIN module_configs mc ON mc.unitId = u.id AND mc.module = 'data_vip'
-      WHERE o.status = 'active'
+      WHERE o.active = 1
         AND JSON_UNQUOTE(JSON_EXTRACT(mc.config, '$.apiUnidadeId')) IS NOT NULL
         AND JSON_UNQUOTE(JSON_EXTRACT(mc.config, '$.apiHash')) IS NOT NULL
     `) as any;

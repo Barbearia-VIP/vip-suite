@@ -358,3 +358,8 @@
 - [x] Dados Data VIP zerados — migração de 6.363 registros de `vendas` para `vendas_api_raw`, reconstrução de dimensões (2.276 clientes, 25 colaboradores)
 - [x] Formulário Nova Integração (Reputação) salvava com `unitId=0` quando nenhuma unidade estava selecionada — corrigido com seletor de unidade obrigatório no dialog
 - [x] Registro duplicado com `unitId=0` removido do banco (`rep_conexoes`)
+
+## Melhorias Sessão 01/04/2026
+- [x] Badge "Data VIP" adicionado nos lançamentos do Financeiro (Gestão Total) — identificação visual clara de lançamentos gerados automaticamente pelo Data VIP
+- [x] Botões de editar/excluir ocultados para lançamentos com `dataVipRef` preenchido (gerenciados automaticamente)
+- [x] Bug corrigido: auto-sync usava `o.status = 'active'` mas tabela usa `o.active = 1` — corrigido em vipDataSync.ts linha 498

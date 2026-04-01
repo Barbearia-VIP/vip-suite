@@ -10,6 +10,7 @@ import {
   decimal,
   date,
   index,
+  uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
 // ─────────────────────────────────────────────
@@ -760,11 +761,13 @@ export const gtFinanceiro = mysqlTable("gt_financeiro", {
   formaPagamento: varchar("formaPagamento", { length: 50 }),
   referencia: varchar("referencia", { length: 7 }), // YYYY-MM
   observacoes: text("observacoes"),
+  dataVipRef: varchar("dataVipRef", { length: 100 }), // 'datavip:{unitId}:{YYYY-MM-DD}' — controle de duplicação
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (t) => [
   index("idx_gt_fin_org_ref").on(t.orgId, t.referencia),
   index("idx_gt_fin_tipo").on(t.tipo),
+  uniqueIndex("uq_datavip_ref").on(t.dataVipRef),
 ]);
 
 // ─────────────────────────────────────────────
