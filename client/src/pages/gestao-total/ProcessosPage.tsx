@@ -243,7 +243,7 @@ export default function ProcessosPage() {
   };
 
   const handleEnviarIT = (p: Processo) => {
-    navigate(`/gestao-total/${org?.id}/instrucoes?processoId=${p.id}&processoNome=${encodeURIComponent(p.nome)}`);
+    navigate(`/gestao-total/instrucoes?processoId=${p.id}&processoNome=${encodeURIComponent(p.nome)}`);
   };
 
   const filtered = filterTipo === "todos" ? processos : processos.filter(p => p.tipo === filterTipo);
