@@ -139,42 +139,72 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
 
   // ── Iniciar câmera USB ──────────────────────
 
-  const startUSBCamera = useCallback(async () => {
-    try {
-      setCameraError(null);
-
-      // Tentar 1080p primeiro
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            deviceId: selectedCameraId ? { exact: selectedCameraId } : undefined,
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-          },
-        });
-      } catch {
-        // Fallback sem restrições
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: selectedCameraId ? { deviceId: { exact: selectedCameraId } } : true,
-        });
-      }
-
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-
-      // Recarregar lista de câmeras com labels (após permissão)
-      await listCameras();
-      setCameraActive(true);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erro ao acessar câmera';
-      setCameraError(msg);
-      toast.error('Erro ao iniciar câmera: ' + msg);
+  const friendlyError = useCallback((err: unknown): string => {
+    const name = err instanceof Error ? err.name : '';
+    const msg = err instanceof Error ? err.message : String(err);
+    if (name === 'NotReadableError' || msg.includes('Could not start video source')) {
+      return 'A câmera está sendo usada por outro programa (Zoom, Teams, OBS, etc.). Feche os outros programas, desconecte e reconecte a câmera USB, e tente novamente.';
     }
-  }, [selectedCameraId, listCameras]);
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      return 'Permissão de câmera negada. Clique no ícone de câmera na barra de endereço do browser e permita o acesso.';
+    }
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+      return 'Nenhuma câmera encontrada. Verifique se a câmera USB está conectada corretamente e tente novamente.';
+    }
+    if (name === 'OverconstrainedError') {
+      return 'A câmera não suporta as configurações solicitadas. Tente selecionar outra câmera na lista.';
+    }
+    if (name === 'AbortError') {
+      return 'Acesso à câmera foi interrompido. Tente novamente.';
+    }
+    return msg || 'Erro desconhecido ao acessar câmera';
+  }, []);
+
+  const startUSBCamera = useCallback(async () => {
+    setCameraError(null);
+
+    // Estratégia de retry em 4 etapas
+    const attempts: (() => Promise<MediaStream>)[] = [
+      // 1. deviceId exato + resolução ideal
+      ...(selectedCameraId ? [() => navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: selectedCameraId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      })] : []),
+      // 2. deviceId exato sem restrição de resolução
+      ...(selectedCameraId ? [() => navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: selectedCameraId } },
+      })] : []),
+      // 3. qualquer câmera com resolução ideal
+      () => navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+      }),
+      // 4. mínimo absoluto
+      () => navigator.mediaDevices.getUserMedia({ video: true }),
+    ];
+
+    let lastErr: unknown;
+    for (const attempt of attempts) {
+      try {
+        const stream = await attempt();
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+        await listCameras();
+        setCameraActive(true);
+        return;
+      } catch (err) {
+        lastErr = err;
+        // Se for NotReadableError não adianta tentar outras configurações do mesmo device
+        const name = err instanceof Error ? err.name : '';
+        if (name === 'NotReadableError') break;
+      }
+    }
+
+    const msg = friendlyError(lastErr);
+    setCameraError(msg);
+    toast.error('Erro ao iniciar câmera', { description: msg, duration: 8000 });
+  }, [selectedCameraId, listCameras, friendlyError]);
 
   // ── Parar câmera ────────────────────────────
 
@@ -408,7 +438,26 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
       )}
       {cameraError && (
         <Alert variant="destructive">
-          <AlertDescription>{cameraError}</AlertDescription>
+          <AlertDescription>
+            <div className="flex flex-col gap-2">
+              <span>{cameraError}</span>
+              <div className="flex gap-2 mt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="bg-transparent border-white/30 text-white hover:bg-white/10 h-7 text-xs"
+                  onClick={async () => {
+                    setCameraError(null);
+                    await listCameras();
+                    await loadModels();
+                    await startUSBCamera();
+                  }}
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />Tentar Novamente
+                </Button>
+              </div>
+            </div>
+          </AlertDescription>
         </Alert>
       )}
 
