@@ -446,3 +446,24 @@
 - [x] Adicionar procedure `getDailyUniqueStats` — clientes únicos do dia com regra de prioridade
 - [x] Adicionar botão "Recalcular Agora" na página de Configurações do VIP Cam
 - [x] 23 testes vitest cobrindo os 3 cenários (satisfeito permanente, neutro prevalece, insatisfeito maioria) + casos extremos (168 total)
+
+## VIP Cam — Auditoria de Recálculos e Badge Em Risco
+
+- [ ] Verificar tabela de auditoria existente (cam_audit_log ou gt_audit_log)
+- [ ] Registrar auditoria no `recalcAllClients`: quem acionou, quando, quantos atualizados
+- [ ] Criar procedure `getRecalcHistory` para listar histórico de recálculos
+- [ ] Exibir histórico de recálculos na CamConfigPage (últimas 10 execuções)
+- [ ] Adicionar campo `riskLevel` no retorno de `getClientes` (em_risco quando neutros = insatisfeitos e sem satisfeito)
+- [ ] Exibir badge laranja "Em Risco" na CamClientesPage para clientes em risco
+- [ ] Testes vitest para a lógica de detecção de risco
+
+## VIP Cam — Correção de Lógica de Satisfação (Bug: todos insatisfeitos) (Concluído)
+
+- [x] Diagnosticado: thresholds de angry(0.30), disgusted(0.30) e sad(0.40) muito baixos para o modelo face-api
+- [x] Corrigido angry >= 0.55 (era 0.30) — evita falsos positivos de raiva em rostos sérios
+- [x] Corrigido disgusted >= 0.50 (era 0.30) — evita confundir "concentrado" com "enojado"
+- [x] Corrigido sad >= 0.60 && happy < 0.15 (era 0.40 e 0.20) — só tristeza muito marcada
+- [x] Corrigido happy >= 0.35 (era 0.40) — captura sorrisos leves
+- [x] Aumentado scoreThreshold do detector de rosto: 0.25 → 0.45 (menos detecções falsas)
+- [x] 20 novos testes vitest cobrindo os novos thresholds (183 total)
+- [ ] Recalcular clientes existentes com a nova lógica (fazer via botão na página de Configurações)

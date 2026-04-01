@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, Users, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { Search, Users, ChevronLeft, ChevronRight, Eye, AlertTriangle } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { SATISFACTION_LABELS, SATISFACTION_COLORS, SATISFACTION_EMOJIS, SatisfactionLevel } from '@/lib/emotionClassifier';
 
@@ -69,7 +69,18 @@ export default function CamClientesPage() {
         <div className="space-y-2">{[...Array(8)].map((_, i) => <Skeleton key={i} className="h-16" />)}</div>
       ) : (
         <>
-          <div className="text-sm text-muted-foreground">{data?.total ?? 0} clientes encontrados</div>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm text-muted-foreground">{data?.total ?? 0} clientes encontrados</span>
+            {(() => {
+              const emRisco = (data?.clientes ?? []).filter((c: any) => c.riskLevel === 'em_risco').length;
+              return emRisco > 0 ? (
+                <span className="flex items-center gap-1.5 text-xs text-orange-400 bg-orange-400/10 border border-orange-400/30 rounded-full px-3 py-1">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {emRisco} cliente{emRisco > 1 ? 's' : ''} em risco nesta página
+                </span>
+              ) : null;
+            })()}
+          </div>
           <div className="space-y-2">
             {(data?.clientes ?? []).map(cliente => {
               const level = (cliente.satisfactionLevel ?? 'neutral') as SatisfactionLevel;
@@ -86,9 +97,21 @@ export default function CamClientesPage() {
                         {cliente.visitCount ?? 0} visitas · {cliente.lastSeenAt ? new Date(cliente.lastSeenAt).toLocaleDateString('pt-BR') : 'Nunca'}
                       </p>
                     </div>
-                    <Badge variant="outline" style={{ color: SATISFACTION_COLORS[level], borderColor: SATISFACTION_COLORS[level] + '60' }}>
-                      {SATISFACTION_EMOJIS[level]} {SATISFACTION_LABELS[level]}
-                    </Badge>
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {(cliente as any).riskLevel === 'em_risco' && (
+                        <Badge
+                          variant="outline"
+                          className="text-orange-400 border-orange-400/50 bg-orange-400/10 text-xs gap-1"
+                          title="Neutros = Insatisfeitos: próxima captura negativa muda para Insatisfeito"
+                        >
+                          <AlertTriangle className="h-3 w-3" />
+                          Em Risco
+                        </Badge>
+                      )}
+                      <Badge variant="outline" style={{ color: SATISFACTION_COLORS[level], borderColor: SATISFACTION_COLORS[level] + '60' }}>
+                        {SATISFACTION_EMOJIS[level]} {SATISFACTION_LABELS[level]}
+                      </Badge>
+                    </div>
                     <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
                   </CardContent>
                 </Card>

@@ -1,10 +1,13 @@
 /**
  * Classificador de emoções para o VIP Cam.
- * Regras exatas conforme o documento de arquitetura SenseVIP:
+ * Regras calibradas para o modelo @vladmandic/face-api:
  *
- * - Insatisfeito: angry >= 0.30 OU disgusted >= 0.30 OU (sad >= 0.40 E happy < 0.20)
- * - Satisfeito: happy >= 0.40
- * - Neutro: qualquer outra coisa
+ * O modelo retorna valores de angry/disgusted/sad elevados mesmo para rostos neutros.
+ * Thresholds altos evitam falsos positivos de insatisfação.
+ *
+ * - Insatisfeito: angry >= 0.55 OU disgusted >= 0.50 OU (sad >= 0.60 E happy < 0.15)
+ * - Satisfeito: happy >= 0.35
+ * - Neutro: qualquer outra coisa (padrão)
  */
 
 export type SatisfactionLevel = 'satisfied' | 'neutral' | 'unsatisfied';
@@ -31,17 +34,18 @@ export function classifyExpression(scores: ExpressionScores): {
   const entries = Object.entries(scores) as [ExpressionName, number][];
   const dominantExpression = entries.reduce((a, b) => b[1] > a[1] ? b : a)[0];
 
-  // Regra de insatisfação (tem prioridade sobre neutro)
+  // Regra de insatisfação (thresholds altos para evitar falsos positivos)
+  // O modelo face-api retorna angry/disgusted/sad elevados mesmo para rostos neutros-sérios.
   if (
-    scores.angry >= 0.30 ||
-    scores.disgusted >= 0.30 ||
-    (scores.sad >= 0.40 && scores.happy < 0.20)
+    scores.angry >= 0.55 ||
+    scores.disgusted >= 0.50 ||
+    (scores.sad >= 0.60 && scores.happy < 0.15)
   ) {
     return { satisfactionLevel: 'unsatisfied', dominantExpression };
   }
 
-  // Regra de satisfação
-  if (scores.happy >= 0.40) {
+  // Regra de satisfação (threshold levemente reduzido para capturar sorrisos leves)
+  if (scores.happy >= 0.35) {
     return { satisfactionLevel: 'satisfied', dominantExpression };
   }
 

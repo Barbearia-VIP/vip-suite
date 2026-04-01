@@ -13,6 +13,7 @@ import {
   camMetricasDiarias,
   camMetricasHorarias,
   camCameraConfig,
+  gtAuditLog,
 } from '../../drizzle/schema';
 import { storagePut } from '../storage';
 
@@ -483,8 +484,51 @@ export const vipCamRouter = router({
         .limit(input.limit)
         .offset(offset);
 
+      // Calcular riskLevel para cada cliente:
+      // "em_risco" quando: sem nenhuma captura satisfeita E neutros === insatisfeitos
+      // (ou seja, uma única captura negativa a mais mudaria o status para insatisfeito)
+      const clienteIds = clientes.map(c => c.id);
+      const riskMap = new Map<number, 'em_risco' | 'seguro'>();
+
+      if (clienteIds.length > 0) {
+        // Buscar contagens agrupadas por cliente e nível de satisfação
+        const counts = await db!
+          .select({
+            clienteId: camSentimentTimeline.clienteId,
+            satisfactionLevel: camSentimentTimeline.satisfactionLevel,
+            total: count(),
+          })
+          .from(camSentimentTimeline)
+          .where(sql`${camSentimentTimeline.clienteId} IN (${sql.join(clienteIds.map(id => sql`${id}`), sql`, `)})`)
+          .groupBy(camSentimentTimeline.clienteId, camSentimentTimeline.satisfactionLevel);
+
+        // Agrupar por cliente
+        const clienteCounts = new Map<number, { satisfied: number; neutral: number; unsatisfied: number }>();
+        for (const row of counts) {
+          if (!clienteCounts.has(row.clienteId)) {
+            clienteCounts.set(row.clienteId, { satisfied: 0, neutral: 0, unsatisfied: 0 });
+          }
+          const c = clienteCounts.get(row.clienteId)!;
+          if (row.satisfactionLevel === 'satisfied') c.satisfied += row.total;
+          else if (row.satisfactionLevel === 'neutral') c.neutral += row.total;
+          else if (row.satisfactionLevel === 'unsatisfied') c.unsatisfied += row.total;
+        }
+
+        for (const id of clienteIds) {
+          const c = clienteCounts.get(id) ?? { satisfied: 0, neutral: 0, unsatisfied: 0 };
+          // Em risco: sem satisfeito E neutros === insatisfeitos (empate — próxima captura negativa muda status)
+          const isAtRisk = c.satisfied === 0 && c.neutral === c.unsatisfied && c.neutral > 0;
+          riskMap.set(id, isAtRisk ? 'em_risco' : 'seguro');
+        }
+      }
+
+      const clientesComRisco = clientes.map(c => ({
+        ...c,
+        riskLevel: riskMap.get(c.id) ?? 'seguro',
+      }));
+
       return {
-        clientes,
+        clientes: clientesComRisco,
         total: totalRow?.total ?? 0,
         page: input.page,
         totalPages: Math.ceil((totalRow?.total ?? 0) / input.limit),
@@ -652,8 +696,9 @@ export const vipCamRouter = router({
   recalcAllClients: protectedProcedure
     .input(z.object({
       unitId: z.number(),
+      orgId: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
 
       // Buscar todos os clientes da unidade
@@ -691,7 +736,49 @@ export const vipCamRouter = router({
         updated++;
       }
 
+      // Registrar auditoria do recálculo
+      try {
+        const orgId = input.orgId ?? input.unitId;
+        await db!.insert(gtAuditLog).values({
+          orgId,
+          unitId: input.unitId,
+          userId: ctx.user!.id,
+          userName: ctx.user!.name ?? 'Usuário',
+          acao: 'recalc',
+          entidade: 'vip_cam_satisfaction',
+          descricao: `Recálculo de satisfação em lote: ${updated} de ${clientes.length} clientes atualizados (regra SenseVIP)`,
+        });
+      } catch { /* não bloquear por falha de auditoria */ }
+
       return { updated, total: clientes.length };
+    }),
+
+  // ── Histórico de recálculos de satisfação ──
+  // Lista os últimos recálculos registrados na tabela de auditoria para a unidade.
+  getRecalcHistory: protectedProcedure
+    .input(z.object({
+      unitId: z.number(),
+      limit: z.number().default(10),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const history = await db!
+        .select({
+          id: gtAuditLog.id,
+          userId: gtAuditLog.userId,
+          userName: gtAuditLog.userName,
+          descricao: gtAuditLog.descricao,
+          createdAt: gtAuditLog.createdAt,
+        })
+        .from(gtAuditLog)
+        .where(and(
+          eq(gtAuditLog.unitId, input.unitId),
+          eq(gtAuditLog.entidade, 'vip_cam_satisfaction'),
+          eq(gtAuditLog.acao, 'recalc')
+        ))
+        .orderBy(desc(gtAuditLog.createdAt))
+        .limit(input.limit);
+      return history;
     }),
 
   // ── Clientes únicos do dia com satisfação calculada pela regra de prioridade ──

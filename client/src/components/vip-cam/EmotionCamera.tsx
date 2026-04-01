@@ -340,7 +340,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
 
     try {
       const detection = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.25 }))
+        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.45 }))
         .withFaceLandmarks()
         .withFaceDescriptor()
         .withFaceExpressions();

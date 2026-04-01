@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Camera, Wifi, Save, Info, RefreshCw } from 'lucide-react';
+import { Camera, Wifi, Save, Info, RefreshCw, History, Clock } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { toast } from 'sonner';
 
@@ -204,6 +204,15 @@ export default function CamConfigPage() {
             Se neutros ≥ insatisfeitos → Neutro. Caso contrário → Insatisfeito.
           </p>
           <RecalcButton unitId={unitId} />
+
+          {/* Histórico de recálculos */}
+          <div className="pt-3 border-t border-amber-500/20">
+            <p className="text-xs font-medium text-amber-400 flex items-center gap-1.5 mb-2">
+              <History className="h-3.5 w-3.5" />
+              Histórico de Recálculos
+            </p>
+            <RecalcHistory unitId={unitId} />
+          </div>
         </CardContent>
       </Card>
 
@@ -218,9 +227,11 @@ export default function CamConfigPage() {
 }
 
 function RecalcButton({ unitId }: { unitId: number }) {
+  const utils = trpc.useUtils();
   const recalc = trpc.vipCam.recalcAllClients.useMutation({
     onSuccess: (data) => {
       toast.success(`Recálculo concluído: ${data.updated} de ${data.total} clientes atualizados.`);
+      utils.vipCam.getRecalcHistory.invalidate({ unitId });
     },
     onError: (err) => {
       toast.error(`Erro no recálculo: ${err.message}`);
@@ -232,11 +243,43 @@ function RecalcButton({ unitId }: { unitId: number }) {
       variant="outline"
       size="sm"
       className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10"
-      onClick={() => recalc.mutate({ unitId })}
+      onClick={() => recalc.mutate({ unitId, orgId: unitId })}
       disabled={recalc.isPending || unitId === 0}
     >
       <RefreshCw className={`h-4 w-4 mr-2 ${recalc.isPending ? 'animate-spin' : ''}`} />
       {recalc.isPending ? 'Recalculando...' : 'Recalcular Agora'}
     </Button>
+  );
+}
+
+function RecalcHistory({ unitId }: { unitId: number }) {
+  const { data: history, isLoading } = trpc.vipCam.getRecalcHistory.useQuery(
+    { unitId, limit: 10 },
+    { enabled: unitId > 0 }
+  );
+
+  if (isLoading) return <p className="text-xs text-muted-foreground">Carregando histórico...</p>;
+  if (!history || history.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground italic">
+        Nenhum recálculo registrado ainda. Clique em "Recalcular Agora" para iniciar.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+      {history.map((entry) => (
+        <div key={entry.id} className="flex items-start gap-2 text-xs p-2 rounded bg-muted/30">
+          <Clock className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-foreground/80 leading-snug">{entry.descricao}</p>
+            <p className="text-muted-foreground mt-0.5">
+              {entry.userName ?? 'Usuário'} · {entry.createdAt ? new Date(entry.createdAt).toLocaleString('pt-BR') : ''}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
