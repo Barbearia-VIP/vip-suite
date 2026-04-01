@@ -384,3 +384,8 @@
 - [x] ProcessosPage: botão "Gerar Processos com IA", modal de revisão com aceitar/rejeitar individual, botão "IT" para enviar processo para Instruções de Trabalho
 - [x] InstrucoesPage: recebe processoId via query param, modal de geração por IA, visualização do plano detalhado (objetivo, materiais, passos, dicas, alertas, indicadores)
 - [x] Router gestaoTotal.ts: procedures generateAI (planejamento), generateAI (processos), saveMany (processos), generateFromProcesso (instrucoes)
+
+## Bugs VIP Cam (01/04/2026)
+
+- [x] Corrigir erro 403 no carregamento dos modelos do face-api.js — modelos copiados para client/public/models/ e servidos localmente
+- [x] Corrigir SelectItem com value vazio na página VIP Cam ao vivo
