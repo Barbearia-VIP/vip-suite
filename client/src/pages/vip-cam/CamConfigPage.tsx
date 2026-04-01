@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Camera, Wifi, Save, Info } from 'lucide-react';
+import { Camera, Wifi, Save, Info, RefreshCw } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { toast } from 'sonner';
 
@@ -185,6 +185,28 @@ export default function CamConfigPage() {
         </CardContent>
       </Card>
 
+      {/* Card de Manutenção — Recálculo em lote da satisfação */}
+      <Card className="border-amber-500/30 bg-amber-500/5">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <RefreshCw className="h-4 w-4 text-amber-500" />
+            Recalcular Satisfação dos Clientes
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Reaplica a regra de prioridade positiva (SenseVIP) em todos os clientes desta unidade,
+            usando o histórico completo de capturas. Use após importar dados históricos ou
+            quando suspeitar que o status de algum cliente está incorreto.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            <strong>Regra:</strong> Se teve ao menos 1 captura satisfeita → Satisfeito permanente.
+            Se neutros ≥ insatisfeitos → Neutro. Caso contrário → Insatisfeito.
+          </p>
+          <RecalcButton unitId={unitId} />
+        </CardContent>
+      </Card>
+
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saveConfig.isPending}>
           <Save className="h-4 w-4 mr-2" />
@@ -192,5 +214,29 @@ export default function CamConfigPage() {
         </Button>
       </div>
     </div>
+  );
+}
+
+function RecalcButton({ unitId }: { unitId: number }) {
+  const recalc = trpc.vipCam.recalcAllClients.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Recálculo concluído: ${data.updated} de ${data.total} clientes atualizados.`);
+    },
+    onError: (err) => {
+      toast.error(`Erro no recálculo: ${err.message}`);
+    },
+  });
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10"
+      onClick={() => recalc.mutate({ unitId })}
+      disabled={recalc.isPending || unitId === 0}
+    >
+      <RefreshCw className={`h-4 w-4 mr-2 ${recalc.isPending ? 'animate-spin' : ''}`} />
+      {recalc.isPending ? 'Recalculando...' : 'Recalcular Agora'}
+    </Button>
   );
 }

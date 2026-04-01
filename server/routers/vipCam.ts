@@ -645,4 +645,111 @@ export const vipCamRouter = router({
         totalPages: Math.ceil((totalRow?.total ?? 0) / input.limit),
       };
     }),
+
+  // ── Recalcular satisfação de todos os clientes da unidade ──
+  // Percorre todos os clientes e reaplica a regra de prioridade positiva
+  // usando o histórico completo de capturas de cada um.
+  recalcAllClients: protectedProcedure
+    .input(z.object({
+      unitId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+
+      // Buscar todos os clientes da unidade
+      const clientes = await db!
+        .select({ id: camClientes.id })
+        .from(camClientes)
+        .where(eq(camClientes.unitId, input.unitId));
+
+      let updated = 0;
+      for (const cliente of clientes) {
+        // Buscar todo o histórico de capturas do cliente
+        const timeline = await db!
+          .select({ satisfactionLevel: camSentimentTimeline.satisfactionLevel })
+          .from(camSentimentTimeline)
+          .where(and(
+            eq(camSentimentTimeline.clienteId, cliente.id),
+            eq(camSentimentTimeline.unitId, input.unitId)
+          ));
+
+        if (timeline.length === 0) continue;
+
+        // Aplicar a regra de prioridade positiva
+        const finalLevel = calcFinalSatisfactionLevel(timeline);
+        const expressaoLegado = finalLevel === 'satisfied' ? 'satisfeito'
+          : finalLevel === 'neutral' ? 'neutro' : 'insatisfeito';
+
+        await db!.update(camClientes).set({
+          satisfactionLevel: finalLevel,
+          expressao: expressaoLegado,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(camClientes.id, cliente.id),
+          eq(camClientes.unitId, input.unitId)
+        ));
+        updated++;
+      }
+
+      return { updated, total: clientes.length };
+    }),
+
+  // ── Clientes únicos do dia com satisfação calculada pela regra de prioridade ──
+  // Retorna contagem de satisfeitos/neutros/insatisfeitos únicos de um dia,
+  // aplicando a regra: satisfeito permanente > neutro >= insatisfeito > insatisfeito
+  getDailyUniqueStats: protectedProcedure
+    .input(z.object({
+      unitId: z.number(),
+      date: z.string().optional(), // YYYY-MM-DD, default hoje
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const targetDate = input.date ?? new Date().toISOString().slice(0, 10);
+      const startOfDay = new Date(targetDate + 'T00:00:00Z');
+      const endOfDay = new Date(targetDate + 'T23:59:59Z');
+
+      // Buscar todas as capturas do dia agrupadas por cliente
+      const capturasDoDia = await db!
+        .select({
+          clienteId: camSentimentTimeline.clienteId,
+          satisfactionLevel: camSentimentTimeline.satisfactionLevel,
+        })
+        .from(camSentimentTimeline)
+        .where(and(
+          eq(camSentimentTimeline.unitId, input.unitId),
+          gte(camSentimentTimeline.recordedAt, startOfDay),
+          lte(camSentimentTimeline.recordedAt, endOfDay)
+        ));
+
+      // Agrupar por cliente e aplicar a regra de prioridade
+      const clienteMap = new Map<number, Array<{ satisfactionLevel: string }>>();
+      for (const captura of capturasDoDia) {
+        if (!clienteMap.has(captura.clienteId)) {
+          clienteMap.set(captura.clienteId, []);
+        }
+        clienteMap.get(captura.clienteId)!.push({ satisfactionLevel: captura.satisfactionLevel });
+      }
+
+      let satisfeitos = 0;
+      let neutros = 0;
+      let insatisfeitos = 0;
+      for (const timeline of Array.from(clienteMap.values())) {
+        const level = calcFinalSatisfactionLevel(timeline);
+        if (level === 'satisfied') satisfeitos++;
+        else if (level === 'neutral') neutros++;
+        else insatisfeitos++;
+      }
+
+      return {
+        date: targetDate,
+        totalUnicos: clienteMap.size,
+        satisfeitos,
+        neutros,
+        insatisfeitos,
+        satisfactionRate: clienteMap.size > 0
+          ? Math.round((satisfeitos / clienteMap.size) * 100)
+          : 0,
+      };
+    }),
 });
+

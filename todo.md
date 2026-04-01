@@ -436,3 +436,13 @@
 
 ### Testes
 - [x] 27 testes vitest passando (145 total)
+
+## VIP Cam — Ajuste de Lógica de Satisfação (SenseVIP) (Concluído)
+
+- [x] Confirmar que `calcFinalSatisfactionLevel` já implementa as 3 regras do SenseVIP corretamente
+- [x] Confirmar que `saveCapture` aplica a regra para clientes existentes (busca histórico + nova captura)
+- [x] Confirmar que novo cliente (1ª captura) salva o nível bruto corretamente (regra se aplica a partir da 2ª)
+- [x] Adicionar procedure `recalcAllClients` — recálculo em lote com regra de prioridade positiva
+- [x] Adicionar procedure `getDailyUniqueStats` — clientes únicos do dia com regra de prioridade
+- [x] Adicionar botão "Recalcular Agora" na página de Configurações do VIP Cam
+- [x] 23 testes vitest cobrindo os 3 cenários (satisfeito permanente, neutro prevalece, insatisfeito maioria) + casos extremos (168 total)
