@@ -216,6 +216,31 @@ export default function CamConfigPage() {
         </CardContent>
       </Card>
 
+      {/* Card de Reclassificação Histórica com Novos Thresholds */}
+      <Card className="border-blue-500/30 bg-blue-500/5">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <History className="h-4 w-4 text-blue-400" />
+            Reclassificar Histórico com Nova Lógica
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Reavalia <strong>cada captura histórica</strong> da timeline usando a expressão dominante
+            e os novos thresholds calibrados para o modelo face-api: angry ≥ 0.55, disgusted ≥ 0.50,
+            sad ≥ 0.60 (com happy &lt; 0.15), happy ≥ 0.35. Após reclassificar a timeline, recalcula
+            o status final de todos os clientes com a regra de prioridade positiva (SenseVIP).
+          </p>
+          <Alert className="border-blue-500/30 bg-blue-500/10 py-2">
+            <AlertDescription className="text-xs text-blue-300">
+              Execute após a atualização dos thresholds para corrigir registros históricos classificados
+              incorretamente como insatisfeitos.
+            </AlertDescription>
+          </Alert>
+          <ReclassifyHistoryButton unitId={unitId} />
+        </CardContent>
+      </Card>
+
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saveConfig.isPending}>
           <Save className="h-4 w-4 mr-2" />
@@ -249,6 +274,44 @@ function RecalcButton({ unitId }: { unitId: number }) {
       <RefreshCw className={`h-4 w-4 mr-2 ${recalc.isPending ? 'animate-spin' : ''}`} />
       {recalc.isPending ? 'Recalculando...' : 'Recalcular Agora'}
     </Button>
+  );
+}
+
+function ReclassifyHistoryButton({ unitId }: { unitId: number }) {
+  const utils = trpc.useUtils();
+  const [result, setResult] = useState<{ timelineUpdated: number; clientesUpdated: number; timelineTotal: number; clientesTotal: number } | null>(null);
+  const reclassify = trpc.vipCam.reclassifyAllHistory.useMutation({
+    onSuccess: (data) => {
+      setResult(data);
+      toast.success(
+        `Reclassificação concluída: ${data.timelineUpdated} de ${data.timelineTotal} capturas atualizadas, ` +
+        `${data.clientesUpdated} clientes recalculados.`
+      );
+      utils.vipCam.getClientes.invalidate({ unitId });
+      utils.vipCam.getRecalcHistory.invalidate({ unitId });
+    },
+    onError: (err) => toast.error(`Erro na reclassificação: ${err.message}`),
+  });
+
+  return (
+    <div className="space-y-2">
+      <Button
+        variant="outline"
+        size="sm"
+        className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+        onClick={() => reclassify.mutate({ unitId, orgId: unitId })}
+        disabled={reclassify.isPending || unitId === 0}
+      >
+        <History className={`h-4 w-4 mr-2 ${reclassify.isPending ? 'animate-spin' : ''}`} />
+        {reclassify.isPending ? 'Reclassificando...' : 'Reclassificar Histórico Agora'}
+      </Button>
+      {result && (
+        <div className="text-xs text-blue-300 bg-blue-500/10 rounded p-2 space-y-0.5">
+          <p>✓ Timeline: {result.timelineUpdated} de {result.timelineTotal} capturas atualizadas</p>
+          <p>✓ Clientes: {result.clientesUpdated} de {result.clientesTotal} recalculados</p>
+        </div>
+      )}
+    </div>
   );
 }
 

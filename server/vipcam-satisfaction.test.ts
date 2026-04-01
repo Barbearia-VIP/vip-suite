@@ -265,3 +265,79 @@ describe("classifyExpression — thresholds calibrados (anti falsos positivos)",
     expect(classifyExpression({ happy: 0.05, neutral: 0.45, angry: 0.25, surprised: 0.02, sad: 0.20, disgusted: 0.02, fearful: 0.01 })).toBe("neutral");
   });
 });
+
+// ── Testes para reclassifyByExpression (reclassificação histórica) ────────────
+// Replica a função do servidor para testar isoladamente
+
+function reclassifyByExpression(
+  expression: string | null,
+  confidence: string | null
+): "satisfied" | "neutral" | "unsatisfied" {
+  const conf = parseFloat(confidence ?? "0");
+  const expr = (expression ?? "neutral").toLowerCase();
+
+  if (expr === "happy") return conf >= 0.35 ? "satisfied" : "neutral";
+  if (expr === "angry") return conf >= 0.55 ? "unsatisfied" : "neutral";
+  if (expr === "disgusted") return conf >= 0.50 ? "unsatisfied" : "neutral";
+  if (expr === "sad") return conf >= 0.60 ? "unsatisfied" : "neutral";
+  return "neutral";
+}
+
+describe("reclassifyByExpression — reclassificação histórica por expressão dominante", () => {
+  // happy
+  it("happy + conf=0.35 → satisfied", () => {
+    expect(reclassifyByExpression("happy", "0.35")).toBe("satisfied");
+  });
+  it("happy + conf=0.80 → satisfied", () => {
+    expect(reclassifyByExpression("happy", "0.80")).toBe("satisfied");
+  });
+  it("happy + conf=0.20 (baixo) → neutral", () => {
+    expect(reclassifyByExpression("happy", "0.20")).toBe("neutral");
+  });
+
+  // angry
+  it("angry + conf=0.55 → unsatisfied", () => {
+    expect(reclassifyByExpression("angry", "0.55")).toBe("unsatisfied");
+  });
+  it("angry + conf=0.40 (abaixo do threshold) → neutral", () => {
+    expect(reclassifyByExpression("angry", "0.40")).toBe("neutral");
+  });
+  it("angry + conf=0.30 (rosto sério) → neutral", () => {
+    expect(reclassifyByExpression("angry", "0.30")).toBe("neutral");
+  });
+
+  // disgusted
+  it("disgusted + conf=0.50 → unsatisfied", () => {
+    expect(reclassifyByExpression("disgusted", "0.50")).toBe("unsatisfied");
+  });
+  it("disgusted + conf=0.30 → neutral", () => {
+    expect(reclassifyByExpression("disgusted", "0.30")).toBe("neutral");
+  });
+
+  // sad
+  it("sad + conf=0.60 → unsatisfied", () => {
+    expect(reclassifyByExpression("sad", "0.60")).toBe("unsatisfied");
+  });
+  it("sad + conf=0.45 (cansado) → neutral", () => {
+    expect(reclassifyByExpression("sad", "0.45")).toBe("neutral");
+  });
+
+  // neutral, surprised, fearful sempre neutro
+  it("neutral → neutral independente da confidence", () => {
+    expect(reclassifyByExpression("neutral", "0.99")).toBe("neutral");
+  });
+  it("surprised → neutral", () => {
+    expect(reclassifyByExpression("surprised", "0.80")).toBe("neutral");
+  });
+  it("fearful → neutral", () => {
+    expect(reclassifyByExpression("fearful", "0.70")).toBe("neutral");
+  });
+
+  // null/undefined
+  it("expression null → neutral", () => {
+    expect(reclassifyByExpression(null, "0.90")).toBe("neutral");
+  });
+  it("confidence null → neutral (conf=0 abaixo de todos os thresholds)", () => {
+    expect(reclassifyByExpression("angry", null)).toBe("neutral");
+  });
+});

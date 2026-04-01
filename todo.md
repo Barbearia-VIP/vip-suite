@@ -467,3 +467,12 @@
 - [x] Aumentado scoreThreshold do detector de rosto: 0.25 → 0.45 (menos detecções falsas)
 - [x] 20 novos testes vitest cobrindo os novos thresholds (183 total)
 - [ ] Recalcular clientes existentes com a nova lógica (fazer via botão na página de Configurações)
+
+## VIP Cam — Reclassificação Histórica com Novos Thresholds (Concluído)
+
+- [x] Verificado: cam_sentiment_timeline não tem scores brutos, apenas expression+confidence dominante
+- [x] Criado procedure `reclassifyAllHistory`: reavalia cada registro por expression+confidence com novos thresholds
+- [x] Procedure recalcula status final de todos os clientes após atualizar a timeline
+- [x] Adicionado card azul "Reclassificar Histórico com Nova Lógica" na CamConfigPage
+- [x] Auditoria registrada na gt_audit_log após cada reclassificação
+- [x] 15 novos testes vitest para reclassifyByExpression (198 total)

@@ -838,5 +838,123 @@ export const vipCamRouter = router({
           : 0,
       };
     }),
+
+  // ── Reclassificar histórico completo com novos thresholds ──
+  // Usa expression + confidence de cada registro para inferir o novo satisfactionLevel
+  // com os thresholds calibrados para o modelo face-api.
+  reclassifyAllHistory: protectedProcedure
+    .input(z.object({
+      unitId: z.number(),
+      orgId: z.number().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+
+      // Buscar todos os registros da timeline da unidade
+      const allRecords = await db!
+        .select({
+          id: camSentimentTimeline.id,
+          expression: camSentimentTimeline.expression,
+          confidence: camSentimentTimeline.confidence,
+          satisfactionLevel: camSentimentTimeline.satisfactionLevel,
+        })
+        .from(camSentimentTimeline)
+        .where(eq(camSentimentTimeline.unitId, input.unitId));
+
+      // Reclassificar cada registro usando expression + confidence
+      // Regra: expression domínante + confidence com novos thresholds
+      function reclassifyByExpression(
+        expression: string | null,
+        confidence: string | null
+      ): 'satisfied' | 'neutral' | 'unsatisfied' {
+        const conf = parseFloat(confidence ?? '0');
+        const expr = (expression ?? 'neutral').toLowerCase();
+
+        if (expr === 'happy') {
+          return conf >= 0.35 ? 'satisfied' : 'neutral';
+        }
+        if (expr === 'angry') {
+          return conf >= 0.55 ? 'unsatisfied' : 'neutral';
+        }
+        if (expr === 'disgusted') {
+          return conf >= 0.50 ? 'unsatisfied' : 'neutral';
+        }
+        if (expr === 'sad') {
+          return conf >= 0.60 ? 'unsatisfied' : 'neutral';
+        }
+        // neutral, surprised, fearful → sempre neutro
+        return 'neutral';
+      }
+
+      let timelineUpdated = 0;
+      const BATCH = 200;
+
+      for (let i = 0; i < allRecords.length; i += BATCH) {
+        const batch = allRecords.slice(i, i + BATCH);
+        for (const rec of batch) {
+          const newLevel = reclassifyByExpression(rec.expression, rec.confidence);
+          if (newLevel !== rec.satisfactionLevel) {
+            await db!.update(camSentimentTimeline)
+              .set({ satisfactionLevel: newLevel })
+              .where(eq(camSentimentTimeline.id, rec.id));
+            timelineUpdated++;
+          }
+        }
+      }
+
+      // Agora recalcular o status final de cada cliente com a timeline atualizada
+      const clientes = await db!
+        .select({ id: camClientes.id })
+        .from(camClientes)
+        .where(eq(camClientes.unitId, input.unitId));
+
+      let clientesUpdated = 0;
+      for (const cliente of clientes) {
+        const timeline = await db!
+          .select({ satisfactionLevel: camSentimentTimeline.satisfactionLevel })
+          .from(camSentimentTimeline)
+          .where(and(
+            eq(camSentimentTimeline.clienteId, cliente.id),
+            eq(camSentimentTimeline.unitId, input.unitId)
+          ));
+
+        if (timeline.length === 0) continue;
+
+        const finalLevel = calcFinalSatisfactionLevel(timeline);
+        const expressaoLegado = finalLevel === 'satisfied' ? 'satisfeito'
+          : finalLevel === 'neutral' ? 'neutro' : 'insatisfeito';
+
+        await db!.update(camClientes).set({
+          satisfactionLevel: finalLevel,
+          expressao: expressaoLegado,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(camClientes.id, cliente.id),
+          eq(camClientes.unitId, input.unitId)
+        ));
+        clientesUpdated++;
+      }
+
+      // Registrar auditoria
+      try {
+        const orgId = input.orgId ?? input.unitId;
+        await db!.insert(gtAuditLog).values({
+          orgId,
+          unitId: input.unitId,
+          userId: ctx.user!.id,
+          userName: ctx.user!.name ?? 'Usuário',
+          acao: 'recalc',
+          entidade: 'vip_cam_satisfaction',
+          descricao: `Reclassificação histórica: ${timelineUpdated} registros da timeline atualizados, ${clientesUpdated} clientes recalculados (novos thresholds face-api)`,
+        });
+      } catch { /* não bloquear por falha de auditoria */ }
+
+      return {
+        timelineTotal: allRecords.length,
+        timelineUpdated,
+        clientesTotal: clientes.length,
+        clientesUpdated,
+      };
+    }),
 });
 
