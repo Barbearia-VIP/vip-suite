@@ -467,9 +467,64 @@ const indicadoresGtRouter = router({
       await db.delete(gtIndicadores).where(and(eq(gtIndicadores.id, input.id), eq(gtIndicadores.orgId, input.orgId)));
       return { success: true };
     }),
-});
 
-// ── Planejamento Estratégico ──────────────────────────────────────────────────
+  // Indicadores consolidados do sistema (dados reais)
+  consolidado: protectedProcedure
+    .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const { orgId, unitId } = input;
+      // Helper genérico de condição por orgId/unitId
+      const condFor = (orgIdCol: Parameters<typeof eq>[0], unitIdCol: Parameters<typeof eq>[0]) =>
+        unitId ? and(eq(orgIdCol, orgId), eq(unitIdCol, unitId)) : eq(orgIdCol, orgId);
+
+      // Tarefas
+      const tarefas = await db.select().from(gtTarefas).where(condFor(gtTarefas.orgId, gtTarefas.unitId));
+      const total = tarefas.length;
+      const concluidas = tarefas.filter(t => t.status === "concluida").length;
+      const taxaConclusao = total > 0 ? Math.round((concluidas / total) * 100) : 0;
+      const hoje = new Date();
+      const tarefasAtraso = tarefas.filter(t => t.prazo && new Date(t.prazo) < hoje && t.status !== "concluida").length;
+      const tarefasAtivas = tarefas.filter(t => t.status === "pendente" || t.status === "em_andamento").length;
+
+      // Financeiro (mês atual)
+      const refAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+      const finCond = unitId
+        ? and(eq(gtFinanceiro.orgId, orgId), eq(gtFinanceiro.unitId, unitId), eq(gtFinanceiro.referencia, refAtual))
+        : and(eq(gtFinanceiro.orgId, orgId), eq(gtFinanceiro.referencia, refAtual));
+      const financeiro = await db.select().from(gtFinanceiro).where(finCond);
+      const receitaMes = financeiro.filter(f => f.tipo === "receita").reduce((s, f) => s + Number(f.valor), 0);
+
+      // Compras pendentes
+      const comprCond = unitId
+        ? and(eq(gtCompras.orgId, orgId), eq(gtCompras.unitId, unitId), eq(gtCompras.status, "aguardando_aprovacao"))
+        : and(eq(gtCompras.orgId, orgId), eq(gtCompras.status, "aguardando_aprovacao"));
+      const comprasPendentes = await db.select().from(gtCompras).where(comprCond);
+
+      // Colaboradores ativos
+      const colaboradores = await db.select().from(gtColaboradores).where(condFor(gtColaboradores.orgId, gtColaboradores.unitId));
+      const colaboradoresAtivos = colaboradores.filter(c => c.status === "ativo").length;
+
+      // Oportunidades
+      const oportunidades = await db.select().from(gtOportunidades).where(condFor(gtOportunidades.orgId, gtOportunidades.unitId));
+      const oportunidadesAbertas = oportunidades.filter(o => o.status === "identificada" || o.status === "em_avaliacao" || o.status === "aprovada").length;
+      const oportunidadesImplementadas = oportunidades.filter(o => o.status === "concluida").length;
+
+      return [
+        { id: "taxa_conclusao", nome: "Taxa de Conclusão de Tarefas", valor: taxaConclusao, meta: 85, tipo: "percentual", categoria: "Produtividade", tendencia: taxaConclusao >= 85 ? "subindo" : taxaConclusao >= 50 ? "estavel" : "caindo" },
+        { id: "tarefas_atraso", nome: "Tarefas em Atraso", valor: tarefasAtraso, meta: 5, tipo: "numero", unidade: "unid", categoria: "Produtividade", tendencia: tarefasAtraso <= 5 ? "subindo" : "caindo", inverso: true },
+        { id: "tarefas_ativas", nome: "Tarefas Ativas", valor: tarefasAtivas, meta: 20, tipo: "numero", unidade: "unid", categoria: "Produtividade", tendencia: "estavel" },
+        { id: "receita_mensal", nome: "Receita Mensal", valor: receitaMes, meta: 50000, tipo: "moeda", categoria: "Financeiro", tendencia: receitaMes >= 50000 ? "subindo" : receitaMes >= 25000 ? "estavel" : "caindo" },
+        { id: "compras_pendentes", nome: "Pedidos Pendentes", valor: comprasPendentes.length, meta: 10, tipo: "numero", unidade: "unid", categoria: "Compras", tendencia: "estavel", inverso: true },
+        { id: "colaboradores_ativos", nome: "Colaboradores Ativos", valor: colaboradoresAtivos, meta: 50, tipo: "numero", unidade: "pessoas", categoria: "RH", tendencia: "estavel" },
+        { id: "convites_pendentes", nome: "Convites Pendentes", valor: 0, meta: 5, tipo: "numero", unidade: "unid", categoria: "RH", tendencia: "estavel", inverso: true },
+        { id: "oportunidades_abertas", nome: "Oportunidades Abertas", valor: oportunidadesAbertas, meta: 15, tipo: "numero", unidade: "unid", categoria: "Oportunidades", tendencia: oportunidadesAbertas > 0 ? "subindo" : "estavel" },
+        { id: "oportunidades_implementadas", nome: "Oportunidades Implementadas", valor: oportunidadesImplementadas, meta: 10, tipo: "numero", unidade: "unid", categoria: "Oportunidades", tendencia: oportunidadesImplementadas > 0 ? "subindo" : "estavel" },
+      ];
+    }),
+});
+// ── Planejamento Estratégicoo ──────────────────────────────────────────────────
 const planejamentoRouter = router({
   get: protectedProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), ano: z.number() }))

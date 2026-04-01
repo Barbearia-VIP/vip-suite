@@ -389,3 +389,13 @@
 
 - [x] Corrigir erro 403 no carregamento dos modelos do face-api.js — modelos copiados para client/public/models/ e servidos localmente
 - [x] Corrigir SelectItem com value vazio na página VIP Cam ao vivo
+
+## Indicadores Integrados — Implementação Completa
+
+- [x] Procedure `gestaoTotal.indicadores.consolidado` — retorna indicadores reais do sistema (tarefas, financeiro, compras, colaboradores, oportunidades)
+- [x] IndicadoresPage reescrita com layout integrado: cards com valor real vs meta, barra de progresso colorida (verde/amarelo/vermelho)
+- [x] Resumo rápido: 3 cards de status (No alvo, Atenção, Crítico)
+- [x] 3 abas: Visão Geral (grid de cards), Por Categoria (agrupado), Gráficos (BarChart + RadarChart)
+- [x] Tendência por indicador (seta subindo/estável/caindo)
+- [x] Link direto para o módulo de cada categoria (Produtividade → Tarefas, Financeiro → Financeiro, etc.)
+- [x] Atualização automática a cada 60 segundos

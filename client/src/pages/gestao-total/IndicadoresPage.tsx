@@ -1,241 +1,336 @@
 /**
- * IndicadoresPage.tsx — Indicadores estratégicos com CRUD e progresso visual
- * Alinhado com router: list, save, delete
+ * IndicadoresPage.tsx — Indicadores integrados do Gestão Total
+ * Layout: cards com valor real vs meta, barra de progresso colorida,
+ * badge de categoria, 3 abas (Visão Geral, Por Categoria, Gráficos)
  */
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLocation } from "wouter";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
-import { Plus, Trash2, Edit2, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend,
+} from "recharts";
+import {
+  TrendingUp, TrendingDown, Minus, RefreshCw, LayoutGrid,
+  Tag, BarChart2, AlertCircle, DollarSign,
+  ShoppingCart, Users, Lightbulb, Target, ExternalLink,
+  CheckCircle,
+} from "lucide-react";
 
+// ── Tipos ─────────────────────────────────────────────────────────────────────
 type Indicador = {
-  id: number; nome: string; descricao: string | null;
-  tipo: "numero" | "percentual" | "moeda" | "tempo";
-  valorAtual: string | null; meta: string | null;
-  periodo: string | null; tendencia: string | null; cor: string | null;
-  orgId: number; unitId: number | null;
-  updatedAt: Date;
+  id: string; nome: string; valor: number; meta: number;
+  tipo: "numero" | "percentual" | "moeda"; unidade?: string;
+  categoria: string; tendencia: "subindo" | "estavel" | "caindo";
+  inverso?: boolean;
 };
 
-function TrendIcon({ atual, meta }: { atual: string | null; meta: string | null }) {
-  if (!atual || !meta) return <Minus className="w-4 h-4 text-muted-foreground" />;
-  const a = parseFloat(atual), m = parseFloat(meta);
-  if (a >= m) return <TrendingUp className="w-4 h-4 text-green-400" />;
-  if (a >= m * 0.8) return <Minus className="w-4 h-4 text-yellow-400" />;
-  return <TrendingDown className="w-4 h-4 text-red-400" />;
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function formatValor(ind: Indicador): string {
+  if (ind.tipo === "moeda") return `R$ ${ind.valor.toLocaleString("pt-BR", { minimumFractionDigits: 0 })}`;
+  if (ind.tipo === "percentual") return `${ind.valor}%`;
+  return `${ind.valor}${ind.unidade ? ` ${ind.unidade}` : ""}`;
 }
-
-function ProgressBar({ atual, meta, tipo }: { atual: string | null; meta: string | null; tipo: string }) {
-  if (!atual || !meta) return null;
-  const pct = Math.min(100, Math.round((parseFloat(atual) / parseFloat(meta)) * 100));
-  const color = pct >= 100 ? "bg-green-500" : pct >= 80 ? "bg-yellow-500" : "bg-red-500";
-  function fmt(v: string) {
-    const n = parseFloat(v);
-    if (tipo === "moeda") return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(n);
-    if (tipo === "percentual") return `${n}%`;
-    return v;
+function formatMeta(ind: Indicador): string {
+  if (ind.tipo === "moeda") return `Meta: R$ ${ind.meta.toLocaleString("pt-BR")}`;
+  if (ind.tipo === "percentual") return `Meta: ${ind.meta}%`;
+  return `Meta: ${ind.meta}${ind.unidade ? ` ${ind.unidade}` : ""}`;
+}
+function getPercent(ind: Indicador): number {
+  if (ind.meta === 0) return 0;
+  const raw = Math.round((ind.valor / ind.meta) * 100);
+  if (ind.inverso) {
+    return Math.max(0, Math.min(100, 100 - raw));
   }
+  return Math.min(100, Math.max(0, raw));
+}
+function getBarColor(pct: number): string {
+  if (pct >= 80) return "bg-green-500";
+  if (pct >= 40) return "bg-yellow-500";
+  return "bg-red-500";
+}
+function getValueColor(pct: number): string {
+  if (pct >= 80) return "text-green-400";
+  if (pct >= 40) return "text-yellow-400";
+  return "text-red-400";
+}
+
+// ── Ícones por categoria ──────────────────────────────────────────────────────
+const CATEGORIA_ICON: Record<string, React.ReactNode> = {
+  "Produtividade": <CheckCircle className="w-4 h-4 text-green-400" />,
+  "Financeiro": <DollarSign className="w-4 h-4 text-yellow-400" />,
+  "Compras": <ShoppingCart className="w-4 h-4 text-blue-400" />,
+  "RH": <Users className="w-4 h-4 text-purple-400" />,
+  "Oportunidades": <Lightbulb className="w-4 h-4 text-orange-400" />,
+};
+const CATEGORIA_LINK: Record<string, string> = {
+  "Produtividade": "/gestao-total/tarefas",
+  "Financeiro": "/gestao-total/financeiro",
+  "Compras": "/gestao-total/compras",
+  "RH": "/gestao-total/colaboradores",
+  "Oportunidades": "/gestao-total/oportunidades",
+};
+
+// ── Card de Indicador ─────────────────────────────────────────────────────────
+function IndicadorCard({ ind, onNavigate }: { ind: Indicador; onNavigate: (path: string) => void }) {
+  const pct = getPercent(ind);
+  const barColor = getBarColor(pct);
+  const valueColor = getValueColor(pct);
+  const link = CATEGORIA_LINK[ind.categoria];
+
   return (
-    <div className="space-y-1 mt-2">
-      <div className="flex justify-between text-xs text-muted-foreground">
-        <span>Atual: {fmt(atual)}</span>
-        <span>Meta: {fmt(meta)}</span>
-      </div>
-      <div className="w-full bg-muted rounded-full h-1.5">
-        <div className={`h-1.5 rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
-      </div>
-      <p className="text-xs text-right text-muted-foreground">{pct}% da meta</p>
+    <Card className="hover:shadow-md transition-shadow border-border/60 bg-card">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            {CATEGORIA_ICON[ind.categoria] ?? <Target className="w-4 h-4 text-muted-foreground" />}
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide leading-tight truncate">
+              {ind.nome}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {ind.tendencia === "subindo" && <TrendingUp className="w-3.5 h-3.5 text-green-400" />}
+            {ind.tendencia === "caindo" && <TrendingDown className="w-3.5 h-3.5 text-red-400" />}
+            {ind.tendencia === "estavel" && <Minus className="w-3.5 h-3.5 text-muted-foreground" />}
+          </div>
+        </div>
+
+        <div>
+          <p className={`text-2xl font-bold ${valueColor}`}>{formatValor(ind)}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{formatMeta(ind)}</p>
+        </div>
+
+        <div className="space-y-1">
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">{pct}% da meta</span>
+            {link && (
+              <button
+                onClick={() => onNavigate(link)}
+                className="flex items-center gap-0.5 text-xs text-primary hover:underline font-medium"
+              >
+                {ind.categoria} <ExternalLink className="w-2.5 h-2.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Aba Gráficos ──────────────────────────────────────────────────────────────
+function GraficosView({ indicadores }: { indicadores: Indicador[] }) {
+  const barData = indicadores.map(ind => ({
+    nome: ind.nome.length > 22 ? ind.nome.substring(0, 20) + "…" : ind.nome,
+    pct: getPercent(ind),
+  }));
+
+  const radarData = indicadores.map(ind => ({
+    subject: ind.nome.length > 16 ? ind.nome.substring(0, 14) + "…" : ind.nome,
+    pct: getPercent(ind),
+    fullMark: 100,
+  }));
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardContent className="p-4">
+          <h3 className="text-sm font-semibold mb-4 text-foreground">% de Atingimento por Indicador</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={barData} margin={{ top: 5, right: 10, left: 0, bottom: 70 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis
+                dataKey="nome"
+                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                angle={-35}
+                textAnchor="end"
+                interval={0}
+              />
+              <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} unit="%" domain={[0, 100]} />
+              <Tooltip
+                formatter={(v: number) => [`${v}%`, "Atingimento"]}
+                contentStyle={{
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+                labelStyle={{ color: "hsl(var(--foreground))" }}
+              />
+              <Bar dataKey="pct" name="% da Meta" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-4">
+          <h3 className="text-sm font-semibold mb-4 text-foreground">Radar de Performance</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <RadarChart data={radarData}>
+              <PolarGrid stroke="hsl(var(--border))" />
+              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+              <Radar
+                name="% da Meta"
+                dataKey="pct"
+                stroke="hsl(var(--primary))"
+                fill="hsl(var(--primary))"
+                fillOpacity={0.2}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+            </RadarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-function FormIndicador({ initial, onSave, onClose }: {
-  initial?: Partial<Indicador>;
-  onSave: (data: {
-    nome: string; descricao?: string; tipo: "numero" | "percentual" | "moeda" | "tempo";
-    valorAtual?: number; meta?: number; periodo?: string;
-  }) => void;
-  onClose: () => void;
-}) {
-  const [nome, setNome] = useState(initial?.nome ?? "");
-  const [descricao, setDescricao] = useState(initial?.descricao ?? "");
-  const [tipo, setTipo] = useState<"numero" | "percentual" | "moeda" | "tempo">(initial?.tipo ?? "numero");
-  const [valorAtual, setValorAtual] = useState(initial?.valorAtual ?? "");
-  const [meta, setMeta] = useState(initial?.meta ?? "");
-  const [periodo, setPeriodo] = useState(initial?.periodo ?? "");
-  return (
-    <div className="space-y-4">
-      <div className="space-y-1.5">
-        <Label className="text-xs">Nome *</Label>
-        <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Taxa de retenção de clientes" className="text-sm" />
-      </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs">Descrição</Label>
-        <Textarea value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Como este indicador é calculado..." className="text-sm min-h-[60px]" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs">Tipo</Label>
-          <Select value={tipo} onValueChange={v => setTipo(v as typeof tipo)}>
-            <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="numero">Número</SelectItem>
-              <SelectItem value="percentual">Percentual</SelectItem>
-              <SelectItem value="moeda">Moeda (R$)</SelectItem>
-              <SelectItem value="tempo">Tempo</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Período (ex: 2026-03)</Label>
-          <Input value={periodo} onChange={e => setPeriodo(e.target.value)} placeholder="AAAA-MM" className="text-sm" />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs">Valor Atual</Label>
-          <Input type="number" value={valorAtual} onChange={e => setValorAtual(e.target.value)} placeholder="0" className="text-sm" />
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Meta</Label>
-          <Input type="number" value={meta} onChange={e => setMeta(e.target.value)} placeholder="0" className="text-sm" />
-        </div>
-      </div>
-      <DialogFooter>
-        <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-        <Button size="sm" onClick={() => onSave({
-          nome, descricao: descricao || undefined, tipo,
-          valorAtual: valorAtual ? parseFloat(valorAtual) : undefined,
-          meta: meta ? parseFloat(meta) : undefined,
-          periodo: periodo || undefined,
-        })} disabled={!nome.trim()}>
-          Salvar
-        </Button>
-      </DialogFooter>
-    </div>
-  );
-}
-
+// ── Página principal ──────────────────────────────────────────────────────────
 export default function IndicadoresPage() {
   const { selectedUnit } = useApp();
   const { org } = useOrg();
-  const utils = trpc.useUtils();
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<Indicador | null>(null);
-  const [filterTipo, setFilterTipo] = useState("todos");
+  const [, navigate] = useLocation();
+  const [aba, setAba] = useState<"geral" | "categoria" | "graficos">("geral");
 
-  const q = trpc.gestaoTotal.indicadores.list.useQuery(
+  const { data: rawIndicadores = [], isLoading, refetch } = trpc.gestaoTotal.indicadores.consolidado.useQuery(
     { orgId: org?.id ?? 0, unitId: selectedUnit?.id },
-    { enabled: !!org?.id }
+    { enabled: !!org?.id, refetchInterval: 60_000 }
   );
-  const indicadores = (q.data ?? []) as unknown as Indicador[];
-  const filtered = filterTipo === "todos" ? indicadores : indicadores.filter(i => i.tipo === filterTipo);
 
-  const saveM = trpc.gestaoTotal.indicadores.save.useMutation({
-    onSuccess: () => { utils.gestaoTotal.indicadores.list.invalidate(); toast.success("Indicador salvo!"); setShowForm(false); setEditing(null); },
-    onError: () => toast.error("Erro ao salvar"),
-  });
-  const deleteM = trpc.gestaoTotal.indicadores.delete.useMutation({
-    onSuccess: () => { utils.gestaoTotal.indicadores.list.invalidate(); toast.success("Removido"); },
-    onError: () => toast.error("Erro ao remover"),
-  });
+  const indicadores = rawIndicadores as Indicador[];
+  const categorias = Array.from(new Set(indicadores.map(i => i.categoria)));
 
-  const TIPOS = ["todos", "numero", "percentual", "moeda", "tempo"];
-  const TIPO_LABELS: Record<string, string> = { todos: "Todos", numero: "Número", percentual: "Percentual", moeda: "Moeda", tempo: "Tempo" };
+  const totalOk = indicadores.filter(i => getPercent(i) >= 80).length;
+  const totalAtencao = indicadores.filter(i => { const p = getPercent(i); return p >= 40 && p < 80; }).length;
+  const totalCritico = indicadores.filter(i => getPercent(i) < 40).length;
+
+  if (!org) return (
+    <div className="p-6 text-center text-muted-foreground">
+      Selecione uma organização para ver os indicadores.
+    </div>
+  );
 
   return (
-    <div className="p-6 space-y-4">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Indicadores Estratégicos</h1>
-          <p className="text-sm text-muted-foreground">{indicadores.length} indicadores cadastrados</p>
+          <h1 className="text-2xl font-bold text-foreground">Indicadores</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Visão integrada em tempo real — {selectedUnit?.name ?? "Organização"}
+          </p>
         </div>
-        <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
-          <Plus className="w-3.5 h-3.5" /> Novo Indicador
+        <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
+          <RefreshCw className="w-4 h-4" /> Atualizar
         </Button>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
-        {TIPOS.map(t => (
-          <button key={t} onClick={() => setFilterTipo(t)}
-            className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-              filterTipo === t ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"
-            }`}>
-            {TIPO_LABELS[t]}
+      {!isLoading && indicadores.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          <Card className="border-green-500/30 bg-green-500/5">
+            <CardContent className="p-3 text-center">
+              <p className="text-2xl font-bold text-green-400">{totalOk}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">No alvo (≥80%)</p>
+            </CardContent>
+          </Card>
+          <Card className="border-yellow-500/30 bg-yellow-500/5">
+            <CardContent className="p-3 text-center">
+              <p className="text-2xl font-bold text-yellow-400">{totalAtencao}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Atenção (40–79%)</p>
+            </CardContent>
+          </Card>
+          <Card className="border-red-500/30 bg-red-500/5">
+            <CardContent className="p-3 text-center">
+              <p className="text-2xl font-bold text-red-400">{totalCritico}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Crítico (&lt;40%)</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <div className="flex items-center gap-1 border-b border-border">
+        {[
+          { key: "geral", label: "Visão Geral", icon: <LayoutGrid className="w-4 h-4" /> },
+          { key: "categoria", label: "Por Categoria", icon: <Tag className="w-4 h-4" /> },
+          { key: "graficos", label: "Gráficos", icon: <BarChart2 className="w-4 h-4" /> },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setAba(tab.key as typeof aba)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              aba === tab.key
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.icon} {tab.label}
           </button>
         ))}
       </div>
 
-      {q.isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-36 rounded-lg" />)}
-        </div>
-      ) : filtered.length === 0 ? (
-        <Card className="bg-card border-border">
-          <CardContent className="p-8 text-center">
-            <TrendingUp className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">Nenhum indicador cadastrado</p>
-            <Button size="sm" variant="outline" className="mt-3" onClick={() => setShowForm(true)}>Criar indicador</Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(ind => (
-            <Card key={ind.id} className="bg-card border-border hover:border-primary/40 transition-colors">
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0">
-                    <CardTitle className="text-sm truncate">{ind.nome}</CardTitle>
-                    <p className="text-xs text-muted-foreground capitalize mt-0.5">{ind.tipo} {ind.periodo && `• ${ind.periodo}`}</p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0 ml-2">
-                    <TrendIcon atual={ind.valorAtual} meta={ind.meta} />
-                    <button onClick={() => setEditing(ind)} className="text-muted-foreground hover:text-foreground p-0.5">
-                      <Edit2 className="w-3 h-3" />
-                    </button>
-                    <button onClick={() => deleteM.mutate({ id: ind.id, orgId: ind.orgId })} className="text-muted-foreground hover:text-red-400 p-0.5">
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <ProgressBar atual={ind.valorAtual} meta={ind.meta} tipo={ind.tipo} />
-                {ind.descricao && <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{ind.descricao}</p>}
-              </CardContent>
-            </Card>
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <Skeleton key={i} className="h-36 rounded-xl" />
           ))}
         </div>
+      ) : indicadores.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <p className="text-sm">Nenhum indicador disponível.</p>
+          <p className="text-xs mt-1">Adicione dados ao sistema para ver os indicadores em tempo real.</p>
+        </div>
+      ) : aba === "geral" ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {indicadores.map(ind => (
+            <IndicadorCard key={ind.id} ind={ind} onNavigate={navigate} />
+          ))}
+        </div>
+      ) : aba === "categoria" ? (
+        <div className="space-y-8">
+          {categorias.map(cat => {
+            const catIndicadores = indicadores.filter(i => i.categoria === cat);
+            return (
+              <div key={cat}>
+                <div className="flex items-center gap-2 mb-4">
+                  {CATEGORIA_ICON[cat] ?? <Target className="w-4 h-4 text-muted-foreground" />}
+                  <h2 className="text-base font-semibold text-foreground">{cat}</h2>
+                  <Badge variant="outline" className="text-xs">
+                    {catIndicadores.length} indicador{catIndicadores.length !== 1 ? "es" : ""}
+                  </Badge>
+                  {CATEGORIA_LINK[cat] && (
+                    <button
+                      onClick={() => navigate(CATEGORIA_LINK[cat])}
+                      className="ml-auto flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      Ver módulo <ExternalLink className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {catIndicadores.map(ind => (
+                    <IndicadorCard key={ind.id} ind={ind} onNavigate={navigate} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <GraficosView indicadores={indicadores} />
       )}
-
-      <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Novo Indicador</DialogTitle></DialogHeader>
-          <FormIndicador
-            onSave={d => { if (!org?.id) return; saveM.mutate({ orgId: org.id, unitId: selectedUnit?.id, ...d }); }}
-            onClose={() => setShowForm(false)}
-          />
-        </DialogContent>
-      </Dialog>
-      <Dialog open={!!editing} onOpenChange={v => !v && setEditing(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Editar Indicador</DialogTitle></DialogHeader>
-          {editing && <FormIndicador
-            initial={editing}
-            onSave={d => saveM.mutate({ id: editing.id, orgId: editing.orgId, ...d })}
-            onClose={() => setEditing(null)}
-          />}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
