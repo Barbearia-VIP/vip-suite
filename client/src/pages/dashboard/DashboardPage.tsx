@@ -206,6 +206,7 @@ export default function DashboardPage() {
   const ranking = rankingQuery.data ?? [];
   const isLoading = kpisQuery.isLoading || kpisQuery.isFetching;
 
+
   // Timestamp da última atualização
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   useEffect(() => {

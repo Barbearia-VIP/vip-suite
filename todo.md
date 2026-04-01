@@ -518,3 +518,12 @@
 - [x] Ranking de unidades (admin)
 - [x] Acesso rápido aos 6 módulos
 - [x] Atualização automática a cada 2 minutos (refetchInterval: 120000)
+
+## Dashboard Geral — Correção de Sincronização de Dados
+
+- [ ] Investigar por que os cards mostram "Sem dados" mesmo com dados no banco
+- [ ] Corrigir queries do procedure kpis para Data VIP (vendas_api_raw / valorLiquido)
+- [ ] Corrigir queries do procedure kpis para Gestão Total (gt_tarefas, gt_problemas, gt_reunioes)
+- [ ] Corrigir queries do procedure kpis para VIP Cam (cam_sentiment_timeline / cam_clientes)
+- [ ] Corrigir queries do procedure kpis para Reputação (rep_avaliacoes / avaliacoes)
+- [ ] Garantir que filtros de orgId/unitId e período estão corretos em todas as queries

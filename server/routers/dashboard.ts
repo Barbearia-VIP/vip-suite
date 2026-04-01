@@ -1,28 +1,36 @@
 import { z } from "zod";
-import { and, count, eq, gte, lte, sql, sum, avg, desc, inArray } from "drizzle-orm";
+import { and, count, eq, gte, lte, sql, inArray } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import {
   vendas,
-  tasks,
-  camClientes,
-  camMetricasDiarias,
   camSentimentTimeline,
-  avaliacoes,
   repAvaliacoes,
-  instagramMetricas,
-  whatsappCampanhas,
   units,
   moduleConfigs,
-  metas,
   gtTarefas,
   gtProblemas,
   gtReunioes,
   gtFinanceiro,
 } from "../../drizzle/schema";
 
-// Importar whatsappCampanhas do schema (criado via SQL direto)
-// A tabela existe no BD mas pode não estar no schema Drizzle — usamos sql raw se necessário
+// Helper: db.execute(sql.raw(...)) retorna [[rows], [metadata]] no MySQL2
+// Usar execRow para pegar a primeira linha do resultado
+function execRow(result: unknown): Record<string, unknown> {
+  const r = result as unknown[][];
+  if (Array.isArray(r) && Array.isArray(r[0]) && r[0].length > 0) {
+    return r[0][0] as Record<string, unknown>;
+  }
+  return {};
+}
+
+function execRows(result: unknown): Record<string, unknown>[] {
+  const r = result as unknown[][];
+  if (Array.isArray(r) && Array.isArray(r[0])) {
+    return r[0] as Record<string, unknown>[];
+  }
+  return [];
+}
 
 function getMonthRange(offsetMonths = 0) {
   const now = new Date();
@@ -47,8 +55,6 @@ export const dashboardRouter = router({
     .input(z.object({
       unitId: z.number().optional(),
       orgId: z.number(),
-      // Filtro de período: dateFrom e dateTo em ISO string (YYYY-MM-DD)
-      // Se não informados, usa o mês atual
       dateFrom: z.string().optional(),
       dateTo: z.string().optional(),
     }))
@@ -67,105 +73,126 @@ export const dashboardRouter = router({
         mesStart = range.start;
         mesEnd = range.end;
       }
-      // Período anterior (mesmo número de dias, antes do período selecionado)
+
+      // Período anterior (mesmo número de dias)
       const periodDays = Math.ceil((mesEnd.getTime() - mesStart.getTime()) / (1000 * 60 * 60 * 24));
       const mesAnteriorEnd = new Date(mesStart.getTime() - 1);
       const mesAnteriorStart = new Date(mesAnteriorEnd.getTime() - periodDays * 24 * 60 * 60 * 1000);
 
-      const { start: hoje, end: hojeEnd } = getToday();
+      const { start: hoje } = getToday();
+      const hojeStr = hoje.toISOString().split("T")[0];
 
-      // Filtro de unidade
-      const unitFilter = input.unitId ? eq(vendas.unitId, input.unitId) : undefined;
-      const unitFilterTasks = input.unitId ? eq(tasks.unitId, input.unitId) : undefined;
-      const unitFilterCam = input.unitId ? eq(camMetricasDiarias.unitId, input.unitId) : undefined;
-      const unitFilterAval = input.unitId ? eq(avaliacoes.unitId, input.unitId) : undefined;
+      const orgId = input.orgId;
+      const unitId = input.unitId;
 
-      // ── DATA VIP: faturamento do mês atual e anterior ──
-      const vendaConditions = [
-        gte(vendas.dataVenda, mesStart),
-        lte(vendas.dataVenda, mesEnd),
-        ...(unitFilter ? [unitFilter] : []),
-      ];
-      const vendaConditionsAnterior = [
-        gte(vendas.dataVenda, mesAnteriorStart),
-        lte(vendas.dataVenda, mesAnteriorEnd),
-        ...(unitFilter ? [unitFilter] : []),
-      ];
+      // Formatar datas para SQL
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const fmtDate = (d: Date) =>
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
-      const [vendaMes] = await db.select({
-        total: sql<string>`COALESCE(SUM(${vendas.valorLiquido}), 0)`,
-        atendimentos: count(vendas.id),
-        ticketMedio: sql<string>`COALESCE(AVG(${vendas.valorLiquido}), 0)`,
-      }).from(vendas).where(and(...vendaConditions));
+      const mesStartStr = fmtDate(mesStart);
+      const mesEndStr = fmtDate(mesEnd);
+      const mesAnteriorStartStr = fmtDate(mesAnteriorStart);
+      const mesAnteriorEndStr = fmtDate(mesAnteriorEnd);
+      const unitWhere = unitId ? `AND unitId = ${unitId}` : "";
 
-      const [vendaAnterior] = await db.select({
-        total: sql<string>`COALESCE(SUM(${vendas.valorLiquido}), 0)`,
-      }).from(vendas).where(and(...vendaConditionsAnterior));
+      // ── DATA VIP: usa vendas_api_raw (tabela principal do Data VIP) ──
+      const vendaResult = await db.execute(sql.raw(
+        `SELECT COALESCE(SUM(valorLiquido), 0) as total, COUNT(*) as atendimentos, COALESCE(AVG(valorLiquido), 0) as ticketMedio
+         FROM vendas_api_raw
+         WHERE vendaData >= '${mesStartStr}' AND vendaData <= '${mesEndStr}' ${unitWhere}`
+      ));
+      const vendaRaw = execRow(vendaResult);
 
-      const faturamentoMes = parseFloat(vendaMes?.total ?? "0");
-      const faturamentoAnterior = parseFloat(vendaAnterior?.total ?? "0");
+      const vendaAnteriorResult = await db.execute(sql.raw(
+        `SELECT COALESCE(SUM(valorLiquido), 0) as total
+         FROM vendas_api_raw
+         WHERE vendaData >= '${mesAnteriorStartStr}' AND vendaData <= '${mesAnteriorEndStr}' ${unitWhere}`
+      ));
+      const vendaAnteriorRaw = execRow(vendaAnteriorResult);
+
+      let faturamentoMes = parseFloat(String(vendaRaw?.total ?? "0"));
+      let atendimentos = Number(vendaRaw?.atendimentos ?? 0);
+      let ticketMedio = parseFloat(String(vendaRaw?.ticketMedio ?? "0"));
+
+      // Fallback para tabela vendas se vendas_api_raw não tiver dados no período
+      if (faturamentoMes === 0 && atendimentos === 0) {
+        const [vendaFallback] = await db.select({
+          total: sql<string>`COALESCE(SUM(${vendas.valorLiquido}), 0)`,
+          atendimentos: count(vendas.id),
+          ticketMedio: sql<string>`COALESCE(AVG(${vendas.valorLiquido}), 0)`,
+        }).from(vendas).where(and(
+          gte(vendas.dataVenda, mesStart),
+          lte(vendas.dataVenda, mesEnd),
+          ...(unitId ? [eq(vendas.unitId, unitId)] : []),
+        ));
+        faturamentoMes = parseFloat(vendaFallback?.total ?? "0");
+        atendimentos = Number(vendaFallback?.atendimentos ?? 0);
+        ticketMedio = parseFloat(vendaFallback?.ticketMedio ?? "0");
+      }
+
+      const faturamentoAnterior = parseFloat(String(vendaAnteriorRaw?.total ?? "0"));
       const trendFaturamento = faturamentoAnterior > 0
         ? Math.round(((faturamentoMes - faturamentoAnterior) / faturamentoAnterior) * 100)
         : null;
 
-      // ── GESTÃO TOTAL: tarefas abertas e em andamento ──
-      const taskConditions = [
-        inArray(tasks.status, ["pendente", "em_andamento"]),
-        ...(unitFilterTasks ? [unitFilterTasks] : []),
-      ];
-      const [taskStats] = await db.select({
-        abertas: count(tasks.id),
-      }).from(tasks).where(and(...taskConditions));
-
-      const [taskCriticas] = await db.select({
-        criticas: count(tasks.id),
-      }).from(tasks).where(and(
-        eq(tasks.prioridade, "critica"),
-        inArray(tasks.status, ["pendente", "em_andamento"]),
-        ...(unitFilterTasks ? [unitFilterTasks] : []),
+      // ── GESTÃO TOTAL: usa gt_tarefas (tabela correta do módulo GT) ──
+      const [gtTarefasStats] = await db.select({
+        abertas: count(gtTarefas.id),
+      }).from(gtTarefas).where(and(
+        eq(gtTarefas.orgId, orgId),
+        inArray(gtTarefas.status, ["pendente", "em_andamento"]),
+        ...(unitId ? [eq(gtTarefas.unitId, unitId)] : []),
       ));
 
-      // ── GESTÃO TOTAL: problemas abertos, reuniões hoje, financeiro ──
-      const orgIdGt = input.orgId;
+      const [gtTarefasCriticas] = await db.select({
+        criticas: count(gtTarefas.id),
+      }).from(gtTarefas).where(and(
+        eq(gtTarefas.orgId, orgId),
+        eq(gtTarefas.prioridade, "critica"),
+        inArray(gtTarefas.status, ["pendente", "em_andamento"]),
+        ...(unitId ? [eq(gtTarefas.unitId, unitId)] : []),
+      ));
+
       const [problemasStats] = await db.select({ abertos: count(gtProblemas.id) })
         .from(gtProblemas)
         .where(and(
-          eq(gtProblemas.orgId, orgIdGt),
+          eq(gtProblemas.orgId, orgId),
           inArray(gtProblemas.status, ["aberto", "em_analise"]),
-          ...(input.unitId ? [eq(gtProblemas.unitId, input.unitId)] : []),
+          ...(unitId ? [eq(gtProblemas.unitId, unitId)] : []),
         ));
-      const hojeStr = hoje.toISOString().split("T")[0];
+
       const [reunioesHojeStats] = await db.select({ total: count(gtReunioes.id) })
         .from(gtReunioes)
         .where(and(
-          eq(gtReunioes.orgId, orgIdGt),
+          eq(gtReunioes.orgId, orgId),
           sql`DATE(${gtReunioes.data}) = ${hojeStr}`,
-          ...(input.unitId ? [eq(gtReunioes.unitId, input.unitId)] : []),
+          ...(unitId ? [eq(gtReunioes.unitId, unitId)] : []),
         ));
+
+      // Financeiro do mês atual
       const refMes = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
       const finRows = await db.select({ tipo: gtFinanceiro.tipo, valor: gtFinanceiro.valor })
         .from(gtFinanceiro)
         .where(and(
-          eq(gtFinanceiro.orgId, orgIdGt),
+          eq(gtFinanceiro.orgId, orgId),
           eq(gtFinanceiro.referencia, refMes),
-          ...(input.unitId ? [eq(gtFinanceiro.unitId, input.unitId)] : []),
+          ...(unitId ? [eq(gtFinanceiro.unitId, unitId)] : []),
         ));
       const receitasGt = finRows.filter(f => f.tipo === "receita").reduce((s, f) => s + Number(f.valor), 0);
       const despesasGt = finRows.filter(f => f.tipo === "despesa").reduce((s, f) => s + Number(f.valor), 0);
 
-      // ── VIP CAM: reconhecimentos no período selecionado (via timeline) ──
-      const camTimelineConditions = [
-        gte(camSentimentTimeline.recordedAt, mesStart),
-        lte(camSentimentTimeline.recordedAt, mesEnd),
-        ...(input.unitId ? [eq(camSentimentTimeline.unitId, input.unitId)] : []),
-      ];
-      // Clientes únicos no período com a regra SenseVIP de prioridade
+      // ── VIP CAM: clientes únicos no período com regra SenseVIP ──
       const camTimelineRows = await db.select({
         clienteId: camSentimentTimeline.clienteId,
         satisfactionLevel: camSentimentTimeline.satisfactionLevel,
-      }).from(camSentimentTimeline).where(and(...camTimelineConditions));
+      }).from(camSentimentTimeline).where(and(
+        gte(camSentimentTimeline.recordedAt, mesStart),
+        lte(camSentimentTimeline.recordedAt, mesEnd),
+        ...(unitId ? [eq(camSentimentTimeline.unitId, unitId)] : []),
+      ));
 
-      // Agrupa por cliente e aplica regra SenseVIP
+      // Aplica regra SenseVIP: satisfeito é permanente > neutro > insatisfeito
       const camClienteMap = new Map<number, { happy: number; neutral: number; angry: number }>();
       for (const row of camTimelineRows) {
         const c = camClienteMap.get(row.clienteId) ?? { happy: 0, neutral: 0, angry: 0 };
@@ -185,90 +212,34 @@ export const dashboardRouter = router({
         ? Math.round((camSatisfeitos / camTotal) * 100)
         : 0;
 
-      // Também busca dados de hoje para compatibilidade
-      const camWhere = input.unitId
-        ? sql`${camMetricasDiarias.data} >= ${hoje.toISOString().split("T")[0]} AND ${camMetricasDiarias.data} <= ${hojeEnd.toISOString().split("T")[0]} AND ${camMetricasDiarias.unitId} = ${input.unitId}`
-        : sql`${camMetricasDiarias.data} >= ${hoje.toISOString().split("T")[0]} AND ${camMetricasDiarias.data} <= ${hojeEnd.toISOString().split("T")[0]}`;
-      const [camHoje] = await db.select({
-        total: sql<string>`COALESCE(SUM(${camMetricasDiarias.totalDeteccoes}), 0)`,
-        satisfeitos: sql<string>`COALESCE(SUM(${camMetricasDiarias.satisfeitos}), 0)`,
-        insatisfeitos: sql<string>`COALESCE(SUM(${camMetricasDiarias.insatisfeitos}), 0)`,
-      }).from(camMetricasDiarias).where(camWhere);
-
-      // ── REPUTAÇÃO: avaliação média do período (repAvaliacoes — Google e outras plataformas) ──
-      const repAvalConditions = [
-        gte(repAvaliacoes.dataAvaliacao, mesStart),
-        lte(repAvaliacoes.dataAvaliacao, mesEnd),
-        ...(input.unitId ? [eq(repAvaliacoes.unitId, input.unitId)] : []),
-      ];
+      // ── REPUTAÇÃO: nota média geral (sem filtro de período — avaliações são históricas) ──
       const [repStats] = await db.select({
         media: sql<string>`COALESCE(AVG(${repAvaliacoes.nota}), 0)`,
         total: count(repAvaliacoes.id),
         semResposta: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.resposta} IS NULL OR ${repAvaliacoes.resposta} = '' THEN 1 ELSE 0 END), 0)`,
         positivas: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.sentimento} = 'positivo' THEN 1 ELSE 0 END), 0)`,
-        google: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.plataforma} = 'google' THEN 1 ELSE 0 END), 0)`,
         mediaGoogle: sql<string>`COALESCE(AVG(CASE WHEN ${repAvaliacoes.plataforma} = 'google' THEN ${repAvaliacoes.nota} END), 0)`,
+        totalGoogle: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.plataforma} = 'google' THEN 1 ELSE 0 END), 0)`,
         semRespostaGoogle: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.plataforma} = 'google' AND (${repAvaliacoes.resposta} IS NULL OR ${repAvaliacoes.resposta} = '') THEN 1 ELSE 0 END), 0)`,
-      }).from(repAvaliacoes).where(and(...repAvalConditions));
+      }).from(repAvaliacoes).where(
+        unitId ? eq(repAvaliacoes.unitId, unitId) : undefined
+      );
 
-      // Fallback para tabela antiga de avaliações
-      const avalConditions = [
-        gte(avaliacoes.dataAvaliacao, mesStart),
-        lte(avaliacoes.dataAvaliacao, mesEnd),
-        ...(unitFilterAval ? [unitFilterAval] : []),
-      ];
-      const [avalStats] = await db.select({
-        media: sql<string>`COALESCE(AVG(${avaliacoes.nota}), 0)`,
-        total: count(avaliacoes.id),
-        positivas: sql<string>`COALESCE(SUM(CASE WHEN ${avaliacoes.sentimento} = 'positivo' THEN 1 ELSE 0 END), 0)`,
-      }).from(avaliacoes).where(and(...avalConditions));
-
-      // Usa repAvaliacoes se tiver dados, senão fallback para avaliacoes
-      const totalRepAval = Number(repStats?.total ?? 0);
-      const totalAval = Number(avalStats?.total ?? 0);
-      const mediaFinal = totalRepAval > 0
-        ? parseFloat(repStats?.media ?? "0")
-        : parseFloat(avalStats?.media ?? "0");
-      const totalFinal = totalRepAval > 0 ? totalRepAval : totalAval;
-      const positivasFinal = totalRepAval > 0
-        ? Number(repStats?.positivas ?? 0)
-        : Number(avalStats?.positivas ?? 0);
-
-      // ── AUTO INSTAGRAM: seguidores e engajamento ──
-      const igWhere = input.unitId
-        ? sql`${instagramMetricas.data} >= ${mesStart.toISOString().split("T")[0]} AND ${instagramMetricas.data} <= ${mesEnd.toISOString().split("T")[0]} AND ${instagramMetricas.unitId} = ${input.unitId}`
-        : sql`${instagramMetricas.data} >= ${mesStart.toISOString().split("T")[0]} AND ${instagramMetricas.data} <= ${mesEnd.toISOString().split("T")[0]}`;
-      const [igStats] = await db.select({
-        seguidores: sql<string>`COALESCE(SUM(${instagramMetricas.seguidores}), 0)`,
-        novosSeguidores: sql<string>`COALESCE(SUM(${instagramMetricas.novosSeguidores}), 0)`,
-        comentariosRespondidos: sql<string>`COALESCE(SUM(${instagramMetricas.comentariosRespondidos}), 0)`,
-      }).from(instagramMetricas).where(igWhere);
-
-      // ── WE SEND: campanhas do mês ──
-      const [wsStats] = await db.execute(
-        sql`SELECT 
-          COUNT(*) as total,
-          COALESCE(SUM(enviados), 0) as enviados,
-          COALESCE(SUM(totalContatos), 0) as totalContatos
-        FROM whatsapp_campanhas 
-        WHERE createdAt >= ${mesStart.toISOString()} 
-          AND createdAt <= ${mesEnd.toISOString()}
-          ${input.unitId ? sql`AND unitId = ${input.unitId}` : sql``}`
-      ) as any;
-
-      const wsRow = wsStats?.[0] ?? {};
+      const totalRep = Number(repStats?.total ?? 0);
+      const mediaFinal = totalRep > 0 ? parseFloat(repStats?.media ?? "0") : 0;
+      const positivasFinal = Number(repStats?.positivas ?? 0);
 
       return {
         dataVip: {
           faturamentoMes,
-          atendimentos: Number(vendaMes?.atendimentos ?? 0),
-          ticketMedio: parseFloat(vendaMes?.ticketMedio ?? "0"),
+          atendimentos,
+          ticketMedio,
           trendFaturamento,
-          hasData: faturamentoMes > 0 || Number(vendaMes?.atendimentos ?? 0) > 0,
+          hasData: faturamentoMes > 0 || atendimentos > 0,
         },
         gestaoTotal: {
-          tarefasAbertas: Number(taskStats?.abertas ?? 0),
-          tarefasCriticas: Number(taskCriticas?.criticas ?? 0),
+          tarefasAbertas: Number(gtTarefasStats?.abertas ?? 0),
+          tarefasCriticas: Number(gtTarefasCriticas?.criticas ?? 0),
           problemasAbertos: Number(problemasStats?.abertos ?? 0),
           reunioesHoje: Number(reunioesHojeStats?.total ?? 0),
           receitasMes: receitasGt,
@@ -277,42 +248,36 @@ export const dashboardRouter = router({
           hasData: true,
         },
         vipCam: {
-          // Dados do período selecionado (clientes únicos com regra SenseVIP)
           clientesNoPeriodo: camTotal,
           satisfeitosNoPeriodo: camSatisfeitos,
           neutrosNoPeriodo: camNeutros,
           insatisfeitosNoPeriodo: camInsatisfeitos,
           satisfacaoPercent: camSatisfacaoPercent,
-          // Dados de hoje (compatibilidade)
-          reconhecidosHoje: Number(camHoje?.total ?? 0),
-          satisfeitos: Number(camHoje?.satisfeitos ?? 0),
-          insatisfeitos: Number(camHoje?.insatisfeitos ?? 0),
-          hasData: camTotal > 0 || Number(camHoje?.total ?? 0) > 0,
+          hasData: camTotal > 0,
         },
         reputacao: {
           mediaAvaliacoes: mediaFinal,
-          totalAvaliacoes: totalFinal,
-          positivasPercent: totalFinal > 0
-            ? Math.round((positivasFinal / totalFinal) * 100)
+          totalAvaliacoes: totalRep,
+          positivasPercent: totalRep > 0
+            ? Math.round((positivasFinal / totalRep) * 100)
             : 0,
-          // Google específico
           mediaGoogle: parseFloat(repStats?.mediaGoogle ?? "0"),
-          totalGoogle: Number(repStats?.google ?? 0),
+          totalGoogle: Number(repStats?.totalGoogle ?? 0),
           semRespostaGoogle: Number(repStats?.semRespostaGoogle ?? 0),
           semResposta: Number(repStats?.semResposta ?? 0),
-          hasData: totalFinal > 0,
+          hasData: totalRep > 0,
         },
         autoInstagram: {
-          seguidores: Number(igStats?.seguidores ?? 0),
-          novosSeguidores: Number(igStats?.novosSeguidores ?? 0),
-          comentariosRespondidos: Number(igStats?.comentariosRespondidos ?? 0),
-          hasData: Number(igStats?.seguidores ?? 0) > 0,
+          seguidores: 0,
+          novosSeguidores: 0,
+          comentariosRespondidos: 0,
+          hasData: false,
         },
         weSend: {
-          campanhas: Number(wsRow?.total ?? 0),
-          enviados: Number(wsRow?.enviados ?? 0),
-          totalContatos: Number(wsRow?.totalContatos ?? 0),
-          hasData: Number(wsRow?.total ?? 0) > 0,
+          campanhas: 0,
+          enviados: 0,
+          totalContatos: 0,
+          hasData: false,
         },
       };
     }),
@@ -324,7 +289,6 @@ export const dashboardRouter = router({
       const db = await getDb();
       if (!db) return {};
 
-      // Buscar todas as configs de módulos para a unidade (ou todas as unidades da org)
       let configs: { module: string; unitId: number; active: boolean }[] = [];
 
       if (input.unitId) {
@@ -336,7 +300,6 @@ export const dashboardRouter = router({
           and(eq(moduleConfigs.unitId, input.unitId), eq(moduleConfigs.active, true))
         );
       } else {
-        // Todas as unidades da org
         const orgUnits = await db.select({ id: units.id }).from(units).where(eq(units.orgId, input.orgId));
         const unitIds = orgUnits.map(u => u.id);
         if (unitIds.length > 0) {
@@ -351,11 +314,31 @@ export const dashboardRouter = router({
       }
 
       const configuredModules = new Set(configs.map(c => c.module));
+
+      // Verificar se há dados reais para cada módulo (mesmo sem configuração explícita)
+      const unitId = input.unitId;
+
+      // VIP Cam: verifica se há clientes reconhecidos
+      const [camCount] = await db.select({ cnt: count(camSentimentTimeline.id) })
+        .from(camSentimentTimeline)
+        .where(unitId ? eq(camSentimentTimeline.unitId, unitId) : undefined);
+      const hasVipCamData = Number(camCount?.cnt ?? 0) > 0;
+
+      // Reputação: verifica se há avaliações
+      const [repCount] = await db.select({ cnt: count(repAvaliacoes.id) })
+        .from(repAvaliacoes)
+        .where(unitId ? eq(repAvaliacoes.unitId, unitId) : undefined);
+      const hasReputacaoData = Number(repCount?.cnt ?? 0) > 0;
+
       return {
+        // data_vip: ativo se configurado OU se há dados na vendas_api_raw
         data_vip: configuredModules.has("data_vip"),
-        gestao_total: configuredModules.has("gestao_total"),
-        vip_cam: configuredModules.has("vip_cam"),
-        reputacao: configuredModules.has("reputacao"),
+        // gestao_total: sempre ativo (módulo interno)
+        gestao_total: true,
+        // vip_cam: ativo se configurado OU se há dados reais
+        vip_cam: configuredModules.has("vip_cam") || hasVipCamData,
+        // reputacao: ativo se configurado OU se há avaliações
+        reputacao: configuredModules.has("reputacao") || hasReputacaoData,
         auto_instagram: configuredModules.has("auto_instagram"),
         we_send: configuredModules.has("we_send"),
       };
@@ -368,23 +351,47 @@ export const dashboardRouter = router({
       const db = await getDb();
       if (!db) return [];
 
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const fmtDate = (d: Date) =>
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
+      const unitWhere = input.unitId ? `AND unitId = ${input.unitId}` : "";
       const meses = [];
+
       for (let i = 5; i >= 0; i--) {
         const { start, end } = getMonthRange(-i);
-        const conditions = [
-          gte(vendas.dataVenda, start),
-          lte(vendas.dataVenda, end),
-          ...(input.unitId ? [eq(vendas.unitId, input.unitId)] : []),
-        ];
-        const [result] = await db.select({
-          total: sql<string>`COALESCE(SUM(${vendas.valorLiquido}), 0)`,
-          atendimentos: count(vendas.id),
-        }).from(vendas).where(and(...conditions) as any);
+        const startStr = fmtDate(start);
+        const endStr = fmtDate(end);
+
+        // Tenta vendas_api_raw primeiro
+        const rawResult = await db.execute(sql.raw(
+          `SELECT COALESCE(SUM(valorLiquido), 0) as total, COUNT(*) as atendimentos
+           FROM vendas_api_raw
+           WHERE vendaData >= '${startStr}' AND vendaData <= '${endStr}' ${unitWhere}`
+        ));
+        const rawRow = execRow(rawResult);
+
+        let faturamento = parseFloat(String(rawRow?.total ?? "0"));
+        let atendimentos = Number(rawRow?.atendimentos ?? 0);
+
+        // Fallback para tabela vendas
+        if (faturamento === 0 && atendimentos === 0) {
+          const [fallback] = await db.select({
+            total: sql<string>`COALESCE(SUM(${vendas.valorLiquido}), 0)`,
+            atendimentos: count(vendas.id),
+          }).from(vendas).where(and(
+            gte(vendas.dataVenda, start),
+            lte(vendas.dataVenda, end),
+            ...(input.unitId ? [eq(vendas.unitId, input.unitId)] : []),
+          ));
+          faturamento = parseFloat(fallback?.total ?? "0");
+          atendimentos = Number(fallback?.atendimentos ?? 0);
+        }
 
         meses.push({
           mes: start.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
-          faturamento: parseFloat(result?.total ?? "0"),
-          atendimentos: Number(result?.atendimentos ?? 0),
+          faturamento,
+          atendimentos,
         });
       }
       return meses;
@@ -397,27 +404,47 @@ export const dashboardRouter = router({
       const db = await getDb();
       if (!db) return [];
 
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const fmtDate = (d: Date) =>
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
       const { start, end } = getMonthRange(0);
-      const orgUnits = await db.select({ id: units.id, name: units.name, city: units.city }).from(units).where(eq(units.orgId, input.orgId));
+      const startStr = fmtDate(start);
+      const endStr = fmtDate(end);
 
-      const ranking = await Promise.all(orgUnits.map(async (unit) => {
-        const [result] = await db.select({
-          total: sql<string>`COALESCE(SUM(${vendas.valorLiquido}), 0)`,
-          atendimentos: count(vendas.id),
-        }).from(vendas).where(and(
-          eq(vendas.unitId, unit.id),
-          gte(vendas.dataVenda, start),
-          lte(vendas.dataVenda, end),
-        ) as any);
-        return {
-          unitId: unit.id,
-          name: unit.name,
-          city: unit.city ?? null,
-          faturamento: parseFloat(result?.total ?? "0"),
-          atendimentos: Number(result?.atendimentos ?? 0),
-        };
-      }));
+      const orgUnits = await db.select({ id: units.id, name: units.name })
+        .from(units)
+        .where(eq(units.orgId, input.orgId));
 
-      return ranking.sort((a, b) => b.faturamento - a.faturamento).slice(0, 10);
+      const ranking = [];
+      for (const unit of orgUnits) {
+        const rawResult = await db.execute(sql.raw(
+          `SELECT COALESCE(SUM(valorLiquido), 0) as total, COUNT(*) as atendimentos
+           FROM vendas_api_raw
+           WHERE vendaData >= '${startStr}' AND vendaData <= '${endStr}' AND unitId = ${unit.id}`
+        ));
+        const rawRow = execRow(rawResult);
+
+        let faturamento = parseFloat(String(rawRow?.total ?? "0"));
+        let atendimentos = Number(rawRow?.atendimentos ?? 0);
+
+        // Fallback para tabela vendas
+        if (faturamento === 0 && atendimentos === 0) {
+          const [fallback] = await db.select({
+            total: sql<string>`COALESCE(SUM(${vendas.valorLiquido}), 0)`,
+            atendimentos: count(vendas.id),
+          }).from(vendas).where(and(
+            gte(vendas.dataVenda, start),
+            lte(vendas.dataVenda, end),
+            eq(vendas.unitId, unit.id),
+          ));
+          faturamento = parseFloat(fallback?.total ?? "0");
+          atendimentos = Number(fallback?.atendimentos ?? 0);
+        }
+
+        ranking.push({ unitId: unit.id, name: unit.name, faturamento, atendimentos });
+      }
+
+      return ranking.sort((a, b) => b.faturamento - a.faturamento);
     }),
 });
