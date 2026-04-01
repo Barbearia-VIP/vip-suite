@@ -476,3 +476,11 @@
 - [x] Adicionado card azul "Reclassificar Histórico com Nova Lógica" na CamConfigPage
 - [x] Auditoria registrada na gt_audit_log após cada reclassificação
 - [x] 15 novos testes vitest para reclassifyByExpression (198 total)
+
+## VIP Cam — Correção: Reclassificação processa apenas parte dos registros (Concluído)
+
+- [x] Diagnosticado: timeout do tRPC causado por N queries individuais (1 por registro)
+- [x] Etapa 1 reescrita com SQL nativo UPDATE...CASE WHEN (1 query para toda a timeline)
+- [x] Etapa 2 reescrita com chunks de 500 clientes (busca timeline em batch com inArray)
+- [x] Adicionado import de inArray no vipCam.ts
+- [x] 198 testes passando

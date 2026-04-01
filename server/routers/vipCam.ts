@@ -4,7 +4,7 @@
  * Separação de dados por unidade (unitId)
  */
 import { z } from 'zod';
-import { eq, and, desc, sql, gte, lte, count } from 'drizzle-orm';
+import { eq, and, desc, sql, gte, lte, count, inArray } from 'drizzle-orm';
 import { router, protectedProcedure } from '../_core/trpc';
 import { getDb } from '../db';
 import {
@@ -840,8 +840,9 @@ export const vipCamRouter = router({
     }),
 
   // ── Reclassificar histórico completo com novos thresholds ──
-  // Usa expression + confidence de cada registro para inferir o novo satisfactionLevel
-  // com os thresholds calibrados para o modelo face-api.
+  // Usa SQL nativo em batch para evitar timeout em bases grandes.
+  // Etapa 1: UPDATE da timeline via CASE WHEN (1 query total)
+  // Etapa 2: Recalc de clientes em chunks de 500 (N/500 queries)
   reclassifyAllHistory: protectedProcedure
     .input(z.object({
       unitId: z.number(),
@@ -850,92 +851,88 @@ export const vipCamRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
 
-      // Buscar todos os registros da timeline da unidade
-      const allRecords = await db!
-        .select({
-          id: camSentimentTimeline.id,
-          expression: camSentimentTimeline.expression,
-          confidence: camSentimentTimeline.confidence,
-          satisfactionLevel: camSentimentTimeline.satisfactionLevel,
-        })
-        .from(camSentimentTimeline)
-        .where(eq(camSentimentTimeline.unitId, input.unitId));
+      // ── Etapa 1: Reclassificar a timeline inteira com 1 query SQL nativa ──
+      // Regras por expression+confidence com novos thresholds:
+      //   happy >= 0.35 → satisfied
+      //   angry >= 0.55 → unsatisfied
+      //   disgusted >= 0.50 → unsatisfied
+      //   sad >= 0.60 → unsatisfied
+      //   qualquer outra coisa → neutral
+      const timelineResult = await db!.execute(sql`
+        UPDATE cam_sentiment_timeline
+        SET satisfactionLevel = CASE
+          WHEN expression = 'happy'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.35 THEN 'satisfied'
+          WHEN expression = 'angry'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.55 THEN 'unsatisfied'
+          WHEN expression = 'disgusted' AND CAST(confidence AS DECIMAL(10,4)) >= 0.50 THEN 'unsatisfied'
+          WHEN expression = 'sad'       AND CAST(confidence AS DECIMAL(10,4)) >= 0.60 THEN 'unsatisfied'
+          ELSE 'neutral'
+        END
+        WHERE unitId = ${input.unitId}
+      `);
+      const timelineUpdated = (timelineResult as any)?.[0]?.affectedRows ?? 0;
 
-      // Reclassificar cada registro usando expression + confidence
-      // Regra: expression domínante + confidence com novos thresholds
-      function reclassifyByExpression(
-        expression: string | null,
-        confidence: string | null
-      ): 'satisfied' | 'neutral' | 'unsatisfied' {
-        const conf = parseFloat(confidence ?? '0');
-        const expr = (expression ?? 'neutral').toLowerCase();
+      // ── Etapa 2: Buscar total de registros da timeline para o relatório ──
+      const [totalRow] = await db!.execute(sql`
+        SELECT COUNT(*) as total FROM cam_sentiment_timeline WHERE unitId = ${input.unitId}
+      `) as any;
+      const timelineTotal = Number(totalRow?.[0]?.total ?? 0);
 
-        if (expr === 'happy') {
-          return conf >= 0.35 ? 'satisfied' : 'neutral';
-        }
-        if (expr === 'angry') {
-          return conf >= 0.55 ? 'unsatisfied' : 'neutral';
-        }
-        if (expr === 'disgusted') {
-          return conf >= 0.50 ? 'unsatisfied' : 'neutral';
-        }
-        if (expr === 'sad') {
-          return conf >= 0.60 ? 'unsatisfied' : 'neutral';
-        }
-        // neutral, surprised, fearful → sempre neutro
-        return 'neutral';
-      }
-
-      let timelineUpdated = 0;
-      const BATCH = 200;
-
-      for (let i = 0; i < allRecords.length; i += BATCH) {
-        const batch = allRecords.slice(i, i + BATCH);
-        for (const rec of batch) {
-          const newLevel = reclassifyByExpression(rec.expression, rec.confidence);
-          if (newLevel !== rec.satisfactionLevel) {
-            await db!.update(camSentimentTimeline)
-              .set({ satisfactionLevel: newLevel })
-              .where(eq(camSentimentTimeline.id, rec.id));
-            timelineUpdated++;
-          }
-        }
-      }
-
-      // Agora recalcular o status final de cada cliente com a timeline atualizada
+      // ── Etapa 3: Recalcular status final de cada cliente (chunks de 500) ──
+      // Busca todos os clientes da unidade sem limite
       const clientes = await db!
         .select({ id: camClientes.id })
         .from(camClientes)
         .where(eq(camClientes.unitId, input.unitId));
 
       let clientesUpdated = 0;
-      for (const cliente of clientes) {
-        const timeline = await db!
-          .select({ satisfactionLevel: camSentimentTimeline.satisfactionLevel })
+      const CHUNK = 500;
+
+      for (let i = 0; i < clientes.length; i += CHUNK) {
+        const chunk = clientes.slice(i, i + CHUNK);
+        const clienteIds = chunk.map(c => c.id);
+
+        // Buscar toda a timeline deste chunk de clientes de uma vez
+        const timelines = await db!
+          .select({
+            clienteId: camSentimentTimeline.clienteId,
+            satisfactionLevel: camSentimentTimeline.satisfactionLevel,
+          })
           .from(camSentimentTimeline)
           .where(and(
-            eq(camSentimentTimeline.clienteId, cliente.id),
+            inArray(camSentimentTimeline.clienteId, clienteIds),
             eq(camSentimentTimeline.unitId, input.unitId)
           ));
 
-        if (timeline.length === 0) continue;
+        // Agrupar por cliente
+        const byCliente = new Map<number, string[]>();
+        for (const t of timelines) {
+          if (!byCliente.has(t.clienteId)) byCliente.set(t.clienteId, []);
+          byCliente.get(t.clienteId)!.push(t.satisfactionLevel);
+        }
 
-        const finalLevel = calcFinalSatisfactionLevel(timeline);
-        const expressaoLegado = finalLevel === 'satisfied' ? 'satisfeito'
-          : finalLevel === 'neutral' ? 'neutro' : 'insatisfeito';
+        // Atualizar cada cliente com o status final calculado
+        for (const clienteId of clienteIds) {
+          const levels = byCliente.get(clienteId);
+          if (!levels || levels.length === 0) continue;
 
-        await db!.update(camClientes).set({
-          satisfactionLevel: finalLevel,
-          expressao: expressaoLegado,
-          updatedAt: new Date(),
-        }).where(and(
-          eq(camClientes.id, cliente.id),
-          eq(camClientes.unitId, input.unitId)
-        ));
-        clientesUpdated++;
+          const tl = levels.map(s => ({ satisfactionLevel: s }));
+          const finalLevel = calcFinalSatisfactionLevel(tl);
+          const expressaoLegado = finalLevel === 'satisfied' ? 'satisfeito'
+            : finalLevel === 'neutral' ? 'neutro' : 'insatisfeito';
+
+          await db!.update(camClientes).set({
+            satisfactionLevel: finalLevel,
+            expressao: expressaoLegado,
+            updatedAt: new Date(),
+          }).where(and(
+            eq(camClientes.id, clienteId),
+            eq(camClientes.unitId, input.unitId)
+          ));
+          clientesUpdated++;
+        }
       }
 
-      // Registrar auditoria
+      // ── Registrar auditoria ──
       try {
         const orgId = input.orgId ?? input.unitId;
         await db!.insert(gtAuditLog).values({
@@ -945,12 +942,12 @@ export const vipCamRouter = router({
           userName: ctx.user!.name ?? 'Usuário',
           acao: 'recalc',
           entidade: 'vip_cam_satisfaction',
-          descricao: `Reclassificação histórica: ${timelineUpdated} registros da timeline atualizados, ${clientesUpdated} clientes recalculados (novos thresholds face-api)`,
+          descricao: `Reclassificação histórica completa: ${timelineTotal} capturas processadas (${timelineUpdated} alteradas), ${clientesUpdated} clientes recalculados`,
         });
       } catch { /* não bloquear por falha de auditoria */ }
 
       return {
-        timelineTotal: allRecords.length,
+        timelineTotal,
         timelineUpdated,
         clientesTotal: clientes.length,
         clientesUpdated,
