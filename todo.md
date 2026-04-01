@@ -499,3 +499,7 @@
 - [x] Corrigir conteúdo cortado no topo da campanha gerada (MarketingPage / CampaignPreview)
 - [x] CampaignPreview: header fixo (título + badges + botões PDF/JSON) + conteúdo scrollável separado
 - [x] MarketingCampaignWizard: header fixo (título + progresso) + conteúdo scrollável + footer fixo com botões
+
+## VIP Cam — Correção: Foto do cliente existente
+
+- [x] Corrigir saveCapture: atualizar faceImageUrl do cliente existente quando ele não tiver foto

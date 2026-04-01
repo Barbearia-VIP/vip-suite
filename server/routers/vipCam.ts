@@ -221,6 +221,9 @@ export const vipCamRouter = router({
           : null;
         const isNewDay = lastSeenDate !== todayStr;
 
+        // Atualizar foto apenas se o cliente ainda não tiver foto salva
+        const shouldUpdatePhoto = !cliente.faceImageUrl && !!input.faceImageUrl;
+
         await db!.update(camClientes).set({
           faceDescriptor: newDescriptor,
           satisfactionLevel: finalLevel,
@@ -228,6 +231,8 @@ export const vipCamRouter = router({
           confidenceScore: String(input.confidence),
           lastSeenAt: now,
           visitCount: isNewDay ? sql`${camClientes.visitCount} + 1` : undefined,
+          // Atualizar foto se ainda não tiver
+          ...(shouldUpdatePhoto ? { faceImageUrl: input.faceImageUrl, fotoUrl: input.faceImageUrl } : {}),
           // Compat legado
           expressao: finalLevel === 'satisfied' ? 'satisfeito' : finalLevel === 'neutral' ? 'neutro' : 'insatisfeito',
           totalVisitas: isNewDay ? sql`${camClientes.totalVisitas} + 1` : undefined,
