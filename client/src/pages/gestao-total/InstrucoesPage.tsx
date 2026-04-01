@@ -153,6 +153,7 @@ export default function InstrucoesPage() {
   const searchParams = new URLSearchParams(location.split("?")[1] ?? "");
   const processoIdParam = searchParams.get("processoId");
   const processoNomeParam = searchParams.get("processoNome");
+  const responsavelNomeParam = searchParams.get("responsavelNome");
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Instrucao | null>(null);
@@ -167,9 +168,11 @@ export default function InstrucoesPage() {
     if (processoIdParam && processoNomeParam) {
       setGenProcessoId(Number(processoIdParam));
       setGenProcessoNome(decodeURIComponent(processoNomeParam));
+      if (responsavelNomeParam) setGenResponsavel(decodeURIComponent(responsavelNomeParam));
       setShowGenModal(true);
     }
-  }, [processoIdParam, processoNomeParam]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processoIdParam, processoNomeParam, responsavelNomeParam]);
 
   const q = trpc.gestaoTotal.instrucoes.list.useQuery(
     { orgId: org?.id ?? 0, unitId: selectedUnit?.id },

@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 import {
   Plus, Trash2, Edit2, Sparkles, Loader2, CheckCircle2, XCircle,
-  ChevronDown, ChevronUp, Send, Layers, Settings, RefreshCw,
+  ChevronDown, ChevronUp, Send, Layers, Settings, RefreshCw, Users,
 } from "lucide-react";
 
 type Etapa = { titulo: string; descricao?: string; responsavel?: string; concluida: boolean };
@@ -164,6 +164,11 @@ export default function ProcessosPage() {
   const [showAIModal, setShowAIModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [aiProcessos, setAiProcessos] = useState<ProcessoAI[]>([]);
+  // Modal de seleção de colaborador para IT
+  const [showITModal, setShowITModal] = useState(false);
+  const [itProcesso, setItProcesso] = useState<Processo | null>(null);
+  const [itColaboradorId, setItColaboradorId] = useState<string>("");
+  const [itSearch, setItSearch] = useState("");
 
   const currentUnit = units.find(u => u.id === selectedUnit?.id) ?? units[0];
 
@@ -242,8 +247,35 @@ export default function ProcessosPage() {
     });
   };
 
+  const colaboradoresQ = trpc.gestaoTotal.colaboradores.list.useQuery(
+    { orgId: org?.id ?? 0, unitId: selectedUnit?.id, status: "ativo" },
+    { enabled: !!org?.id && showITModal }
+  );
+  const colaboradores = (colaboradoresQ.data ?? []) as { id: number; nome: string; avatarUrl?: string | null }[];
+  const colaboradoresFiltrados = itSearch.trim()
+    ? colaboradores.filter(c => c.nome.toLowerCase().includes(itSearch.toLowerCase()))
+    : colaboradores;
+
   const handleEnviarIT = (p: Processo) => {
-    navigate(`/gestao-total/instrucoes?processoId=${p.id}&processoNome=${encodeURIComponent(p.nome)}`);
+    setItProcesso(p);
+    setItColaboradorId("");
+    setItSearch("");
+    setShowITModal(true);
+  };
+
+  const handleConfirmarIT = () => {
+    if (!itProcesso) return;
+    const colab = colaboradores.find(c => String(c.id) === itColaboradorId);
+    const params = new URLSearchParams({
+      processoId: String(itProcesso.id),
+      processoNome: encodeURIComponent(itProcesso.nome),
+    });
+    if (colab) {
+      params.set("responsavelId", String(colab.id));
+      params.set("responsavelNome", encodeURIComponent(colab.nome));
+    }
+    setShowITModal(false);
+    navigate(`/gestao-total/instrucoes?${params.toString()}`);
   };
 
   const filtered = filterTipo === "todos" ? processos : processos.filter(p => p.tipo === filterTipo);
@@ -419,6 +451,77 @@ export default function ProcessosPage() {
             <Button onClick={handleSaveAccepted} disabled={saveManyM.isPending} className="gap-1.5 bg-violet-600 hover:bg-violet-700">
               {saveManyM.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
               Salvar Selecionados
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Selecionar colaborador para Instrução de Trabalho */}
+      <Dialog open={showITModal} onOpenChange={v => { setShowITModal(v); if (!v) setItProcesso(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-violet-400" /> Destinar Instrução de Trabalho
+            </DialogTitle>
+            <DialogDescription>
+              Selecione o colaborador responsável pela instrução de trabalho do processo <strong>{itProcesso?.nome}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="relative">
+              <Input
+                value={itSearch}
+                onChange={e => setItSearch(e.target.value)}
+                placeholder="Buscar colaborador..."
+                className="text-sm pl-8"
+              />
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              </span>
+            </div>
+            {colaboradoresQ.isLoading ? (
+              <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-12 rounded-lg bg-muted/30 animate-pulse" />)}</div>
+            ) : colaboradoresFiltrados.length === 0 ? (
+              <div className="text-center py-6">
+                <Users className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  {colaboradores.length === 0
+                    ? "Nenhum colaborador ativo cadastrado. Cadastre colaboradores em Pessoas → Colaboradores."
+                    : "Nenhum colaborador encontrado com esse nome."}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                {colaboradoresFiltrados.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => setItColaboradorId(String(c.id) === itColaboradorId ? "" : String(c.id))}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors ${
+                      String(c.id) === itColaboradorId
+                        ? "border-violet-500/50 bg-violet-500/10 text-foreground"
+                        : "border-border bg-card hover:border-violet-500/30 hover:bg-violet-500/5 text-foreground"
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center shrink-0 text-sm font-semibold text-violet-400">
+                      {c.nome.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-sm font-medium flex-1">{c.nome}</span>
+                    {String(c.id) === itColaboradorId && (
+                      <CheckCircle2 className="w-4 h-4 text-violet-400 shrink-0" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+            {colaboradores.length > 0 && (
+              <p className="text-xs text-muted-foreground">Você pode prosseguir sem selecionar um colaborador e atribuir depois.</p>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowITModal(false)}>Cancelar</Button>
+            <Button onClick={handleConfirmarIT} className="gap-1.5 bg-violet-600 hover:bg-violet-700">
+              <Send className="w-3.5 h-3.5" />
+              {itColaboradorId ? "Destinar e Gerar IT" : "Prosseguir sem Colaborador"}
             </Button>
           </DialogFooter>
         </DialogContent>
