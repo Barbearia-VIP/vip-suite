@@ -613,10 +613,17 @@ export const gtProcessos = mysqlTable("gt_processos", {
   unitId: int("unitId"),
   nome: varchar("nome", { length: 255 }).notNull(),
   descricao: text("descricao"),
+  tipo: mysqlEnum("tipo", ["principal", "apoio"]).default("principal").notNull(),
   categoria: varchar("categoria", { length: 100 }),
+  area: varchar("area", { length: 100 }),
   responsavel: varchar("responsavel", { length: 255 }),
   etapas: json("etapas"), // Array de { titulo, descricao, responsavel, concluida }
-  ativo: int("ativo").default(1).notNull(),
+  recursos: json("recursos"),   // string[]
+  metricas: json("metricas"),   // string[]
+  riscos: json("riscos"),       // string[]
+  duracaoEstimada: varchar("duracaoEstimada", { length: 100 }),
+  status: mysqlEnum("status", ["ativo", "inativo", "em_revisao"]).default("ativo").notNull(),
+  geradoPorIA: int("geradoPorIA").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (t) => [
@@ -630,11 +637,16 @@ export const gtInstrucoes = mysqlTable("gt_instrucoes", {
   id: int("id").autoincrement().primaryKey(),
   orgId: int("orgId").notNull(),
   unitId: int("unitId"),
+  processoId: int("processoId"),  // FK → gt_processos.id
   titulo: varchar("titulo", { length: 255 }).notNull(),
   conteudo: text("conteudo"),
+  plano: json("plano"),           // Plano detalhado gerado por IA (JSON estruturado)
   categoria: varchar("categoria", { length: 100 }),
+  responsavelId: int("responsavelId"), // FK → gt_colaboradores.id
+  responsavelNome: varchar("responsavelNome", { length: 255 }),
+  status: mysqlEnum("status", ["pendente", "em_andamento", "concluida", "pausada"]).default("pendente").notNull(),
   versao: varchar("versao", { length: 20 }).default("1.0"),
-  ativo: int("ativo").default(1).notNull(),
+  geradoPorIA: int("geradoPorIA").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (t) => [

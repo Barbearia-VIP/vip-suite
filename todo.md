@@ -372,3 +372,15 @@
 - [x] Página Privilégios criada (/gestao-total/privilegios) — 5 perfis com permissões visuais (Master, Admin, Gerente, Líder, Colaborador)
 - [x] Página Guia do Sistema criada (/gestao-total/guia) — accordion expansível com descrição de cada seção do módulo
 - [x] 3 novas rotas registradas no App.tsx
+
+## Sessão 01/04/2026 — Fluxo IA Gestão Total
+
+- [x] Reorganizar menu lateral do Gestão Total (Dashboard, Planejamento, Processos, IT, Tarefas, Pessoas, Indicadores, Documentos, Problemas, Oportunidades, Riscos, Marketing, Financeiro, Reuniões, Compras, IA Conselheiro, Configurações, Privilégios, Guia do Sistema)
+- [x] Criar grupo "Pessoas" com Cargos e Colaboradores no menu
+- [x] Criar páginas placeholder: ConfiguracoesGtPage, PrivilegiosPage, GuiaSistemaPage
+- [x] Atualizar schema: gtProcessos com tipo/area/duracaoEstimada/etapas/recursos/metricas/riscos/geradoPorIA/status, gtInstrucoes com processoId/plano/responsavelNome/responsavelId/geradoPorIA/status
+- [x] Migração SQL aplicada no banco (0008_gt_ai_flow.sql)
+- [x] PlanejamentoPage: botão "Gerar com IA", modal de contexto (segmento/porte/diferenciais/desafios), modal de revisão (Missão/Visão/Valores + SWOT + Objetivos)
+- [x] ProcessosPage: botão "Gerar Processos com IA", modal de revisão com aceitar/rejeitar individual, botão "IT" para enviar processo para Instruções de Trabalho
+- [x] InstrucoesPage: recebe processoId via query param, modal de geração por IA, visualização do plano detalhado (objetivo, materiais, passos, dicas, alertas, indicadores)
+- [x] Router gestaoTotal.ts: procedures generateAI (planejamento), generateAI (processos), saveMany (processos), generateFromProcesso (instrucoes)

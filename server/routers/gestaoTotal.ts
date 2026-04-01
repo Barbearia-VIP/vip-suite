@@ -143,6 +143,97 @@ const processosRouter = router({
       await db.delete(gtProcessos).where(and(eq(gtProcessos.id, input.id), eq(gtProcessos.orgId, input.orgId)));
       return { success: true };
     }),
+
+  generateAI: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      unitId: z.number().optional(),
+      nomeUnidade: z.string(),
+      segmento: z.string().optional(),
+      missao: z.string().optional(),
+      visao: z.string().optional(),
+      objetivos: z.array(z.string()).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const systemPrompt = `Você é um especialista em gestão de processos para empresas brasileiras.
+Gere processos operacionais completos e práticos. Responda APENAS com JSON válido, sem markdown.`;
+
+      const userPrompt = `Gere os processos operacionais para:
+- Empresa: ${input.nomeUnidade}
+- Segmento: ${input.segmento ?? "Barbearia/Salão"}
+- Missão: ${input.missao ?? "Não informada"}
+- Visão: ${input.visao ?? "Não informada"}
+- Objetivos estratégicos: ${(input.objetivos ?? []).join("; ")}
+
+Retorne JSON com esta estrutura:
+{
+  "processos": [
+    {
+      "nome": "string",
+      "tipo": "principal" | "apoio",
+      "area": "string (ex: Atendimento, Financeiro, RH, Marketing)",
+      "descricao": "string (2-3 frases)",
+      "categoria": "string",
+      "duracaoEstimada": "string (ex: 30 min, 2 horas)",
+      "etapas": [
+        { "titulo": "string", "descricao": "string", "responsavel": "string", "concluida": false }
+      ],
+      "recursos": ["string"],
+      "metricas": ["string"],
+      "riscos": ["string"]
+    }
+  ]
+}
+Gere 4-6 processos principais e 2-4 de apoio. Cada processo deve ter 3-6 etapas. Seja específico e prático para o segmento.`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const rawContent3 = response.choices?.[0]?.message?.content;
+      const content = typeof rawContent3 === "string" ? rawContent3 : "{}";
+      try {
+        const parsed = JSON.parse(content);
+        return { success: true, data: parsed };
+      } catch {
+        return { success: false, data: null, error: "Falha ao interpretar resposta da IA" };
+      }
+    }),
+
+  saveMany: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      unitId: z.number().optional(),
+      processos: z.array(z.object({
+        nome: z.string(), tipo: z.enum(["principal", "apoio"]).default("principal"),
+        area: z.string().optional(), descricao: z.string().optional(),
+        categoria: z.string().optional(), duracaoEstimada: z.string().optional(),
+        etapas: z.array(z.object({ titulo: z.string(), descricao: z.string().optional(), responsavel: z.string().optional(), concluida: z.boolean().default(false) })).optional(),
+        recursos: z.array(z.string()).optional(),
+        metricas: z.array(z.string()).optional(),
+        riscos: z.array(z.string()).optional(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const ids: number[] = [];
+      for (const p of input.processos) {
+        const [r] = await db.insert(gtProcessos).values({
+          orgId: input.orgId, unitId: input.unitId,
+          nome: p.nome, tipo: p.tipo, area: p.area, descricao: p.descricao,
+          categoria: p.categoria, duracaoEstimada: p.duracaoEstimada,
+          etapas: p.etapas, recursos: p.recursos, metricas: p.metricas,
+          riscos: p.riscos, geradoPorIA: 1, status: "ativo",
+        });
+        ids.push((r as { insertId: number }).insertId);
+      }
+      return { ids };
+    }),
 });
 
 // ── Instruções de Trabalho ────────────────────────────────────────────────────
@@ -163,6 +254,7 @@ const instrucoesRouter = router({
       id: z.number().optional(), orgId: z.number(), unitId: z.number().optional(),
       titulo: z.string().min(1), conteudo: z.string().optional(),
       categoria: z.string().optional(), versao: z.string().optional(),
+      responsavelNome: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -182,6 +274,103 @@ const instrucoesRouter = router({
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
       await db.delete(gtInstrucoes).where(and(eq(gtInstrucoes.id, input.id), eq(gtInstrucoes.orgId, input.orgId)));
+      return { success: true };
+    }),
+
+  generateFromProcesso: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      unitId: z.number().optional(),
+      processoId: z.number(),
+      processoNome: z.string(),
+      processoDescricao: z.string().optional(),
+      etapas: z.array(z.object({ titulo: z.string(), descricao: z.string().optional(), responsavel: z.string().optional() })).optional(),
+      segmento: z.string().optional(),
+      responsavelNome: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const systemPrompt = `Você é um especialista em instruções de trabalho para empresas brasileiras.
+Gere uma instrução de trabalho detalhada e prática. Responda APENAS com JSON válido, sem markdown.`;
+
+      const etapasStr = (input.etapas ?? []).map((e, i) => `${i+1}. ${e.titulo}${e.descricao ? ": " + e.descricao : ""}`).join("\n");
+
+      const userPrompt = `Gere uma instrução de trabalho detalhada para o processo:
+- Processo: ${input.processoNome}
+- Descrição: ${input.processoDescricao ?? "Não informada"}
+- Segmento: ${input.segmento ?? "Barbearia/Salão"}
+- Etapas do processo: ${etapasStr || "Não informadas"}
+- Responsável: ${input.responsavelNome ?? "A definir"}
+
+Retorne JSON com esta estrutura:
+{
+  "titulo": "string (nome da instrução)",
+  "categoria": "string",
+  "conteudo": "string (texto completo da instrução, em markdown)",
+  "plano": {
+    "objetivo": "string",
+    "publicoAlvo": "string",
+    "frequencia": "string (ex: Diário, Semanal, Por demanda)",
+    "tempoEstimado": "string",
+    "materiais": ["string"],
+    "passos": [
+      {
+        "numero": 1,
+        "titulo": "string",
+        "descricao": "string",
+        "dicas": ["string"],
+        "alertas": ["string"]
+      }
+    ],
+    "indicadoresSucesso": ["string"],
+    "errosComuns": ["string"]
+  }
+}
+Seja detalhado, prático e específico. O conteúdo deve ser suficiente para um novo colaborador executar o processo sem supervisao.`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const rawContent = response.choices?.[0]?.message?.content;
+      const content = typeof rawContent === "string" ? rawContent : "{}";
+      try {
+        const parsed = JSON.parse(content);
+        // Salvar automaticamente no banco
+        const db = await getDb();
+        if (!db) throw new Error("DB unavailable");
+        const [r] = await db.insert(gtInstrucoes).values({
+          orgId: input.orgId, unitId: input.unitId,
+          processoId: input.processoId,
+          titulo: parsed.titulo ?? `IT - ${input.processoNome}`,
+          conteudo: parsed.conteudo,
+          plano: parsed.plano,
+          categoria: parsed.categoria,
+          responsavelNome: input.responsavelNome,
+          geradoPorIA: 1, status: "pendente",
+        });
+        const id = (r as { insertId: number }).insertId;
+        return { success: true, id, data: parsed };
+      } catch {
+        return { success: false, id: null, data: null, error: "Falha ao interpretar resposta da IA" };
+      }
+    }),
+
+  updateStatus: protectedProcedure
+    .input(z.object({
+      id: z.number(), orgId: z.number(),
+      status: z.enum(["pendente", "em_andamento", "concluida", "pausada"]),
+      responsavelId: z.number().optional(),
+      responsavelNome: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const { id, orgId, ...data } = input;
+      await db.update(gtInstrucoes).set(data).where(and(eq(gtInstrucoes.id, id), eq(gtInstrucoes.orgId, orgId)));
       return { success: true };
     }),
 });
@@ -263,8 +452,67 @@ const planejamentoRouter = router({
       const [r] = await db.insert(gtPlanejamento).values(data);
       return { id: (r as { insertId: number }).insertId };
     }),
-});
 
+  generateAI: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      unitId: z.number().optional(),
+      nomeUnidade: z.string(),
+      segmento: z.string().optional(),
+      cidade: z.string().optional(),
+      porte: z.string().optional(),
+      descricaoNegocio: z.string().optional(),
+      diferenciais: z.string().optional(),
+      desafios: z.string().optional(),
+      ano: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const systemPrompt = `Você é um especialista em planejamento estratégico para pequenas e médias empresas brasileiras.
+Gere um planejamento estratégico completo, prático e personalizado. Responda APENAS com JSON válido, sem markdown.`;
+
+      const userPrompt = `Gere um planejamento estratégico para:
+- Empresa: ${input.nomeUnidade}
+- Segmento: ${input.segmento ?? "Barbearia/Salão"}
+- Cidade: ${input.cidade ?? "Brasil"}
+- Porte: ${input.porte ?? "Pequena empresa"}
+- Descrição: ${input.descricaoNegocio ?? "Barbearia premium"}
+- Diferenciais: ${input.diferenciais ?? "Atendimento personalizado"}
+- Desafios atuais: ${input.desafios ?? "Atrair e reter clientes"}
+- Ano: ${input.ano}
+
+Retorne JSON com esta estrutura:
+{
+  "missao": "string (2-3 frases sobre o propósito da empresa)",
+  "visao": "string (onde quer chegar em 3-5 anos)",
+  "valores": "string (4-6 valores separados por vírgula)",
+  "swotForcas": ["string", ...],
+  "swotFraquezas": ["string", ...],
+  "swotOportunidades": ["string", ...],
+  "swotAmeacas": ["string", ...],
+  "objetivos": [
+    { "titulo": "string", "prazo": "string (ex: Q2 2026)", "status": "pendente" }
+  ]
+}
+Cada array SWOT deve ter 4-5 itens. Objetivos devem ter 4-6 itens. Seja específico para o segmento.`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+      });
+
+       const rawContent2 = response.choices?.[0]?.message?.content;
+      const content = typeof rawContent2 === "string" ? rawContent2 : "{}";
+      try {
+        const parsed = JSON.parse(content);
+        return { success: true, data: parsed };
+      } catch {
+        return { success: false, data: null, error: "Falha ao interpretar resposta da IA" };
+      }
+    }),
+});
 // ── Reuniões ──────────────────────────────────────────────────────────────────
 const reunioesRouter = router({
   list: protectedProcedure
