@@ -194,13 +194,21 @@ export const metas = mysqlTable("metas", {
 // ─────────────────────────────────────────────
 export const syncLog = mysqlTable("sync_log", {
   id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
   unitId: int("unitId").notNull(),
+  modo: mysqlEnum("modo", ["auto", "manual_13m", "historico"]).notNull(),
+  dataInicio: date("dataInicio"),
+  dataFim: date("dataFim"),
   status: mysqlEnum("status", ["running", "success", "error"]).notNull(),
-  registrosImportados: int("registrosImportados").default(0),
+  fetchedCount: int("fetchedCount").default(0),
+  insertedCount: int("insertedCount").default(0),
+  durationMs: int("durationMs"),
   erro: text("erro"),
   iniciadoEm: timestamp("iniciadoEm").defaultNow().notNull(),
   finalizadoEm: timestamp("finalizadoEm"),
-});
+}, (t) => [
+  index("idx_sync_log_unit").on(t.unitId, t.iniciadoEm),
+]);
 
 // ─────────────────────────────────────────────
 // GESTÃO TOTAL — tarefas
