@@ -534,3 +534,34 @@
 - [x] SincronizacaoPage: exibir quais unidades têm credenciais configuradas e bloquear botão de sync para unidades sem credenciais, em vez de lançar erro genérico
 - [x] Dados sincronizados somem após sair e voltar: bug crítico corrigido — DELETE usava apenas orgId, apagando dados de todas as unidades; corrigido para filtrar por orgId AND unitId
 - [x] Botão "Sincronizar Todas as Unidades" com execução sequencial, seleção de modo (2 dias / 13 meses) e progresso em tempo real
+
+## Raio X Clientes — Expansão Completa
+- [ ] Endpoints tRPC: raioXVisaoGeral (sinais da base, saúde, distribuições)
+- [ ] Endpoints tRPC: raioXOneShot (clientes com 1 visita)
+- [ ] Endpoints tRPC: raioXCadencia (frequência e perfil)
+- [ ] Endpoints tRPC: raioXChurn (perdas e retenção mensal)
+- [ ] Endpoints tRPC: raioXCohort (por coorte de entrada)
+- [ ] Endpoints tRPC: raioXBarbeiros (por colaborador)
+- [ ] Endpoints tRPC: raioXDiagnostico (qualidade de dados)
+- [ ] Frontend: aba Visão Geral (sinais da base, atividade, saúde, distribuições)
+- [ ] Frontend: aba One-Shot (clientes com 1 visita)
+- [ ] Frontend: aba Cadência (frequência e perfil)
+- [ ] Frontend: aba Churn (perdas e retenção)
+- [ ] Frontend: aba Cohort (por coorte de entrada)
+- [ ] Frontend: aba Barbeiros (por colaborador)
+- [ ] Frontend: aba Ações (fila de contato CRM)
+- [ ] Frontend: aba Diagnóstico (qualidade de dados)
+
+## Raio X Clientes — Implementação Completa (Data VIP)
+
+- [x] Router tRPC raioX.visaoGeral (sinais da base, atividade, saúde, distribuições, novos clientes)
+- [x] Router tRPC raioX.oneShot (lista paginada com filtros aguardando/em_risco/perdido e busca)
+- [x] Router tRPC raioX.cadencia (distribuição por cadência, top clientes por frequência)
+- [x] Router tRPC raioX.churn (taxa de churn, perdidos recentes, gráfico mensal)
+- [x] Router tRPC raioX.cohort (por mês de entrada, retenção e fidelização)
+- [x] Router tRPC raioX.barbeiros (atendimentos, faturamento, clientes únicos, novos por barbeiro)
+- [x] Router tRPC raioX.acoes (fila de contato por prioridade: alta/média/baixa)
+- [x] Router tRPC raioX.diagnostico (qualidade da base, alertas, distribuição por visitas)
+- [x] Página /data-vip/raio-x reescrita com todas as 8 abas
+- [x] Score de saúde da base (% ativos) com indicador visual
+- [x] Gráficos recharts: novos clientes mensal, churn mensal, barbeiros
