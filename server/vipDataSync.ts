@@ -26,10 +26,11 @@ export interface UnitSyncStatus {
   completedBlocks: number;
 }
 
+// Chave: unitId (não orgId) — múltiplas unidades podem ter o mesmo orgId
 const syncStatusMap = new Map<number, UnitSyncStatus>();
 
-export function getSyncStatus(orgId: number): UnitSyncStatus | undefined {
-  return syncStatusMap.get(orgId);
+export function getSyncStatus(unitId: number): UnitSyncStatus | undefined {
+  return syncStatusMap.get(unitId);
 }
 
 export function getAllSyncStatuses(): UnitSyncStatus[] {
@@ -40,19 +41,20 @@ export async function initSyncStatusMap(): Promise<void> {
   try {
     const db = await getDb();
     if (!db) return;
-    const orgs = await db.execute(sql`
-      SELECT o.id, o.name as nome,
+    const units = await db.execute(sql`
+      SELECT u.id as unitId, u.orgId, o.name as orgNome,
              JSON_UNQUOTE(JSON_EXTRACT(mc.config, '$.apiUnidadeId')) as apiUnidadeId
-      FROM organizations o
-      LEFT JOIN module_configs mc ON mc.unitId = o.id AND mc.module = 'data_vip'
+      FROM units u
+      JOIN organizations o ON o.id = u.orgId
+      LEFT JOIN module_configs mc ON mc.unitId = u.id AND mc.module = 'data_vip'
       WHERE o.active = 1
     `);
-    const rows = (orgs as any[])[0] as any[];
+    const rows = (units as any[])[0] as any[];
     syncStatusMap.clear();
     for (const row of rows) {
-      syncStatusMap.set(row.id, {
-        orgId: row.id,
-        orgNome: row.nome,
+      syncStatusMap.set(row.unitId, {
+        orgId: row.orgId,
+        orgNome: row.orgNome,
         apiUnidadeId: row.apiUnidadeId || "",
         status: "idle",
         lastRunAt: null,
@@ -352,7 +354,7 @@ export async function syncVendasChunked(
     const blockLabel = block.inicio.substring(0, 7);
     onProgress?.(blockLabel, i, blocks.length);
 
-    const status = syncStatusMap.get(orgId);
+    const status = syncStatusMap.get(unitId);
     if (status) {
       status.currentBlock = blockLabel;
       status.totalBlocks = blocks.length;
@@ -388,13 +390,13 @@ export async function runSyncForOrg(
   const db = await getDb();
   if (!db) return;
 
-  const status = syncStatusMap.get(orgId) || {
+  const status = syncStatusMap.get(unitId) || {
     orgId, orgNome: "", apiUnidadeId,
     status: "idle" as const, lastRunAt: null, lastError: null,
     insertedCount: 0, fetchedCount: 0, durationMs: null,
     currentBlock: null, totalBlocks: null, completedBlocks: 0,
   };
-  syncStatusMap.set(orgId, status);
+  syncStatusMap.set(unitId, status);
 
   if (status.status === "running") throw new Error("Sync already running for this unit");
 

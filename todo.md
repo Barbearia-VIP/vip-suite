@@ -527,3 +527,7 @@
 - [ ] Corrigir queries do procedure kpis para VIP Cam (cam_sentiment_timeline / cam_clientes)
 - [ ] Corrigir queries do procedure kpis para Reputação (rep_avaliacoes / avaliacoes)
 - [ ] Garantir que filtros de orgId/unitId e período estão corretos em todas as queries
+
+## Bugs Novos
+
+- [x] Sincronização Data VIP travada: syncStatusMap usa orgId como chave mas múltiplas unidades têm o mesmo orgId, causando "Sync already running for this unit" ao tentar sincronizar várias unidades

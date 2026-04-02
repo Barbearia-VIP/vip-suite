@@ -593,9 +593,10 @@ export const dataVipRouter = router({
 
   // ── Sync ─────────────────────────────────────────────────────────────────────
   syncStatus: protectedProcedure
-    .input(z.object({ orgId: z.number().optional() }))
+    .input(z.object({ orgId: z.number().optional(), unitId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
-      if (input.orgId) return getSyncStatus(input.orgId) || null;
+      if (input.unitId) return getSyncStatus(input.unitId) || null;
+      if (input.orgId) return getSyncStatus(input.orgId) || null; // fallback legado
       return getAllSyncStatuses();
     }),
 
