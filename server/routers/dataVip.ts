@@ -760,6 +760,109 @@ export const dataVipRouter = router({
       });
     }),
 
+  // ── Sincronização em lote (todas as unidades) ─────────────────────────────────
+  startSyncAll: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      modo: z.enum(["auto", "manual_13m"]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Busca todas as unidades com credenciais configuradas
+      const [unitsList] = await db.execute(sql`SELECT * FROM units WHERE orgId = ${input.orgId}`) as any;
+      const [configs] = await db.execute(sql`
+        SELECT unitId, config FROM module_configs
+        WHERE module = 'data_vip' AND unitId IN (SELECT id FROM units WHERE orgId = ${input.orgId})
+      `) as any;
+
+      const configMap: Record<number, any> = {};
+      for (const c of configs as any[]) {
+        configMap[c.unitId] = c.config ?? {};
+      }
+
+      const unitsWithCreds = (unitsList as any[]).filter(u => {
+        const cfg = configMap[u.id] ?? {};
+        return !!((cfg.apiUnidadeId || cfg.unitExternalId) && (cfg.apiHash || cfg.apiKey));
+      });
+
+      if (unitsWithCreds.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma unidade com credenciais configuradas" });
+      }
+
+      // Executa sequencialmente em background — uma unidade por vez
+      const runSequential = async () => {
+        for (const unit of unitsWithCreds) {
+          const cfg = configMap[unit.id] ?? {};
+          const apiUnidadeId = (cfg.apiUnidadeId || cfg.unitExternalId) as string;
+          const apiHash = (cfg.apiHash || cfg.apiKey) as string;
+          try {
+            await runSyncForOrg(input.orgId, unit.id, apiUnidadeId, apiHash, input.modo);
+          } catch (e: any) {
+            console.error(`[syncAll] Erro na unidade ${unit.id} (${unit.name}):`, e.message);
+          }
+          // Pausa de 2s entre unidades para não sobrecarregar a API externa
+          await new Promise(r => setTimeout(r, 2000));
+        }
+        console.log(`[syncAll] Concluído: ${unitsWithCreds.length} unidades processadas`);
+      };
+
+      runSequential().catch(e => console.error(`[syncAll] Erro geral:`, e.message));
+
+      return {
+        success: true,
+        totalUnits: unitsWithCreds.length,
+        unitNames: unitsWithCreds.map((u: any) => u.name),
+        message: `Sincronização iniciada para ${unitsWithCreds.length} unidade(s) em sequência`,
+      };
+    }),
+
+  // Status de progresso do syncAll (polling)
+  syncAllStatus: protectedProcedure
+    .input(z.object({ orgId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { units: [] };
+      const [unitsList] = await db.execute(sql`SELECT id, name FROM units WHERE orgId = ${input.orgId}`) as any;
+      const [configs] = await db.execute(sql`
+        SELECT unitId, config FROM module_configs
+        WHERE module = 'data_vip' AND unitId IN (SELECT id FROM units WHERE orgId = ${input.orgId})
+      `) as any;
+      const configMap: Record<number, any> = {};
+      for (const c of configs as any[]) configMap[c.unitId] = c.config ?? {};
+
+      // Busca o último log de sync por unidade
+      const [logs] = await db.execute(sql`
+        SELECT unitId, status, iniciadoEm, finalizadoEm, registrosInseridos, erro
+        FROM sync_log_vip
+        WHERE unitId IN (SELECT id FROM units WHERE orgId = ${input.orgId})
+        AND iniciadoEm = (SELECT MAX(iniciadoEm) FROM sync_log_vip s2 WHERE s2.unitId = sync_log_vip.unitId)
+      `) as any;
+
+      const logMap: Record<number, any> = {};
+      for (const l of logs as any[]) logMap[l.unitId] = l;
+
+      return {
+        units: (unitsList as any[]).map(u => {
+          const cfg = configMap[u.id] ?? {};
+          const hasCredentials = !!((cfg.apiUnidadeId || cfg.unitExternalId) && (cfg.apiHash || cfg.apiKey));
+          const syncStatus = getSyncStatus(u.id);
+          const lastLog = logMap[u.id];
+          return {
+            unitId: u.id,
+            name: u.name,
+            hasCredentials,
+            currentStatus: syncStatus?.status ?? "idle",
+            lastSyncAt: lastLog?.finalizadoEm ?? null,
+            lastRecords: lastLog?.registrosInseridos ?? null,
+            lastError: lastLog?.erro ?? null,
+          };
+        }),
+      };
+    }),
+
   // ── Relatórios semanais ───────────────────────────────────────────────────────
   relatoriosSemanais: protectedProcedure
     .input(z.object({

@@ -1,12 +1,12 @@
 /**
- * SincronizacaoPage.tsx — Painel de sincronização com 3 modos
+ * SincronizacaoPage.tsx — Painel de sincronização com 3 modos + sincronização em lote
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,8 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { RefreshCw, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, KeyRound, ExternalLink } from "lucide-react";
+import { RefreshCw, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, KeyRound, ExternalLink, PlaySquare } from "lucide-react";
 import { Link } from "wouter";
 
 function fmtDt(d: string | null) {
@@ -33,6 +34,8 @@ export default function SincronizacaoPage() {
   const [modo, setModo] = useState<"auto" | "manual_13m" | "historico">("auto");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState(today);
+  const [modoSyncAll, setModoSyncAll] = useState<"auto" | "manual_13m">("manual_13m");
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
 
   // Busca configurações das unidades para verificar credenciais
   const unitsConfigQuery = trpc.dataVip.unitsConfig.useQuery(
@@ -45,19 +48,36 @@ export default function SincronizacaoPage() {
     { enabled: !!org?.id, refetchInterval: 5000 }
   );
 
+  const syncAllStatusQuery = trpc.dataVip.syncAllStatus.useQuery(
+    { orgId: org?.id ?? 0 },
+    { enabled: !!org?.id && isSyncingAll, refetchInterval: isSyncingAll ? 3000 : false }
+  );
+
   const utils = trpc.useUtils();
   const startSync = trpc.dataVip.startSync.useMutation({
     onSuccess: (d) => { toast.success(d.message); utils.dataVip.syncLogs.invalidate(); },
     onError: (e) => toast.error("Erro ao iniciar sync", { description: e.message }),
   });
 
+  const startSyncAllMutation = trpc.dataVip.startSyncAll.useMutation({
+    onSuccess: (data) => {
+      setIsSyncingAll(true);
+      toast.success(data.message);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const logs = logsQ.data ?? [];
   const unitsConfig = unitsConfigQuery.data ?? [];
+  const syncAllStatus = syncAllStatusQuery.data;
 
   // Verifica se a unidade selecionada tem credenciais
   const selectedUnitConfig = unitsConfig.find(u => String(u.id) === unitId);
   const hasCredentials = selectedUnitConfig?.hasApiKeys ?? false;
   const canSync = !!unitId && hasCredentials;
+
+  const unitsWithCredentials = unitsConfig.filter(u => u.hasApiKeys);
+  const unitsWithoutCredentials = unitsConfig.filter(u => !u.hasApiKeys);
 
   const statusIcon = (s: string) => {
     if (s === "sucesso") return <CheckCircle2 className="w-4 h-4 text-green-400" />;
@@ -65,6 +85,23 @@ export default function SincronizacaoPage() {
     if (s === "em_progresso") return <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />;
     return <Clock className="w-4 h-4 text-muted-foreground" />;
   };
+
+  const handleStartSyncAll = () => {
+    if (!org?.id) return;
+    startSyncAllMutation.mutate({ orgId: org.id, modo: modoSyncAll });
+  };
+
+  // Monitora progresso do syncAll
+  useEffect(() => {
+    if (isSyncingAll && syncAllStatus) {
+      const running = syncAllStatus.units.some(u => u.currentStatus === "running");
+      if (!running) {
+        setIsSyncingAll(false);
+        utils.dataVip.syncLogs.invalidate();
+        toast.success("Sincronização em lote concluída");
+      }
+    }
+  }, [syncAllStatus, isSyncingAll]);
 
   return (
     <div className="p-6 space-y-5">
@@ -75,6 +112,122 @@ export default function SincronizacaoPage() {
         <p className="text-sm text-muted-foreground">Importar dados da API externa para o VIP Suite</p>
       </div>
 
+      {/* Sincronização em lote (apenas quando "Todas as Unidades" selecionado) */}
+      {isAdmin && !selectedUnit && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <PlaySquare className="w-5 h-5 text-cyan-400" />
+              Sincronizar Todas as Unidades
+            </CardTitle>
+            <CardDescription>
+              Executa a sincronização sequencialmente para todas as {unitsWithCredentials.length} unidade(s) com credenciais configuradas
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-end gap-4">
+              <div className="flex-1">
+                <Label>Modo de Sincronização</Label>
+                <Select value={modoSyncAll} onValueChange={(v: any) => setModoSyncAll(v)} disabled={isSyncingAll}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Automático (últimos 2 dias)</SelectItem>
+                    <SelectItem value="manual_13m">Manual (13 meses)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                onClick={handleStartSyncAll}
+                disabled={isSyncingAll || unitsWithCredentials.length === 0}
+                className="min-w-[180px] gap-2"
+              >
+                {isSyncingAll ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Sincronizando...
+                  </>
+                ) : (
+                  <>
+                    <PlaySquare className="w-4 h-4" />
+                    Iniciar Sincronização
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {unitsWithoutCredentials.length > 0 && (
+              <Alert className="border-amber-500/30 bg-amber-500/10">
+                <AlertCircle className="w-4 h-4 text-amber-400" />
+                <AlertDescription className="text-amber-300">
+                  {unitsWithoutCredentials.length} unidade(s) sem credenciais serão puladas.{" "}
+                  <Link href="/configuracoes" className="underline text-amber-200 hover:text-white">
+                    Configurar credenciais
+                  </Link>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Progresso em tempo real */}
+            {isSyncingAll && syncAllStatus && (
+              <div className="space-y-3 border rounded-lg p-4 bg-muted/20">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">Progresso</span>
+                  <span className="text-muted-foreground">
+                    {syncAllStatus.units.filter(u => u.currentStatus === "success" || u.currentStatus === "error").length} /{" "}
+                    {unitsWithCredentials.length}
+                  </span>
+                </div>
+                <Progress
+                  value={
+                    (syncAllStatus.units.filter(u => u.currentStatus === "success" || u.currentStatus === "error").length /
+                      unitsWithCredentials.length) *
+                    100
+                  }
+                />
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {syncAllStatus.units
+                    .filter(u => u.hasCredentials)
+                    .map(unit => (
+                      <div key={unit.unitId} className="flex items-center justify-between text-sm py-1.5 px-2 rounded hover:bg-muted/50">
+                        <span className="font-medium">{unit.name}</span>
+                        <div className="flex items-center gap-2">
+                          {unit.currentStatus === "running" && (
+                            <Badge variant="secondary" className="gap-1 text-xs">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Sincronizando
+                            </Badge>
+                          )}
+                          {unit.currentStatus === "success" && (
+                            <Badge variant="outline" className="gap-1 text-xs border-green-500/30 text-green-400">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Concluído
+                            </Badge>
+                          )}
+                          {unit.currentStatus === "error" && (
+                            <Badge variant="outline" className="gap-1 text-xs border-red-500/30 text-red-400">
+                              <XCircle className="w-3 h-3" />
+                              Falhou
+                            </Badge>
+                          )}
+                          {unit.currentStatus === "idle" && (
+                            <Badge variant="outline" className="gap-1 text-xs">
+                              <Clock className="w-3 h-3" />
+                              Aguardando
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Sincronização individual */}
       {isAdmin && (
         <Card>
           <CardHeader className="pb-3"><CardTitle className="text-sm font-medium">Nova Sincronização</CardTitle></CardHeader>

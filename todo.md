@@ -532,3 +532,5 @@
 
 - [x] Sincronização Data VIP travada: syncStatusMap usa orgId como chave mas múltiplas unidades têm o mesmo orgId, causando "Sync already running for this unit" ao tentar sincronizar várias unidades
 - [x] SincronizacaoPage: exibir quais unidades têm credenciais configuradas e bloquear botão de sync para unidades sem credenciais, em vez de lançar erro genérico
+- [x] Dados sincronizados somem após sair e voltar: bug crítico corrigido — DELETE usava apenas orgId, apagando dados de todas as unidades; corrigido para filtrar por orgId AND unitId
+- [x] Botão "Sincronizar Todas as Unidades" com execução sequencial, seleção de modo (2 dias / 13 meses) e progresso em tempo real

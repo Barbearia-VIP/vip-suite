@@ -174,7 +174,7 @@ export async function syncVendas(
   if (vendas.length === 0) return { fetched: 0, inserted: 0 };
 
   // Limpa staging e insere novos dados
-  await db.execute(sql`DELETE FROM vendas_api_raw_tmp WHERE orgId = ${orgId}`);
+  await db.execute(sql`DELETE FROM vendas_api_raw_tmp WHERE orgId = ${orgId} AND unitId = ${unitId}`);
 
   const BATCH = 200;
   for (let i = 0; i < vendas.length; i += BATCH) {
@@ -206,12 +206,13 @@ export async function syncVendas(
   }
 
   // Troca atômica: deleta período da tabela principal e insere do staging
+  // IMPORTANTE: filtrar por unitId para não apagar dados de outras unidades do mesmo orgId
   const startTs = new Date(inicio + "T00:00:00.000Z").getTime();
   const endTs = new Date(fim + "T23:59:59.999Z").getTime();
 
   await db.execute(sql`
     DELETE FROM vendas_api_raw
-    WHERE orgId = ${orgId} AND vendaDataTs BETWEEN ${startTs} AND ${endTs}
+    WHERE orgId = ${orgId} AND unitId = ${unitId} AND vendaDataTs BETWEEN ${startTs} AND ${endTs}
   `);
 
   const [result] = await db.execute(sql`
@@ -223,14 +224,14 @@ export async function syncVendas(
            formaPagamento, convenio, colaboradorId, colaborador, colaboradorNome,
            caixaId, caixaNome, clienteId, clienteNome, telefone, orgId, unitId
     FROM vendas_api_raw_tmp
-    WHERE orgId = ${orgId}
+    WHERE orgId = ${orgId} AND unitId = ${unitId}
     ON DUPLICATE KEY UPDATE
       vendaData = VALUES(vendaData), vendaDataTs = VALUES(vendaDataTs),
       produto = VALUES(produto), valorBruto = VALUES(valorBruto), valorLiquido = VALUES(valorLiquido),
       formaPagamento = VALUES(formaPagamento), clienteNome = VALUES(clienteNome)
   `) as any;
 
-  await db.execute(sql`DELETE FROM vendas_api_raw_tmp WHERE orgId = ${orgId}`);
+  await db.execute(sql`DELETE FROM vendas_api_raw_tmp WHERE orgId = ${orgId} AND unitId = ${unitId}`);
 
   return { fetched: vendas.length, inserted: (result as any).affectedRows || vendas.length };
 }
