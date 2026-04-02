@@ -92,7 +92,7 @@ export const raioXRouter = router({
 
       // Filtro base vendas (para novos clientes no período)
       let whereVendas = sql`dataVenda >= ${dataInicio} AND dataVenda <= ${dataFim + " 23:59:59"} AND clienteId != '2'`;
-      if (orgFilter) whereVendas = sql`${whereVendas} AND orgId = ${orgFilter}`;
+      // vendas table has no orgId column - filter by unitId only
       if (unitFilter) whereVendas = sql`${whereVendas} AND unitId = ${unitFilter}`;
 
       // Todos os clientes da dimensão
@@ -523,7 +523,7 @@ export const raioXRouter = router({
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
 
       let where = sql`dataVenda >= ${dataInicio} AND dataVenda <= ${dataFim + " 23:59:59"} AND clienteId != '2'`;
-      if (orgFilter) where = sql`${where} AND orgId = ${orgFilter}`;
+      // vendas has no orgId - skip orgFilter for this query
       if (unitFilter) where = sql`${where} AND unitId = ${unitFilter}`;
 
       // Métricas por barbeiro no período
