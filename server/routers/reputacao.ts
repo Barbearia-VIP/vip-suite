@@ -305,22 +305,85 @@ export const reputacaoRouter = router({
     .input(z.object({
       avaliacaoId: z.number(),
       unitId: z.number(),
-      resposta: z.string().min(1),
+      resposta: z.string().min(1).max(4000),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Buscar a avaliação para obter o reviewName (urlAvaliacao) e plataforma
+      const [avaliacao] = await db.select()
+        .from(repAvaliacoes)
+        .where(and(eq(repAvaliacoes.id, input.avaliacaoId), eq(repAvaliacoes.unitId, input.unitId)))
+        .limit(1);
+
+      if (!avaliacao) throw new TRPCError({ code: "NOT_FOUND", message: "Avaliação não encontrada" });
+
+      let respostaPublicada = false;
+
+      // Se for avaliação do Google com reviewName salvo, publicar via API
+      if (avaliacao.plataforma === "google" && avaliacao.urlAvaliacao) {
+        const reviewName = avaliacao.urlAvaliacao; // ex: accounts/xxx/locations/yyy/reviews/zzz
+
+        // Buscar conexão Google da unidade
+        const [conexao] = await db.select()
+          .from(repConexoes)
+          .where(and(eq(repConexoes.unitId, input.unitId), eq(repConexoes.plataforma, "google")))
+          .limit(1);
+
+        if (conexao?.googleAccessToken || conexao?.googleRefreshToken) {
+          let accessToken = conexao.googleAccessToken;
+
+          // Refresh token se necessário
+          if (conexao.googleRefreshToken && conexao.googleClientId && conexao.googleClientSecret) {
+            const tokenExpiry = conexao.googleTokenExpiry ? new Date(conexao.googleTokenExpiry).getTime() : 0;
+            if (!accessToken || Date.now() > tokenExpiry - 60000) {
+              const refreshed = await refreshGoogleToken(conexao.googleRefreshToken, conexao.googleClientId, conexao.googleClientSecret);
+              if (refreshed.access_token) {
+                accessToken = refreshed.access_token;
+                await db.update(repConexoes).set({
+                  googleAccessToken: refreshed.access_token,
+                  googleTokenExpiry: new Date(Date.now() + (refreshed.expires_in || 3600) * 1000),
+                }).where(eq(repConexoes.id, conexao.id));
+              }
+            }
+          }
+
+          if (accessToken) {
+            // Publicar resposta no Google Business Profile
+            const googleRes = await fetch(
+              `https://mybusiness.googleapis.com/v4/${reviewName}/reply`,
+              {
+                method: "PUT",
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ comment: input.resposta }),
+              }
+            );
+            const googleData = await googleRes.json();
+            if (googleRes.ok) {
+              respostaPublicada = true;
+            } else {
+              console.error("[Google Reply] Erro:", googleData);
+              // Não lançar erro — salvar localmente mesmo se Google falhar
+            }
+          }
+        }
+      }
 
       await db.update(repAvaliacoes)
         .set({
           resposta: input.resposta,
           respondidoEm: new Date(),
           respondidoPor: ctx.user.name || "Equipe",
+          respostaPublicada,
         })
         .where(and(eq(repAvaliacoes.id, input.avaliacaoId), eq(repAvaliacoes.unitId, input.unitId)));
 
       await recalcularResumo(db, input.unitId);
-      return { success: true };
+      return { success: true, publicadoNoGoogle: respostaPublicada };
     }),
 
   // ── Gerar resposta com IA ─────────────────────────────────────────────────
@@ -758,9 +821,13 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       for (const review of result.reviews) {
         const reviewId = review.reviewId || review.name?.split("/").pop() || String(Date.now());
         const externalId = `google-business-${reviewId}`;
+        // Salvar o reviewName completo (accounts/xxx/locations/yyy/reviews/zzz) para poder responder
+        const reviewName = review.name || null;
         const nota = review.starRating === "FIVE" ? 5 : review.starRating === "FOUR" ? 4 : review.starRating === "THREE" ? 3 : review.starRating === "TWO" ? 2 : 1;
         const sentimento = determineSentimento(nota);
         const dataAvaliacao = review.createTime ? new Date(review.createTime) : new Date();
+        // Verificar se já existe resposta no Google
+        const respostaExistente = review.reviewReply?.comment || null;
         const avalData = {
           unitId: input.unitId,
           plataforma: "google" as const,
@@ -771,8 +838,14 @@ Gere uma resposta personalizada e única para esta avaliação.`;
           comentario: review.comment || "",
           sentimento,
           dataAvaliacao,
-          urlAvaliacao: null,
+          urlAvaliacao: reviewName, // Salvar o reviewName completo para uso na API de resposta
           isVerificado: true,
+          // Sincronizar resposta existente do Google
+          ...(respostaExistente ? {
+            resposta: respostaExistente,
+            respostaPublicada: true,
+            respondidoEm: review.reviewReply?.updateTime ? new Date(review.reviewReply.updateTime) : new Date(),
+          } : {}),
         };
         const existing = await db.select({ id: repAvaliacoes.id })
           .from(repAvaliacoes)

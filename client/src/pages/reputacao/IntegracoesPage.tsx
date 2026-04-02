@@ -243,29 +243,53 @@ export default function IntegracoesPage() {
               {showOAuthGuide ? "Ocultar instruções" : "Ver instruções de configuração"}
             </Button>
             {showOAuthGuide && (
-              <div className="space-y-3 text-xs text-muted-foreground bg-background/50 rounded-lg p-3 border">
-                <p className="font-medium text-foreground">Passo a passo para configurar o OAuth:</p>
-                <ol className="list-decimal list-inside space-y-2">
-                  <li>Acesse o <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="text-primary underline inline-flex items-center gap-0.5">Google Cloud Console <ExternalLink className="w-3 h-3" /></a></li>
-                  <li>Selecione seu projeto e vá em <strong>Credenciais → OAuth 2.0</strong></li>
-                  <li>Clique no Client ID configurado para editar</li>
-                  <li>Em <strong>"URIs de redirecionamento autorizados"</strong>, adicione exatamente esta URL:</li>
-                </ol>
-                <div className="flex items-center gap-2 bg-muted rounded p-2 mt-1">
-                  <code className="text-xs flex-1 break-all text-primary">{redirectUri}</code>
-                  <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => copyToClipboard(redirectUri)}>
-                    <Copy className="w-3 h-3" />
-                  </Button>
+              <div className="space-y-4 text-xs text-muted-foreground bg-background/50 rounded-lg p-4 border">
+                <div>
+                  <p className="font-semibold text-foreground mb-2">1. Ative as APIs no Google Cloud Console</p>
+                  <ol className="list-decimal list-inside space-y-1.5 ml-1">
+                    <li>Acesse <a href="https://console.cloud.google.com/apis/library" target="_blank" className="text-primary underline inline-flex items-center gap-0.5">APIs e Serviços → Biblioteca <ExternalLink className="w-3 h-3" /></a></li>
+                    <li>Ative: <strong>Google Business Profile API</strong></li>
+                    <li>Ative: <strong>My Business Business Information API</strong></li>
+                    <li>Ative: <strong>My Business Account Management API</strong></li>
+                  </ol>
                 </div>
-                <ol className="list-decimal list-inside space-y-2" start={5}>
-                  <li>Salve as alterações no Google Cloud Console</li>
-                  <li>Volte aqui e clique no botão <strong>"Autorizar Google"</strong> na integração abaixo</li>
-                  <li>Faça login com a conta Google que gerencia o perfil da barbearia</li>
-                  <li>As avaliações serão importadas automaticamente após a autorização</li>
-                </ol>
-                <div className="mt-2 p-2 rounded bg-blue-500/10 border border-blue-500/20">
+                <div>
+                  <p className="font-semibold text-foreground mb-2">2. Configure a Tela de Permissão OAuth</p>
+                  <ol className="list-decimal list-inside space-y-1.5 ml-1">
+                    <li>Vá em <strong>APIs e Serviços → Tela de permissão OAuth</strong></li>
+                    <li>Tipo de usuário: <strong>Externo</strong></li>
+                    <li>Adicione o escopo: <code className="bg-muted px-1 rounded">https://www.googleapis.com/auth/business.manage</code></li>
+                    <li>Adicione seu e-mail como <strong>usuário de teste</strong> (enquanto o app estiver em modo de teste)</li>
+                  </ol>
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground mb-2">3. Crie as Credenciais OAuth</p>
+                  <ol className="list-decimal list-inside space-y-1.5 ml-1">
+                    <li>Vá em <a href="https://console.cloud.google.com/apis/credentials" target="_blank" className="text-primary underline inline-flex items-center gap-0.5">Credenciais → Criar credenciais → ID do cliente OAuth <ExternalLink className="w-3 h-3" /></a></li>
+                    <li>Tipo: <strong>Aplicativo da Web</strong></li>
+                    <li>Em <strong>"URIs de redirecionamento autorizados"</strong>, adicione exatamente:</li>
+                  </ol>
+                  <div className="flex items-center gap-2 bg-muted rounded p-2 mt-2">
+                    <code className="text-xs flex-1 break-all text-primary">{redirectUri}</code>
+                    <Button variant="ghost" size="sm" className="h-6 px-2 shrink-0" onClick={() => copyToClipboard(redirectUri)}>
+                      <Copy className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  <p className="mt-2">4. Salve e copie o <strong>Client ID</strong> e <strong>Client Secret</strong> gerados</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground mb-2">4. Configure na Integração</p>
+                  <ol className="list-decimal list-inside space-y-1.5 ml-1">
+                    <li>Edite a integração Google abaixo e cole o <strong>Client ID</strong> e <strong>Client Secret</strong></li>
+                    <li>Clique em <strong>"Autorizar Google"</strong></li>
+                    <li>Faça login com a conta que gerencia o Google Business Profile</li>
+                    <li>As avaliações serão importadas automaticamente após a autorização</li>
+                    <li>Respostas enviadas pelo sistema serão publicadas diretamente no Google</li>
+                  </ol>
+                </div>
+                <div className="p-2.5 rounded bg-blue-500/10 border border-blue-500/20">
                   <p className="text-blue-700 font-medium">Alternativa rápida (sem OAuth):</p>
-                  <p className="mt-1">Se preferir não configurar o OAuth agora, adicione uma <strong>Google Places API Key</strong> na integração. Com ela é possível importar as 5 avaliações mais recentes imediatamente, sem precisar de autorização OAuth.</p>
+                  <p className="mt-1">Adicione uma <strong>Google Places API Key</strong> na integração para importar as avaliações mais recentes sem precisar de autorização OAuth. As respostas, neste caso, precisarão ser feitas manualmente no Google.</p>
                 </div>
               </div>
             )}

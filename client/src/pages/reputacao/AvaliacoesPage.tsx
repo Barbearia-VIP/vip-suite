@@ -62,8 +62,12 @@ export default function AvaliacoesPage() {
   });
 
   const responderMutation = trpc.reputacao.responderAvaliacao.useMutation({
-    onSuccess: () => {
-      toast.success("Resposta salva com sucesso!");
+    onSuccess: (data: { success: boolean; publicadoNoGoogle?: boolean }) => {
+      if (data.publicadoNoGoogle) {
+        toast.success("Resposta publicada no Google Business Profile!");
+      } else {
+        toast.success("Resposta salva! (Autorize o Google para publicar automaticamente)");
+      }
       setAvaliacaoSelecionada(null);
       setRespostaTexto("");
       utils.reputacao.getAvaliacoes.invalidate();
