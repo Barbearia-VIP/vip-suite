@@ -405,11 +405,12 @@ export async function runSyncForOrg(
   status.lastError = null;
   const startTime = Date.now();
 
-  // Registra log
-  const [logResult] = await db.execute(sql`
-    INSERT INTO sync_log (orgId, unitId, modo, dataInicio, dataFim, status)
-    VALUES (${orgId}, ${unitId}, ${modo}, ${dataInicio || null}, ${dataFim || null}, 'running')
-  `) as any;
+  // Registra log — omite dataInicio/dataFim quando não fornecidos (MySQL rejeita string vazia em campo DATE)
+  const [logResult] = await db.execute(
+    dataInicio && dataFim
+      ? sql`INSERT INTO sync_log (orgId, unitId, modo, dataInicio, dataFim, status) VALUES (${orgId}, ${unitId}, ${modo}, ${dataInicio}, ${dataFim}, 'running')`
+      : sql`INSERT INTO sync_log (orgId, unitId, modo, status) VALUES (${orgId}, ${unitId}, ${modo}, 'running')`
+  ) as any;
   const logId = (logResult as any).insertId;
 
   try {
