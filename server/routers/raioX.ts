@@ -549,7 +549,9 @@ export const raioXRouter = router({
         SELECT v.colaboradorId, COUNT(DISTINCT v.clienteId) as novos
         FROM vendas v
         INNER JOIN dimensao_clientes dc ON dc.clienteId = v.clienteId AND dc.unitId = v.unitId
-        WHERE ${where}
+        WHERE v.dataVenda >= ${dataInicio} AND v.dataVenda <= ${dataFim + " 23:59:59"}
+          AND v.clienteId != '2'
+          AND v.unitId = ${unitFilter || 0}
           AND DATE(dc.primeiraVenda) >= ${dataInicio}
           AND DATE(dc.primeiraVenda) <= ${dataFim}
         GROUP BY v.colaboradorId

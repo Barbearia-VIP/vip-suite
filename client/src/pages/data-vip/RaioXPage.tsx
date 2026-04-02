@@ -15,9 +15,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users, UserCheck, UserX, AlertTriangle, TrendingDown, TrendingUp,
-  Zap, Activity, Target, Scissors, Search, RefreshCw, Info, ChevronRight
+  Zap, Activity, Target, Scissors, Search, RefreshCw, Info, ChevronRight, Calendar
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -90,10 +91,35 @@ export default function RaioXPage() {
   const [oneShotFiltro, setOneShotFiltro] = useState<"todos" | "aguardando" | "em_risco" | "perdido">("todos");
   const [acoesTipo, setAcoesTipo] = useState<"todos" | "one_shot_risco" | "perdidos_recentes" | "em_risco">("todos");
 
+  // Seletor de período
+  type PeriodoPreset = "30d" | "60d" | "90d" | "6m" | "12m" | "custom";
+  const [periodoPreset, setPeriodoPreset] = useState<PeriodoPreset>("90d");
+  const [customInicio, setCustomInicio] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().split("T")[0];
+  });
+  const [customFim, setCustomFim] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const { dataInicio, dataFim } = useMemo(() => {
+    const now = new Date();
+    const fmt = (d: Date) => d.toISOString().split("T")[0];
+    if (periodoPreset === "custom") return { dataInicio: customInicio, dataFim: customFim };
+    const dias: Record<PeriodoPreset, number> = { "30d": 30, "60d": 60, "90d": 90, "6m": 180, "12m": 365, custom: 90 };
+    const inicio = new Date(now); inicio.setDate(inicio.getDate() - dias[periodoPreset]);
+    return { dataInicio: fmt(inicio), dataFim: fmt(now) };
+  }, [periodoPreset, customInicio, customFim]);
+
+  const periodoLabel = useMemo(() => {
+    const d1 = new Date(dataInicio + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+    const d2 = new Date(dataFim + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "2-digit" });
+    return `${d1} → ${d2}`;
+  }, [dataInicio, dataFim]);
+
   const baseInput = useMemo(() => ({
     orgId: org?.id,
     unitId: selectedUnit?.id,
-  }), [org?.id, selectedUnit?.id]);
+    dataInicio,
+    dataFim,
+  }), [org?.id, selectedUnit?.id, dataInicio, dataFim]);
 
   // Queries
   const qVisao = trpc.raioX.visaoGeral.useQuery(baseInput, { enabled: !!org?.id });
@@ -133,7 +159,44 @@ export default function RaioXPage() {
             {selectedUnit ? selectedUnit.name : "Todas as unidades"} · Base: {v?.sinais.totalBase.toLocaleString() ?? "—"} clientes
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* Seletor de período */}
+          <div className="flex items-center gap-2">
+            <Select value={periodoPreset} onValueChange={(v) => setPeriodoPreset(v as PeriodoPreset)}>
+              <SelectTrigger className="w-40 h-8 text-xs">
+                <Calendar className="w-3 h-3 mr-1 shrink-0" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                <SelectItem value="60d">Últimos 60 dias</SelectItem>
+                <SelectItem value="90d">Últimos 90 dias</SelectItem>
+                <SelectItem value="6m">Últimos 6 meses</SelectItem>
+                <SelectItem value="12m">Últimos 12 meses</SelectItem>
+                <SelectItem value="custom">Personalizado</SelectItem>
+              </SelectContent>
+            </Select>
+            {periodoPreset === "custom" && (
+              <div className="flex items-center gap-1">
+                <input
+                  type="date"
+                  value={customInicio}
+                  onChange={e => setCustomInicio(e.target.value)}
+                  className="h-8 px-2 text-xs rounded border border-border bg-background text-foreground"
+                />
+                <span className="text-xs text-muted-foreground">→</span>
+                <input
+                  type="date"
+                  value={customFim}
+                  onChange={e => setCustomFim(e.target.value)}
+                  className="h-8 px-2 text-xs rounded border border-border bg-background text-foreground"
+                />
+              </div>
+            )}
+            {periodoPreset !== "custom" && (
+              <span className="text-xs text-muted-foreground hidden sm:block">{periodoLabel}</span>
+            )}
+          </div>
           {v && (
             <div className="text-right">
               <p className={`text-2xl font-bold ${scoreCor}`}>{scoreBase}%</p>

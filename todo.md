@@ -565,3 +565,4 @@
 - [x] Página /data-vip/raio-x reescrita com todas as 8 abas
 - [x] Score de saúde da base (% ativos) com indicador visual
 - [x] Gráficos recharts: novos clientes mensal, churn mensal, barbeiros
+- [ ] Raio X - Seletor de período com opções predefinidas e personalizado
