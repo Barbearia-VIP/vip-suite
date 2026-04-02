@@ -348,7 +348,10 @@ export const reputacaoRouter = router({
       let respostaPublicada = false;
 
       // Se for avaliação do Google com reviewName salvo, publicar via API
-      if (avaliacao.plataforma === "google" && avaliacao.urlAvaliacao) {
+      // Só tenta publicar no Google se o urlAvaliacao for um reviewName válido da API
+      // (começa com "accounts/" — não é uma URL do Maps como https://www.google.com/maps/...)
+      const isValidReviewName = avaliacao.urlAvaliacao?.startsWith("accounts/");
+      if (avaliacao.plataforma === "google" && isValidReviewName) {
         const reviewName = avaliacao.urlAvaliacao; // ex: accounts/xxx/locations/yyy/reviews/zzz
 
         // Buscar conexão Google da unidade
@@ -389,11 +392,13 @@ export const reputacaoRouter = router({
                 body: JSON.stringify({ comment: input.resposta }),
               }
             );
-            const googleData = await googleRes.json();
+            const googleText = await googleRes.text();
+            let googleData: any = {};
+            try { googleData = JSON.parse(googleText); } catch { /* resposta não é JSON */ }
             if (googleRes.ok) {
               respostaPublicada = true;
             } else {
-              console.error("[Google Reply] Erro:", googleData);
+              console.error("[Google Reply] Erro:", googleData?.error?.message || googleText.substring(0, 200));
               // Não lançar erro — salvar localmente mesmo se Google falhar
             }
           }
