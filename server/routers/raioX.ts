@@ -465,7 +465,90 @@ export const raioXRouter = router({
       };
     }),
 
-  // ── Cohort ───────────────────────────────────────────────────────────────────
+  // ── Churn por Barbeiro ──────────────────────────────────────────────────────────
+  churnPorBarbeiro: protectedProcedure
+    .input(baseInput)
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { orgFilter, unitFilter } = await resolveUnitFilter(
+        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+      );
+
+      const hoje = new Date().toISOString().split("T")[0];
+      const dataInicio = input.dataInicio || new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0];
+      const dataFim = input.dataFim || hoje;
+
+      // Monta filtro de unidade/org dinamicamente
+      let whereUnidade = sql`v.clienteId != '2'
+          AND v.colaboradorId IS NOT NULL
+          AND v.colaboradorNome IS NOT NULL
+          AND v.colaboradorNome != ''
+          AND dc.ultimaVenda IS NOT NULL`;
+      if (unitFilter) whereUnidade = sql`${whereUnidade} AND v.unitId = ${unitFilter}`;
+      else if (orgFilter) whereUnidade = sql`${whereUnidade} AND v.unitId IN (SELECT id FROM units WHERE orgId = ${orgFilter})`;
+
+      // Estratégia de Retenção por Barbeiro:
+      // - Clientes atendidos pelo barbeiro no período selecionado
+      // - Status calculado com base na última visita ATUAL (de todos os tempos)
+      // - Ativo: última visita <= 60 dias atrás
+      // - Em Risco: última visita entre 61-90 dias
+      // - Perdido: última visita > 90 dias
+      // Nota: se o período for recente (ex: últimos 90 dias), clientes atendidos
+      // nesse período terão status "ativo" por definição. Para ver churn real,
+      // use períodos mais antigos (ex: 12 meses, ano passado).
+      const [rows] = await db.execute(sql`
+        SELECT
+          bp.colaboradorId,
+          bp.colaboradorNome,
+          COUNT(DISTINCT bp.clienteId) as totalClientes,
+          COUNT(DISTINCT CASE WHEN DATEDIFF(${hoje}, DATE(dc.ultimaVenda)) <= 60 THEN bp.clienteId END) as ativos,
+          COUNT(DISTINCT CASE WHEN DATEDIFF(${hoje}, DATE(dc.ultimaVenda)) BETWEEN 61 AND 90 THEN bp.clienteId END) as emRisco,
+          COUNT(DISTINCT CASE WHEN DATEDIFF(${hoje}, DATE(dc.ultimaVenda)) > 90 THEN bp.clienteId END) as perdidos,
+          COUNT(DISTINCT CASE WHEN dc.totalVisitas = 1 THEN bp.clienteId END) as oneShots,
+          AVG(dc.totalVisitas) as mediaVisitas,
+          AVG(dc.totalGasto) as mediaGasto
+        FROM (
+          SELECT DISTINCT v.colaboradorId, v.colaboradorNome, v.clienteId, v.unitId
+          FROM vendas v
+          WHERE v.dataVenda >= ${dataInicio} AND v.dataVenda <= ${dataFim + " 23:59:59"}
+            AND v.clienteId != '2'
+            AND v.colaboradorId IS NOT NULL
+            AND v.colaboradorNome IS NOT NULL
+            AND v.colaboradorNome != ''
+            ${unitFilter ? sql`AND v.unitId = ${unitFilter}` : orgFilter ? sql`AND v.unitId IN (SELECT id FROM units WHERE orgId = ${orgFilter})` : sql``}
+        ) bp
+        INNER JOIN dimensao_clientes dc ON dc.clienteId = bp.clienteId AND dc.unitId = bp.unitId
+        WHERE dc.ultimaVenda IS NOT NULL
+        GROUP BY bp.colaboradorId, bp.colaboradorNome
+        ORDER BY totalClientes DESC
+      `) as any;
+
+      return {
+        barbeiros: (rows as any[]).map(r => {
+          const total = Number(r.totalClientes || 0);
+          const ativos = Number(r.ativos || 0);
+          const emRisco = Number(r.emRisco || 0);
+          const perdidos = Number(r.perdidos || 0);
+          return {
+            colaboradorId: r.colaboradorId,
+            colaboradorNome: r.colaboradorNome,
+            totalClientes: total,
+            ativos,
+            emRisco,
+            perdidos,
+            oneShots: Number(r.oneShots || 0),
+            taxaRetencao: total > 0 ? Math.round((ativos / total) * 100) : 0,
+            taxaChurn: total > 0 ? Math.round((perdidos / total) * 100) : 0,
+            mediaVisitas: Math.round(Number(r.mediaVisitas || 0) * 10) / 10,
+            mediaGasto: Math.round(Number(r.mediaGasto || 0)),
+          };
+        }),
+        periodo: { dataInicio, dataFim },
+      };
+    }),
+
+  // ── Cohort ─────────────────────────────────────────────────────────────────────────────────
   cohort: protectedProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {

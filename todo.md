@@ -566,3 +566,12 @@
 - [x] Score de saúde da base (% ativos) com indicador visual
 - [x] Gráficos recharts: novos clientes mensal, churn mensal, barbeiros
 - [ ] Raio X - Seletor de período com opções predefinidas e personalizado
+
+## Raio X — Filtro por Barbeiro na Aba Churn
+
+- [x] Endpoint tRPC raioX.churnPorBarbeiro (clientes atendidos no período, status atual por barbeiro)
+- [x] Toggle "Visão Geral / Por Barbeiro" na aba Churn
+- [x] Tabela de retenção por barbeiro: Clientes, Ativos, Em Risco, Perdidos, One-Shot, Retenção %, Churn %, Méd. Visitas, Ticket Médio
+- [x] Correção: query usa subquery para clientes únicos do período + status atual da dimensao_clientes
+- [x] Correção: fmtDate lida com objetos Date do MySQL e strings
+- [x] Nota informativa: usar períodos mais antigos para ver churn real

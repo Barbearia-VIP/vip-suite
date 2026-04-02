@@ -22,9 +22,17 @@ import {
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function fmtDate(d: string | null | undefined) {
+function fmtDate(d: string | Date | null | undefined) {
   if (!d) return "—";
-  return new Date(d + "T12:00:00").toLocaleDateString("pt-BR");
+  // MySQL pode retornar Date objects ou strings
+  if (d instanceof Date) return d.toLocaleDateString("pt-BR");
+  // Se for string no formato YYYY-MM-DD, adiciona horário para evitar fuso horário
+  if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    return new Date(d + "T12:00:00").toLocaleDateString("pt-BR");
+  }
+  // Outros formatos de string
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? "—" : dt.toLocaleDateString("pt-BR");
 }
 function fmtMoeda(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -129,6 +137,8 @@ export default function RaioXPage() {
   );
   const qCadencia = trpc.raioX.cadencia.useQuery(baseInput, { enabled: !!org?.id && tab === "cadencia" });
   const qChurn = trpc.raioX.churn.useQuery(baseInput, { enabled: !!org?.id && tab === "churn" });
+  const [churnViewMode, setChurnViewMode] = useState<"geral" | "barbeiros">("geral");
+  const qChurnBarbeiros = trpc.raioX.churnPorBarbeiro.useQuery(baseInput, { enabled: !!org?.id && tab === "churn" });
   const qCohort = trpc.raioX.cohort.useQuery(baseInput, { enabled: !!org?.id && tab === "cohort" });
   const qBarbeiros = trpc.raioX.barbeiros.useQuery(baseInput, { enabled: !!org?.id && tab === "barbeiros" });
   const qAcoes = trpc.raioX.acoes.useQuery(
@@ -562,7 +572,22 @@ export default function RaioXPage() {
 
         {/* ── CHURN ────────────────────────────────────────────────────────────── */}
         <TabsContent value="churn" className="space-y-4 mt-4">
-          {qChurn.isLoading ? <Skeleton className="h-40" /> : qChurn.data ? (
+          {/* Toggle Geral / Por Barbeiro */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={churnViewMode === "geral" ? "default" : "outline"}
+              size="sm" className="text-xs"
+              onClick={() => setChurnViewMode("geral")}
+            >Visão Geral</Button>
+            <Button
+              variant={churnViewMode === "barbeiros" ? "default" : "outline"}
+              size="sm" className="text-xs"
+              onClick={() => setChurnViewMode("barbeiros")}
+            ><Scissors className="w-3 h-3 mr-1" />Por Barbeiro</Button>
+          </div>
+
+          {churnViewMode === "geral" && (
+            <>{qChurn.isLoading ? <Skeleton className="h-40" /> : qChurn.data ? (
             <>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <KpiCard label="Taxa de Churn" value={`${qChurn.data.resumo.taxaChurn}%`} icon={TrendingDown} color="text-red-400" />
@@ -612,7 +637,66 @@ export default function RaioXPage() {
                 </Card>
               </div>
             </>
-          ) : null}
+          ) : null}</>
+          )}
+
+          {churnViewMode === "barbeiros" && (
+            <>{qChurnBarbeiros.isLoading ? <Skeleton className="h-60" /> : qChurnBarbeiros.data ? (
+            <Card className="bg-card/60 border-border/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Scissors className="w-4 h-4 text-yellow-400" />
+                  Retenção por Barbeiro
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">Clientes atendidos no período · status atual baseado na última visita de todos os tempos · use períodos mais antigos (ex: 12 meses) para ver churn real</p>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border/50 text-xs text-muted-foreground">
+                        <th className="text-left p-3">Barbeiro</th>
+                        <th className="text-right p-3">Clientes</th>
+                        <th className="text-right p-3">Ativos</th>
+                        <th className="text-right p-3">Em Risco</th>
+                        <th className="text-right p-3">Perdidos</th>
+                        <th className="text-right p-3">One-Shot</th>
+                        <th className="text-right p-3">Retenção</th>
+                        <th className="text-right p-3">Churn</th>
+                        <th className="text-right p-3">Méd. Visitas</th>
+                        <th className="text-right p-3">Ticket Médio</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {qChurnBarbeiros.data.barbeiros.map(b => (
+                        <tr key={b.colaboradorId} className="border-b border-border/20 hover:bg-muted/20">
+                          <td className="p-3 font-medium">{b.colaboradorNome}</td>
+                          <td className="p-3 text-right">{b.totalClientes.toLocaleString()}</td>
+                          <td className="p-3 text-right text-green-400">{b.ativos.toLocaleString()}</td>
+                          <td className="p-3 text-right text-yellow-400">{b.emRisco.toLocaleString()}</td>
+                          <td className="p-3 text-right text-red-400">{b.perdidos.toLocaleString()}</td>
+                          <td className="p-3 text-right text-purple-400">{b.oneShots.toLocaleString()}</td>
+                          <td className="p-3 text-right">
+                            <span className={`font-semibold ${
+                              b.taxaRetencao >= 60 ? "text-green-400" : b.taxaRetencao >= 40 ? "text-yellow-400" : "text-red-400"
+                            }`}>{b.taxaRetencao}%</span>
+                          </td>
+                          <td className="p-3 text-right">
+                            <span className={`font-semibold ${
+                              b.taxaChurn <= 20 ? "text-green-400" : b.taxaChurn <= 40 ? "text-yellow-400" : "text-red-400"
+                            }`}>{b.taxaChurn}%</span>
+                          </td>
+                          <td className="p-3 text-right text-muted-foreground">{b.mediaVisitas}x</td>
+                          <td className="p-3 text-right text-muted-foreground">{fmtMoeda(b.mediaGasto)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}</>
+          )}
         </TabsContent>
 
         {/* ── COHORT ───────────────────────────────────────────────────────────── */}
