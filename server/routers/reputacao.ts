@@ -768,8 +768,10 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       if (!clientId) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Credenciais Google não configuradas. Configure GOOGLE_BUSINESS_CLIENT_ID no servidor ou na aba Integrações." });
       }
-      const redirectUri = `${input.redirectOrigin}/api/google-oauth/callback`;
-      const state = Buffer.from(JSON.stringify({ unitId: input.unitId, origin: input.redirectOrigin })).toString("base64");
+      // Usar domínio publicado fixo como redirect URI para evitar mismatch com URLs de desenvolvimento temporárias
+      const publicOrigin = process.env.VITE_APP_PUBLIC_URL || input.redirectOrigin;
+      const redirectUri = `${publicOrigin}/api/google-oauth/callback`;
+      const state = Buffer.from(JSON.stringify({ unitId: input.unitId, origin: publicOrigin })).toString("base64");
       const params = new URLSearchParams({
         client_id: clientId,
         redirect_uri: redirectUri,
