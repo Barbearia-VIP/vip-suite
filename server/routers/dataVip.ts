@@ -639,7 +639,11 @@ export const dataVipRouter = router({
         LIMIT 1
       `) as any;
       const cfg = (creds as any[])[0]?.config ?? {};
-      const credMap = { apiUnidadeId: cfg.apiUnidadeId as string, apiHash: cfg.apiHash as string };
+      // Compatibilidade: aceita tanto apiUnidadeId/apiHash quanto unitExternalId/apiKey (nomes legados)
+      const credMap = {
+        apiUnidadeId: (cfg.apiUnidadeId || cfg.unitExternalId) as string,
+        apiHash: (cfg.apiHash || cfg.apiKey) as string,
+      };
 
       if (!credMap.apiUnidadeId || !credMap.apiHash) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Credenciais da API não configuradas para esta unidade" });
@@ -677,7 +681,11 @@ export const dataVipRouter = router({
         LIMIT 1
       `) as any;
       const cfg = (creds as any[])[0]?.config ?? {};
-      const credMap = { apiUnidadeId: cfg.apiUnidadeId as string, apiHash: cfg.apiHash as string };
+      // Compatibilidade: aceita tanto apiUnidadeId/apiHash quanto unitExternalId/apiKey (nomes legados)
+      const credMap = {
+        apiUnidadeId: (cfg.apiUnidadeId || cfg.unitExternalId) as string,
+        apiHash: (cfg.apiHash || cfg.apiKey) as string,
+      };
 
       if (!credMap.apiUnidadeId || !credMap.apiHash) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Credenciais da API não configuradas para esta unidade" });
@@ -738,11 +746,18 @@ export const dataVipRouter = router({
       for (const c of configs as any[]) {
         configMap[c.unitId] = c.config ?? {};
       }
-      return (unitsList as any[]).map(u => ({
-        ...u,
-        dataVipConfig: configMap[u.id] ?? null,
-        hasApiKeys: !!(configMap[u.id]?.apiUnidadeId && configMap[u.id]?.apiHash),
-      }));
+      return (unitsList as any[]).map(u => {
+        const cfg = configMap[u.id] ?? {};
+        const hasApiKeys = !!(
+          (cfg.apiUnidadeId || cfg.unitExternalId) &&
+          (cfg.apiHash || cfg.apiKey)
+        );
+        return {
+          ...u,
+          dataVipConfig: cfg,
+          hasApiKeys,
+        };
+      });
     }),
 
   // ── Relatórios semanais ───────────────────────────────────────────────────────

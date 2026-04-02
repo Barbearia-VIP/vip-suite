@@ -15,7 +15,7 @@ import { useApp } from "@/contexts/AppContext";
 
 const MODULES = [
   { key: "data_vip" as const, label: "Data VIP", icon: BarChart3, color: "oklch(0.65 0.15 200)",
-    fields: [{ key: "apiUrl", label: "URL da API", placeholder: "https://api.exemplo.com", type: "url" }, { key: "apiKey", label: "Chave da API", placeholder: "sk-...", type: "password" }, { key: "unitExternalId", label: "ID da Unidade na API", placeholder: "123", type: "text" }] },
+    fields: [{ key: "apiUnidadeId", label: "ID da Unidade na API", placeholder: "29", type: "text" }, { key: "apiHash", label: "Hash da API", placeholder: "y76y4lh2...", type: "password" }] },
   { key: "gestao_total" as const, label: "Gestão Total", icon: ClipboardList, color: "oklch(0.65 0.15 145)",
     fields: [{ key: "supabaseUrl", label: "Supabase URL", placeholder: "https://xxx.supabase.co", type: "url" }, { key: "supabaseKey", label: "Supabase Anon Key", placeholder: "eyJ...", type: "password" }] },
   { key: "vip_cam" as const, label: "VIP Cam", icon: Camera, color: "oklch(0.65 0.15 280)",

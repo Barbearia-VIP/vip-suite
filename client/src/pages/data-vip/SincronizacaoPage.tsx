@@ -13,8 +13,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { RefreshCw, Clock, CheckCircle2, XCircle, AlertCircle, Loader2 } from "lucide-react";
+import { RefreshCw, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, KeyRound, ExternalLink } from "lucide-react";
+import { Link } from "wouter";
 
 function fmtDt(d: string | null) {
   if (!d) return "—";
@@ -32,6 +34,12 @@ export default function SincronizacaoPage() {
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState(today);
 
+  // Busca configurações das unidades para verificar credenciais
+  const unitsConfigQuery = trpc.dataVip.unitsConfig.useQuery(
+    { orgId: org?.id ?? 0 },
+    { enabled: !!org?.id }
+  );
+
   const logsQ = trpc.dataVip.syncLogs.useQuery(
     { orgId: org?.id, unitId: unitId ? Number(unitId) : undefined, limit: 30 },
     { enabled: !!org?.id, refetchInterval: 5000 }
@@ -44,6 +52,12 @@ export default function SincronizacaoPage() {
   });
 
   const logs = logsQ.data ?? [];
+  const unitsConfig = unitsConfigQuery.data ?? [];
+
+  // Verifica se a unidade selecionada tem credenciais
+  const selectedUnitConfig = unitsConfig.find(u => String(u.id) === unitId);
+  const hasCredentials = selectedUnitConfig?.hasApiKeys ?? false;
+  const canSync = !!unitId && hasCredentials;
 
   const statusIcon = (s: string) => {
     if (s === "sucesso") return <CheckCircle2 className="w-4 h-4 text-green-400" />;
@@ -71,7 +85,18 @@ export default function SincronizacaoPage() {
                 <Select value={unitId} onValueChange={setUnitId}>
                   <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                   <SelectContent>
-                    {(units ?? []).map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+                    {(units ?? []).map((u: any) => {
+                      const cfg = unitsConfig.find(c => c.id === u.id);
+                      const hasCreds = cfg?.hasApiKeys ?? false;
+                      return (
+                        <SelectItem key={u.id} value={String(u.id)}>
+                          <span className="flex items-center gap-2">
+                            {u.name}
+                            {!hasCreds && <span className="text-xs text-amber-400">(sem credenciais)</span>}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
@@ -99,14 +124,53 @@ export default function SincronizacaoPage() {
                 </div>
               </div>
             )}
+
+            {/* Alerta quando unidade selecionada não tem credenciais */}
+            {unitId && !hasCredentials && (
+              <Alert className="border-amber-500/30 bg-amber-500/10">
+                <KeyRound className="w-4 h-4 text-amber-400" />
+                <AlertDescription className="text-amber-300 flex items-center gap-2">
+                  Esta unidade não tem credenciais da API configuradas.
+                  <Link href="/configuracoes" className="underline text-amber-200 flex items-center gap-1 hover:text-white">
+                    Configurar agora <ExternalLink className="w-3 h-3" />
+                  </Link>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <Button
               onClick={() => startSync.mutate({ orgId: org!.id, unitId: Number(unitId), modo, dataInicio: dataInicio || undefined, dataFim: dataFim || undefined })}
-              disabled={startSync.isPending || !unitId}
+              disabled={startSync.isPending || !canSync}
               className="gap-2"
             >
               {startSync.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
               Iniciar Sincronização
             </Button>
+            {!unitId && <p className="text-xs text-muted-foreground">Selecione uma unidade para continuar.</p>}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Resumo de credenciais das unidades */}
+      {isAdmin && unitsConfig.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-cyan-400" /> Status de Credenciais
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y divide-border max-h-48 overflow-y-auto">
+              {unitsConfig.map((u: any) => (
+                <div key={u.id} className="flex items-center justify-between px-4 py-2">
+                  <span className="text-sm">{u.name}</span>
+                  {u.hasApiKeys
+                    ? <Badge variant="outline" className="text-xs border-green-500/30 text-green-400">Configurada</Badge>
+                    : <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-400">Sem credenciais</Badge>
+                  }
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -133,11 +197,11 @@ export default function SincronizacaoPage() {
                   {statusIcon(l.status)}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{l.unitName || `Unidade ${l.unitId}`}</p>
-                    <p className="text-xs text-muted-foreground">{fmtDt(l.iniciadoEm)} · {l.modo} · {l.periodoInicio} a {l.periodoFim}</p>
+                    <p className="text-xs text-muted-foreground">{fmtDt(l.iniciadoEm)} · {l.modo}{l.periodoInicio ? ` · ${l.periodoInicio} a ${l.periodoFim}` : ""}</p>
                     {l.erro && <p className="text-xs text-red-400 mt-0.5">{l.erro}</p>}
                   </div>
                   <div className="text-right text-xs">
-                    {l.registrosInseridos !== null && <p className="font-medium">{Number(l.registrosInseridos).toLocaleString("pt-BR")} registros</p>}
+                    {l.registrosInseridos != null && !isNaN(Number(l.registrosInseridos)) && <p className="font-medium">{Number(l.registrosInseridos).toLocaleString("pt-BR")} registros</p>}
                     <Badge variant="outline" className={`text-xs ${l.status === "sucesso" ? "border-green-500/30 text-green-400" : l.status === "erro" ? "border-red-500/30 text-red-400" : "border-blue-500/30 text-blue-400"}`}>
                       {l.status}
                     </Badge>
