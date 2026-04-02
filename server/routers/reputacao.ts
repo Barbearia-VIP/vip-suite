@@ -138,8 +138,8 @@ export async function exchangeGoogleCode(
 }
 
 // Busca accounts e locations via Google Business Profile API
-async function fetchGoogleBusinessReviews(accessToken: string, locationName?: string) {
-  // 1. Listar accounts
+async function fetchGoogleBusinessReviews(accessToken: string, savedLocationPath?: string) {
+  // 1. Listar accounts (todos os grupos)
   const accountsRes = await fetch(
     "https://mybusinessaccountmanagement.googleapis.com/v1/accounts",
     { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -148,44 +148,63 @@ async function fetchGoogleBusinessReviews(accessToken: string, locationName?: st
   if (!accountsData.accounts?.length) {
     return { success: false, error: "Nenhuma conta Google Business encontrada", reviews: [], locationName: null };
   }
-  const accountName = accountsData.accounts[0].name; // ex: "accounts/123456"
-
-  // 2. Listar locations
-  const locRes = await fetch(
-    `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations?readMask=name,title,storefrontAddress`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-  const locData = await locRes.json();
-  if (!locData.locations?.length) {
-    return { success: false, error: "Nenhuma localização encontrada na conta", reviews: [], locationName: null };
+  // Se já temos o path salvo (accounts/xxx/locations/yyy), usar diretamente
+  if (savedLocationPath && savedLocationPath.includes("accounts/") && savedLocationPath.includes("locations/")) {
+    let allReviews: any[] = [];
+    let pageToken: string | undefined;
+    do {
+      const url = new URL(`https://mybusiness.googleapis.com/v4/${savedLocationPath}/reviews`);
+      url.searchParams.set("pageSize", "50");
+      if (pageToken) url.searchParams.set("pageToken", pageToken);
+      const revRes = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+      const revText = await revRes.text();
+      let revData: any;
+      try { revData = JSON.parse(revText); } catch { return { success: false, error: "Resposta inválida da API Google", reviews: [], locationName: savedLocationPath }; }
+      if (revData.error) return { success: false, error: revData.error.message || "Erro ao buscar avaliações", reviews: [], locationName: savedLocationPath };
+      allReviews = allReviews.concat(revData.reviews || []);
+      pageToken = revData.nextPageToken;
+    } while (pageToken);
+    return { success: true, reviews: allReviews, locationName: savedLocationPath, locationTitle: null };
   }
-
-  // Usar locationName salvo ou a primeira location
-  const location = locationName
-    ? locData.locations.find((l: any) => l.name === locationName) || locData.locations[0]
-    : locData.locations[0];
-
-  // 3. Buscar avaliações
+  // 2. Buscar locations de todos os grupos (exceto conta pessoal)
+  // A API v4 requer o path completo: accounts/{accountId}/locations/{locationId}/reviews
+  let foundAccount: string | null = null;
+  let foundLocation: any = null;
+  for (const account of accountsData.accounts) {
+    if (account.type === "PERSONAL") continue;
+    const locRes = await fetch(
+      `https://mybusinessbusinessinformation.googleapis.com/v1/${account.name}/locations?readMask=name,title,storefrontAddress`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const locData = await locRes.json();
+    if (locData.locations?.length) {
+      foundAccount = account.name;
+      foundLocation = locData.locations[0];
+      break;
+    }
+  }
+  if (!foundAccount || !foundLocation) {
+    return { success: false, error: "Nenhuma localização encontrada nas contas Google Business", reviews: [], locationName: null };
+  }
+  // Path completo para a API v4: accounts/{accountId}/locations/{locationId}
+  const locationPath = `${foundAccount}/${foundLocation.name}`;
+  // 3. Buscar avaliações com paginação completa
   let allReviews: any[] = [];
   let pageToken: string | undefined;
   do {
-    const url = new URL(`https://mybusiness.googleapis.com/v4/${location.name}/reviews`);
+    const url = new URL(`https://mybusiness.googleapis.com/v4/${locationPath}/reviews`);
     url.searchParams.set("pageSize", "50");
     if (pageToken) url.searchParams.set("pageToken", pageToken);
-    const revRes = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const revData = await revRes.json();
-    if (revData.error) {
-      return { success: false, error: revData.error.message || "Erro ao buscar avaliações", reviews: [], locationName: location.name };
-    }
+    const revRes = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+    const revText = await revRes.text();
+    let revData: any;
+    try { revData = JSON.parse(revText); } catch { return { success: false, error: "Resposta inválida da API Google", reviews: [], locationName: locationPath }; }
+    if (revData.error) return { success: false, error: revData.error.message || "Erro ao buscar avaliações", reviews: [], locationName: locationPath };
     allReviews = allReviews.concat(revData.reviews || []);
     pageToken = revData.nextPageToken;
   } while (pageToken);
-
-  return { success: true, reviews: allReviews, locationName: location.name, locationTitle: location.title };
+  return { success: true, reviews: allReviews, locationName: locationPath, locationTitle: foundLocation.title };
 }
-
 // ─── Router ──────────────────────────────────────────────────────────────────
 
 export const reputacaoRouter = router({
