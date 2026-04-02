@@ -613,7 +613,7 @@ export const dataVipRouter = router({
       if (input.orgId) where = sql`${where} AND sl.orgId = ${input.orgId}`;
       if (input.unitId) where = sql`${where} AND sl.unitId = ${input.unitId}`;
       const [rows] = await db.execute(sql`
-        SELECT sl.*, u.name as unitName FROM sync_log_vip sl
+        SELECT sl.*, u.name as unitName FROM sync_log sl
         LEFT JOIN units u ON u.id = sl.unitId
         WHERE ${where} ORDER BY sl.iniciadoEm DESC LIMIT ${input.limit}
       `) as any;
@@ -703,7 +703,7 @@ export const dataVipRouter = router({
       const db = await getDb();
       if (!db) return [];
       const [rows] = await db.execute(sql`
-        SELECT * FROM sync_log_vip WHERE unitId = ${input.unitId}
+        SELECT * FROM sync_log WHERE unitId = ${input.unitId}
         ORDER BY iniciadoEm DESC LIMIT 20
       `) as any;
       return rows as any[];
@@ -839,10 +839,10 @@ export const dataVipRouter = router({
       if (unitIds.length > 0) {
         const [logsResult] = await db.execute(sql`
           SELECT s.unitId, s.status, s.iniciadoEm, s.finalizadoEm, s.registrosInseridos, s.erro
-          FROM sync_log_vip s
+          FROM sync_log s
           INNER JOIN (
             SELECT unitId, MAX(iniciadoEm) AS maxIniciadoEm
-            FROM sync_log_vip
+            FROM sync_log
             GROUP BY unitId
           ) latest ON s.unitId = latest.unitId AND s.iniciadoEm = latest.maxIniciadoEm
         `) as any;

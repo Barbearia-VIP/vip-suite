@@ -407,7 +407,7 @@ export async function runSyncForOrg(
 
   // Registra log
   const [logResult] = await db.execute(sql`
-    INSERT INTO sync_log_vip (orgId, unitId, modo, dataInicio, dataFim, status)
+    INSERT INTO sync_log (orgId, unitId, modo, dataInicio, dataFim, status)
     VALUES (${orgId}, ${unitId}, ${modo}, ${dataInicio || null}, ${dataFim || null}, 'running')
   `) as any;
   const logId = (logResult as any).insertId;
@@ -454,7 +454,7 @@ export async function runSyncForOrg(
     status.currentBlock = null;
 
     await db.execute(sql`
-      UPDATE sync_log_vip
+      UPDATE sync_log
       SET status = 'success', fetchedCount = ${totalFetched}, insertedCount = ${totalInserted},
           durationMs = ${durationMs}, finalizadoEm = NOW()
       WHERE id = ${logId}
@@ -467,7 +467,7 @@ export async function runSyncForOrg(
     status.currentBlock = null;
 
     await db.execute(sql`
-      UPDATE sync_log_vip
+      UPDATE sync_log
       SET status = 'error', erro = ${e.message}, durationMs = ${durationMs}, finalizadoEm = NOW()
       WHERE id = ${logId}
     `);
