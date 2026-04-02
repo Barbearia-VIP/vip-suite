@@ -456,7 +456,7 @@ export async function runSyncForOrg(
     await db.execute(sql`
       UPDATE sync_log
       SET status = 'success', fetchedCount = ${totalFetched}, insertedCount = ${totalInserted},
-          durationMs = ${durationMs}, finalizadoEm = NOW()
+          registrosInseridos = ${totalInserted}, durationMs = ${durationMs}, finalizadoEm = NOW()
       WHERE id = ${logId}
     `);
   } catch (e: any) {
