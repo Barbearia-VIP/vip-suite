@@ -95,6 +95,13 @@ async function fetchGooglePlaceDetails(placeId: string, apiKey: string) {
 const GOOGLE_OAUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 
+// Helper: retorna credenciais Google — por unidade se disponível, senão usa variáveis de ambiente globais
+function getGoogleCredentials(conexao?: { googleClientId?: string | null; googleClientSecret?: string | null } | null) {
+  const clientId = conexao?.googleClientId || process.env.GOOGLE_BUSINESS_CLIENT_ID || "";
+  const clientSecret = conexao?.googleClientSecret || process.env.GOOGLE_BUSINESS_CLIENT_SECRET || "";
+  return { clientId, clientSecret };
+}
+
 async function refreshGoogleToken(refreshToken: string, clientId: string, clientSecret: string) {
   const res = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
@@ -334,11 +341,12 @@ export const reputacaoRouter = router({
         if (conexao?.googleAccessToken || conexao?.googleRefreshToken) {
           let accessToken = conexao.googleAccessToken;
 
-          // Refresh token se necessário
-          if (conexao.googleRefreshToken && conexao.googleClientId && conexao.googleClientSecret) {
+          // Refresh token se necessário — usa credenciais da unidade ou globais como fallback
+          if (conexao.googleRefreshToken) {
+            const { clientId: gClientId, clientSecret: gClientSecret } = getGoogleCredentials(conexao);
             const tokenExpiry = conexao.googleTokenExpiry ? new Date(conexao.googleTokenExpiry).getTime() : 0;
             if (!accessToken || Date.now() > tokenExpiry - 60000) {
-              const refreshed = await refreshGoogleToken(conexao.googleRefreshToken, conexao.googleClientId, conexao.googleClientSecret);
+              const refreshed = await refreshGoogleToken(conexao.googleRefreshToken, gClientId, gClientSecret);
               if (refreshed.access_token) {
                 accessToken = refreshed.access_token;
                 await db.update(repConexoes).set({
@@ -741,7 +749,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       return { success: true };
     }),
 
-  // ── Google OAuth: gerar URL de autorização ──────────────────────────────
+   // ── Google OAuth: gerar URL de autorização ──────────────────────────
   getGoogleAuthUrl: protectedProcedure
     .input(z.object({
       unitId: z.number(),
@@ -750,14 +758,15 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      // Buscar credenciais da conexão Google desta unidade
+      // Buscar conexão Google desta unidade (pode não existir ainda)
       const [conexao] = await db.select()
         .from(repConexoes)
         .where(and(eq(repConexoes.unitId, input.unitId), eq(repConexoes.plataforma, "google")))
         .limit(1);
-      const clientId = conexao?.googleClientId;
+      // Usar credenciais da unidade ou fallback para variáveis de ambiente globais
+      const { clientId } = getGoogleCredentials(conexao);
       if (!clientId) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Configure o Google Client ID primeiro na aba Integrações" });
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Credenciais Google não configuradas. Configure GOOGLE_BUSINESS_CLIENT_ID no servidor ou na aba Integrações." });
       }
       const redirectUri = `${input.redirectOrigin}/api/google-oauth/callback`;
       const state = Buffer.from(JSON.stringify({ unitId: input.unitId, origin: input.redirectOrigin })).toString("base64");
@@ -765,10 +774,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
         client_id: clientId,
         redirect_uri: redirectUri,
         response_type: "code",
-        scope: [
-          "https://www.googleapis.com/auth/business.manage",
-          "https://www.googleapis.com/auth/plus.business.manage",
-        ].join(" "),
+        scope: "https://www.googleapis.com/auth/business.manage",
         access_type: "offline",
         prompt: "consent",
         state,
@@ -776,7 +782,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       return { url: `${GOOGLE_OAUTH_BASE}?${params.toString()}`, redirectUri };
     }),
 
-  // ── Buscar avaliações via OAuth (Business Profile API) ───────────────────
+  // ── Buscar avaliações via OAuth (Business Profile API) ───────────────────────
   fetchGoogleReviews: protectedProcedure
     .input(z.object({ unitId: z.number() }))
     .mutation(async ({ input }) => {
@@ -786,16 +792,17 @@ Gere uma resposta personalizada e única para esta avaliação.`;
         .from(repConexoes)
         .where(and(eq(repConexoes.unitId, input.unitId), eq(repConexoes.plataforma, "google")))
         .limit(1);
-      if (!conexao) throw new TRPCError({ code: "NOT_FOUND", message: "Integração Google não configurada" });
+      if (!conexao) throw new TRPCError({ code: "NOT_FOUND", message: "Integração Google não configurada. Crie uma conexão Google na aba Integrações primeiro." });
       if (!conexao.googleAccessToken && !conexao.googleRefreshToken) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Autorize o Google Business Profile primeiro" });
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Autorize o Google Business Profile primeiro clicando em \"Conectar com Google\"" });
       }
       let accessToken = conexao.googleAccessToken;
-      // Refresh token se expirado
-      if (conexao.googleRefreshToken && conexao.googleClientId && conexao.googleClientSecret) {
+      // Refresh token se expirado — usa credenciais da unidade ou globais como fallback
+      if (conexao.googleRefreshToken) {
+        const { clientId, clientSecret } = getGoogleCredentials(conexao);
         const tokenExpiry = conexao.googleTokenExpiry ? new Date(conexao.googleTokenExpiry).getTime() : 0;
         if (!accessToken || Date.now() > tokenExpiry - 60000) {
-          const refreshed = await refreshGoogleToken(conexao.googleRefreshToken, conexao.googleClientId, conexao.googleClientSecret);
+          const refreshed = await refreshGoogleToken(conexao.googleRefreshToken, clientId, clientSecret);
           if (refreshed.access_token) {
             accessToken = refreshed.access_token;
             await db.update(repConexoes).set({
@@ -805,7 +812,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
           }
         }
       }
-      if (!accessToken) throw new TRPCError({ code: "UNAUTHORIZED", message: "Token de acesso inválido" });
+      if (!accessToken) throw new TRPCError({ code: "UNAUTHORIZED", message: "Token de acesso inválido. Reconecte o Google Business Profile." });
       const result = await fetchGoogleBusinessReviews(accessToken, conexao.googleLocationName || undefined);
       if (!result.success) {
         throw new TRPCError({ code: "BAD_REQUEST", message: result.error || "Erro ao buscar avaliações" });

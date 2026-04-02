@@ -169,7 +169,7 @@ export default function IntegracoesPage() {
         </Badge>
       );
     }
-    if (c.googleClientId) {
+    if (!c.googleAccessToken) {
       return (
         <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-xs">
           <AlertTriangle className="w-3 h-3 mr-1" />Aguardando OAuth
@@ -220,7 +220,7 @@ export default function IntegracoesPage() {
       )}
 
       {/* Guia de configuração OAuth */}
-      {conexoes.some((c: any) => c.plataforma === "google" && c.googleClientId && !c.googleAccessToken) && (
+      {conexoes.some((c: any) => c.plataforma === "google" && !c.googleAccessToken) && (
         <Card className="border-amber-500/30 bg-amber-500/5">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2 text-amber-700">
@@ -350,7 +350,7 @@ export default function IntegracoesPage() {
                   </Button>
 
                   {/* Botão Autorizar Google OAuth */}
-                  {c.plataforma === "google" && c.googleClientId && (
+                  {c.plataforma === "google" && (
                     <Button
                       variant={c.googleAccessToken ? "outline" : "default"}
                       size="sm"

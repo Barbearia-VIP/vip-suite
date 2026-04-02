@@ -45,12 +45,15 @@ export function registerGoogleOAuthCallback(app: Express) {
         .where(and(eq(repConexoes.unitId, unitId), eq(repConexoes.plataforma, "google")))
         .limit(1);
 
-      if (!conexao?.googleClientId || !conexao?.googleClientSecret) {
+      // Usar credenciais da unidade ou fallback para variáveis de ambiente globais
+      const clientId = conexao?.googleClientId || process.env.GOOGLE_BUSINESS_CLIENT_ID || "";
+      const clientSecret = conexao?.googleClientSecret || process.env.GOOGLE_BUSINESS_CLIENT_SECRET || "";
+      if (!clientId || !clientSecret) {
         return res.redirect(`${origin}/reputacao/integracoes?error=missing_credentials`);
       }
 
       const redirectUri = `${origin}/api/google-oauth/callback`;
-      const tokenData = await exchangeGoogleCode(code, conexao.googleClientId, conexao.googleClientSecret, redirectUri);
+      const tokenData = await exchangeGoogleCode(code, clientId, clientSecret, redirectUri);
 
       if (tokenData.error) {
         console.error("[Google OAuth] Token exchange error:", tokenData.error, tokenData.error_description);
@@ -58,13 +61,29 @@ export function registerGoogleOAuthCallback(app: Express) {
       }
 
       const expiresIn = tokenData.expires_in || 3600;
-      await db.update(repConexoes).set({
-        googleAccessToken: tokenData.access_token,
-        googleRefreshToken: tokenData.refresh_token || conexao.googleRefreshToken, // preservar refresh_token existente
-        googleTokenExpiry: new Date(Date.now() + expiresIn * 1000),
-        isAtivo: true,
-        updatedAt: new Date(),
-      }).where(eq(repConexoes.id, conexao.id));
+
+      if (conexao) {
+        // Atualizar conexão existente
+        await db.update(repConexoes).set({
+          googleAccessToken: tokenData.access_token,
+          googleRefreshToken: tokenData.refresh_token || conexao.googleRefreshToken,
+          googleTokenExpiry: new Date(Date.now() + expiresIn * 1000),
+          isAtivo: true,
+          updatedAt: new Date(),
+        }).where(eq(repConexoes.id, conexao.id));
+      } else {
+        // Criar nova conexão Google para esta unidade
+        await db.insert(repConexoes).values({
+          unitId,
+          plataforma: "google",
+          nome: `Google Business - Unidade ${unitId}`,
+          externalId: `google-${unitId}`,
+          googleAccessToken: tokenData.access_token,
+          googleRefreshToken: tokenData.refresh_token || null,
+          googleTokenExpiry: new Date(Date.now() + expiresIn * 1000),
+          isAtivo: true,
+        });
+      }
 
       // Redirecionar para o frontend com sucesso
       return res.redirect(`${origin}/reputacao/integracoes?google_connected=1&unit=${unitId}`);
