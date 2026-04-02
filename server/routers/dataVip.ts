@@ -834,17 +834,20 @@ export const dataVipRouter = router({
       for (const c of configs as any[]) configMap[c.unitId] = c.config ?? {};
 
       // Busca o último log de sync por unidade (usando JOIN para compatibilidade com MySQL)
-      const [logs] = await db.execute(sql`
-        SELECT s.unitId, s.status, s.iniciadoEm, s.finalizadoEm, s.registrosInseridos, s.erro
-        FROM sync_log_vip s
-        INNER JOIN (
-          SELECT unitId, MAX(iniciadoEm) AS maxIniciadoEm
-          FROM sync_log_vip
-          WHERE unitId IN (SELECT id FROM units WHERE orgId = ${input.orgId})
-          GROUP BY unitId
-        ) latest ON s.unitId = latest.unitId AND s.iniciadoEm = latest.maxIniciadoEm
-        WHERE s.unitId IN (SELECT id FROM units WHERE orgId = ${input.orgId})
-      `) as any;
+      const unitIds = (unitsList as any[]).map(u => u.id);
+      let logs: any[] = [];
+      if (unitIds.length > 0) {
+        const [logsResult] = await db.execute(sql`
+          SELECT s.unitId, s.status, s.iniciadoEm, s.finalizadoEm, s.registrosInseridos, s.erro
+          FROM sync_log_vip s
+          INNER JOIN (
+            SELECT unitId, MAX(iniciadoEm) AS maxIniciadoEm
+            FROM sync_log_vip
+            GROUP BY unitId
+          ) latest ON s.unitId = latest.unitId AND s.iniciadoEm = latest.maxIniciadoEm
+        `) as any;
+        logs = (logsResult as any[]).filter(l => unitIds.includes(l.unitId));
+      }
 
       const logMap: Record<number, any> = {};
       for (const l of logs as any[]) logMap[l.unitId] = l;
