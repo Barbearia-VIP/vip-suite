@@ -833,12 +833,17 @@ export const dataVipRouter = router({
       const configMap: Record<number, any> = {};
       for (const c of configs as any[]) configMap[c.unitId] = c.config ?? {};
 
-      // Busca o último log de sync por unidade
+      // Busca o último log de sync por unidade (usando JOIN para compatibilidade com MySQL)
       const [logs] = await db.execute(sql`
-        SELECT unitId, status, iniciadoEm, finalizadoEm, registrosInseridos, erro
-        FROM sync_log_vip
-        WHERE unitId IN (SELECT id FROM units WHERE orgId = ${input.orgId})
-        AND iniciadoEm = (SELECT MAX(iniciadoEm) FROM sync_log_vip s2 WHERE s2.unitId = sync_log_vip.unitId)
+        SELECT s.unitId, s.status, s.iniciadoEm, s.finalizadoEm, s.registrosInseridos, s.erro
+        FROM sync_log_vip s
+        INNER JOIN (
+          SELECT unitId, MAX(iniciadoEm) AS maxIniciadoEm
+          FROM sync_log_vip
+          WHERE unitId IN (SELECT id FROM units WHERE orgId = ${input.orgId})
+          GROUP BY unitId
+        ) latest ON s.unitId = latest.unitId AND s.iniciadoEm = latest.maxIniciadoEm
+        WHERE s.unitId IN (SELECT id FROM units WHERE orgId = ${input.orgId})
       `) as any;
 
       const logMap: Record<number, any> = {};
