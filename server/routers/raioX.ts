@@ -92,7 +92,7 @@ function classificarStatus(dias: number): "ativo" | "em_risco" | "perdido" {
 // ─── Subquery de visitas por cliente ─────────────────────────────────────────
 const visitasSubquery = `(
   SELECT cliente, COUNT(*) as total_visitas
-  FROM vendas WHERE comanda_temp = 0 AND cancelado_motivo IS NULL
+  FROM vendas WHERE comanda_temp = 0 AND cancelado_motivo IS NULL AND status != 0
   GROUP BY cliente
 )`;
 
@@ -185,7 +185,7 @@ export const raioXRouter = router({
             SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 60 THEN 1 ELSE 0 END) as perdido
           FROM clientes c
           WHERE ${unitCond} AND c.status = 1 AND c.ultima_visita IS NOT NULL
-            AND (SELECT COUNT(*) FROM vendas v WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL) = 1
+            AND (SELECT COUNT(*) FROM vendas v WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0) = 1
         `),
         // Novos no período
         queryExternal<{ total: number }>(`
@@ -198,7 +198,7 @@ export const raioXRouter = router({
           SELECT COUNT(*) as total FROM clientes c
           WHERE ${unitCond} AND c.status = 1
             AND DATE(c.data_criacao) >= ? AND DATE(c.data_criacao) <= ?
-            AND (SELECT COUNT(*) FROM vendas v WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL) > 1
+            AND (SELECT COUNT(*) FROM vendas v WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0) > 1
         `, [dataInicio, dataFim]),
         // Novos por mês (últimos 12 meses)
         queryExternal<{ mes: string; total: number }>(`
@@ -228,7 +228,7 @@ export const raioXRouter = router({
           FROM clientes c
           JOIN vendas v ON v.cliente = c.id
           WHERE ${unitCond} AND c.status = 1
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
             AND DATE(v.data_criacao) >= ? AND DATE(v.data_criacao) <= ?
         `, [dataInicio, dataFim]),
         // Resgatados (perdidos que voltaram no período)
@@ -237,12 +237,12 @@ export const raioXRouter = router({
           FROM clientes c
           JOIN vendas v ON v.cliente = c.id
           WHERE ${unitCond} AND c.status = 1
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
             AND DATE(v.data_criacao) >= ? AND DATE(v.data_criacao) <= ?
             AND (SELECT MIN(v2.data_criacao) FROM vendas v2
-                 WHERE v2.cliente = c.id AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL) < ?
+                 WHERE v2.cliente = c.id AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0) < ?
             AND DATEDIFF(?, (SELECT MAX(v3.data_criacao) FROM vendas v3
-                 WHERE v3.cliente = c.id AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL
+                 WHERE v3.cliente = c.id AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL AND v3.status != 0
                  AND v3.data_criacao < ?)) > 90
         `, [dataInicio, dataFim, dataInicio, dataInicio, dataInicio]),
       ]);
@@ -359,11 +359,11 @@ export const raioXRouter = router({
       }>(`
         SELECT c.id, c.nome, c.telefone, c.data_criacao, c.ultima_visita,
           COALESCE((SELECT SUM(v.valor_total) FROM vendas v
-               WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL), 0) as total_gasto
+               WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0), 0) as total_gasto
         FROM clientes c
         WHERE ${unitCond} AND c.status = 1 AND c.ultima_visita IS NOT NULL
           AND (SELECT COUNT(*) FROM vendas v
-               WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL) = 1
+               WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0) = 1
         ORDER BY c.ultima_visita DESC
         LIMIT 2000
       `);
@@ -470,7 +470,7 @@ export const raioXRouter = router({
           FROM vendas v
           JOIN usuarios uu ON v.usuario = uu.id
           WHERE ${unitCond3.replace(/c\./g, 'uu.').replace('ultima_visita_unidade', 'unidade')}
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.cliente IS NOT NULL
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0 AND v.cliente IS NOT NULL
           GROUP BY v.cliente HAVING cnt >= 3
         ) vc ON vc.cliente = c.id
         WHERE ${unitCond3} AND c.status = 1
@@ -682,6 +682,7 @@ export const raioXRouter = router({
           AND v.data_criacao <= ?
           AND v.comanda_temp = 0
           AND v.cancelado_motivo IS NULL
+          AND v.status != 0
           AND v.cliente IS NOT NULL
           AND v.cliente != 2
         GROUP BY uu.id, uu.nome

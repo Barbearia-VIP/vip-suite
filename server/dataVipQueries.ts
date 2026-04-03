@@ -61,6 +61,7 @@ async function getKpisRealtime(extIds: number[], ano: number, mes: number) {
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
+      AND v.status != 0
   `, [dataInicio, dataInicio, dataInicio, dataFim]);
 
   // Contar serviços e produtos separadamente (via subquery para evitar duplicatas)
@@ -84,6 +85,7 @@ async function getKpisRealtime(extIds: number[], ano: number, mes: number) {
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
+      AND v.status != 0
   `, [dataInicio, dataFim]);
 
   return { ...(rows[0] ?? {}), ...(servicosRows[0] ?? {}) };
@@ -238,6 +240,7 @@ export async function getFaturamentoMensal(extIds: number[], meses: number = 12)
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
+      AND v.status != 0
   `, [dataInicio, dataInicio, dataInicio, dataFim]);
 
   const rt = realtimeRows[0];
@@ -282,6 +285,7 @@ export async function getFaturamentoPorPagamento(extIds: number[], dataInicio: s
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
+      AND v.status != 0
     GROUP BY fp.id, fp.nome, fp.tipo
     ORDER BY total DESC
   `, [dataInicio, dataFim]);
@@ -313,6 +317,7 @@ export async function getFaturamentoDiario(extIds: number[], dataInicio: string,
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
+      AND v.status != 0
     GROUP BY DATE(v.data_criacao)
     ORDER BY dia ASC
   `, [dataInicio, dataFim]);
@@ -347,6 +352,7 @@ export async function getFaturamentoPorProduto(extIds: number[], dataInicio: str
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
+      AND v.status != 0
     GROUP BY LOWER(TRIM(p.nome)), p.tipo
     ORDER BY total DESC
     LIMIT 50
@@ -488,13 +494,13 @@ export async function getClientesPerdidosRecentes(
        JOIN usuarios u2 ON v2.usuario = u2.id 
        WHERE v2.cliente = c.id 
          AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u2.unidade = ${extIds[0]}` : `u2.unidade IN (${extIds.join(",")})`})
-         AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL) as total_visitas,
+         AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0) as total_visitas,
       (SELECT COALESCE(SUM(vp2.valor_total), 0) FROM vendas v2 
        JOIN usuarios u2 ON v2.usuario = u2.id 
        JOIN vendas_produtos vp2 ON vp2.venda = v2.id
        WHERE v2.cliente = c.id 
          AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u2.unidade = ${extIds[0]}` : `u2.unidade IN (${extIds.join(",")})`})
-         AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL) as total_gasto
+         AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0) as total_gasto
     FROM clientes c
     WHERE ${unitCond}
       AND c.status = 1
@@ -543,7 +549,7 @@ export async function getRaioXVisaoGeral(extIds: number[]) {
         JOIN usuarios u ON v.usuario = u.id 
         WHERE v.cliente = c.id 
           AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u.unidade = ${extIds[0]}` : `u.unidade IN (${extIds.join(",")})`})
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
       ) = 1
   `);
 
@@ -586,14 +592,14 @@ export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, 
         JOIN usuarios u3 ON v3.usuario = u3.id 
         WHERE v3.cliente = v.cliente 
           AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u3.unidade = ${extIds[0]}` : `u3.unidade IN (${extIds.join(",")})`})
-          AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL
+          AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL AND v3.status != 0
       ) = 1 THEN v.cliente END) as one_shots,
       AVG((
         SELECT COUNT(*) FROM vendas v4 
         JOIN usuarios u4 ON v4.usuario = u4.id 
         WHERE v4.cliente = v.cliente 
           AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u4.unidade = ${extIds[0]}` : `u4.unidade IN (${extIds.join(",")})`})
-          AND v4.comanda_temp = 0 AND v4.cancelado_motivo IS NULL
+          AND v4.comanda_temp = 0 AND v4.cancelado_motivo IS NULL AND v4.status != 0
       )) as media_visitas,
       AVG(c.consumo) as media_gasto
     FROM vendas v
@@ -605,6 +611,7 @@ export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, 
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
+      AND v.status != 0
       AND v.cliente IS NOT NULL
       AND v.cliente != 2
     GROUP BY uu.id, uu.nome
@@ -640,6 +647,7 @@ export async function getCadenciaVisitas(extIds: number[]) {
       WHERE ${unitCond}
         AND v.comanda_temp = 0
         AND v.cancelado_motivo IS NULL
+        AND v.status != 0
         AND v.cliente IS NOT NULL
         AND v.cliente != 2
       GROUP BY v.cliente
@@ -703,7 +711,7 @@ export async function getCohortClientes(extIds: number[]) {
          JOIN usuarios uu2 ON v2.usuario = uu2.id
          WHERE v2.cliente = v.cliente 
            AND (${unitCond.replace(/uu\./g, "uu2.")})
-           AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL
+           AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
         ) > 1 THEN v.cliente END) as voltaram,
       ROUND(
         COUNT(DISTINCT CASE WHEN 
@@ -711,7 +719,7 @@ export async function getCohortClientes(extIds: number[]) {
            JOIN usuarios uu2 ON v2.usuario = uu2.id
            WHERE v2.cliente = v.cliente 
              AND (${unitCond.replace(/uu\./g, "uu2.")})
-             AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL
+             AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
           ) > 1 THEN v.cliente END) * 100.0 / 
         NULLIF(COUNT(DISTINCT v.cliente), 0), 1
       ) as taxa_retencao
@@ -720,6 +728,7 @@ export async function getCohortClientes(extIds: number[]) {
     WHERE ${unitCond}
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
+      AND v.status != 0
       AND v.cliente IS NOT NULL
       AND v.cliente != 2
       AND v.data_criacao >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
