@@ -75,6 +75,7 @@ import RespostasPage from "./pages/reputacao/RespostasPage";
 import AnaliseReputacaoPage from "./pages/reputacao/AnaliseReputacaoPage";
 import IntegracoesPage from "./pages/reputacao/IntegracoesPage";
 import ConfigIAPage from "./pages/reputacao/ConfigIAPage";
+import HistoricoIAPage from "./pages/reputacao/HistoricoIAPage";
 
 // Auto Instagram
 import AutoInstagramPage from "./pages/auto-instagram/AutoInstagramPage";
@@ -308,6 +309,9 @@ function Router() {
       </Route>
       <Route path="/reputacao/integracoes">
         <ProtectedLayout><IntegracoesPage /></ProtectedLayout>
+      </Route>
+      <Route path="/reputacao/historico-ia">
+        <ProtectedLayout><HistoricoIAPage /></ProtectedLayout>
       </Route>
       <Route path="/reputacao/config-ia">
         <ProtectedLayout><ConfigIAPage /></ProtectedLayout>

@@ -913,4 +913,87 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       const [resumo] = await db.select().from(repResumo).where(eq(repResumo.unitId, input.unitId));
       return resumo || null;
     }),
+
+  // ── Histórico de Auto-Respostas ──────────────────────────────────────────
+  getHistoricoAutoResposta: protectedProcedure
+    .input(z.object({
+      unitId: z.number(),
+      page: z.number().default(1),
+      pageSize: z.number().default(20),
+      plataforma: z.string().optional(),
+      publicada: z.boolean().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const offset = (input.page - 1) * input.pageSize;
+      const conditions: any[] = [
+        eq(repAvaliacoes.unitId, input.unitId),
+        sql`${repAvaliacoes.respondidoPor} = 'Auto-Resposta IA'`,
+      ];
+      if (input.plataforma) conditions.push(eq(repAvaliacoes.plataforma, input.plataforma as any));
+      if (input.publicada !== undefined) conditions.push(eq(repAvaliacoes.respostaPublicada, input.publicada));
+      const [rows, countResult] = await Promise.all([
+        db.select({
+          id: repAvaliacoes.id,
+          autorNome: repAvaliacoes.autorNome,
+          nota: repAvaliacoes.nota,
+          sentimento: repAvaliacoes.sentimento,
+          comentario: repAvaliacoes.comentario,
+          resposta: repAvaliacoes.resposta,
+          respondidoEm: repAvaliacoes.respondidoEm,
+          respostaPublicada: repAvaliacoes.respostaPublicada,
+          plataforma: repAvaliacoes.plataforma,
+          dataAvaliacao: repAvaliacoes.dataAvaliacao,
+        })
+          .from(repAvaliacoes)
+          .where(and(...conditions))
+          .orderBy(desc(repAvaliacoes.respondidoEm))
+          .limit(input.pageSize)
+          .offset(offset),
+        db.select({ total: sql<number>`COUNT(*)` })
+          .from(repAvaliacoes)
+          .where(and(...conditions)),
+      ]);
+      const total = Number(countResult[0]?.total ?? 0);
+      return {
+        items: rows,
+        total,
+        page: input.page,
+        pageSize: input.pageSize,
+        totalPages: Math.ceil(total / input.pageSize),
+      };
+    }),
+
+  // ── Estatísticas do Auto-Responder ──────────────────────────────────────
+  getEstatisticasAutoResposta: protectedProcedure
+    .input(z.object({ unitId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const result = await db.execute(sql`
+        SELECT
+          COUNT(*) as total,
+          SUM(CASE WHEN respostaPublicada = 1 THEN 1 ELSE 0 END) as publicadas,
+          SUM(CASE WHEN respostaPublicada = 0 THEN 1 ELSE 0 END) as pendentes,
+          SUM(CASE WHEN sentimento = 'positivo' THEN 1 ELSE 0 END) as positivas,
+          SUM(CASE WHEN sentimento = 'negativo' THEN 1 ELSE 0 END) as negativas,
+          SUM(CASE WHEN sentimento = 'neutro' THEN 1 ELSE 0 END) as neutras,
+          MIN(respondidoEm) as primeiraResposta,
+          MAX(respondidoEm) as ultimaResposta
+        FROM rep_avaliacoes
+        WHERE unitId = ${input.unitId} AND respondidoPor = 'Auto-Resposta IA'
+      `);
+      const row = ((result[0] as unknown) as any[])[0] || {};
+      return {
+        total: Number(row.total ?? 0),
+        publicadas: Number(row.publicadas ?? 0),
+        pendentes: Number(row.pendentes ?? 0),
+        positivas: Number(row.positivas ?? 0),
+        negativas: Number(row.negativas ?? 0),
+        neutras: Number(row.neutras ?? 0),
+        primeiraResposta: row.primeiraResposta ? new Date(row.primeiraResposta) : null,
+        ultimaResposta: row.ultimaResposta ? new Date(row.ultimaResposta) : null,
+      };
+    }),
 });

@@ -199,6 +199,7 @@ const SIDEBAR_ITEMS: Record<ModuleId, SidebarItem[]> = {
     { label: "Avaliações", path: "/reputacao/avaliacoes", icon: Star },
     { label: "Respostas", path: "/reputacao/respostas", icon: MessageSquare },
     { label: "Análise", path: "/reputacao/analise", icon: BarChart3 },
+    { label: "Histórico IA", path: "/reputacao/historico-ia", icon: ClipboardList },
     { label: "Integrações", path: "/reputacao/integracoes", icon: Settings },
     { label: "Config. IA", path: "/reputacao/config-ia", icon: Bot },
   ],

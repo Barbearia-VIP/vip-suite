@@ -605,3 +605,9 @@
 - [ ] Criar procedure tRPC para salvar/buscar ai_prompt da unidade
 - [ ] Criar UI de edição do Prompt de IA nas configurações da unidade
 - [ ] Integrar ai_prompt na geração de respostas de avaliações (Reputação)
+
+## Histórico Auto-Resposta (Reputação)
+
+- [x] Criar procedure tRPC getHistoricoAutoResposta no reputacao.ts
+- [x] Criar componente HistoricoAutoResposta.tsx na página de Reputação
+- [x] Adicionar aba "Histórico Auto-Resposta" na navegação do módulo Reputação
