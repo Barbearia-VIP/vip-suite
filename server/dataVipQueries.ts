@@ -247,6 +247,90 @@ export async function getDashboardKpis(extIds: number[], ano: number, mes: numbe
   };
 }
 
+// ─── Dias trabalhados e faturamento por dia ──────────────────────────────────
+
+/**
+ * Conta quantos dias distintos tiveram faturamento > 0 no período.
+ * Também retorna o total faturado para calcular fat/dia.
+ */
+export async function getDiasTrabalhados(
+  extIds: number[],
+  dataInicio: string,
+  dataFim: string // exclusivo (já ajustado pelo caller)
+): Promise<{ diasTrabalhados: number; faturamentoTotal: number }> {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  const rows = await queryExternal<{ dias: number; total: number }>(`
+    SELECT 
+      COUNT(DISTINCT DATE(v.data_criacao)) as dias,
+      COALESCE(SUM(v.valor_total), 0) as total
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND v.status != 0
+  `, [dataInicio, dataFim]);
+
+  return {
+    diasTrabalhados: Number(rows[0]?.dias ?? 0),
+    faturamentoTotal: Number(rows[0]?.total ?? 0),
+  };
+}
+
+/**
+ * Conta serviços extra e soma seu valor total.
+ * Serviços extra = aqueles cujo nome NÃO está na lista de nomes marcados como 'base'.
+ * nomesBases: lista de nomes vindos da tabela servico_categorias onde categoria='base'
+ */
+export async function getServicosExtra(
+  extIds: number[],
+  dataInicio: string,
+  dataFim: string, // exclusivo
+  nomesBase: string[]
+): Promise<{ qtdExtra: number; totalExtra: number }> {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  // Se não há nomes base configurados, todos os serviços são extra
+  let extraCond: string;
+  if (nomesBase.length === 0) {
+    extraCond = "p.tipo = 'ser'";
+  } else {
+    const placeholders = nomesBase.map(() => "?").join(",");
+    extraCond = `p.tipo = 'ser' AND p.nome NOT IN (${placeholders})`;
+  }
+
+  const params: unknown[] = [...(nomesBase.length > 0 ? nomesBase : []), dataInicio, dataFim];
+
+  const rows = await queryExternal<{ qtd: number; total: number }>(`
+    SELECT 
+      COUNT(*) as qtd,
+      COALESCE(SUM(vp.valor_total), 0) as total
+    FROM vendas_produtos vp
+    JOIN vendas v ON vp.venda = v.id
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN produtos p ON p.id = vp.produto
+    WHERE ${unitCond}
+      AND ${extraCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND v.status != 0
+  `, params);
+
+  return {
+    qtdExtra: Number(rows[0]?.qtd ?? 0),
+    totalExtra: Number(rows[0]?.total ?? 0),
+  };
+}
+
 // ─── Faturamento mensal histórico (híbrido: tempo real para mês atual) ────────────────
 
 export async function getFaturamentoMensal(extIds: number[], meses: number = 12) {

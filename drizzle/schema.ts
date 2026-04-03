@@ -1263,3 +1263,22 @@ export const wsListaItens = mysqlTable("ws_lista_itens", {
   index("idx_ws_lista_itens_lista").on(t.listaId),
   index("idx_ws_lista_itens_unit").on(t.unitId),
 ]);
+
+// ─────────────────────────────────────────────
+// DATA VIP — configuração de categorias de serviços
+// Permite marcar cada serviço (por nome) como 'base' ou 'extra' por organização
+// ─────────────────────────────────────────────
+export const servicoCategorias = mysqlTable("servico_categorias", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),              // FK → organizations.id
+  nomeServico: varchar("nomeServico", { length: 255 }).notNull(),
+  categoria: mysqlEnum("categoria", ["base", "extra"]).notNull().default("extra"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_servico_categorias_org").on(t.orgId),
+  uniqueIndex("idx_servico_categorias_org_nome").on(t.orgId, t.nomeServico),
+]);
+
+export type ServicoCategoria = typeof servicoCategorias.$inferSelect;
+export type InsertServicoCategoria = typeof servicoCategorias.$inferInsert;

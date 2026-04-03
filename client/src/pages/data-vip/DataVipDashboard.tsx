@@ -474,6 +474,70 @@ export default function DataVipDashboard() {
         </Card>
       </div>
 
+      {/* KPIs terciários: Dias Trabalhados, Fat/Dia, Serviços Extra */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Dias Trabalhados</p>
+                {dashQ.isLoading
+                  ? <Skeleton className="h-7 w-24" />
+                  : <p className="text-xl font-bold">{d ? (d.diasTrabalhados ?? 0).toLocaleString("pt-BR") : "—"}</p>
+                }
+                <p className="text-xs text-muted-foreground">dias com faturamento</p>
+              </div>
+              <Calendar className="w-5 h-5 text-violet-400 opacity-70" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Fat. / Dia Trabalhado</p>
+                {dashQ.isLoading
+                  ? <Skeleton className="h-7 w-24" />
+                  : <p className="text-xl font-bold">{d ? fmt(d.fatPorDia ?? 0) : "—"}</p>
+                }
+                <p className="text-xs text-muted-foreground">média por dia ativo</p>
+              </div>
+              <TrendingUp className="w-5 h-5 text-emerald-400 opacity-70" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Serviços Extra (Qtd)</p>
+                {dashQ.isLoading
+                  ? <Skeleton className="h-7 w-24" />
+                  : <p className="text-xl font-bold">{d ? (d.servicosExtraQtd ?? 0).toLocaleString("pt-BR") : "—"}</p>
+                }
+                <p className="text-xs text-muted-foreground">acabamentos e adicionais</p>
+              </div>
+              <Scissors className="w-5 h-5 text-amber-400 opacity-70" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Total Serviços Extra</p>
+                {dashQ.isLoading
+                  ? <Skeleton className="h-7 w-24" />
+                  : <p className="text-xl font-bold">{d ? fmt(d.servicosExtraTotal ?? 0) : "—"}</p>
+                }
+                <p className="text-xs text-muted-foreground">valor dos adicionais</p>
+              </div>
+              <DollarSign className="w-5 h-5 text-amber-400 opacity-70" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Gráfico mensal + Formas de pagamento */}
       <div className="grid lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">

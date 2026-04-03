@@ -20,6 +20,8 @@ import {
   getColaboradores,
   getColaboradoresByRange,
   getRankingUnidades,
+  getDiasTrabalhados,
+  getServicosExtra,
 } from "../dataVipQueries";
 
 // Inicializa scheduler automático (08:00 BRT)
@@ -104,13 +106,28 @@ export const dataVipRouter = router({
       dataFim: z.string().optional(),    // YYYY-MM-DD — filtro livre
     }))
     .query(async ({ ctx, input }) => {
-      const { extIds, isAdmin } = await resolveExternalIds(
+      const { extIds, isAdmin, orgFilter } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
       const now = new Date();
+      // Helper: busca nomes base da tabela servico_categorias
+      const db = await getDb();
+      let nomesBase: string[] = [];
+      if (db && orgFilter) {
+        const [catRows] = await db.execute(sql`
+          SELECT nomeServico FROM servico_categorias WHERE orgId = ${orgFilter} AND categoria = 'base'
+        `) as any;
+        nomesBase = (catRows as any[]).map((r: any) => r.nomeServico);
+      }
+
       // Modo range livre (dia único ou intervalo)
       if (input.dataInicio && input.dataFim) {
-        const kpis = await getKpisRealtimeByRange(extIds, input.dataInicio, input.dataFim);
+        const dataFimExcl = new Date(new Date(input.dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+        const [kpis, diasData, extraData] = await Promise.all([
+          getKpisRealtimeByRange(extIds, input.dataInicio, input.dataFim),
+          getDiasTrabalhados(extIds, input.dataInicio, dataFimExcl),
+          getServicosExtra(extIds, input.dataInicio, dataFimExcl, nomesBase),
+        ]);
         return {
           periodo: `${input.dataInicio}:${input.dataFim}`,
           faturamento: kpis.faturamento,
@@ -123,6 +140,10 @@ export const dataVipRouter = router({
           clientesAntigos: kpis.clientesAntigos,
           servicosTotal: kpis.servicosTotal,
           produtosVendidos: kpis.produtosVendidos,
+          diasTrabalhados: diasData.diasTrabalhados,
+          fatPorDia: diasData.diasTrabalhados > 0 ? Math.round(diasData.faturamentoTotal / diasData.diasTrabalhados * 100) / 100 : 0,
+          servicosExtraQtd: extraData.qtdExtra,
+          servicosExtraTotal: Math.round(extraData.totalExtra * 100) / 100,
           isAdmin,
           isRangeMode: true,
         };
@@ -130,7 +151,15 @@ export const dataVipRouter = router({
       // Modo mensal (padrão)
       const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const [ano, mes] = periodo.split("-").map(Number);
-      const kpis = await getDashboardKpis(extIds, ano, mes);
+      const dataInicio = `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const proximoMes = mes === 12 ? 1 : mes + 1;
+      const anoProximo = mes === 12 ? ano + 1 : ano;
+      const dataFimExcl = `${anoProximo}-${String(proximoMes).padStart(2, "0")}-01`;
+      const [kpis, diasData, extraData] = await Promise.all([
+        getDashboardKpis(extIds, ano, mes),
+        getDiasTrabalhados(extIds, dataInicio, dataFimExcl),
+        getServicosExtra(extIds, dataInicio, dataFimExcl, nomesBase),
+      ]);
       return {
         periodo,
         faturamento: kpis.faturamento,
@@ -143,6 +172,10 @@ export const dataVipRouter = router({
         clientesAntigos: kpis.clientesAntigos,
         servicosTotal: kpis.servicosTotal,
         produtosVendidos: kpis.produtosVendidos,
+        diasTrabalhados: diasData.diasTrabalhados,
+        fatPorDia: diasData.diasTrabalhados > 0 ? Math.round(diasData.faturamentoTotal / diasData.diasTrabalhados * 100) / 100 : 0,
+        servicosExtraQtd: extraData.qtdExtra,
+        servicosExtraTotal: Math.round(extraData.totalExtra * 100) / 100,
         isAdmin,
         isRangeMode: false,
       };
@@ -800,6 +833,75 @@ export const dataVipRouter = router({
         WHERE ${where} ORDER BY rs.semanaInicio DESC LIMIT ${input.limit}
       `) as any;
       return rows as any[];
+    }),
+
+  // ── Serviços do banco externo (para configuração de categorias) ──────────────────────────────────────────────
+  /** Lista todos os serviços distintos do banco externo + categoria salva no banco local */
+  listServicosExterno: protectedProcedure
+    .input(z.object({ orgId: z.number().optional(), unitId: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      const { extIds, orgFilter } = await resolveExternalIds(
+        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+      );
+      const { queryExternal } = await import("../db-external");
+      const unitCond = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+        : `uu.unidade IN (${extIds.join(",")})`;
+
+      // Busca todos os nomes de serviços distintos do banco externo
+      const extServicos = await queryExternal<{ nome: string; qtd: number }>(`
+        SELECT p.nome, COUNT(*) as qtd
+        FROM produtos p
+        JOIN vendas_produtos vp ON vp.produto = p.id
+        JOIN vendas v ON vp.venda = v.id
+        JOIN usuarios uu ON v.usuario = uu.id
+        WHERE ${unitCond}
+          AND p.tipo = 'ser'
+          AND v.comanda_temp = 0
+          AND v.status != 0
+        GROUP BY p.nome
+        ORDER BY qtd DESC
+      `, []);
+
+      // Busca categorias salvas no banco local
+      const db = await getDb();
+      let catMap: Record<string, string> = {};
+      if (db && orgFilter) {
+        const [catRows] = await db.execute(sql`
+          SELECT nomeServico, categoria FROM servico_categorias WHERE orgId = ${orgFilter}
+        `) as any;
+        for (const r of catRows as any[]) {
+          catMap[r.nomeServico] = r.categoria;
+        }
+      }
+
+      return extServicos.map(s => ({
+        nome: s.nome,
+        qtd: Number(s.qtd),
+        categoria: catMap[s.nome] as "base" | "extra" | null ?? null,
+      }));
+    }),
+
+  /** Salva (upsert) a categoria de um ou mais serviços */
+  saveServicoCategorias: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      servicos: z.array(z.object({
+        nome: z.string(),
+        categoria: z.enum(["base", "extra"]),
+      })),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      for (const s of input.servicos) {
+        await db.execute(sql`
+          INSERT INTO servico_categorias (orgId, nomeServico, categoria)
+          VALUES (${input.orgId}, ${s.nome}, ${s.categoria})
+          ON DUPLICATE KEY UPDATE categoria = ${s.categoria}, updatedAt = NOW()
+        `);
+      }
+      return { success: true, count: input.servicos.length };
     }),
 
 });
