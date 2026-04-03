@@ -622,3 +622,4 @@
 - [x] Melhorar layout aba Análise: NPS e Alertas 50/50, gauge mais moderno, remover gráficos sem dados
 - [x] Redesenhar gráfico Distribuição de Sentimentos com visual moderno e impactante
 - [x] Bug: erro INSERT na tabela regras_comissao (ON DUPLICATE KEY / colaboradorId 200) na página Comissões
+- [x] Bug persistente: INSERT regras_comissao corrigido — adicionada coluna updatedAt e UNIQUE KEY (orgId, colaboradorId)
