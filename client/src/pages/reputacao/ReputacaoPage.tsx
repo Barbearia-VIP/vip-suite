@@ -18,83 +18,188 @@ type EvolucaoItem = { mes: string; mesLabel: string; media: number; total: numbe
 
 function EvolucaoChart({ data, notaMediaGeral }: { data: EvolucaoItem[]; notaMediaGeral: number | null }) {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; item: EvolucaoItem } | null>(null);
-  const W = 600; const H = 200;
-  const PAD = { top: 16, right: 16, bottom: 32, left: 32 };
+  const W = 700; const H = 220;
+  const PAD = { top: 24, right: 24, bottom: 36, left: 36 };
   const chartW = W - PAD.left - PAD.right;
   const chartH = H - PAD.top - PAD.bottom;
-  const minY = 0; const maxY = 5;
+  // Escala Y fixa de 3.0 a 5.0 para manter proporcionalidade visual
+  const minY = 3.0;
+  const maxY = 5.2;
   const toX = (i: number) => PAD.left + (i / Math.max(data.length - 1, 1)) * chartW;
-  const toY = (v: number) => PAD.top + chartH - ((v - minY) / (maxY - minY)) * chartH;
+  // clamp: valores fora da escala são cortados nas bordas
+  const toY = (v: number) => {
+    const raw = PAD.top + chartH - ((v - minY) / (maxY - minY)) * chartH;
+    return Math.max(PAD.top, Math.min(PAD.top + chartH, raw));
+  };
   if (data.length === 0) return null;
-  const pts = data.map((d, i) => `${toX(i)},${toY(d.media)}`).join(" ");
-  const areaPath = `M${toX(0)},${toY(data[0].media)} ` +
-    data.slice(1).map((d, i) => `L${toX(i + 1)},${toY(d.media)}`).join(" ") +
-    ` L${toX(data.length - 1)},${PAD.top + chartH} L${toX(0)},${PAD.top + chartH} Z`;
-  const linePath = `M${pts.split(" ").join(" L")}`;
-  // x-axis labels: show ~8 evenly spaced
+
+  // Smooth curve usando bezier
+  const smoothPath = (pts: [number, number][]) => {
+    if (pts.length < 2) return "";
+    let d = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1];
+      const [x1, y1] = pts[i];
+      const cpx = (x0 + x1) / 2;
+      d += ` C${cpx},${y0} ${cpx},${y1} ${x1},${y1}`;
+    }
+    return d;
+  };
+
+  const pointCoords: [number, number][] = data.map((d, i) => [toX(i), toY(d.media)]);
+  const linePath = smoothPath(pointCoords);
+  const lastPt = pointCoords[pointCoords.length - 1];
+  const firstPt = pointCoords[0];
+  const areaPath = linePath + ` L${lastPt[0]},${PAD.top + chartH} L${firstPt[0]},${PAD.top + chartH} Z`;
+
   const step = data.length > 12 ? Math.ceil(data.length / 8) : 1;
-  const yTicks = [1, 2, 3, 4, 5];
+  // Y ticks dinâmicos
+  const yTicks: number[] = [];
+  for (let v = Math.ceil(minY * 2) / 2; v <= maxY; v += 0.5) yTicks.push(parseFloat(v.toFixed(1)));
+
+  // Cor baseada na nota média geral (sempre âmbar dourado para barbearia VIP)
+  const lineColor = "#f59e0b";   // âmbar dourado
+  const gradStart = "#f59e0b";
+
   return (
     <div style={{ position: "relative", width: "100%" }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 240, display: "block", overflow: "visible" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 260, display: "block", overflow: "visible" }}>
         <defs>
           <linearGradient id="svgGradNota" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
+            <stop offset="0%" stopColor={gradStart} stopOpacity={0.55} />
+            <stop offset="60%" stopColor={gradStart} stopOpacity={0.15} />
+            <stop offset="100%" stopColor={gradStart} stopOpacity={0.0} />
           </linearGradient>
+          <filter id="glowNota">
+            <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+            <feMerge><feMergeNode in="coloredBlur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <linearGradient id="lineGradNota" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor={gradStart} stopOpacity={0.7} />
+            <stop offset="50%" stopColor={gradStart} stopOpacity={1} />
+            <stop offset="100%" stopColor={gradStart} stopOpacity={0.9} />
+          </linearGradient>
+          <clipPath id="chartClip">
+            <rect x={PAD.left} y={PAD.top} width={chartW} height={chartH} />
+          </clipPath>
         </defs>
-        {/* grid lines */}
+
+        {/* fundo do gráfico levemente destacado */}
+        <rect x={PAD.left} y={PAD.top} width={chartW} height={chartH}
+          fill="rgba(255,255,255,0.02)" rx={4} />
+
+        {/* grid lines horizontais */}
         {yTicks.map(t => (
           <g key={t}>
             <line x1={PAD.left} y1={toY(t)} x2={PAD.left + chartW} y2={toY(t)}
-              stroke="hsl(var(--border))" strokeWidth={1} strokeDasharray="3 3" />
-            <text x={PAD.left - 4} y={toY(t) + 4} fontSize={9} fill="hsl(var(--muted-foreground))" textAnchor="end">{t}</text>
+              stroke="rgba(255,255,255,0.08)" strokeWidth={t % 1 === 0 ? 1 : 0.5}
+              strokeDasharray={t % 1 === 0 ? "4 4" : "2 4"} />
+            {t % 1 === 0 && (
+              <text x={PAD.left - 6} y={toY(t) + 4} fontSize={10} fill="rgba(255,255,255,0.45)" textAnchor="end" fontWeight="500">{t}★</text>
+            )}
           </g>
         ))}
-        {/* reference line: media geral */}
+
+        {/* área preenchida com gradiente — clipada para não sair do gráfico */}
+        <g clipPath="url(#chartClip)">
+          <path d={areaPath} fill="url(#svgGradNota)" />
+          {/* linha principal com glow */}
+          <path d={linePath} fill="none" stroke="url(#lineGradNota)" strokeWidth={3}
+            strokeLinejoin="round" strokeLinecap="round" filter="url(#glowNota)" />
+          {/* linha principal solid por cima */}
+          <path d={linePath} fill="none" stroke={lineColor} strokeWidth={2.5}
+            strokeLinejoin="round" strokeLinecap="round" />
+        </g>
+
+        {/* linha de referência da média geral */}
         {notaMediaGeral && (
           <>
             <line x1={PAD.left} y1={toY(notaMediaGeral)} x2={PAD.left + chartW} y2={toY(notaMediaGeral)}
-              stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="4 4" strokeOpacity={0.5} />
-            <text x={PAD.left + chartW - 2} y={toY(notaMediaGeral) - 4} fontSize={9}
-              fill="hsl(var(--muted-foreground))" textAnchor="end">Média: {notaMediaGeral.toFixed(1)}★</text>
+              stroke={lineColor} strokeWidth={1.5} strokeDasharray="6 4" strokeOpacity={0.6} />
+            <rect x={PAD.left + chartW - 68} y={toY(notaMediaGeral) - 14} width={66} height={16}
+              rx={4} fill={lineColor} fillOpacity={0.15} />
+            <text x={PAD.left + chartW - 4} y={toY(notaMediaGeral) - 3} fontSize={10}
+              fill={lineColor} textAnchor="end" fontWeight="700">∅ {notaMediaGeral.toFixed(1)}★</text>
           </>
         )}
-        {/* area fill */}
-        <path d={areaPath} fill="url(#svgGradNota)" />
-        {/* line */}
-        <polyline points={pts} fill="none" stroke="hsl(var(--primary))" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-        {/* dots (only when ≤ 24 points) */}
-        {data.length <= 24 && data.map((d, i) => (
-          <circle key={i} cx={toX(i)} cy={toY(d.media)} r={4}
-            fill="hsl(var(--primary))" stroke="hsl(var(--background))" strokeWidth={2}
-            style={{ cursor: "pointer" }}
-            onMouseEnter={(e) => { const rect = (e.target as SVGElement).closest("svg")!.getBoundingClientRect(); const svgX = toX(i) / W * rect.width + rect.left; const svgY = toY(d.media) / H * rect.height + rect.top; setTooltip({ x: svgX, y: svgY, item: d }); }}
-            onMouseLeave={() => setTooltip(null)}
-          />
+
+        {/* pontos interativos */}
+        {data.length <= 36 && pointCoords.map(([cx, cy], i) => (
+          <g key={i}>
+            <circle cx={cx} cy={cy} r={data.length <= 24 ? 5 : 3.5}
+              fill={lineColor} stroke="#1a1a2e" strokeWidth={2}
+              style={{ cursor: "pointer", transition: "r 0.15s" }}
+              onMouseEnter={(e) => {
+                const svgEl = (e.target as SVGElement).closest("svg")!;
+                const rect = svgEl.getBoundingClientRect();
+                const svgX = cx / W * rect.width + rect.left;
+                const svgY = cy / H * rect.height + rect.top;
+                setTooltip({ x: svgX, y: svgY, item: data[i] });
+              }}
+              onMouseLeave={() => setTooltip(null)}
+            />
+            {/* halo ao redor do ponto */}
+            <circle cx={cx} cy={cy} r={data.length <= 24 ? 8 : 6}
+              fill={lineColor} fillOpacity={0.15} pointerEvents="none" />
+          </g>
         ))}
-        {/* x-axis labels */}
-        {data.map((d, i) => i % step === 0 && (
-          <text key={i} x={toX(i)} y={H - 4} fontSize={9} fill="hsl(var(--muted-foreground))" textAnchor="middle">{d.mesLabel}</text>
-        ))}
-        {/* hover zones for many points */}
-        {data.length > 24 && data.map((d, i) => (
-          <rect key={i} x={toX(i) - chartW / data.length / 2} y={PAD.top} width={chartW / data.length} height={chartH}
+
+        {/* zonas hover para muitos pontos */}
+        {data.length > 36 && pointCoords.map(([cx, cy], i) => (
+          <rect key={i} x={cx - chartW / data.length / 2} y={PAD.top}
+            width={chartW / data.length} height={chartH}
             fill="transparent" style={{ cursor: "pointer" }}
-            onMouseEnter={(e) => { const rect2 = (e.target as SVGElement).closest("svg")!.getBoundingClientRect(); const svgX = toX(i) / W * rect2.width + rect2.left; const svgY = toY(d.media) / H * rect2.height + rect2.top; setTooltip({ x: svgX, y: svgY, item: d }); }}
+            onMouseEnter={(e) => {
+              const svgEl = (e.target as SVGElement).closest("svg")!;
+              const rect2 = svgEl.getBoundingClientRect();
+              const svgX = cx / W * rect2.width + rect2.left;
+              const svgY = cy / H * rect2.height + rect2.top;
+              setTooltip({ x: svgX, y: svgY, item: data[i] });
+            }}
             onMouseLeave={() => setTooltip(null)}
           />
         ))}
+
+        {/* labels do eixo X */}
+        {data.map((d, i) => i % step === 0 && (
+          <text key={i} x={toX(i)} y={H - 6} fontSize={9.5} fill="rgba(255,255,255,0.4)" textAnchor="middle">{d.mesLabel}</text>
+        ))}
+
+        {/* último ponto destacado com label */}
+        {pointCoords.length > 0 && (() => {
+          const last = data[data.length - 1];
+          const [lx, ly] = pointCoords[pointCoords.length - 1];
+          return (
+            <g>
+              <circle cx={lx} cy={ly} r={7} fill={lineColor} stroke="#1a1a2e" strokeWidth={2.5} />
+              <circle cx={lx} cy={ly} r={12} fill={lineColor} fillOpacity={0.2} />
+              <rect x={lx - 22} y={ly - 26} width={44} height={18} rx={5}
+                fill={lineColor} fillOpacity={0.9} />
+              <text x={lx} y={ly - 13} fontSize={11} fill="#1a1a2e" textAnchor="middle" fontWeight="800">{last.media}★</text>
+            </g>
+          );
+        })()}
       </svg>
+
+      {/* Tooltip */}
       {tooltip && (
         <div style={{
-          position: "fixed", left: tooltip.x + 12, top: tooltip.y - 40,
-          background: "hsl(var(--card))", border: "1px solid hsl(var(--border))",
-          borderRadius: 8, padding: "6px 10px", fontSize: 12, pointerEvents: "none", zIndex: 50,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+          position: "fixed",
+          left: tooltip.x + 14,
+          top: tooltip.y - 52,
+          background: "linear-gradient(135deg, #1e1e2e 0%, #16213e 100%)",
+          border: `1px solid ${lineColor}40`,
+          borderRadius: 10,
+          padding: "8px 14px",
+          fontSize: 12,
+          pointerEvents: "none",
+          zIndex: 50,
+          boxShadow: `0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px ${lineColor}20`,
+          minWidth: 130,
         }}>
-          <div className="font-semibold">{tooltip.item.mesLabel}</div>
-          <div>{tooltip.item.media} ★ &nbsp;<span className="text-muted-foreground">({tooltip.item.total} avaliações)</span></div>
+          <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 10, marginBottom: 2 }}>{tooltip.item.mesLabel}</div>
+          <div style={{ color: lineColor, fontWeight: 700, fontSize: 16 }}>{tooltip.item.media} ★</div>
+          <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 10 }}>{tooltip.item.total} avaliações</div>
         </div>
       )}
     </div>
