@@ -481,6 +481,52 @@ export async function getFaturamentoPorPagamento(extIds: number[], dataInicio: s
 
 // ─── Faturamento diário ───────────────────────────────────────────────────────
 
+export async function getEvolucaoDiaria(
+  extIds: number[],
+  dataInicio: string,
+  dataFimIncl: string // inclusivo
+) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+  const dataFimExcl = new Date(new Date(dataFimIncl + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+
+  return queryExternal<{
+    dia: string;
+    faturamento: number;
+    atendimentos: number;
+    clientes: number;
+    ticket_medio: number;
+    servicos: number;
+    produtos: number;
+    extra_qtd: number;
+    extra_valor: number;
+  }>(`
+    SELECT 
+      DATE(v.data_criacao) as dia,
+      COALESCE(SUM(vp.valor_total), 0) as faturamento,
+      COUNT(DISTINCT v.id) as atendimentos,
+      COUNT(DISTINCT v.cliente) as clientes,
+      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
+      COUNT(CASE WHEN p.tipo = 'ser' THEN 1 END) as servicos,
+      COUNT(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN 1 END) as produtos,
+      COUNT(CASE WHEN p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL) THEN 1 END) as extra_qtd,
+      COALESCE(SUM(CASE WHEN p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL) THEN vp.valor_total END), 0) as extra_valor
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    JOIN produtos p ON p.id = vp.produto
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+    GROUP BY DATE(v.data_criacao)
+    ORDER BY dia ASC
+  `, [dataInicio, dataFimExcl]);
+}
+
+/** @deprecated use getEvolucaoDiaria */
 export async function getFaturamentoDiario(extIds: number[], dataInicio: string, dataFim: string) {
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
@@ -504,7 +550,6 @@ export async function getFaturamentoDiario(extIds: number[], dataInicio: string,
       AND v.data_criacao >= ?
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
-      AND v.cancelado_motivo IS NULL
       AND v.status != 0
     GROUP BY DATE(v.data_criacao)
     ORDER BY dia ASC

@@ -15,14 +15,17 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, PieChart, Pie, Cell
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
+  ReferenceLine, Dot
 } from "recharts";
 import {
   DollarSign, Users, Scissors, TrendingUp,
   ArrowUpRight, ArrowDownRight, RefreshCw, Trophy, Calendar,
-  Target, BarChart3, UserCheck, ChevronRight, AlertCircle, ChevronDown, X
+  Target, BarChart3, UserCheck, ChevronRight, AlertCircle, ChevronDown, X,
+  TrendingDown, Sigma
 } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
@@ -267,23 +270,71 @@ export default function DataVipDashboard() {
   const isMesAtual = filter.mode === "month" && filter.periodo === currentPeriodo;
   const isRangeMode = filter.mode === "range";
 
+  // Seletor de métrica para o gráfico de evolução diária
+  type MetricKey = "faturamento" | "atendimentos" | "ticketMedio" | "clientes" | "clientesNovos" | "extraQtd" | "extraValor" | "servicos" | "produtos";
+  const [metrica, setMetrica] = useState<MetricKey>("faturamento");
+  const [chartType, setChartType] = useState<"area" | "line">("area");
+
+  const METRICAS: { key: MetricKey; label: string; format: (v: number) => string; color: string }[] = [
+    { key: "faturamento",   label: "Faturamento",    format: fmt,                                         color: "oklch(0.78 0.18 85)"  },
+    { key: "atendimentos",  label: "Atendimentos",   format: v => v.toLocaleString("pt-BR"),               color: "oklch(0.72 0.14 220)" },
+    { key: "ticketMedio",   label: "Ticket Médio",   format: v => fmt(v),                                  color: "oklch(0.75 0.15 145)" },
+    { key: "clientes",      label: "Clientes",       format: v => v.toLocaleString("pt-BR"),               color: "oklch(0.72 0.12 280)" },
+    { key: "clientesNovos", label: "Novos Clientes", format: v => v.toLocaleString("pt-BR"),               color: "oklch(0.75 0.15 340)" },
+    { key: "extraQtd",      label: "Extra (Qtd)",    format: v => v.toLocaleString("pt-BR"),               color: "oklch(0.72 0.14 30)"  },
+    { key: "extraValor",    label: "Extra (R$)",     format: fmt,                                         color: "oklch(0.72 0.15 50)"  },
+    { key: "servicos",      label: "Serviços",       format: v => v.toLocaleString("pt-BR"),               color: "oklch(0.72 0.12 200)" },
+    { key: "produtos",      label: "Produtos",       format: v => v.toLocaleString("pt-BR"),               color: "oklch(0.72 0.14 160)" },
+  ];
+  const metricaCfg = METRICAS.find(m => m.key === metrica) ?? METRICAS[0];
+
+  // Parâmetros para evolução diária (sempre range)
+  const evolParams = useMemo(() => {
+    if (filter.mode === "range") {
+      return { orgId, unitId, dataInicio: filter.dataInicio, dataFim: filter.dataFim };
+    }
+    // Modo mensal: calcular início e fim do mês
+    const [ano, mes] = filter.periodo.split("-").map(Number);
+    const dataInicio = `${ano}-${String(mes).padStart(2, "0")}-01`;
+    const lastDay = new Date(ano, mes, 0).getDate();
+    const dataFim = `${ano}-${String(mes).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    return { orgId, unitId, dataInicio, dataFim };
+  }, [filter, orgId, unitId]);
+
   const dashQ = trpc.dataVip.dashboard.useQuery(dashParams, { enabled: !!orgId });
-  const mensalQ = trpc.dataVip.faturamentoMensal.useQuery({ orgId, unitId, meses: 6 }, { enabled: !!orgId });
+  const evolQ = trpc.dataVip.evolucaoDiaria.useQuery(evolParams, { enabled: !!orgId });
   const colaborQ = trpc.dataVip.colaboradores.useQuery(colaborParams, { enabled: !!orgId });
   const prodQ = trpc.dataVip.faturamentoPorProduto.useQuery(prodParams, { enabled: !!orgId });
 
   const d = dashQ.data;
-  const mensal = mensalQ.data ?? [];
+  const evolData = evolQ.data ?? [];
   const colabs = (colaborQ.data ?? []).slice(0, 5);
   const produtos = (prodQ.data?.porProduto ?? []).slice(0, 5);
   const pagamentos = prodQ.data?.porPagamento ?? [];
 
   const mesesLabels = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-  const chartData = mensal.map(m => ({
-    mes: mesesLabels[parseInt(m.periodo.split("-")[1]) - 1],
-    faturamento: m.faturamento,
-    atendimentos: m.atendimentos,
-  }));
+
+  // Enriquecer evolData com clientesNovos (não vem da query diária — usar 0 como placeholder)
+  const evolChartData = useMemo(() => {
+    return evolData.map(r => ({
+      ...r,
+      clientesNovos: 0, // não disponível por dia sem subquery pesada
+      label: r.dia.slice(5), // MM-DD
+    }));
+  }, [evolData]);
+
+  // Estatísticas do gráfico
+  const evolStats = useMemo(() => {
+    if (evolChartData.length === 0) return null;
+    const vals = evolChartData.map(r => (r as any)[metrica] as number);
+    const total = vals.reduce((a, b) => a + b, 0);
+    const media = total / vals.length;
+    const maxVal = Math.max(...vals);
+    const minVal = Math.min(...vals);
+    const maxDia = evolChartData[vals.indexOf(maxVal)]?.label ?? "";
+    const minDia = evolChartData[vals.indexOf(minVal)]?.label ?? "";
+    return { total, media, maxVal, minVal, maxDia, minDia };
+  }, [evolChartData, metrica]);
 
   const periodos = useMemo(() => {
     const list = [];
@@ -538,32 +589,140 @@ export default function DataVipDashboard() {
         </Card>
       </div>
 
-      {/* Gráfico mensal + Formas de pagamento */}
+      {/* Evolução Diária + Formas de pagamento */}
       <div className="grid lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 bg-[oklch(0.12_0.01_240)] border-[oklch(0.22_0.02_240)]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Faturamento Mensal</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-primary" />
+                Evolução Diária
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                {/* Toggle área/linha */}
+                <div className="flex border border-border rounded-md overflow-hidden">
+                  <button
+                    onClick={() => setChartType("area")}
+                    className={`px-2 py-1 text-xs transition-colors ${
+                      chartType === "area" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <TrendingUp className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={() => setChartType("line")}
+                    className={`px-2 py-1 text-xs transition-colors ${
+                      chartType === "line" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <BarChart3 className="w-3 h-3" />
+                  </button>
+                </div>
+                <Select value={metrica} onValueChange={v => setMetrica(v as typeof metrica)}>
+                  <SelectTrigger className="h-7 text-xs w-[140px] border-primary/50 text-primary font-medium">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {METRICAS.map(m => (
+                      <SelectItem key={m.key} value={m.key} className="text-xs">{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
-            {mensalQ.isLoading
-              ? <Skeleton className="h-48 w-full" />
-              : chartData.length === 0
-                ? <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">
-                    <AlertCircle className="w-4 h-4 mr-2" /> Sem dados — sincronize para ver o histórico
+          <CardContent className="pt-0">
+            {/* Mini KPIs */}
+            {evolStats && (
+              <div className="grid grid-cols-4 gap-2 mb-3">
+                <div className="text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center justify-center gap-1">
+                    <Sigma className="w-3 h-3" /> Acumulado
+                  </p>
+                  <p className="text-sm font-bold text-foreground">
+                    {metrica === "clientesNovos" ? "—" : metricaCfg.format(evolStats.total)}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Média/Dia</p>
+                  <p className="text-sm font-bold text-foreground">{metricaCfg.format(evolStats.media)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-green-400 uppercase tracking-wide flex items-center justify-center gap-1">
+                    <TrendingUp className="w-3 h-3" /> Máximo
+                  </p>
+                  <p className="text-sm font-bold text-green-400">
+                    {metricaCfg.format(evolStats.maxVal)}
+                    <span className="text-[10px] text-muted-foreground ml-1">{evolStats.maxDia}</span>
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] text-red-400 uppercase tracking-wide flex items-center justify-center gap-1">
+                    <TrendingDown className="w-3 h-3" /> Mínimo
+                  </p>
+                  <p className="text-sm font-bold text-red-400">
+                    {metricaCfg.format(evolStats.minVal)}
+                    <span className="text-[10px] text-muted-foreground ml-1">{evolStats.minDia}</span>
+                  </p>
+                </div>
+              </div>
+            )}
+            {evolQ.isLoading
+              ? <Skeleton className="h-[180px] w-full" />
+              : evolChartData.length === 0
+                ? <div className="h-[180px] flex items-center justify-center text-muted-foreground text-sm">
+                    <AlertCircle className="w-4 h-4 mr-2" /> Sem dados para este período
                   </div>
-                : <ResponsiveContainer width="100%" height={200}>
-                    <AreaChart data={chartData}>
+                : <ResponsiveContainer width="100%" height={180}>
+                    <AreaChart data={evolChartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                       <defs>
-                        <linearGradient id="gradFat" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="oklch(0.75 0.15 200)" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="oklch(0.75 0.15 200)" stopOpacity={0} />
+                        <linearGradient id={`gradEvol-${metrica}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor={metricaCfg.color} stopOpacity={0.35} />
+                          <stop offset="95%" stopColor={metricaCfg.color} stopOpacity={0.02} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0)" />
-                      <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-                      <YAxis tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(v: number) => [fmt(v), "Faturamento"]} />
-                      <Area type="monotone" dataKey="faturamento" stroke="oklch(0.75 0.15 200)" fill="url(#gradFat)" strokeWidth={2} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.01 240)" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 10, fill: "oklch(0.55 0.01 240)" }}
+                        tickLine={false}
+                        axisLine={false}
+                        interval="preserveStartEnd"
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: "oklch(0.55 0.01 240)" }}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={v => {
+                          if (metrica === "faturamento" || metrica === "ticketMedio" || metrica === "extraValor") {
+                            return v >= 1000 ? `R$${(v/1000).toFixed(0)}k` : `R$${v.toFixed(0)}`;
+                          }
+                          return v.toLocaleString("pt-BR");
+                        }}
+                        width={52}
+                      />
+                      <Tooltip
+                        contentStyle={{ background: "oklch(0.15 0.01 240)", border: "1px solid oklch(0.25 0.02 240)", borderRadius: 8, fontSize: 12 }}
+                        formatter={(v: number) => [metricaCfg.format(v), metricaCfg.label]}
+                        labelFormatter={l => `Dia ${l}`}
+                      />
+                      {evolStats && (
+                        <ReferenceLine
+                          y={evolStats.media}
+                          stroke="oklch(0.55 0.01 240)"
+                          strokeDasharray="4 4"
+                          label={{ value: "Méd", position: "insideTopRight", fontSize: 9, fill: "oklch(0.55 0.01 240)" }}
+                        />
+                      )}
+                      <Area
+                        type="monotone"
+                        dataKey={metrica}
+                        stroke={metricaCfg.color}
+                        strokeWidth={2}
+                        fill={chartType === "area" ? `url(#gradEvol-${metrica})` : "none"}
+                        dot={false}
+                        activeDot={{ r: 4, fill: metricaCfg.color, stroke: "oklch(0.12 0.01 240)", strokeWidth: 2 }}
+                      />
                     </AreaChart>
                   </ResponsiveContainer>
             }

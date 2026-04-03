@@ -17,6 +17,7 @@ import {
   getFaturamentoPorPagamento,
   getFaturamentoPorProduto,
   getFaturamentoDiario,
+  getEvolucaoDiaria,
   getColaboradores,
   getColaboradoresByRange,
   getRankingUnidades,
@@ -902,6 +903,32 @@ export const dataVipRouter = router({
         `);
       }
       return { success: true, count: input.servicos.length };
+    }),
+
+  // ── Evolução diária (gráfico) ────────────────────────────────────────────────
+  evolucaoDiaria: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(), // YYYY-MM-DD
+      dataFim: z.string(),    // YYYY-MM-DD (inclusivo)
+    }))
+    .query(async ({ ctx, input }) => {
+      const { extIds } = await resolveExternalIds(
+        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+      );
+      const rows = await getEvolucaoDiaria(extIds, input.dataInicio, input.dataFim);
+      return rows.map(r => ({
+        dia: String(r.dia).slice(0, 10),
+        faturamento: Number(r.faturamento),
+        atendimentos: Number(r.atendimentos),
+        clientes: Number(r.clientes),
+        ticketMedio: Math.round(Number(r.ticket_medio) * 100) / 100,
+        servicos: Number(r.servicos),
+        produtos: Number(r.produtos),
+        extraQtd: Number(r.extra_qtd),
+        extraValor: Number(r.extra_valor),
+      }));
     }),
 
 });
