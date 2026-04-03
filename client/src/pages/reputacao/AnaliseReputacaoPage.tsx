@@ -9,6 +9,7 @@ import {
   AlertCircle, ShieldCheck,
 } from "lucide-react";
 import { EvolucaoNotaChart, type EvolucaoItem } from "@/components/reputacao/EvolucaoNotaChart";
+import { NPSGauge } from "@/components/reputacao/NPSGauge";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
 import {
@@ -40,10 +41,9 @@ function WordCloud({ words }: { words: Array<{ word: string; count: number; sent
   const fontSize = (count: number) => {
     if (maxCount === minCount) return 18;
     const normalized = (count - minCount) / (maxCount - minCount);
-    return Math.round(11 + normalized * 24); // 11px a 35px
+    return Math.round(11 + normalized * 24);
   };
 
-  // Layout em grade simples com quebra de linha
   const [hoveredWord, setHoveredWord] = useState<string | null>(null);
 
   return (
@@ -178,6 +178,21 @@ export default function AnaliseReputacaoPage() {
   }));
 
   const resumo = resumoQuery.data;
+
+  // porNota raw para o NPSGauge (com valores numéricos)
+  // Usa dados do período selecionado; se vazio, usa distribuicaoNotas do resumo (todo histórico)
+  const porNotaFromAnalise = (analiseQuery.data?.porNota || []).map((n: any) => ({
+    nota: Math.round(Number(n.nota)),
+    total: Number(n.total),
+  }));
+  const porNotaFromResumo = resumo?.distribuicaoNotas
+    ? Object.entries(resumo.distribuicaoNotas as Record<string, number>).map(([nota, total]) => ({
+        nota: Math.round(Number(nota)),
+        total: Number(total),
+      }))
+    : [];
+  const porNotaRaw = porNotaFromAnalise.length > 0 ? porNotaFromAnalise : porNotaFromResumo;
+  const npsUsandoHistorico = porNotaFromAnalise.length === 0 && porNotaFromResumo.length > 0;
   const sentimentoData = resumo ? [
     { name: "Positivas", value: Number(resumo.totalPositivas) },
     { name: "Neutras", value: Number(resumo.totalNeutras) },
@@ -188,7 +203,6 @@ export default function AnaliseReputacaoPage() {
   const alertas = alertasQuery.data || [];
   const palavras = palavrasQuery.data || [];
 
-  // Conta alertas críticos para badge no header
   const alertasCriticos = alertas.filter(a => a.tipo === "critico").length;
   const alertasAtencao = alertas.filter(a => a.tipo === "atencao").length;
 
@@ -244,60 +258,88 @@ export default function AnaliseReputacaoPage() {
         ))}
       </div>
 
-      {/* ── Alertas de Queda de Nota ── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Zap className="w-4 h-4 text-amber-500" />
-            Alertas de Reputação
-            {alertasCriticos > 0 && (
-              <Badge className="bg-red-500/10 text-red-400 border-red-500/20 text-xs ml-1">
-                {alertasCriticos} crítico{alertasCriticos > 1 ? "s" : ""}
-              </Badge>
+      {/* ── NPS Estimado + Alertas (lado a lado) ── */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* NPS Gauge */}
+        <Card className="lg:col-span-1">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Star className="w-4 h-4 text-amber-500" />
+              NPS Estimado
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              {npsUsandoHistorico ? (
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                  Usando todo o histórico (sem dados no período)
+                </span>
+              ) : "Net Promoter Score baseado nas notas do período selecionado"}
+            </p>
+          </CardHeader>
+          <CardContent>
+            {analiseQuery.isLoading ? (
+              <div className="h-48 rounded-lg bg-muted animate-pulse" />
+            ) : (
+              <NPSGauge porNota={porNotaRaw} />
             )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {alertasQuery.isLoading ? (
-            <div className="space-y-2">
-              {[1, 2].map(i => <div key={i} className="h-14 rounded-lg bg-muted animate-pulse" />)}
-            </div>
-          ) : alertas.length === 0 ? (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm p-3">
-              <CheckCircle className="w-4 h-4 text-green-500" />
-              Sem alertas no momento.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {alertas.map((alerta, i) => (
-                <div
-                  key={i}
-                  className={`flex items-start gap-3 p-3 rounded-lg border ${
-                    alerta.tipo === "critico"
-                      ? "bg-red-500/5 border-red-500/20"
-                      : alerta.tipo === "atencao"
-                      ? "bg-amber-500/5 border-amber-500/20"
-                      : "bg-green-500/5 border-green-500/20"
-                  }`}
-                >
-                  <AlertIcon tipo={alerta.tipo} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm">{alerta.titulo}</span>
-                      {alerta.valor && (
-                        <Badge className={`text-xs ${alertBadgeClass(alerta.tipo)}`}>
-                          {alerta.valor}
-                        </Badge>
-                      )}
+          </CardContent>
+        </Card>
+
+        {/* Alertas de Reputação */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Zap className="w-4 h-4 text-amber-500" />
+              Alertas de Reputação
+              {alertasCriticos > 0 && (
+                <Badge className="bg-red-500/10 text-red-400 border-red-500/20 text-xs ml-1">
+                  {alertasCriticos} crítico{alertasCriticos > 1 ? "s" : ""}
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {alertasQuery.isLoading ? (
+              <div className="space-y-2">
+                {[1, 2].map(i => <div key={i} className="h-14 rounded-lg bg-muted animate-pulse" />)}
+              </div>
+            ) : alertas.length === 0 ? (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm p-3">
+                <CheckCircle className="w-4 h-4 text-green-500" />
+                Sem alertas no momento.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {alertas.map((alerta, i) => (
+                  <div
+                    key={i}
+                    className={`flex items-start gap-3 p-3 rounded-lg border ${
+                      alerta.tipo === "critico"
+                        ? "bg-red-500/5 border-red-500/20"
+                        : alerta.tipo === "atencao"
+                        ? "bg-amber-500/5 border-amber-500/20"
+                        : "bg-green-500/5 border-green-500/20"
+                    }`}
+                  >
+                    <AlertIcon tipo={alerta.tipo} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm">{alerta.titulo}</span>
+                        {alerta.valor && (
+                          <Badge className={`text-xs ${alertBadgeClass(alerta.tipo)}`}>
+                            {alerta.valor}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">{alerta.descricao}</p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{alerta.descricao}</p>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* ── Tempo Médio de Resposta da IA ── */}
       <Card>
@@ -319,7 +361,6 @@ export default function AnaliseReputacaoPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Destaque: tempo médio */}
               <div className="flex items-center gap-4 p-3 rounded-lg bg-primary/5 border border-primary/10">
                 <div className="p-2 rounded-lg bg-primary/10">
                   <Clock className="w-5 h-5 text-primary" />
@@ -329,7 +370,6 @@ export default function AnaliseReputacaoPage() {
                   <div className="text-xs text-muted-foreground">Tempo médio de resposta · {tempo.total} respostas automáticas</div>
                 </div>
               </div>
-              {/* Distribuição */}
               <div className="space-y-2">
                 <ProgressBar
                   value={tempo.menosDeUmaHora}
