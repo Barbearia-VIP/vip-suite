@@ -91,6 +91,81 @@ async function getKpisRealtime(extIds: number[], ano: number, mes: number) {
   return { ...(rows[0] ?? {}), ...(servicosRows[0] ?? {}) };
 }
 
+/** Busca KPIs por range de datas livre (tempo real, tabela vendas) */
+export async function getKpisRealtimeByRange(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+  // dataFim é inclusivo: adicionar 1 dia para usar < no WHERE
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+  const rows = await queryExternal<{
+    total_vendas: number;
+    quantidade_vendas: number;
+    ticket_medio_por_venda: number;
+    total_clientes_novos: number;
+    total_clientes_antigos: number;
+  }>(`
+    SELECT 
+      COALESCE(SUM(v.valor_total), 0) as total_vendas,
+      COUNT(DISTINCT v.id) as quantidade_vendas,
+      COALESCE(AVG(v.valor_total), 0) as ticket_medio_por_venda,
+      COUNT(DISTINCT CASE WHEN c.data_criacao >= ? THEN v.cliente END) as total_clientes_novos,
+      COUNT(DISTINCT CASE WHEN c.data_criacao < ? OR c.data_criacao IS NULL THEN v.cliente END) as total_clientes_antigos
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    LEFT JOIN clientes c ON c.id = v.cliente
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND v.status != 0
+  `, [dataInicio, dataInicio, dataInicio, dataFimExcl]);
+  const servicosRows = await queryExternal<{
+    total_servicos_realizados: number;
+    total_servicos_base: number;
+    total_servicos_extra: number;
+    total_produtos_vendidos: number;
+  }>(`
+    SELECT 
+      COUNT(*) as total_servicos_realizados,
+      COUNT(CASE WHEN p.tipo = 'ser' THEN 1 END) as total_servicos_base,
+      COUNT(CASE WHEN p.tipo NOT IN ('ser','probar','proemp','proins','lavavip') THEN 1 END) as total_servicos_extra,
+      COUNT(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN 1 END) as total_produtos_vendidos
+    FROM vendas_produtos vp
+    JOIN vendas v ON vp.venda = v.id
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN produtos p ON p.id = vp.produto
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND v.status != 0
+  `, [dataInicio, dataFimExcl]);
+  const cur = { ...(rows[0] ?? {}), ...(servicosRows[0] ?? {}) } as Record<string, number>;
+  const fat = Number(cur.total_vendas ?? 0);
+  const atend = Number(cur.quantidade_vendas ?? 0);
+  const totalClientes = Number(cur.total_clientes_novos ?? 0) + Number(cur.total_clientes_antigos ?? 0);
+  return {
+    faturamento: fat,
+    faturamentoAnterior: 0,
+    crescimentoFat: 0,
+    atendimentos: atend,
+    atendimentosAnterior: 0,
+    crescimentoAtend: 0,
+    ticketMedio: atend > 0 ? fat / atend : 0,
+    clientesNovos: Number(cur.total_clientes_novos ?? 0),
+    clientesAntigos: Number(cur.total_clientes_antigos ?? 0),
+    totalClientes,
+    servicosBase: Number(cur.total_servicos_base ?? 0),
+    servicosExtra: Number(cur.total_servicos_extra ?? 0),
+    servicosTotal: Number(cur.total_servicos_realizados ?? 0),
+    produtosVendidos: Number(cur.total_produtos_vendidos ?? 0),
+    isMesAtual: false,
+  };
+}
+
 export async function getDashboardKpis(extIds: number[], ano: number, mes: number) {
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `unidade = ${extIds[0]}`

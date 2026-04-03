@@ -12,6 +12,7 @@ import { sql } from "drizzle-orm";
 import { getSyncStatus, getAllSyncStatuses, startAutoSyncScheduler } from "../vipDataSync";
 import {
   getDashboardKpis,
+  getKpisRealtimeByRange,
   getFaturamentoMensal,
   getFaturamentoPorPagamento,
   getFaturamentoPorProduto,
@@ -98,12 +99,31 @@ export const dataVipRouter = router({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
       periodo: z.string().optional(),
+      dataInicio: z.string().optional(), // YYYY-MM-DD — filtro livre
+      dataFim: z.string().optional(),    // YYYY-MM-DD — filtro livre
     }))
     .query(async ({ ctx, input }) => {
       const { extIds, isAdmin } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
       const now = new Date();
+      // Modo range livre (dia único ou intervalo)
+      if (input.dataInicio && input.dataFim) {
+        const kpis = await getKpisRealtimeByRange(extIds, input.dataInicio, input.dataFim);
+        return {
+          periodo: `${input.dataInicio}:${input.dataFim}`,
+          faturamento: kpis.faturamento,
+          varFaturamento: 0,
+          atendimentos: kpis.atendimentos,
+          varAtendimentos: 0,
+          ticketMedio: Math.round(kpis.ticketMedio * 100) / 100,
+          clientesAtendidos: kpis.totalClientes,
+          clientesNovos: kpis.clientesNovos,
+          isAdmin,
+          isRangeMode: true,
+        };
+      }
+      // Modo mensal (padrão)
       const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const [ano, mes] = periodo.split("-").map(Number);
       const kpis = await getDashboardKpis(extIds, ano, mes);
@@ -117,6 +137,7 @@ export const dataVipRouter = router({
         clientesAtendidos: kpis.totalClientes,
         clientesNovos: kpis.clientesNovos,
         isAdmin,
+        isRangeMode: false,
       };
     }),
 
