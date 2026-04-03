@@ -346,7 +346,7 @@ export default function DataVipDashboard() {
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           {
             label: "Faturamento",
@@ -373,12 +373,6 @@ export default function DataVipDashboard() {
             value: d ? d.clientesAtendidos.toLocaleString("pt-BR") : "—",
             icon: Users,
             color: "text-purple-400",
-          },
-          {
-            label: "Clientes Novos",
-            value: d ? d.clientesNovos.toLocaleString("pt-BR") : "—",
-            icon: UserCheck,
-            color: "text-pink-400",
           },
         ].map((kpi, i) => (
           <Card key={i}>
@@ -410,6 +404,40 @@ export default function DataVipDashboard() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* KPIs secundários: Serviços e Produtos */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Serviços Realizados</p>
+                {dashQ.isLoading
+                  ? <Skeleton className="h-7 w-24" />
+                  : <p className="text-xl font-bold">{d ? (d.servicosTotal ?? 0).toLocaleString("pt-BR") : "—"}</p>
+                }
+                <p className="text-xs text-muted-foreground">cortes e serviços no período</p>
+              </div>
+              <Scissors className="w-5 h-5 text-cyan-400 opacity-70" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Produtos Vendidos</p>
+                {dashQ.isLoading
+                  ? <Skeleton className="h-7 w-24" />
+                  : <p className="text-xl font-bold">{d ? (d.produtosVendidos ?? 0).toLocaleString("pt-BR") : "—"}</p>
+                }
+                <p className="text-xs text-muted-foreground">itens de produto no período</p>
+              </div>
+              <BarChart3 className="w-5 h-5 text-orange-400 opacity-70" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Gráfico mensal + Formas de pagamento */}

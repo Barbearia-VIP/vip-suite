@@ -120,6 +120,8 @@ export const dataVipRouter = router({
           ticketMedio: Math.round(kpis.ticketMedio * 100) / 100,
           clientesAtendidos: kpis.totalClientes,
           clientesNovos: kpis.clientesNovos,
+          servicosTotal: kpis.servicosTotal,
+          produtosVendidos: kpis.produtosVendidos,
           isAdmin,
           isRangeMode: true,
         };
@@ -137,6 +139,8 @@ export const dataVipRouter = router({
         ticketMedio: Math.round(kpis.ticketMedio * 100) / 100,
         clientesAtendidos: kpis.totalClientes,
         clientesNovos: kpis.clientesNovos,
+        servicosTotal: kpis.servicosTotal,
+        produtosVendidos: kpis.produtosVendidos,
         isAdmin,
         isRangeMode: false,
       };
