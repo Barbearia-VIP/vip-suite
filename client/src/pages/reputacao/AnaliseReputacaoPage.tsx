@@ -1,8 +1,13 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import PageHeader from "@/components/PageHeader";
-import { BarChart3, TrendingUp, ThumbsUp, ThumbsDown, Star } from "lucide-react";
+import {
+  BarChart3, TrendingUp, ThumbsUp, ThumbsDown, Star,
+  Clock, AlertTriangle, CheckCircle, Info, Zap, Timer,
+  AlertCircle, ShieldCheck,
+} from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
 import {
@@ -12,10 +17,98 @@ import {
 
 const COLORS = ["#22c55e", "#f59e0b", "#ef4444"];
 
+// ── Nuvem de Palavras SVG puro ──────────────────────────────────────────────
+function WordCloud({ words }: { words: Array<{ word: string; count: number; sentimento: string }> }) {
+  if (!words.length) {
+    return (
+      <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
+        Sem comentários suficientes no período
+      </div>
+    );
+  }
+
+  const maxCount = Math.max(...words.map(w => w.count));
+  const minCount = Math.min(...words.map(w => w.count));
+
+  const sentimentoColor = (s: string) => {
+    if (s === "positivo") return "#22c55e";
+    if (s === "negativo") return "#ef4444";
+    return "#94a3b8";
+  };
+
+  const fontSize = (count: number) => {
+    if (maxCount === minCount) return 18;
+    const normalized = (count - minCount) / (maxCount - minCount);
+    return Math.round(11 + normalized * 24); // 11px a 35px
+  };
+
+  // Layout em grade simples com quebra de linha
+  const [hoveredWord, setHoveredWord] = useState<string | null>(null);
+
+  return (
+    <div className="flex flex-wrap gap-2 p-2 min-h-[180px] items-center justify-center">
+      {words.slice(0, 50).map((w) => (
+        <span
+          key={w.word}
+          onMouseEnter={() => setHoveredWord(w.word)}
+          onMouseLeave={() => setHoveredWord(null)}
+          className="cursor-default transition-all duration-150 select-none"
+          style={{
+            fontSize: `${fontSize(w.count)}px`,
+            color: sentimentoColor(w.sentimento),
+            fontWeight: w.count > maxCount * 0.6 ? 700 : w.count > maxCount * 0.3 ? 600 : 400,
+            opacity: hoveredWord && hoveredWord !== w.word ? 0.4 : 1,
+            textShadow: hoveredWord === w.word ? `0 0 8px ${sentimentoColor(w.sentimento)}80` : "none",
+            lineHeight: 1.3,
+          }}
+          title={`"${w.word}" — ${w.count}x (${w.sentimento})`}
+        >
+          {w.word}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ── Barra de progresso colorida ─────────────────────────────────────────────
+function ProgressBar({ value, color, label, pct }: { value: number; color: string; label: string; pct: number }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-xs text-muted-foreground">
+        <span>{label}</span>
+        <span className="font-medium" style={{ color }}>{value} ({pct}%)</span>
+      </div>
+      <div className="h-2 rounded-full bg-muted overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${pct}%`, backgroundColor: color }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── Ícone de alerta por tipo ─────────────────────────────────────────────────
+function AlertIcon({ tipo }: { tipo: string }) {
+  if (tipo === "critico") return <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />;
+  if (tipo === "atencao") return <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />;
+  return <ShieldCheck className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />;
+}
+
+// ── Cor do badge por tipo ────────────────────────────────────────────────────
+function alertBadgeClass(tipo: string) {
+  if (tipo === "critico") return "bg-red-500/10 text-red-400 border-red-500/20";
+  if (tipo === "atencao") return "bg-amber-500/10 text-amber-400 border-amber-500/20";
+  return "bg-green-500/10 text-green-400 border-green-500/20";
+}
+
+// ── Componente principal ─────────────────────────────────────────────────────
 export default function AnaliseReputacaoPage() {
   const { selectedUnit } = useApp();
   const unitId = selectedUnit?.id ?? 0;
   const [periodo, setPeriodo] = useState<"7d" | "30d" | "90d" | "12m">("30d");
+  const [periodoNuvem, setPeriodoNuvem] = useState<"7d" | "30d" | "90d" | "12m" | "all">("all");
+  const [sentimentoNuvem, setSentimentoNuvem] = useState<"todos" | "positivo" | "neutro" | "negativo">("todos");
 
   const analiseQuery = trpc.reputacao.getAnalise.useQuery(
     { unitId, periodo },
@@ -23,6 +116,21 @@ export default function AnaliseReputacaoPage() {
   );
 
   const resumoQuery = trpc.reputacao.getResumo.useQuery(
+    { unitId },
+    { enabled: !!unitId }
+  );
+
+  const palavrasQuery = trpc.reputacao.getPalavrasChave.useQuery(
+    { unitId, periodo: periodoNuvem, sentimento: sentimentoNuvem },
+    { enabled: !!unitId }
+  );
+
+  const tempoRespostaQuery = trpc.reputacao.getTempoResposta.useQuery(
+    { unitId },
+    { enabled: !!unitId }
+  );
+
+  const alertasQuery = trpc.reputacao.getAlertas.useQuery(
     { unitId },
     { enabled: !!unitId }
   );
@@ -53,24 +161,47 @@ export default function AnaliseReputacaoPage() {
     { name: "Negativas", value: Number(resumo.totalNegativas) },
   ] : [];
 
+  const tempo = tempoRespostaQuery.data;
+  const alertas = alertasQuery.data || [];
+  const palavras = palavrasQuery.data || [];
+
+  // Conta alertas críticos para badge no header
+  const alertasCriticos = alertas.filter(a => a.tipo === "critico").length;
+  const alertasAtencao = alertas.filter(a => a.tipo === "atencao").length;
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Análise de Reputação"
         description="Métricas detalhadas de sentimento e tendências"
         actions={
-          <Select value={periodo} onValueChange={(v: any) => setPeriodo(v)}>
-            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7d">Últimos 7 dias</SelectItem>
-              <SelectItem value="30d">Últimos 30 dias</SelectItem>
-              <SelectItem value="90d">Últimos 90 dias</SelectItem>
-              <SelectItem value="12m">Último ano</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            {alertasCriticos > 0 && (
+              <Badge className="bg-red-500/10 text-red-400 border-red-500/20 gap-1">
+                <AlertCircle className="w-3 h-3" />
+                {alertasCriticos} crítico{alertasCriticos > 1 ? "s" : ""}
+              </Badge>
+            )}
+            {alertasAtencao > 0 && alertasCriticos === 0 && (
+              <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20 gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                {alertasAtencao} alerta{alertasAtencao > 1 ? "s" : ""}
+              </Badge>
+            )}
+            <Select value={periodo} onValueChange={(v: any) => setPeriodo(v)}>
+              <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                <SelectItem value="90d">Últimos 90 dias</SelectItem>
+                <SelectItem value="12m">Último ano</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         }
       />
 
+      {/* ── KPIs ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Nota Média", value: resumo ? parseFloat(String(resumo.notaMedia)).toFixed(1) + " ★" : "—", icon: Star, color: "text-amber-500", bg: "bg-amber-500/10" },
@@ -90,6 +221,118 @@ export default function AnaliseReputacaoPage() {
         ))}
       </div>
 
+      {/* ── Alertas de Queda de Nota ── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Zap className="w-4 h-4 text-amber-500" />
+            Alertas de Reputação
+            {alertasCriticos > 0 && (
+              <Badge className="bg-red-500/10 text-red-400 border-red-500/20 text-xs ml-1">
+                {alertasCriticos} crítico{alertasCriticos > 1 ? "s" : ""}
+              </Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {alertasQuery.isLoading ? (
+            <div className="space-y-2">
+              {[1, 2].map(i => <div key={i} className="h-14 rounded-lg bg-muted animate-pulse" />)}
+            </div>
+          ) : alertas.length === 0 ? (
+            <div className="flex items-center gap-2 text-muted-foreground text-sm p-3">
+              <CheckCircle className="w-4 h-4 text-green-500" />
+              Sem alertas no momento.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {alertas.map((alerta, i) => (
+                <div
+                  key={i}
+                  className={`flex items-start gap-3 p-3 rounded-lg border ${
+                    alerta.tipo === "critico"
+                      ? "bg-red-500/5 border-red-500/20"
+                      : alerta.tipo === "atencao"
+                      ? "bg-amber-500/5 border-amber-500/20"
+                      : "bg-green-500/5 border-green-500/20"
+                  }`}
+                >
+                  <AlertIcon tipo={alerta.tipo} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{alerta.titulo}</span>
+                      {alerta.valor && (
+                        <Badge className={`text-xs ${alertBadgeClass(alerta.tipo)}`}>
+                          {alerta.valor}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{alerta.descricao}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Tempo Médio de Resposta da IA ── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Timer className="w-4 h-4 text-primary" />
+            Tempo de Resposta da IA
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {tempoRespostaQuery.isLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => <div key={i} className="h-8 rounded bg-muted animate-pulse" />)}
+            </div>
+          ) : !tempo || tempo.total === 0 ? (
+            <div className="flex items-center gap-2 text-muted-foreground text-sm p-3">
+              <Info className="w-4 h-4" />
+              Sem respostas automáticas registradas ainda.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Destaque: tempo médio */}
+              <div className="flex items-center gap-4 p-3 rounded-lg bg-primary/5 border border-primary/10">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Clock className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-primary">{tempo.mediaFormatada}</div>
+                  <div className="text-xs text-muted-foreground">Tempo médio de resposta · {tempo.total} respostas automáticas</div>
+                </div>
+              </div>
+              {/* Distribuição */}
+              <div className="space-y-2">
+                <ProgressBar
+                  value={tempo.menosDeUmaHora}
+                  pct={tempo.pctMenosDeUmaHora}
+                  color="#22c55e"
+                  label="Respondidas em menos de 1h"
+                />
+                <ProgressBar
+                  value={tempo.entre1e24h}
+                  pct={tempo.pctEntre1e24h}
+                  color="#f59e0b"
+                  label="Respondidas entre 1h e 24h"
+                />
+                <ProgressBar
+                  value={tempo.maisDe24h}
+                  pct={tempo.pctMaisDe24h}
+                  color="#ef4444"
+                  label="Respondidas após 24h"
+                />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Gráficos existentes ── */}
       <div className="grid lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader><CardTitle className="text-base flex items-center gap-2"><TrendingUp className="w-4 h-4 text-primary" />Evolução da Nota Média</CardTitle></CardHeader>
@@ -167,6 +410,64 @@ export default function AnaliseReputacaoPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── Nuvem de Palavras ── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-primary" />
+              Nuvem de Palavras dos Comentários
+            </CardTitle>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> positivo
+                <span className="w-2 h-2 rounded-full bg-red-500 inline-block ml-2" /> negativo
+                <span className="w-2 h-2 rounded-full bg-slate-400 inline-block ml-2" /> neutro
+              </div>
+              <Select value={sentimentoNuvem} onValueChange={(v: any) => setSentimentoNuvem(v)}>
+                <SelectTrigger className="w-28 h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="positivo">Positivos</SelectItem>
+                  <SelectItem value="neutro">Neutros</SelectItem>
+                  <SelectItem value="negativo">Negativos</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={periodoNuvem} onValueChange={(v: any) => setPeriodoNuvem(v)}>
+                <SelectTrigger className="w-32 h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                  <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                  <SelectItem value="90d">Últimos 90 dias</SelectItem>
+                  <SelectItem value="12m">Último ano</SelectItem>
+                  <SelectItem value="all">Todo o histórico</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {palavrasQuery.isLoading ? (
+            <div className="flex flex-wrap gap-2 p-2 min-h-[180px] items-center justify-center">
+              {Array.from({ length: 20 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-5 rounded bg-muted animate-pulse"
+                  style={{ width: `${40 + Math.random() * 60}px` }}
+                />
+              ))}
+            </div>
+          ) : (
+            <WordCloud words={palavras} />
+          )}
+          {!palavrasQuery.isLoading && palavras.length > 0 && (
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              {palavras.length} palavras · tamanho proporcional à frequência · passe o mouse para detalhes
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

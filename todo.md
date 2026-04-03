@@ -611,3 +611,9 @@
 - [x] Criar procedure tRPC getHistoricoAutoResposta no reputacao.ts
 - [x] Criar componente HistoricoAutoResposta.tsx na página de Reputação
 - [x] Adicionar aba "Histórico Auto-Resposta" na navegação do módulo Reputação
+
+## Melhorias Aba Análise de Reputação
+
+- [ ] Nuvem de Palavras dos comentários (palavras mais frequentes, coloridas por sentimento)
+- [ ] KPIs de Tempo Médio de Resposta da IA (tempo médio, % respondidas em <1h, <24h, >24h)
+- [ ] Alertas de Queda de Nota (badge vermelho/amarelo se nota caiu 0.3★ ou 2+ negativas na semana)

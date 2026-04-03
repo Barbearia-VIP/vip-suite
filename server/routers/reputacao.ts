@@ -995,4 +995,145 @@ Gere uma resposta personalizada e única para esta avaliação.`;
         ultimaResposta: row.ultimaResposta ? new Date(row.ultimaResposta) : null,
       };
     }),
+
+  // ── Palavras-chave dos comentários (Nuvem de Palavras) ────────────────────
+  getPalavrasChave: protectedProcedure
+    .input(z.object({
+      unitId: z.number(),
+      periodo: z.enum(["7d", "30d", "90d", "12m", "all"]).default("30d"),
+      sentimento: z.enum(["todos", "positivo", "neutro", "negativo"]).default("todos"),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const dias = input.periodo === "7d" ? 7 : input.periodo === "30d" ? 30 : input.periodo === "90d" ? 90 : input.periodo === "12m" ? 365 : null;
+      const desde = dias ? new Date(Date.now() - dias * 24 * 60 * 60 * 1000) : null;
+      const conditions: any[] = [eq(repAvaliacoes.unitId, input.unitId), sql`${repAvaliacoes.comentario} IS NOT NULL`, sql`${repAvaliacoes.comentario} != ''`];
+      if (desde) conditions.push(gte(repAvaliacoes.dataAvaliacao, desde));
+      if (input.sentimento !== "todos") conditions.push(eq(repAvaliacoes.sentimento, input.sentimento as any));
+      const rows = await db.select({ comentario: repAvaliacoes.comentario, sentimento: repAvaliacoes.sentimento })
+        .from(repAvaliacoes)
+        .where(and(...conditions));
+      const stopWords = new Set([
+        "de","a","o","que","e","do","da","em","um","para","eh","com","uma","os","no","se",
+        "na","por","mais","as","dos","como","mas","foi","ao","ele","das","tem","seu",
+        "sua","ou","ser","quando","muito","ha","nos","ja","esta","eu","tambem","so","pelo",
+        "pela","ate","isso","ela","entre","era","depois","sem","mesmo","aos","ter","seus",
+        "quem","nas","me","esse","eles","estao","voce","tinha","foram","essa","num","nem",
+        "suas","meu","minha","tem","numa","pelos","elas","havia","seja","qual","sera",
+        "nos","tenho","lhe","deles","essas","esses","pelas","este","fosse","dele","tu",
+        "the","and","of","to","in","is","it","you","that","was","for","on","are","with",
+        "nao","nao","sim","pois","aqui","bem","tudo","cada","todo","toda","todos","todas",
+        "ainda","sempre","nunca","agora","aqui","la","so","ja","ate","apos","sobre","pelo",
+      ]);
+      const freq: Record<string, { count: number; sentimentos: string[] }> = {};
+      for (const row of rows) {
+        if (!row.comentario) continue;
+        const words = (row.comentario as string)
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z\s]/g, " ")
+          .split(/\s+/)
+          .filter((w: string) => w.length > 3 && !stopWords.has(w));
+        for (const word of words) {
+          if (!freq[word]) freq[word] = { count: 0, sentimentos: [] };
+          freq[word].count++;
+          if (row.sentimento) freq[word].sentimentos.push(row.sentimento);
+        }
+      }
+      const result = Object.entries(freq)
+        .filter(([, v]) => v.count >= 2)
+        .map(([word, v]) => {
+          const pos = v.sentimentos.filter(s => s === "positivo").length;
+          const neg = v.sentimentos.filter(s => s === "negativo").length;
+          const sentimentoDominante = pos > neg ? "positivo" : neg > pos ? "negativo" : "neutro";
+          return { word, count: v.count, sentimento: sentimentoDominante };
+        })
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 60);
+      return result;
+    }),
+
+  // ── Tempo médio de resposta da IA ─────────────────────────────────────────
+  getTempoResposta: protectedProcedure
+    .input(z.object({ unitId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [result] = await db.execute(sql`
+        SELECT
+          COUNT(*) as total,
+          AVG(TIMESTAMPDIFF(MINUTE, dataAvaliacao, respondidoEm)) as mediaMinutos,
+          SUM(CASE WHEN TIMESTAMPDIFF(HOUR, dataAvaliacao, respondidoEm) < 1 THEN 1 ELSE 0 END) as menosDeUmaHora,
+          SUM(CASE WHEN TIMESTAMPDIFF(HOUR, dataAvaliacao, respondidoEm) BETWEEN 1 AND 23 THEN 1 ELSE 0 END) as entre1e24h,
+          SUM(CASE WHEN TIMESTAMPDIFF(HOUR, dataAvaliacao, respondidoEm) >= 24 THEN 1 ELSE 0 END) as maisDe24h,
+          MIN(TIMESTAMPDIFF(MINUTE, dataAvaliacao, respondidoEm)) as minMinutos,
+          MAX(TIMESTAMPDIFF(MINUTE, dataAvaliacao, respondidoEm)) as maxMinutos
+        FROM rep_avaliacoes
+        WHERE unitId = ${input.unitId}
+          AND respondidoPor = 'Auto-Resposta IA'
+          AND respondidoEm IS NOT NULL
+          AND dataAvaliacao IS NOT NULL
+      `) as any;
+      const row = ((result as any[]) || [])[0] || {};
+      const total = Number(row.total ?? 0);
+      const mediaMin = Number(row.mediaMinutos ?? 0);
+      const fmt = (m: number) => m < 60 ? `${Math.round(m)}min` : m < 1440 ? `${Math.floor(m / 60)}h ${Math.round(m % 60)}min` : `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h`;
+      return {
+        total,
+        mediaMinutos: Math.round(mediaMin),
+        mediaFormatada: total > 0 ? fmt(mediaMin) : "—",
+        menosDeUmaHora: Number(row.menosDeUmaHora ?? 0),
+        entre1e24h: Number(row.entre1e24h ?? 0),
+        maisDe24h: Number(row.maisDe24h ?? 0),
+        pctMenosDeUmaHora: total > 0 ? Math.round((Number(row.menosDeUmaHora ?? 0) / total) * 100) : 0,
+        pctEntre1e24h: total > 0 ? Math.round((Number(row.entre1e24h ?? 0) / total) * 100) : 0,
+        pctMaisDe24h: total > 0 ? Math.round((Number(row.maisDe24h ?? 0) / total) * 100) : 0,
+        minMinutos: Number(row.minMinutos ?? 0),
+        maxMinutos: Number(row.maxMinutos ?? 0),
+      };
+    }),
+
+  // ── Alertas de queda de nota ──────────────────────────────────────────────
+  getAlertas: protectedProcedure
+    .input(z.object({ unitId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const alertas: Array<{ tipo: "critico" | "atencao" | "info"; titulo: string; descricao: string; valor?: string }> = [];
+      const [notaResult] = await db.execute(sql`
+        SELECT
+          AVG(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN CAST(nota AS DECIMAL(3,1)) END) as notaUltimos7,
+          AVG(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 14 DAY) AND dataAvaliacao < DATE_SUB(NOW(), INTERVAL 7 DAY) THEN CAST(nota AS DECIMAL(3,1)) END) as notaAnterior7,
+          COUNT(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 END) as totalUltimos7,
+          COUNT(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 7 DAY) AND sentimento = 'negativo' THEN 1 END) as negativasUltimos7,
+          AVG(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN CAST(nota AS DECIMAL(3,1)) END) as notaUltimos30,
+          COUNT(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND sentimento = 'negativo' THEN 1 END) as negativasHoje,
+          COUNT(CASE WHEN resposta IS NULL AND dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 END) as semResposta30d
+        FROM rep_avaliacoes
+        WHERE unitId = ${input.unitId}
+      `) as any;
+      const r = ((notaResult as any[]) || [])[0] || {};
+      const notaUltimos7 = r.notaUltimos7 ? parseFloat(r.notaUltimos7) : null;
+      const notaAnterior7 = r.notaAnterior7 ? parseFloat(r.notaAnterior7) : null;
+      const totalUltimos7 = Number(r.totalUltimos7 ?? 0);
+      const negativasUltimos7 = Number(r.negativasUltimos7 ?? 0);
+      const negativasHoje = Number(r.negativasHoje ?? 0);
+      const semResposta30d = Number(r.semResposta30d ?? 0);
+      if (notaUltimos7 !== null && notaAnterior7 !== null) {
+        const queda = notaAnterior7 - notaUltimos7;
+        if (queda >= 0.5) alertas.push({ tipo: "critico", titulo: "Queda crítica na nota", descricao: `A nota média caiu ${queda.toFixed(1)}★ nos últimos 7 dias em relação à semana anterior.`, valor: `${notaUltimos7.toFixed(1)}★ (era ${notaAnterior7.toFixed(1)}★)` });
+        else if (queda >= 0.3) alertas.push({ tipo: "atencao", titulo: "Queda na nota detectada", descricao: `A nota média caiu ${queda.toFixed(1)}★ nos últimos 7 dias em relação à semana anterior.`, valor: `${notaUltimos7.toFixed(1)}★ (era ${notaAnterior7.toFixed(1)}★)` });
+      }
+      if (negativasUltimos7 >= 3) alertas.push({ tipo: "critico", titulo: "Múltiplas avaliações negativas", descricao: `${negativasUltimos7} avaliações negativas recebidas nos últimos 7 dias.`, valor: `${negativasUltimos7} negativas` });
+      else if (negativasUltimos7 >= 2) alertas.push({ tipo: "atencao", titulo: "Avaliações negativas recentes", descricao: `${negativasUltimos7} avaliações negativas recebidas nos últimos 7 dias.`, valor: `${negativasUltimos7} negativas` });
+      if (negativasHoje >= 1) alertas.push({ tipo: "atencao", titulo: "Avaliação negativa hoje", descricao: `${negativasHoje} avaliação(ões) negativa(s) recebida(s) nas últimas 24 horas.`, valor: `${negativasHoje} hoje` });
+      if (semResposta30d >= 5) alertas.push({ tipo: "atencao", titulo: "Avaliações sem resposta", descricao: `${semResposta30d} avaliações dos últimos 30 dias ainda não foram respondidas.`, valor: `${semResposta30d} pendentes` });
+      if (alertas.length === 0) {
+        const notaMedia = r.notaUltimos30 ? parseFloat(r.notaUltimos30).toFixed(1) : null;
+        alertas.push({ tipo: "info", titulo: "Reputação estável", descricao: totalUltimos7 > 0 ? `Nenhuma queda detectada. Nota média dos últimos 7 dias: ${notaUltimos7?.toFixed(1) ?? "—"}★` : "Sem avaliações nos últimos 7 dias para análise de tendência.", valor: notaMedia ? `${notaMedia}★` : undefined });
+      }
+      return alertas;
+    }),
 });
