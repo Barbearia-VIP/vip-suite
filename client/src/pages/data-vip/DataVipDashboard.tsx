@@ -406,8 +406,23 @@ export default function DataVipDashboard() {
         ))}
       </div>
 
-      {/* KPIs secundários: Serviços e Produtos */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* KPIs secundários: Clientes Novos, Serviços e Produtos */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Clientes Novos</p>
+                {dashQ.isLoading
+                  ? <Skeleton className="h-7 w-24" />
+                  : <p className="text-xl font-bold">{d ? (d.clientesNovos ?? 0).toLocaleString("pt-BR") : "—"}</p>
+                }
+                <p className="text-xs text-muted-foreground">primeira visita no período</p>
+              </div>
+              <UserCheck className="w-5 h-5 text-pink-400 opacity-70" />
+            </div>
+          </CardContent>
+        </Card>
         <Card>
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
