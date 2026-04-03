@@ -406,8 +406,27 @@ export default function DataVipDashboard() {
         ))}
       </div>
 
-      {/* KPIs secundários: Clientes Novos, Serviços e Produtos */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+      {/* KPIs secundários: Taxa de Retorno, Clientes Novos, Serviços e Produtos */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Taxa de Retorno</p>
+                {dashQ.isLoading
+                  ? <Skeleton className="h-7 w-24" />
+                  : <p className="text-xl font-bold">
+                      {d && d.clientesAtendidos > 0
+                        ? `${Math.round((d.clientesAntigos ?? 0) / d.clientesAtendidos * 100)}%`
+                        : "—"}
+                    </p>
+                }
+                <p className="text-xs text-muted-foreground">clientes que retornaram</p>
+              </div>
+              <ArrowUpRight className="w-5 h-5 text-emerald-400 opacity-70" />
+            </div>
+          </CardContent>
+        </Card>
         <Card>
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
