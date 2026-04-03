@@ -27,12 +27,18 @@ function unitWhereVendas(extIds: number[]): string {
   return `uu.unidade IN (${extIds.join(",")})`;
 }
 
-// ─── Dashboard KPIs (usa dashboard_faturamento pré-calculado) ─────────────────
+// ─── Dashboard KPIs (híbrido: tempo real para mês atual, dashboard_faturamento para anteriores) ─────
 
-export async function getDashboardKpis(extIds: number[], ano: number, mes: number) {
+/** Busca KPIs diretamente da tabela vendas (tempo real, sem atraso de 1 dia) */
+async function getKpisRealtime(extIds: number[], ano: number, mes: number) {
   const unitCond = extIds.length === 0 ? "1=1"
-    : extIds.length === 1 ? `unidade = ${extIds[0]}`
-    : `unidade IN (${extIds.join(",")})`;
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  const dataInicio = `${ano}-${String(mes).padStart(2, '0')}-01`;
+  const proximoMes = mes === 12 ? 1 : mes + 1;
+  const anoProximo = mes === 12 ? ano + 1 : ano;
+  const dataFim = `${anoProximo}-${String(proximoMes).padStart(2, '0')}-01`;
 
   const rows = await queryExternal<{
     total_vendas: number;
@@ -40,26 +46,94 @@ export async function getDashboardKpis(extIds: number[], ano: number, mes: numbe
     ticket_medio_por_venda: number;
     total_clientes_novos: number;
     total_clientes_antigos: number;
+  }>(`
+    SELECT 
+      COALESCE(SUM(v.valor_total), 0) as total_vendas,
+      COUNT(DISTINCT v.id) as quantidade_vendas,
+      COALESCE(AVG(v.valor_total), 0) as ticket_medio_por_venda,
+      COUNT(DISTINCT CASE WHEN c.data_criacao >= ? THEN v.cliente END) as total_clientes_novos,
+      COUNT(DISTINCT CASE WHEN c.data_criacao < ? OR c.data_criacao IS NULL THEN v.cliente END) as total_clientes_antigos
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    LEFT JOIN clientes c ON c.id = v.cliente
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+  `, [dataInicio, dataInicio, dataInicio, dataFim]);
+
+  // Contar serviços e produtos separadamente (via subquery para evitar duplicatas)
+  const servicosRows = await queryExternal<{
     total_servicos_realizados: number;
     total_servicos_base: number;
     total_servicos_extra: number;
     total_produtos_vendidos: number;
   }>(`
     SELECT 
-      COALESCE(SUM(total_vendas), 0) as total_vendas,
-      COALESCE(SUM(quantidade_vendas), 0) as quantidade_vendas,
-      COALESCE(AVG(ticket_medio_por_venda), 0) as ticket_medio_por_venda,
-      COALESCE(SUM(total_clientes_novos), 0) as total_clientes_novos,
-      COALESCE(SUM(total_clientes_antigos), 0) as total_clientes_antigos,
-      COALESCE(SUM(total_servicos_realizados), 0) as total_servicos_realizados,
-      COALESCE(SUM(total_servicos_base), 0) as total_servicos_base,
-      COALESCE(SUM(total_servicos_extra), 0) as total_servicos_extra,
-      COALESCE(SUM(total_produtos_vendidos), 0) as total_produtos_vendidos
-    FROM dashboard_faturamento
-    WHERE ${unitCond} AND ano = ? AND mes = ?
-  `, [ano, mes]);
+      COUNT(*) as total_servicos_realizados,
+      COUNT(CASE WHEN p.tipo = 'ser' THEN 1 END) as total_servicos_base,
+      COUNT(CASE WHEN p.tipo NOT IN ('ser','probar','proemp','proins','lavavip') THEN 1 END) as total_servicos_extra,
+      COUNT(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN 1 END) as total_produtos_vendidos
+    FROM vendas_produtos vp
+    JOIN vendas v ON vp.venda = v.id
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN produtos p ON p.id = vp.produto
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+  `, [dataInicio, dataFim]);
 
-  // Mês anterior para comparação
+  return { ...(rows[0] ?? {}), ...(servicosRows[0] ?? {}) };
+}
+
+export async function getDashboardKpis(extIds: number[], ano: number, mes: number) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `unidade = ${extIds[0]}`
+    : `unidade IN (${extIds.join(",")})`;
+
+  // Verificar se é o mês atual — usar dados em tempo real para evitar atraso de 1 dia
+  const agora = new Date();
+  const anoAtual = agora.getFullYear();
+  const mesAtual = agora.getMonth() + 1;
+  const isMesAtual = ano === anoAtual && mes === mesAtual;
+
+  let cur: Record<string, number>;
+  if (isMesAtual) {
+    // Tempo real: busca diretamente da tabela vendas
+    cur = (await getKpisRealtime(extIds, ano, mes)) as Record<string, number>;
+  } else {
+    // Meses anteriores: usa dashboard_faturamento (já consolidada)
+    const rows = await queryExternal<{
+      total_vendas: number;
+      quantidade_vendas: number;
+      ticket_medio_por_venda: number;
+      total_clientes_novos: number;
+      total_clientes_antigos: number;
+      total_servicos_realizados: number;
+      total_servicos_base: number;
+      total_servicos_extra: number;
+      total_produtos_vendidos: number;
+    }>(`
+      SELECT 
+        COALESCE(SUM(total_vendas), 0) as total_vendas,
+        COALESCE(SUM(quantidade_vendas), 0) as quantidade_vendas,
+        COALESCE(AVG(ticket_medio_por_venda), 0) as ticket_medio_por_venda,
+        COALESCE(SUM(total_clientes_novos), 0) as total_clientes_novos,
+        COALESCE(SUM(total_clientes_antigos), 0) as total_clientes_antigos,
+        COALESCE(SUM(total_servicos_realizados), 0) as total_servicos_realizados,
+        COALESCE(SUM(total_servicos_base), 0) as total_servicos_base,
+        COALESCE(SUM(total_servicos_extra), 0) as total_servicos_extra,
+        COALESCE(SUM(total_produtos_vendidos), 0) as total_produtos_vendidos
+      FROM dashboard_faturamento
+      WHERE ${unitCond} AND ano = ? AND mes = ?
+    `, [ano, mes]);
+    cur = (rows[0] ?? {}) as Record<string, number>;
+  }
+
+  // Mês anterior para comparação (sempre usa dashboard_faturamento — já consolidado)
   const mesAnt = mes === 1 ? 12 : mes - 1;
   const anoAnt = mes === 1 ? ano - 1 : ano;
   const rowsAnt = await queryExternal<{ total_vendas: number; quantidade_vendas: number }>(`
@@ -70,7 +144,6 @@ export async function getDashboardKpis(extIds: number[], ano: number, mes: numbe
     WHERE ${unitCond} AND ano = ? AND mes = ?
   `, [anoAnt, mesAnt]);
 
-  const cur = rows[0] ?? {};
   const ant = rowsAnt[0] ?? {};
   const fat = Number(cur.total_vendas ?? 0);
   const fatAnt = Number(ant.total_vendas ?? 0);
@@ -93,6 +166,7 @@ export async function getDashboardKpis(extIds: number[], ano: number, mes: numbe
     servicosExtra: Number(cur.total_servicos_extra ?? 0),
     servicosTotal: Number(cur.total_servicos_realizados ?? 0),
     produtosVendidos: Number(cur.total_produtos_vendidos ?? 0),
+    isMesAtual,
   };
 }
 
