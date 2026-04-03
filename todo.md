@@ -597,3 +597,11 @@
 - [x] Raio X One-Shot: campo "Gasto" corrigido para usar SUM(v.valor_total) em vez de c.consumo (campo desatualizado)
 - [x] Raio X Barbeiros: query corrigida de v.total para v.valor_total (campo correto na tabela vendas)
 - [x] Todas as abas do Raio X testadas e funcionando: Visão Geral, One-Shot, Cadência, Churn, Cohort, Barbeiros, Diagnóstico
+
+## Prompt de IA por Unidade (Reputação)
+
+- [ ] Adicionar coluna ai_prompt (TEXT) na tabela units do banco local
+- [ ] Popular todas as unidades com o prompt padrão da Barbearia VIP
+- [ ] Criar procedure tRPC para salvar/buscar ai_prompt da unidade
+- [ ] Criar UI de edição do Prompt de IA nas configurações da unidade
+- [ ] Integrar ai_prompt na geração de respostas de avaliações (Reputação)

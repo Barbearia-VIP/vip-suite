@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
-import { getDb } from "../db";
+import { getDb, getUnitById } from "../db";
 import {
   repAvaliacoes,
   repConexoes,
@@ -433,22 +433,26 @@ export const reputacaoRouter = router({
 
       if (!avaliacao) throw new TRPCError({ code: "NOT_FOUND" });
 
-      const [config] = await db.select().from(repConfigIA).where(eq(repConfigIA.unitId, input.unitId));
-
-      const nomeEstab = config?.nomeEstabelecimento || "Barbearia VIP";
+       const [config] = await db.select().from(repConfigIA).where(eq(repConfigIA.unitId, input.unitId));
+      const unit = await getUnitById(input.unitId);
+      const nomeEstab = config?.nomeEstabelecimento || unit?.name || "Barbearia VIP";
       const nomeProprietario = config?.nomeProprietario || "Equipe";
       const tom = config?.tom || "amigavel";
-      const promptPersonalizado = config?.promptPersonalizado;
-
       const tomDesc = tom === "formal" ? "formal e profissional" : tom === "casual" ? "casual e descontraído" : "amigável e acolhedor";
       const nota = parseFloat(String(avaliacao.nota));
       const sentimento = nota >= 4 ? "positiva" : nota <= 2 ? "negativa" : "neutra";
-
-      const systemPrompt = promptPersonalizado ||
-        `Você é o gerente de reputação da ${nomeEstab}. Responda avaliações de clientes de forma ${tomDesc}. 
-         Seja genuíno, personalizado e nunca use respostas genéricas. 
-         ${config?.incluirAssinatura ? `Assine como: ${nomeProprietario} — ${nomeEstab}` : ""}
-         Responda SEMPRE em português brasileiro. Máximo 150 palavras.`;
+      // Prioridade: 1) aiPrompt da unidade (prompt principal), 2) promptPersonalizado (instruções extras), 3) prompt básico
+      const unitAiPrompt = unit?.aiPrompt;
+      const promptPersonalizado = config?.promptPersonalizado;
+      const systemPrompt = unitAiPrompt
+        ? (promptPersonalizado
+            ? `${unitAiPrompt}\n\nINSTRUÇÕES ADICIONAIS DESTA UNIDADE:\n${promptPersonalizado}\n${config?.incluirAssinatura ? `\nAssine como: ${nomeProprietario} — ${nomeEstab}` : ""}`
+            : `${unitAiPrompt}\n${config?.incluirAssinatura ? `\nAssine como: ${nomeProprietario} — ${nomeEstab}` : ""}`)
+        : (promptPersonalizado ||
+          `Você é o gerente de reputação da ${nomeEstab}. Responda avaliações de clientes de forma ${tomDesc}. 
+           Seja genuíno, personalizado e nunca use respostas genéricas. 
+           ${config?.incluirAssinatura ? `Assine como: ${nomeProprietario} — ${nomeEstab}` : ""}
+           Responda SEMPRE em português brasileiro. Máximo 150 palavras.`);
 
       const userPrompt = `Avaliação ${sentimento} (${nota}/5 estrelas) de ${avaliacao.autorNome || "Cliente"} na plataforma ${avaliacao.plataforma.toUpperCase()}:
 ${avaliacao.titulo ? `Título: "${avaliacao.titulo}"` : ""}

@@ -181,7 +181,7 @@ export async function createUnit(data: {
   return { id, ...data };
 }
 
-export async function updateUnit(unitId: number, data: Partial<{ name: string; address: string; city: string; state: string; phone: string; externalId: string; active: boolean }>) {
+export async function updateUnit(unitId: number, data: Partial<{ name: string; address: string; city: string; state: string; phone: string; externalId: string; active: boolean; aiPrompt: string | null }>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(units).set(data).where(eq(units.id, unitId));

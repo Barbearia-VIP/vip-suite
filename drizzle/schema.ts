@@ -62,6 +62,7 @@ export const units = mysqlTable("units", {
   state: varchar("state", { length: 2 }),
   phone: varchar("phone", { length: 20 }),
   externalId: varchar("externalId", { length: 100 }), // ID na API externa
+  aiPrompt: text("aiPrompt"), // Prompt personalizado para IA de respostas de avaliações
   active: boolean("active").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

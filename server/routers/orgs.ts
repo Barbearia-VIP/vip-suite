@@ -8,6 +8,7 @@ import {
   getOrgById,
   updateOrg,
   getUnitsByOrg,
+  getUnitById,
   createUnit,
   updateUnit,
   getUserProfile,
@@ -155,12 +156,21 @@ export const orgsRouter = router({
         phone: z.string().optional(),
         externalId: z.string().optional(),
         active: z.boolean().optional(),
+        aiPrompt: z.string().nullable().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       await requireMasterOrOrgAdmin(ctx.user.id, input.orgId, ctx.user.role === "admin");
       const { unitId, orgId, ...data } = input;
       return updateUnit(unitId, data);
+    }),
+
+  getUnitAiPrompt: protectedProcedure
+    .input(z.object({ unitId: z.number(), orgId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      await requireMasterOrOrgAdmin(ctx.user.id, input.orgId, ctx.user.role === "admin");
+      const unit = await getUnitById(input.unitId);
+      return { aiPrompt: unit?.aiPrompt ?? null };
     }),
 
   // ── User Profiles ─────────────────────────────────────────────────────────
