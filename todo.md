@@ -619,3 +619,4 @@
 - [ ] Alertas de Queda de Nota (badge vermelho/amarelo se nota caiu 0.3★ ou 2+ negativas na semana)
 - [x] Adicionar gráfico SVG Evolução da Nota Média (igual ao dashboard) na aba Análise de Reputação
 - [x] Medidor visual (gauge SVG) de NPS estimado na aba Análise de Reputação
+- [x] Melhorar layout aba Análise: NPS e Alertas 50/50, gauge mais moderno, remover gráficos sem dados
