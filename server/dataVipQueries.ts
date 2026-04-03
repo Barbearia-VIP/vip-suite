@@ -496,6 +496,7 @@ export async function getEvolucaoDiaria(
     faturamento: number;
     atendimentos: number;
     clientes: number;
+    clientes_novos: number;
     ticket_medio: number;
     servicos: number;
     produtos: number;
@@ -507,6 +508,17 @@ export async function getEvolucaoDiaria(
       COALESCE(SUM(vp.valor_total), 0) as faturamento,
       COUNT(DISTINCT v.id) as atendimentos,
       COUNT(DISTINCT v.cliente) as clientes,
+      COUNT(DISTINCT CASE
+        WHEN NOT EXISTS (
+          SELECT 1 FROM vendas v2
+          JOIN usuarios uu2 ON v2.usuario = uu2.id
+          WHERE v2.cliente = v.cliente
+            AND ${unitCond.replace(/uu\.unidade/g, 'uu2.unidade')}
+            AND v2.data_criacao < DATE(v.data_criacao)
+            AND v2.comanda_temp = 0
+            AND v2.status != 0
+        ) THEN v.cliente
+      END) as clientes_novos,
       COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
       COUNT(CASE WHEN p.tipo = 'ser' THEN 1 END) as servicos,
       COUNT(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN 1 END) as produtos,

@@ -923,6 +923,7 @@ export const dataVipRouter = router({
         faturamento: Number(r.faturamento),
         atendimentos: Number(r.atendimentos),
         clientes: Number(r.clientes),
+        clientesNovos: Number(r.clientes_novos),
         ticketMedio: Math.round(Number(r.ticket_medio) * 100) / 100,
         servicos: Number(r.servicos),
         produtos: Number(r.produtos),

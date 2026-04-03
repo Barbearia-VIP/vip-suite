@@ -314,11 +314,9 @@ export default function DataVipDashboard() {
 
   const mesesLabels = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
-  // Enriquecer evolData com clientesNovos (não vem da query diária — usar 0 como placeholder)
   const evolChartData = useMemo(() => {
     return evolData.map(r => ({
       ...r,
-      clientesNovos: 0, // não disponível por dia sem subquery pesada
       label: r.dia.slice(5), // MM-DD
     }));
   }, [evolData]);
