@@ -12,9 +12,12 @@ import { igConfigRouter, igDashboardRouter, igLogsRouter, igApprovalRouter, igSt
 import { weSendRouter } from "./routers/weSend";
 import { raioXRouter } from "./routers/raioX";
 import { initSchedulers } from "./igScheduler";
+import { initReputacaoScheduler } from "./reputacaoScheduler";
 
 // Inicializar schedulers do Instagram ao subir o servidor
 initSchedulers().catch(console.error);
+// Inicializar scheduler de auto-resposta de avaliações (roda a cada hora)
+initReputacaoScheduler().catch(console.error);
 
 export const appRouter = router({
   system: systemRouter,
