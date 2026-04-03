@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import {
   Clock, AlertTriangle, CheckCircle, Info, Zap, Timer,
   AlertCircle, ShieldCheck,
 } from "lucide-react";
+import { EvolucaoNotaChart, type EvolucaoItem } from "@/components/reputacao/EvolucaoNotaChart";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
 import {
@@ -115,6 +116,11 @@ export default function AnaliseReputacaoPage() {
     { enabled: !!unitId }
   );
 
+  const dashQuery = trpc.reputacao.getDashboard.useQuery(
+    { unitId },
+    { enabled: !!unitId }
+  );
+
   const resumoQuery = trpc.reputacao.getResumo.useQuery(
     { unitId },
     { enabled: !!unitId }
@@ -134,6 +140,23 @@ export default function AnaliseReputacaoPage() {
     { unitId },
     { enabled: !!unitId }
   );
+
+  // Dados históricos completos para o gráfico SVG (mesmo do dashboard)
+  const evolucaoHistorica: EvolucaoItem[] = ((dashQuery.data?.evolucao || []) as any[]).map((e: any) => {
+    const mesLabel = (() => {
+      const [a, m] = String(e.mes || "").split("-");
+      const ms = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+      return `${ms[parseInt(m, 10) - 1] ?? ""}/${a?.slice(2) ?? ""}`;
+    })();
+    return {
+      mes: String(e.mes),
+      mesLabel,
+      media: parseFloat(parseFloat(e.media || 0).toFixed(1)),
+      total: Number(e.total),
+    };
+  });
+  const notaMediaGeral = resumoQuery.data ? parseFloat(String(resumoQuery.data.notaMedia)) : null;
+  const primeiraMes = evolucaoHistorica.length > 0 ? evolucaoHistorica[0].mes : null;
 
   const evolucao = (analiseQuery.data?.evolucao || []).map((e: any) => ({
     data: e.data,
@@ -332,10 +355,40 @@ export default function AnaliseReputacaoPage() {
         </CardContent>
       </Card>
 
+      {/* ── Gráfico Evolução da Nota Média (igual ao dashboard) ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-primary" />
+            Evolução da Nota Média
+            {primeiraMes && (() => {
+              const [a, m] = primeiraMes.split("-");
+              const ms = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+              return (
+                <span className="text-xs font-normal text-muted-foreground ml-1">
+                  desde {ms[parseInt(m, 10) - 1]}/{a}
+                </span>
+              );
+            })()}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {dashQuery.isLoading ? (
+            <div className="h-64 rounded-lg bg-muted animate-pulse" />
+          ) : evolucaoHistorica.length === 0 ? (
+            <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
+              Sem dados históricos disponíveis
+            </div>
+          ) : (
+            <EvolucaoNotaChart data={evolucaoHistorica} notaMediaGeral={notaMediaGeral} />
+          )}
+        </CardContent>
+      </Card>
+
       {/* ── Gráficos existentes ── */}
       <div className="grid lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader><CardTitle className="text-base flex items-center gap-2"><TrendingUp className="w-4 h-4 text-primary" />Evolução da Nota Média</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><TrendingUp className="w-4 h-4 text-primary" />Evolução por Período</CardTitle></CardHeader>
           <CardContent>
             {evolucao.length === 0 ? (
               <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">Sem dados no período</div>

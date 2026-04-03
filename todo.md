@@ -617,3 +617,4 @@
 - [ ] Nuvem de Palavras dos comentários (palavras mais frequentes, coloridas por sentimento)
 - [ ] KPIs de Tempo Médio de Resposta da IA (tempo médio, % respondidas em <1h, <24h, >24h)
 - [ ] Alertas de Queda de Nota (badge vermelho/amarelo se nota caiu 0.3★ ou 2+ negativas na semana)
+- [x] Adicionar gráfico SVG Evolução da Nota Média (igual ao dashboard) na aba Análise de Reputação
