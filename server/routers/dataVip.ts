@@ -18,6 +18,7 @@ import {
   getFaturamentoPorProduto,
   getFaturamentoDiario,
   getColaboradores,
+  getColaboradoresByRange,
   getRankingUnidades,
 } from "../dataVipQueries";
 
@@ -362,12 +363,35 @@ export const dataVipRouter = router({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
       periodo: z.string().optional(),
+      dataInicio: z.string().optional(), // YYYY-MM-DD — filtro livre
+      dataFim: z.string().optional(),    // YYYY-MM-DD — filtro livre
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
       const now = new Date();
+      // Modo range livre
+      if (input.dataInicio && input.dataFim) {
+        const rows = await getColaboradoresByRange(extIds, input.dataInicio, input.dataFim);
+        return rows.map(r => ({
+          colaboradorId: String(r.colaborador_id),
+          colaboradorNome: r.colaborador_nome,
+          tipoColaborador: "barbeiro",
+          faturamento: Number(r.total_vendas),
+          atendimentos: Number(r.total_servicos_realizados),
+          clientes: Number(r.total_clientes_geral),
+          ticketMedio: Number(r.total_clientes_geral) > 0
+            ? Math.round((Number(r.total_vendas) / Number(r.total_clientes_geral)) * 100) / 100
+            : 0,
+          fidelizacao: 0,
+          nps: 0,
+          mediaConsumo: 0,
+          produtosVendidos: 0,
+          estrela: 0,
+        }));
+      }
+      // Modo mensal (padrão)
       const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const [ano, mes] = periodo.split("-").map(Number);
       const rows = await getColaboradores(extIds, ano, mes);
@@ -407,21 +431,28 @@ export const dataVipRouter = router({
       return { success: true };
     }),
 
-  // ── Comissões ────────────────────────────────────────────────────────────────
+  // ── Comissões ───────────────────────────────────────────────────────────────────────────────────
   comissoes: protectedProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
       periodo: z.string().optional(),
+      dataInicio: z.string().optional(), // YYYY-MM-DD — filtro livre
+      dataFim: z.string().optional(),    // YYYY-MM-DD — filtro livre
     }))
     .query(async ({ ctx, input }) => {
       const { extIds, orgFilter } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
       const now = new Date();
-      const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-      const [ano, mes] = periodo.split("-").map(Number);
-      const colabs = await getColaboradores(extIds, ano, mes);
+      // Modo range livre
+      const colabs = input.dataInicio && input.dataFim
+        ? await getColaboradoresByRange(extIds, input.dataInicio, input.dataFim)
+        : await (async () => {
+            const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+            const [ano, mes] = periodo.split("-").map(Number);
+            return getColaboradores(extIds, ano, mes);
+          })();
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       let rWhere = sql`ativo = 1`;

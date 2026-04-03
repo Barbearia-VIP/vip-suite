@@ -483,6 +483,45 @@ export async function getColaboradores(extIds: number[], ano: number, mes: numbe
   `, [ano, mes]);
 }
 
+// ─── Colaboradores por range de datas (tempo real, tabela vendas) ───────────────
+
+export async function getColaboradoresByRange(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+
+  return queryExternal<{
+    colaborador_id: number;
+    colaborador_nome: string;
+    total_vendas: number;
+    total_servicos_realizados: number;
+    total_clientes_novos: number;
+    total_clientes_antigos: number;
+    total_clientes_geral: number;
+  }>(`
+    SELECT
+      uu.id as colaborador_id,
+      uu.nome as colaborador_nome,
+      COALESCE(SUM(v.valor_total), 0) as total_vendas,
+      COUNT(DISTINCT v.id) as total_servicos_realizados,
+      COUNT(DISTINCT CASE WHEN c.data_criacao >= ? THEN v.cliente END) as total_clientes_novos,
+      COUNT(DISTINCT CASE WHEN c.data_criacao < ? OR c.data_criacao IS NULL THEN v.cliente END) as total_clientes_antigos,
+      COUNT(DISTINCT v.cliente) as total_clientes_geral
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    LEFT JOIN clientes c ON c.id = v.cliente
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND v.status != 0
+    GROUP BY uu.id, uu.nome
+    ORDER BY total_vendas DESC
+  `, [dataInicio, dataInicio, dataInicio, dataFimExcl]);
+}
+
 // ─── Ranking de unidades ──────────────────────────────────────────────────────
 
 export async function getRankingUnidades(extIds: number[], ano: number, mes: number) {
