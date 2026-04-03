@@ -620,3 +620,4 @@
 - [x] Adicionar gráfico SVG Evolução da Nota Média (igual ao dashboard) na aba Análise de Reputação
 - [x] Medidor visual (gauge SVG) de NPS estimado na aba Análise de Reputação
 - [x] Melhorar layout aba Análise: NPS e Alertas 50/50, gauge mais moderno, remover gráficos sem dados
+- [x] Redesenhar gráfico Distribuição de Sentimentos com visual moderno e impactante

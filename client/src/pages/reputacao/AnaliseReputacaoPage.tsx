@@ -12,11 +12,9 @@ import { EvolucaoNotaChart, type EvolucaoItem } from "@/components/reputacao/Evo
 import { NPSGauge } from "@/components/reputacao/NPSGauge";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
-import {
-  PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer,
-} from "recharts";
+import { SentimentoChart } from "@/components/reputacao/SentimentoChart";
 
-const SENTIMENT_COLORS = ["#22c55e", "#f59e0b", "#ef4444"];
+
 
 // ── Nuvem de Palavras ────────────────────────────────────────────────────────
 function WordCloud({ words }: { words: Array<{ word: string; count: number; sentimento: string }> }) {
@@ -148,12 +146,12 @@ export default function AnaliseReputacaoPage() {
   const npsUsandoHistorico = porNotaFromAnalise.length === 0 && porNotaFromResumo.length > 0;
 
   // Distribuição de sentimentos (usa resumo — sempre tem dados)
-  const sentimentoData = resumo ? [
-    { name: "Positivas", value: Number(resumo.totalPositivas) },
-    { name: "Neutras",   value: Number(resumo.totalNeutras)   },
-    { name: "Negativas", value: Number(resumo.totalNegativas) },
-  ] : [];
-  const hasSentimento = sentimentoData.some(s => s.value > 0);
+  const sentimentoData = {
+    positivas: resumo ? Number(resumo.totalPositivas) : 0,
+    neutras:   resumo ? Number(resumo.totalNeutras)   : 0,
+    negativas: resumo ? Number(resumo.totalNegativas) : 0,
+  };
+  const hasSentimento = sentimentoData.positivas + sentimentoData.neutras + sentimentoData.negativas > 0;
 
   return (
     <div className="space-y-6">
@@ -371,22 +369,7 @@ export default function AnaliseReputacaoPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
-              <PieChart>
-                <Pie
-                  data={sentimentoData}
-                  cx="50%" cy="50%"
-                  outerRadius={90}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  labelLine={false}
-                >
-                  {sentimentoData.map((_, i) => <Cell key={i} fill={SENTIMENT_COLORS[i]} />)}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+            <SentimentoChart data={sentimentoData} />
           </CardContent>
         </Card>
       )}
