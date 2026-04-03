@@ -170,14 +170,23 @@ export async function getDashboardKpis(extIds: number[], ano: number, mes: numbe
   };
 }
 
-// ─── Faturamento mensal histórico ─────────────────────────────────────────────
+// ─── Faturamento mensal histórico (híbrido: tempo real para mês atual) ────────────────
 
 export async function getFaturamentoMensal(extIds: number[], meses: number = 12) {
-  const unitCond = extIds.length === 0 ? "1=1"
+  const unitCondDf = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `unidade = ${extIds[0]}`
     : `unidade IN (${extIds.join(",")})`;
+  const unitCondV = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
 
-  return queryExternal<{
+  // Meses anteriores: usa dashboard_faturamento (já consolidada)
+  // Busca meses-1 para deixar espaço para o mês atual em tempo real
+  const agora = new Date();
+  const anoAtual = agora.getFullYear();
+  const mesAtual = agora.getMonth() + 1;
+
+  const historico = await queryExternal<{
     ano: number;
     mes: number;
     total_vendas: number;
@@ -194,11 +203,56 @@ export async function getFaturamentoMensal(extIds: number[], meses: number = 12)
       COALESCE(SUM(total_clientes_novos), 0) as total_clientes_novos,
       COALESCE(SUM(total_clientes_antigos), 0) as total_clientes_antigos
     FROM dashboard_faturamento
-    WHERE ${unitCond} AND total_vendas > 0
+    WHERE ${unitCondDf}
+      AND total_vendas > 0
+      AND NOT (ano = ${anoAtual} AND mes = ${mesAtual})
     GROUP BY ano, mes
     ORDER BY ano DESC, mes DESC
-    LIMIT ${Number(meses)}
+    LIMIT ${Number(meses) - 1}
   `, []);
+
+  // Mês atual: busca em tempo real da tabela vendas
+  const dataInicio = `${anoAtual}-${String(mesAtual).padStart(2, '0')}-01`;
+  const proximoMes = mesAtual === 12 ? 1 : mesAtual + 1;
+  const anoProximo = mesAtual === 12 ? anoAtual + 1 : anoAtual;
+  const dataFim = `${anoProximo}-${String(proximoMes).padStart(2, '0')}-01`;
+
+  const realtimeRows = await queryExternal<{
+    total_vendas: number;
+    quantidade_vendas: number;
+    ticket_medio_por_venda: number;
+    total_clientes_novos: number;
+    total_clientes_antigos: number;
+  }>(`
+    SELECT 
+      COALESCE(SUM(v.valor_total), 0) as total_vendas,
+      COUNT(DISTINCT v.id) as quantidade_vendas,
+      COALESCE(AVG(v.valor_total), 0) as ticket_medio_por_venda,
+      COUNT(DISTINCT CASE WHEN c.data_criacao >= ? THEN v.cliente END) as total_clientes_novos,
+      COUNT(DISTINCT CASE WHEN c.data_criacao < ? OR c.data_criacao IS NULL THEN v.cliente END) as total_clientes_antigos
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    LEFT JOIN clientes c ON c.id = v.cliente
+    WHERE ${unitCondV}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+  `, [dataInicio, dataInicio, dataInicio, dataFim]);
+
+  const rt = realtimeRows[0];
+  const mesAtualRow = {
+    ano: anoAtual,
+    mes: mesAtual,
+    total_vendas: Number(rt?.total_vendas ?? 0),
+    quantidade_vendas: Number(rt?.quantidade_vendas ?? 0),
+    ticket_medio_por_venda: Number(rt?.ticket_medio_por_venda ?? 0),
+    total_clientes_novos: Number(rt?.total_clientes_novos ?? 0),
+    total_clientes_antigos: Number(rt?.total_clientes_antigos ?? 0),
+  };
+
+  // Retorna mês atual primeiro (mais recente), seguido do histórico
+  return [mesAtualRow, ...historico];
 }
 
 // ─── Faturamento por forma de pagamento ──────────────────────────────────────
