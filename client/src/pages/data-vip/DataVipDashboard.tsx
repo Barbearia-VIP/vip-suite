@@ -45,6 +45,10 @@ export default function DataVipDashboard() {
   const orgId = org?.id;
   const unitId = selectedUnit?.id;
 
+  // Verifica se o período selecionado é o mês atual (dados incompletos)
+  const currentPeriodo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const isMesAtual = periodo === currentPeriodo;
+
   const dashQ = trpc.dataVip.dashboard.useQuery(
     { orgId, unitId, periodo },
     { enabled: !!orgId }
@@ -175,9 +179,12 @@ export default function DataVipDashboard() {
                     : <p className="text-xl font-bold">{kpi.value}</p>
                   }
                   {kpi.var !== undefined && (
-                    <p className={`text-xs flex items-center gap-0.5 ${kpi.var >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      {kpi.var >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                      {fmtPct(kpi.var)} vs mês ant.
+                    <p className={`text-xs flex items-center gap-0.5 ${isMesAtual ? "text-muted-foreground" : kpi.var >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {isMesAtual
+                        ? <Calendar className="w-3 h-3" />
+                        : kpi.var >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />
+                      }
+                      {isMesAtual ? "Mês em andamento" : `${fmtPct(kpi.var)} vs mês ant.`}
                     </p>
                   )}
                 </div>

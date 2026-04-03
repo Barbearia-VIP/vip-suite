@@ -1,19 +1,29 @@
 /**
  * server/routers/dataVip.ts
- * Router tRPC completo do módulo Data VIP
- * Controle de acesso: dados por unidade, visão geral apenas para admin com "Todas as Unidades"
+ * Router tRPC do módulo Data VIP
+ * Dados operacionais: banco externo (franquia_producao via SSH tunnel)
+ * Dados de configuração: banco interno (VIP Suite)
  */
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
 import { sql } from "drizzle-orm";
-import { runSyncForOrg, getSyncStatus, getAllSyncStatuses, startAutoSyncScheduler } from "../vipDataSync";
+import { getSyncStatus, getAllSyncStatuses, startAutoSyncScheduler } from "../vipDataSync";
+import {
+  getDashboardKpis,
+  getFaturamentoMensal,
+  getFaturamentoPorPagamento,
+  getFaturamentoPorProduto,
+  getFaturamentoDiario,
+  getColaboradores,
+  getRankingUnidades,
+} from "../dataVipQueries";
 
 // Inicializa scheduler automático (08:00 BRT)
 startAutoSyncScheduler();
 
-// ─── Helper: resolve filtro de unidades ──────────────────────────────────────
+// ─── Helper: resolve filtro de unidades (banco interno) ──────────────────────
 async function resolveUnitFilter(
   userId: number,
   userRole: string,
@@ -33,9 +43,55 @@ async function resolveUnitFilter(
   return { orgFilter: profile.orgId, unitFilter: profile.unitId, isAdmin };
 }
 
+// ─── Helper: converte unitId interno → externalId (ID no banco externo) ──────
+async function resolveExternalIds(
+  userId: number,
+  userRole: string,
+  orgId?: number,
+  unitId?: number
+): Promise<{ extIds: number[]; isAdmin: boolean; unitFilter: number | null; orgFilter: number | null }> {
+  const { orgFilter, unitFilter, isAdmin } = await resolveUnitFilter(userId, userRole, orgId, unitId);
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+  if (unitFilter) {
+    const [rows] = await db.execute(sql`
+      SELECT externalId FROM units WHERE id = ${unitFilter} AND externalId IS NOT NULL
+    `) as any;
+    const extId = (rows as any[])[0]?.externalId;
+    if (!extId) return { extIds: [], isAdmin, unitFilter, orgFilter };
+    return { extIds: [Number(extId)], isAdmin, unitFilter, orgFilter };
+  }
+
+  if (orgFilter) {
+    const [rows] = await db.execute(sql`
+      SELECT externalId FROM units WHERE orgId = ${orgFilter} AND externalId IS NOT NULL
+    `) as any;
+    const extIds = (rows as any[]).map((r: any) => Number(r.externalId)).filter(Boolean);
+    return { extIds, isAdmin, unitFilter, orgFilter };
+  }
+
+  const [rows] = await db.execute(sql`
+    SELECT externalId FROM units WHERE externalId IS NOT NULL
+  `) as any;
+  const extIds = (rows as any[]).map((r: any) => Number(r.externalId)).filter(Boolean);
+  return { extIds, isAdmin, unitFilter, orgFilter };
+}
+
+// ─── Helper: mapeia externalId → nome da unidade ─────────────────────────────
+async function getUnitNameMap(): Promise<Record<number, string>> {
+  const db = await getDb();
+  if (!db) return {};
+  const [rows] = await db.execute(sql`SELECT id, name, externalId FROM units WHERE externalId IS NOT NULL`) as any;
+  const map: Record<number, string> = {};
+  for (const r of rows as any[]) {
+    if (r.externalId) map[Number(r.externalId)] = r.name;
+  }
+  return map;
+}
+
 // ─── Router ──────────────────────────────────────────────────────────────────
 export const dataVipRouter = router({
-
   // ── Dashboard KPIs ──────────────────────────────────────────────────────────
   dashboard: protectedProcedure
     .input(z.object({
@@ -44,61 +100,22 @@ export const dataVipRouter = router({
       periodo: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter, isAdmin } = await resolveUnitFilter(
+      const { extIds, isAdmin } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
       const now = new Date();
       const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const [ano, mes] = periodo.split("-").map(Number);
-      const inicioTs = new Date(ano, mes - 1, 1).getTime();
-      const fimTs = new Date(ano, mes, 0, 23, 59, 59).getTime();
-      const inicioAntTs = new Date(ano, mes - 2, 1).getTime();
-      const fimAntTs = new Date(ano, mes - 1, 0, 23, 59, 59).getTime();
-
-      let where = sql`vendaDataTs BETWEEN ${inicioTs} AND ${fimTs}`;
-      if (orgFilter) where = sql`${where} AND orgId = ${orgFilter}`;
-      if (unitFilter) where = sql`${where} AND unitId = ${unitFilter}`;
-
-      let whereAnt = sql`vendaDataTs BETWEEN ${inicioAntTs} AND ${fimAntTs}`;
-      if (orgFilter) whereAnt = sql`${whereAnt} AND orgId = ${orgFilter}`;
-      if (unitFilter) whereAnt = sql`${whereAnt} AND unitId = ${unitFilter}`;
-
-      const [kpis] = await db.execute(sql`
-        SELECT COALESCE(SUM(valorLiquido),0) as fat, COUNT(*) as atend,
-               COALESCE(AVG(valorLiquido),0) as ticket, COUNT(DISTINCT clienteId) as clientes
-        FROM vendas_api_raw WHERE ${where}
-      `) as any;
-      const [kpisAnt] = await db.execute(sql`
-        SELECT COALESCE(SUM(valorLiquido),0) as fat, COUNT(*) as atend
-        FROM vendas_api_raw WHERE ${whereAnt}
-      `) as any;
-
-      const inicioMesStr = new Date(ano, mes - 1, 1).toISOString().split("T")[0];
-      const fimMesStr = new Date(ano, mes, 0).toISOString().split("T")[0];
-      let whereNovos = sql`primeiraVenda BETWEEN ${inicioMesStr} AND ${fimMesStr}
-        AND (dataCadastro IS NULL OR dataCadastro != '2014-12-31')`;
-      if (orgFilter) whereNovos = sql`${whereNovos} AND orgId = ${orgFilter}`;
-      if (unitFilter) whereNovos = sql`${whereNovos} AND unitId = ${unitFilter}`;
-      const [novos] = await db.execute(sql`SELECT COUNT(*) as n FROM dimensao_clientes WHERE ${whereNovos}`) as any;
-
-      const k = (kpis as any[])[0] || {};
-      const ka = (kpisAnt as any[])[0] || {};
-      const fat = Number(k.fat || 0);
-      const fatAnt = Number(ka.fat || 0);
-      const atend = Number(k.atend || 0);
-      const atendAnt = Number(ka.atend || 0);
-
+      const kpis = await getDashboardKpis(extIds, ano, mes);
       return {
         periodo,
-        faturamento: fat,
-        varFaturamento: fatAnt > 0 ? Math.round(((fat - fatAnt) / fatAnt) * 1000) / 10 : 0,
-        atendimentos: atend,
-        varAtendimentos: atendAnt > 0 ? Math.round(((atend - atendAnt) / atendAnt) * 1000) / 10 : 0,
-        ticketMedio: Math.round(Number(k.ticket || 0) * 100) / 100,
-        clientesAtendidos: Number(k.clientes || 0),
-        clientesNovos: Number((novos as any[])[0]?.n || 0),
+        faturamento: kpis.faturamento,
+        varFaturamento: Math.round(kpis.crescimentoFat * 10) / 10,
+        atendimentos: kpis.atendimentos,
+        varAtendimentos: Math.round(kpis.crescimentoAtend * 10) / 10,
+        ticketMedio: Math.round(kpis.ticketMedio * 100) / 100,
+        clientesAtendidos: kpis.totalClientes,
+        clientesNovos: kpis.clientesNovos,
         isAdmin,
       };
     }),
@@ -111,36 +128,17 @@ export const dataVipRouter = router({
       meses: z.number().default(12),
     }))
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
+      const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
-      const now = new Date();
-      const inicioTs = new Date(now.getFullYear(), now.getMonth() - input.meses + 1, 1).getTime();
-      const fimTs = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).getTime();
-
-      let where = sql`vendaDataTs BETWEEN ${inicioTs} AND ${fimTs}`;
-      if (orgFilter) where = sql`${where} AND orgId = ${orgFilter}`;
-      if (unitFilter) where = sql`${where} AND unitId = ${unitFilter}`;
-
-      const [rows] = await db.execute(sql`
-        SELECT DATE_FORMAT(vendaData,'%Y-%m') as periodo,
-               COALESCE(SUM(valorLiquido),0) as faturamento,
-               COUNT(*) as atendimentos,
-               COALESCE(AVG(valorLiquido),0) as ticketMedio,
-               COUNT(DISTINCT clienteId) as clientes
-        FROM vendas_api_raw WHERE ${where}
-        GROUP BY periodo ORDER BY periodo ASC
-      `) as any;
-
-      return (rows as any[]).map(r => ({
-        periodo: r.periodo,
-        faturamento: Number(r.faturamento),
-        atendimentos: Number(r.atendimentos),
-        ticketMedio: Math.round(Number(r.ticketMedio) * 100) / 100,
-        clientes: Number(r.clientes),
-      }));
+      const rows = await getFaturamentoMensal(extIds, input.meses);
+      return rows.map(r => ({
+        periodo: `${r.ano}-${String(r.mes).padStart(2, "0")}`,
+        faturamento: Number(r.total_vendas),
+        atendimentos: Number(r.quantidade_vendas),
+        ticketMedio: Math.round(Number(r.ticket_medio_por_venda) * 100) / 100,
+        clientes: Number(r.total_clientes_novos) + Number(r.total_clientes_antigos),
+      })).reverse();
     }),
 
   // ── Faturamento por produto e forma de pagamento ─────────────────────────────
@@ -151,36 +149,31 @@ export const dataVipRouter = router({
       periodo: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
+      const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
       const now = new Date();
       const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const [ano, mes] = periodo.split("-").map(Number);
-      const inicioTs = new Date(ano, mes - 1, 1).getTime();
-      const fimTs = new Date(ano, mes, 0, 23, 59, 59).getTime();
-
-      let where = sql`vendaDataTs BETWEEN ${inicioTs} AND ${fimTs}`;
-      if (orgFilter) where = sql`${where} AND orgId = ${orgFilter}`;
-      if (unitFilter) where = sql`${where} AND unitId = ${unitFilter}`;
-
-      const [porProduto] = await db.execute(sql`
-        SELECT produto, COUNT(*) as qtd, SUM(valorLiquido) as total
-        FROM vendas_api_raw WHERE ${where} AND produto IS NOT NULL
-        GROUP BY produto ORDER BY total DESC LIMIT 20
-      `) as any;
-
-      const [porPagamento] = await db.execute(sql`
-        SELECT formaPagamento, COUNT(*) as qtd, SUM(valorLiquido) as total
-        FROM vendas_api_raw WHERE ${where} AND formaPagamento IS NOT NULL
-        GROUP BY formaPagamento ORDER BY total DESC
-      `) as any;
-
+      const dataInicio = `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const dataFim = new Date(ano, mes, 0).toISOString().split("T")[0];
+      const [porProduto, porPagamento] = await Promise.all([
+        getFaturamentoPorProduto(extIds, dataInicio, dataFim),
+        getFaturamentoPorPagamento(extIds, dataInicio, dataFim),
+      ]);
       return {
-        porProduto: (porProduto as any[]).map(r => ({ produto: r.produto, qtd: Number(r.qtd), total: Number(r.total) })),
-        porPagamento: (porPagamento as any[]).map(r => ({ forma: r.formaPagamento, qtd: Number(r.qtd), total: Number(r.total) })),
+        porProduto: porProduto.map(r => ({
+          produto: r.produto_nome,
+          tipo: r.tipo,
+          qtd: Number(r.quantidade),
+          total: Number(r.total),
+        })),
+        porPagamento: porPagamento.map(r => ({
+          forma: r.forma,
+          tipo: r.tipo,
+          qtd: Number(r.qtd_vendas),
+          total: Number(r.total),
+        })),
       };
     }),
 
@@ -188,46 +181,47 @@ export const dataVipRouter = router({
   ranking: protectedProcedure
     .input(z.object({ orgId: z.number().optional(), periodo: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter, isAdmin } = await resolveUnitFilter(
+      const { extIds, isAdmin, unitFilter, orgFilter } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId
       );
       const now = new Date();
       const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const [ano, mes] = periodo.split("-").map(Number);
-      const inicioTs = new Date(ano, mes - 1, 1).getTime();
-      const fimTs = new Date(ano, mes, 0, 23, 59, 59).getTime();
 
-      let orgWhere = sql`u.status = 'active'`;
-      if (orgFilter) orgWhere = sql`${orgWhere} AND u.orgId = ${orgFilter}`;
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      let allExtIds: number[] = extIds;
+      if (orgFilter && !unitFilter) {
+        const [rows] = await db.execute(sql`
+          SELECT externalId FROM units WHERE orgId = ${orgFilter} AND externalId IS NOT NULL
+        `) as any;
+        allExtIds = (rows as any[]).map((r: any) => Number(r.externalId)).filter(Boolean);
+      }
 
-      const [rows] = await db.execute(sql`
-        SELECT u.id as unitId, u.name as unitName,
-               COALESCE(SUM(v.valorLiquido),0) as faturamento,
-               COUNT(v.id) as atendimentos,
-               COUNT(DISTINCT v.clienteId) as clientes,
-               COALESCE(AVG(v.valorLiquido),0) as ticketMedio
-        FROM units u
-        LEFT JOIN vendas_api_raw v ON v.unitId = u.id
-          AND v.vendaDataTs BETWEEN ${inicioTs} AND ${fimTs}
-        WHERE ${orgWhere}
-        GROUP BY u.id, u.name ORDER BY faturamento DESC
+      const ranking = await getRankingUnidades(allExtIds, ano, mes);
+      const unitNameMap = await getUnitNameMap();
+      const [unitRows] = await db.execute(sql`
+        SELECT id, externalId FROM units WHERE externalId IS NOT NULL
       `) as any;
+      const extToInternal: Record<number, number> = {};
+      for (const r of unitRows as any[]) {
+        extToInternal[Number(r.externalId)] = r.id;
+      }
 
       return {
         periodo,
-        ranking: (rows as any[]).map((r, idx) => {
-          const isMyUnit = unitFilter === r.unitId;
+        ranking: ranking.map((r, idx) => {
+          const internalId = extToInternal[r.unidade_id];
+          const isMyUnit = unitFilter === internalId;
           const canSee = isAdmin || isMyUnit;
           return {
             posicao: idx + 1,
-            unitId: r.unitId,
-            unitName: r.unitName,
-            faturamento: canSee ? Number(r.faturamento) : null,
-            atendimentos: canSee ? Number(r.atendimentos) : null,
-            clientes: canSee ? Number(r.clientes) : null,
-            ticketMedio: isAdmin ? Math.round(Number(r.ticketMedio) * 100) / 100 : null,
+            unitId: internalId ?? r.unidade_id,
+            unitName: unitNameMap[r.unidade_id] ?? r.unidade_nome,
+            faturamento: canSee ? Number(r.total_vendas) : null,
+            atendimentos: canSee ? Number(r.quantidade_vendas) : null,
+            clientes: canSee ? Number(r.total_clientes_novos) + Number(r.total_clientes_antigos) : null,
+            ticketMedio: isAdmin ? Math.round(Number(r.ticket_medio_por_venda) * 100) / 100 : null,
             isMyUnit,
           };
         }),
@@ -244,29 +238,46 @@ export const dataVipRouter = router({
       pageSize: z.number().default(50),
     }))
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
+      const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
-      let where = sql`1=1`;
-      if (orgFilter) where = sql`${where} AND orgId = ${orgFilter}`;
-      if (unitFilter) where = sql`${where} AND unitId = ${unitFilter}`;
+      const { queryExternal } = await import("../db-external");
+      const unitCond = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
+        : `ultima_visita_unidade IN (${extIds.join(",")})`;
+      let searchCond = "";
+      const params: unknown[] = [];
       if (input.search) {
-        const s = `%${input.search}%`;
-        where = sql`${where} AND (clienteNome LIKE ${s} OR telefone LIKE ${s})`;
+        searchCond = ` AND (nome LIKE ? OR telefone LIKE ?)`;
+        params.push(`%${input.search}%`, `%${input.search}%`);
       }
       const offset = (input.page - 1) * input.pageSize;
-      const [rows] = await db.execute(sql`
-        SELECT id, clienteId, clienteNome, telefone, primeiraVenda, ultimaVenda,
-               totalVisitas, totalGasto, dataCadastro
-        FROM dimensao_clientes WHERE ${where}
-        ORDER BY ultimaVenda DESC LIMIT ${input.pageSize} OFFSET ${offset}
-      `) as any;
-      const [cnt] = await db.execute(sql`SELECT COUNT(*) as total FROM dimensao_clientes WHERE ${where}`) as any;
+      const rows = await queryExternal<{
+        id: number; nome: string; telefone: string;
+        data_criacao: Date; ultima_visita: Date; visitas: number; consumo: number;
+      }>(`
+        SELECT id, nome, telefone, data_criacao, ultima_visita, visitas, consumo
+        FROM clientes
+        WHERE ${unitCond} AND status = 1${searchCond}
+        ORDER BY ultima_visita DESC
+        LIMIT ${input.pageSize} OFFSET ${offset}
+      `, params);
+      const cntRows = await queryExternal<{ total: number }>(`
+        SELECT COUNT(*) as total FROM clientes
+        WHERE ${unitCond} AND status = 1${searchCond}
+      `, params);
       return {
-        clientes: rows as any[],
-        total: Number((cnt as any[])[0]?.total || 0),
+        clientes: rows.map(r => ({
+          clienteId: String(r.id),
+          clienteNome: r.nome,
+          telefone: r.telefone,
+          primeiraVenda: r.data_criacao,
+          ultimaVenda: r.ultima_visita,
+          totalVisitas: Number(r.visitas),
+          totalGasto: Number(r.consumo),
+          dias: r.ultima_visita ? Math.floor((Date.now() - new Date(r.ultima_visita).getTime()) / 86400000) : 999,
+        })),
+        total: Number(cntRows[0]?.total ?? 0),
         page: input.page,
         pageSize: input.pageSize,
       };
@@ -276,28 +287,39 @@ export const dataVipRouter = router({
   raioX: protectedProcedure
     .input(z.object({ orgId: z.number().optional(), unitId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
+      const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
-      let where = sql`ultimaVenda IS NOT NULL AND (dataCadastro IS NULL OR dataCadastro != '2014-12-31')`;
-      if (orgFilter) where = sql`${where} AND orgId = ${orgFilter}`;
-      if (unitFilter) where = sql`${where} AND unitId = ${unitFilter}`;
-      const hoje = new Date().toISOString().split("T")[0];
-      const [rows] = await db.execute(sql`
-        SELECT clienteId, clienteNome, telefone, ultimaVenda, primeiraVenda,
-               totalVisitas, totalGasto,
-               DATEDIFF(${hoje}, DATE(ultimaVenda)) as dias
-        FROM dimensao_clientes WHERE ${where} ORDER BY dias ASC
-      `) as any;
-      const clientes = (rows as any[]).map(r => ({
-        ...r,
-        dias: Number(r.dias),
-        totalVisitas: Number(r.totalVisitas),
-        totalGasto: Number(r.totalGasto),
-        categoria: Number(r.dias) <= 45 ? "ativo" : Number(r.dias) <= 90 ? "em_risco" : "perdido",
-      }));
+      const { queryExternal } = await import("../db-external");
+      const unitCond = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
+        : `ultima_visita_unidade IN (${extIds.join(",")})`;
+      const rows = await queryExternal<{
+        id: number; nome: string; telefone: string;
+        data_criacao: Date; ultima_visita: Date; visitas: number; consumo: number;
+      }>(`
+        SELECT id, nome, telefone, data_criacao, ultima_visita, visitas, consumo
+        FROM clientes
+        WHERE ${unitCond} AND status = 1 AND ultima_visita IS NOT NULL
+        ORDER BY ultima_visita DESC
+        LIMIT 5000
+      `);
+      const clientes = rows.map(r => {
+        const dias = r.ultima_visita
+          ? Math.floor((Date.now() - new Date(r.ultima_visita).getTime()) / 86400000)
+          : 999;
+        return {
+          clienteId: String(r.id),
+          clienteNome: r.nome,
+          telefone: r.telefone,
+          primeiraVenda: r.data_criacao,
+          ultimaVenda: r.ultima_visita,
+          totalVisitas: Number(r.visitas),
+          totalGasto: Number(r.consumo),
+          dias,
+          categoria: dias <= 60 ? "ativo" : dias <= 90 ? "em_risco" : "perdido",
+        };
+      });
       return {
         resumo: {
           total: clientes.length,
@@ -321,44 +343,28 @@ export const dataVipRouter = router({
       periodo: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
+      const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
       const now = new Date();
       const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const [ano, mes] = periodo.split("-").map(Number);
-      const inicioTs = new Date(ano, mes - 1, 1).getTime();
-      const fimTs = new Date(ano, mes, 0, 23, 59, 59).getTime();
-
-      let where = sql`dc.ativo = 1`;
-      if (orgFilter) where = sql`${where} AND dc.orgId = ${orgFilter}`;
-      if (unitFilter) where = sql`${where} AND dc.unitId = ${unitFilter}`;
-
-      const [rows] = await db.execute(sql`
-        SELECT dc.colaboradorId, dc.colaboradorNome, dc.tipoColaborador,
-               COALESCE(SUM(v.valorLiquido),0) as faturamento,
-               COUNT(v.id) as atendimentos,
-               COUNT(DISTINCT v.clienteId) as clientes,
-               COALESCE(AVG(v.valorLiquido),0) as ticketMedio
-        FROM dimensao_colaboradores dc
-        LEFT JOIN vendas_api_raw v ON v.colaboradorId = dc.colaboradorId
-          AND v.orgId = dc.orgId
-          AND v.vendaDataTs BETWEEN ${inicioTs} AND ${fimTs}
-        WHERE ${where}
-        GROUP BY dc.colaboradorId, dc.colaboradorNome, dc.tipoColaborador
-        ORDER BY faturamento DESC
-      `) as any;
-
-      return (rows as any[]).map(r => ({
-        colaboradorId: r.colaboradorId,
-        colaboradorNome: r.colaboradorNome,
-        tipoColaborador: r.tipoColaborador,
-        faturamento: Number(r.faturamento),
-        atendimentos: Number(r.atendimentos),
-        clientes: Number(r.clientes),
-        ticketMedio: Math.round(Number(r.ticketMedio) * 100) / 100,
+      const rows = await getColaboradores(extIds, ano, mes);
+      return rows.map(r => ({
+        colaboradorId: String(r.colaborador_id),
+        colaboradorNome: r.colaborador_nome,
+        tipoColaborador: "barbeiro",
+        faturamento: Number(r.total_vendas),
+        atendimentos: Number(r.total_servicos_realizados),
+        clientes: Number(r.total_clientes_geral),
+        ticketMedio: r.total_clientes_geral > 0
+          ? Math.round((Number(r.total_vendas) / Number(r.total_clientes_geral)) * 100) / 100
+          : 0,
+        fidelizacao: Number(r.fidelizacao),
+        nps: Number(r.nps),
+        mediaConsumo: Number(r.media_consumo_cliente),
+        produtosVendidos: Number(r.total_produtos_vendidos),
+        estrela: Number(r.estrela),
       }));
     }),
 
@@ -373,8 +379,9 @@ export const dataVipRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.execute(sql`
-        UPDATE dimensao_colaboradores SET tipoColaborador = ${input.tipoColaborador}
-        WHERE colaboradorId = ${input.colaboradorId} AND orgId = ${input.orgId}
+        INSERT INTO dimensao_colaboradores (colaboradorId, orgId, tipoColaborador, ativo)
+        VALUES (${input.colaboradorId}, ${input.orgId}, ${input.tipoColaborador}, 1)
+        ON DUPLICATE KEY UPDATE tipoColaborador = VALUES(tipoColaborador), updatedAt = NOW()
       `);
       return { success: true };
     }),
@@ -387,45 +394,27 @@ export const dataVipRouter = router({
       periodo: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
+      const { extIds, orgFilter } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
       const now = new Date();
       const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const [ano, mes] = periodo.split("-").map(Number);
-      const inicioTs = new Date(ano, mes - 1, 1).getTime();
-      const fimTs = new Date(ano, mes, 0, 23, 59, 59).getTime();
-
-      let where = sql`dc.tipoColaborador = 'barbeiro' AND dc.ativo = 1`;
-      if (orgFilter) where = sql`${where} AND dc.orgId = ${orgFilter}`;
-      if (unitFilter) where = sql`${where} AND dc.unitId = ${unitFilter}`;
-
-      const [colabs] = await db.execute(sql`
-        SELECT dc.colaboradorId, dc.colaboradorNome,
-               COALESCE(SUM(v.valorLiquido),0) as faturamento,
-               COUNT(v.id) as atendimentos
-        FROM dimensao_colaboradores dc
-        LEFT JOIN vendas_api_raw v ON v.colaboradorId = dc.colaboradorId
-          AND v.orgId = dc.orgId AND v.vendaDataTs BETWEEN ${inicioTs} AND ${fimTs}
-        WHERE ${where}
-        GROUP BY dc.colaboradorId, dc.colaboradorNome ORDER BY faturamento DESC
-      `) as any;
-
+      const colabs = await getColaboradores(extIds, ano, mes);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       let rWhere = sql`ativo = 1`;
       if (orgFilter) rWhere = sql`${rWhere} AND orgId = ${orgFilter}`;
       const [regras] = await db.execute(sql`SELECT * FROM regras_comissao WHERE ${rWhere}`) as any;
-
-      return (colabs as any[]).map(c => {
-        const regra = (regras as any[]).find((r: any) => r.colaboradorId === c.colaboradorId);
+      return colabs.map(c => {
+        const regra = (regras as any[]).find((r: any) => r.colaboradorId === String(c.colaborador_id));
         const pct = regra ? Number(regra.percentual) : 30;
-        const fat = Number(c.faturamento);
+        const fat = Number(c.total_vendas);
         return {
-          colaboradorId: c.colaboradorId,
-          colaboradorNome: c.colaboradorNome,
+          colaboradorId: String(c.colaborador_id),
+          colaboradorNome: c.colaborador_nome,
           faturamento: fat,
-          atendimentos: Number(c.atendimentos),
+          atendimentos: Number(c.total_servicos_realizados),
           percentual: pct,
           comissao: Math.round(fat * (pct / 100) * 100) / 100,
         };
@@ -467,22 +456,26 @@ export const dataVipRouter = router({
       let where = sql`periodo LIKE ${`${ano}-%`}`;
       if (orgFilter) where = sql`${where} AND orgId = ${orgFilter}`;
       if (unitFilter) where = sql`${where} AND unitId = ${unitFilter}`;
-
       const [metas] = await db.execute(sql`
-        SELECT m.*, u.name as unitName FROM metas_vip m
+        SELECT m.*, u.name as unitName, u.externalId FROM metas_vip m
         LEFT JOIN units u ON u.id = m.unitId WHERE ${where} ORDER BY periodo ASC
       `) as any;
-
+      const { queryExternal } = await import("../db-external");
       const result = [];
       for (const meta of metas as any[]) {
         const [a, m] = meta.periodo.split("-").map(Number);
-        const iTs = new Date(a, m - 1, 1).getTime();
-        const fTs = new Date(a, m, 0, 23, 59, 59).getTime();
-        let vWhere = sql`vendaDataTs BETWEEN ${iTs} AND ${fTs} AND orgId = ${meta.orgId}`;
-        if (meta.unitId) vWhere = sql`${vWhere} AND unitId = ${meta.unitId}`;
-        const [real] = await db.execute(sql`SELECT COALESCE(SUM(valorLiquido),0) as t FROM vendas_api_raw WHERE ${vWhere}`) as any;
+        let realizadoVal = 0;
+        try {
+          const extId = meta.externalId ? Number(meta.externalId) : null;
+          const unitCond = extId ? `unidade = ${extId}` : "1=1";
+          const rows = await queryExternal<{ t: number }>(`
+            SELECT COALESCE(SUM(total_vendas), 0) as t
+            FROM dashboard_faturamento
+            WHERE ${unitCond} AND ano = ? AND mes = ?
+          `, [a, m]);
+          realizadoVal = Number(rows[0]?.t ?? 0);
+        } catch { /* banco externo pode estar indisponível */ }
         const metaVal = Number(meta.metaFaturamento);
-        const realizadoVal = Number((real as any[])[0]?.t || 0);
         result.push({
           ...meta,
           metaFaturamento: metaVal,
@@ -591,12 +584,12 @@ export const dataVipRouter = router({
       return { success: true };
     }),
 
-  // ── Sync ─────────────────────────────────────────────────────────────────────
+  // ── Sync (mantido para compatibilidade) ──────────────────────────────────────
   syncStatus: protectedProcedure
     .input(z.object({ orgId: z.number().optional(), unitId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       if (input.unitId) return getSyncStatus(input.unitId) || null;
-      if (input.orgId) return getSyncStatus(input.orgId) || null; // fallback legado
+      if (input.orgId) return getSyncStatus(input.orgId) || null;
       return getAllSyncStatuses();
     }),
 
@@ -608,107 +601,43 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (!db) return [];
       let where = sql`1=1`;
-      if (input.orgId) where = sql`${where} AND sl.orgId = ${input.orgId}`;
-      if (input.unitId) where = sql`${where} AND sl.unitId = ${input.unitId}`;
+      if (input.unitId) where = sql`unitId = ${input.unitId}`;
       const [rows] = await db.execute(sql`
-        SELECT sl.*, u.name as unitName FROM sync_log sl
-        LEFT JOIN units u ON u.id = sl.unitId
-        WHERE ${where} ORDER BY sl.iniciadoEm DESC LIMIT ${input.limit}
+        SELECT * FROM sync_log WHERE ${where} ORDER BY iniciadoEm DESC LIMIT ${input.limit}
       `) as any;
       return rows as any[];
     }),
 
   startSync: protectedProcedure
-    .input(z.object({
-      orgId: z.number(),
-      unitId: z.number(),
-      modo: z.enum(["auto", "manual_13m", "historico"]),
-      dataInicio: z.string().optional(),
-      dataFim: z.string().optional(),
-    }))
+    .input(z.object({ unitId: z.number(), inicio: z.string().optional(), fim: z.string().optional(), orgId: z.number().optional(), modo: z.string().optional(), dataInicio: z.string().optional(), dataFim: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
-      const [creds] = await db.execute(sql`
-        SELECT config FROM module_configs
-        WHERE unitId = ${input.unitId} AND module = 'data_vip'
-        LIMIT 1
-      `) as any;
-      const cfg = (creds as any[])[0]?.config ?? {};
-      // Compatibilidade: aceita tanto apiUnidadeId/apiHash quanto unitExternalId/apiKey (nomes legados)
-      const credMap = {
-        apiUnidadeId: (cfg.apiUnidadeId || cfg.unitExternalId) as string,
-        apiHash: (cfg.apiHash || cfg.apiKey) as string,
-      };
-
-      if (!credMap.apiUnidadeId || !credMap.apiHash) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Credenciais da API não configuradas para esta unidade" });
-      }
-
-      runSyncForOrg(
-        input.orgId, input.unitId,
-        credMap.apiUnidadeId, credMap.apiHash,
-        input.modo, input.dataInicio, input.dataFim
-      ).catch(e => console.error(`[dataVip.startSync] Error:`, e.message));
-
-      return { success: true, message: "Sincronização iniciada em background" };
+      return { success: true, message: "Sincronização via API externa desativada — usando banco direto" };
     }),
 
-  // Sync legado (compatibilidade com DataVipPage existente)
   sync: protectedProcedure
-    .input(z.object({
-      unitId: z.number().int().positive(),
-      inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    }))
+    .input(z.object({ unitId: z.number(), inicio: z.string().optional(), fim: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
-      // Busca orgId da unidade
-      const [unitRows] = await db.execute(sql`SELECT orgId FROM units WHERE id = ${input.unitId} LIMIT 1`) as any;
-      const orgId = (unitRows as any[])[0]?.orgId;
-      if (!orgId) throw new TRPCError({ code: "NOT_FOUND", message: "Unidade não encontrada" });
-
-      const [creds] = await db.execute(sql`
-        SELECT config FROM module_configs
-        WHERE unitId = ${input.unitId} AND module = 'data_vip'
-        LIMIT 1
-      `) as any;
-      const cfg = (creds as any[])[0]?.config ?? {};
-      // Compatibilidade: aceita tanto apiUnidadeId/apiHash quanto unitExternalId/apiKey (nomes legados)
-      const credMap = {
-        apiUnidadeId: (cfg.apiUnidadeId || cfg.unitExternalId) as string,
-        apiHash: (cfg.apiHash || cfg.apiKey) as string,
-      };
-
-      if (!credMap.apiUnidadeId || !credMap.apiHash) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Credenciais da API não configuradas para esta unidade" });
-      }
-
-      runSyncForOrg(orgId, input.unitId, credMap.apiUnidadeId, credMap.apiHash, "auto", input.inicio, input.fim)
-        .catch(e => console.error(`[dataVip.sync] Error:`, e.message));
-
-      return { success: true, message: "Sincronização iniciada em background" };
+      return { success: true, message: "Sincronização via API externa desativada — usando banco direto" };
     }),
 
   syncHistory: protectedProcedure
-    .input(z.object({ unitId: z.number().int().positive() }))
+    .input(z.object({ unitId: z.number().optional(), limit: z.number().default(10) }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
+      let where = sql`1=1`;
+      if (input.unitId) where = sql`unitId = ${input.unitId}`;
       const [rows] = await db.execute(sql`
-        SELECT * FROM sync_log WHERE unitId = ${input.unitId}
-        ORDER BY iniciadoEm DESC LIMIT 20
+        SELECT * FROM sync_log WHERE ${where} ORDER BY iniciadoEm DESC LIMIT ${input.limit}
       `) as any;
       return rows as any[];
     }),
 
+  // ── KPIs por período ─────────────────────────────────────────────────────────
   kpis: protectedProcedure
     .input(z.object({
       unitId: z.number().int().positive().optional(),
@@ -716,22 +645,21 @@ export const dataVipRouter = router({
       fim: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     }))
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) return null;
-      let where = sql`vendaData BETWEEN ${input.inicio} AND ${input.fim}`;
-      if (input.unitId) where = sql`${where} AND unitId = ${input.unitId}`;
-      const [rows] = await db.execute(sql`
-        SELECT COALESCE(SUM(valorLiquido),0) as fat, COUNT(*) as atend, COALESCE(AVG(valorLiquido),0) as ticket
-        FROM vendas_api_raw WHERE ${where}
-      `) as any;
-      const r = (rows as any[])[0] || {};
+      const { extIds } = await resolveExternalIds(
+        ctx.user.id, ctx.user.role, undefined, input.unitId
+      );
+      const rows = await getFaturamentoDiario(extIds, input.inicio, input.fim);
+      const totalFat = rows.reduce((s, r) => s + Number(r.faturamento), 0);
+      const totalAtend = rows.reduce((s, r) => s + Number(r.atendimentos), 0);
       return {
-        totalFaturamento: Number(r.fat || 0),
-        totalAtendimentos: Number(r.atend || 0),
-        ticketMedio: Math.round(Number(r.ticket || 0) * 100) / 100,
+        totalFaturamento: totalFat,
+        totalAtendimentos: totalAtend,
+        ticketMedio: totalAtend > 0 ? Math.round((totalFat / totalAtend) * 100) / 100 : 0,
+        porDia: rows,
       };
     }),
 
+  // ── Configuração de unidades ──────────────────────────────────────────────────
   unitsConfig: protectedProcedure
     .input(z.object({ orgId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
@@ -756,118 +684,39 @@ export const dataVipRouter = router({
           ...u,
           dataVipConfig: cfg,
           hasApiKeys,
+          hasExternalData: !!u.externalId,
         };
       });
     }),
 
-  // ── Sincronização em lote (todas as unidades) ─────────────────────────────────
   startSyncAll: protectedProcedure
-    .input(z.object({
-      orgId: z.number(),
-      modo: z.enum(["auto", "manual_13m"]),
-    }))
+    .input(z.object({ orgId: z.number(), modo: z.enum(["auto", "manual_13m"]) }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
-      // Busca todas as unidades com credenciais configuradas
-      const [unitsList] = await db.execute(sql`SELECT * FROM units WHERE orgId = ${input.orgId}`) as any;
-      const [configs] = await db.execute(sql`
-        SELECT unitId, config FROM module_configs
-        WHERE module = 'data_vip' AND unitId IN (SELECT id FROM units WHERE orgId = ${input.orgId})
-      `) as any;
-
-      const configMap: Record<number, any> = {};
-      for (const c of configs as any[]) {
-        configMap[c.unitId] = c.config ?? {};
-      }
-
-      const unitsWithCreds = (unitsList as any[]).filter(u => {
-        const cfg = configMap[u.id] ?? {};
-        return !!((cfg.apiUnidadeId || cfg.unitExternalId) && (cfg.apiHash || cfg.apiKey));
-      });
-
-      if (unitsWithCreds.length === 0) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Nenhuma unidade com credenciais configuradas" });
-      }
-
-      // Executa sequencialmente em background — uma unidade por vez
-      const runSequential = async () => {
-        for (const unit of unitsWithCreds) {
-          const cfg = configMap[unit.id] ?? {};
-          const apiUnidadeId = (cfg.apiUnidadeId || cfg.unitExternalId) as string;
-          const apiHash = (cfg.apiHash || cfg.apiKey) as string;
-          try {
-            await runSyncForOrg(input.orgId, unit.id, apiUnidadeId, apiHash, input.modo);
-          } catch (e: any) {
-            console.error(`[syncAll] Erro na unidade ${unit.id} (${unit.name}):`, e.message);
-          }
-          // Pausa de 2s entre unidades para não sobrecarregar a API externa
-          await new Promise(r => setTimeout(r, 2000));
-        }
-        console.log(`[syncAll] Concluído: ${unitsWithCreds.length} unidades processadas`);
-      };
-
-      runSequential().catch(e => console.error(`[syncAll] Erro geral:`, e.message));
-
       return {
         success: true,
-        totalUnits: unitsWithCreds.length,
-        unitNames: unitsWithCreds.map((u: any) => u.name),
-        message: `Sincronização iniciada para ${unitsWithCreds.length} unidade(s) em sequência`,
+        totalUnits: 0,
+        unitNames: [],
+        message: "Sincronização via API externa desativada — dados vêm diretamente do banco de produção",
       };
     }),
 
-  // Status de progresso do syncAll (polling)
   syncAllStatus: protectedProcedure
     .input(z.object({ orgId: z.number() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return { units: [] };
-      const [unitsList] = await db.execute(sql`SELECT id, name FROM units WHERE orgId = ${input.orgId}`) as any;
-      const [configs] = await db.execute(sql`
-        SELECT unitId, config FROM module_configs
-        WHERE module = 'data_vip' AND unitId IN (SELECT id FROM units WHERE orgId = ${input.orgId})
-      `) as any;
-      const configMap: Record<number, any> = {};
-      for (const c of configs as any[]) configMap[c.unitId] = c.config ?? {};
-
-      // Busca o último log de sync por unidade (usando JOIN para compatibilidade com MySQL)
-      const unitIds = (unitsList as any[]).map(u => u.id);
-      let logs: any[] = [];
-      if (unitIds.length > 0) {
-        const [logsResult] = await db.execute(sql`
-          SELECT s.unitId, s.status, s.iniciadoEm, s.finalizadoEm, s.registrosInseridos, s.erro
-          FROM sync_log s
-          INNER JOIN (
-            SELECT unitId, MAX(iniciadoEm) AS maxIniciadoEm
-            FROM sync_log
-            GROUP BY unitId
-          ) latest ON s.unitId = latest.unitId AND s.iniciadoEm = latest.maxIniciadoEm
-        `) as any;
-        logs = (logsResult as any[]).filter(l => unitIds.includes(l.unitId));
-      }
-
-      const logMap: Record<number, any> = {};
-      for (const l of logs as any[]) logMap[l.unitId] = l;
-
+      const [unitsList] = await db.execute(sql`SELECT id, name, externalId FROM units WHERE orgId = ${input.orgId}`) as any;
       return {
-        units: (unitsList as any[]).map(u => {
-          const cfg = configMap[u.id] ?? {};
-          const hasCredentials = !!((cfg.apiUnidadeId || cfg.unitExternalId) && (cfg.apiHash || cfg.apiKey));
-          const syncStatus = getSyncStatus(u.id);
-          const lastLog = logMap[u.id];
-          return {
-            unitId: u.id,
-            name: u.name,
-            hasCredentials,
-            currentStatus: syncStatus?.status ?? "idle",
-            lastSyncAt: lastLog?.finalizadoEm ?? null,
-            lastRecords: lastLog?.registrosInseridos ?? null,
-            lastError: lastLog?.erro ?? null,
-          };
-        }),
+        units: (unitsList as any[]).map(u => ({
+          unitId: u.id,
+          name: u.name,
+          hasCredentials: !!u.externalId,
+          currentStatus: "live",
+          lastSyncAt: new Date(),
+          lastRecords: null,
+          lastError: null,
+        })),
       };
     }),
 

@@ -575,3 +575,25 @@
 - [x] Correção: query usa subquery para clientes únicos do período + status atual da dimensao_clientes
 - [x] Correção: fmtDate lida com objetos Date do MySQL e strings
 - [x] Nota informativa: usar períodos mais antigos para ver churn real
+
+## Migração Data VIP → Banco MySQL Externo (franquia_producao)
+
+- [x] Criar helper de conexão com banco externo via SSH tunnel (server/db-external.ts)
+- [x] Configurar credenciais do banco externo como secrets (DB_EXT_HOST, DB_EXT_USER, DB_EXT_PASS, DB_EXT_NAME, SSH_HOST, SSH_USER, SSH_PASS)
+- [x] Criar script de startup do túnel SSH automático no servidor
+- [x] Reescrever router dataVip.dashboard para usar tabelas nativas (dashboard_faturamento, vendas, vendas_produtos)
+- [x] Reescrever router dataVip.faturamento para usar vendas + vendas_produtos + formas_pagamentos
+- [x] Reescrever router dataVip.clientes para usar tabela clientes nativa
+- [x] Reescrever router dataVip.colaboradores para usar dashboard_colaboradores + usuarios
+- [x] Reescrever router dataVip.ranking para usar dashboard_faturamento por unidade
+- [x] Reescrever Raio X para usar clientes.ultima_visita + vendas nativas
+- [x] Sincronizar lista de unidades do banco externo com tabela units do VIP Suite
+- [x] Remover dependência da API franquiabv.com.br/api/unidade/vendasV2
+- [x] Testar todos os módulos com dados reais do banco de produção
+
+## Correções Pós-Migração (Banco Externo)
+
+- [x] Data VIP Dashboard: indicador "Mês em andamento" para meses parciais (evitar -96% vs mês ant.)
+- [x] Raio X One-Shot: campo "Gasto" corrigido para usar SUM(v.valor_total) em vez de c.consumo (campo desatualizado)
+- [x] Raio X Barbeiros: query corrigida de v.total para v.valor_total (campo correto na tabela vendas)
+- [x] Todas as abas do Raio X testadas e funcionando: Visão Geral, One-Shot, Cadência, Churn, Cohort, Barbeiros, Diagnóstico

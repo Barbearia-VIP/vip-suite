@@ -492,10 +492,10 @@ export default function RaioXPage() {
                             <td className="p-3 text-right">{fmtMoeda(c.totalGasto)}</td>
                             <td className="p-3">
                               <Badge variant="outline" className={
-                                c.status === "aguardando" ? "border-blue-500/50 text-blue-400" :
+                                c.status === "ativo" ? "border-blue-500/50 text-blue-400" :
                                 c.status === "em_risco" ? "border-yellow-500/50 text-yellow-400" :
                                 "border-red-500/50 text-red-400"
-                              }>{c.status === "aguardando" ? "Aguardando" : c.status === "em_risco" ? "Em risco" : "Perdido"}</Badge>
+                              }>{c.status === "ativo" ? "Aguardando" : c.status === "em_risco" ? "Em risco" : "Perdido"}</Badge>
                             </td>
                           </tr>
                         ))}
@@ -687,7 +687,7 @@ export default function RaioXPage() {
                             }`}>{b.taxaChurn}%</span>
                           </td>
                           <td className="p-3 text-right text-muted-foreground">{b.mediaVisitas}x</td>
-                          <td className="p-3 text-right text-muted-foreground">{fmtMoeda(b.mediaGasto)}</td>
+                          <td className="p-3 text-right text-muted-foreground">{fmtMoeda(b.ticketMedio)}</td>
                         </tr>
                       ))}
                     </tbody>

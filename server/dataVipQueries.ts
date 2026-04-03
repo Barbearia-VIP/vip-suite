@@ -1,0 +1,666 @@
+/**
+ * dataVipQueries.ts
+ * Queries do módulo Data VIP usando o banco externo (franquia_producao).
+ * Todas as funções recebem externalUnitIds[] (IDs no banco externo).
+ */
+
+import { queryExternal } from "./db-external";
+
+// ─── Tipos ───────────────────────────────────────────────────────────────────
+
+export interface ExtUnit {
+  internalId: number;
+  externalId: number;
+}
+
+// ─── Helper: monta cláusula WHERE de unidades ─────────────────────────────────
+
+function unitWhereClause(extIds: number[]): string {
+  if (extIds.length === 0) return "1=1"; // sem filtro = todas as unidades
+  if (extIds.length === 1) return `u.unidade = ${extIds[0]}`;
+  return `u.unidade IN (${extIds.join(",")})`;
+}
+
+function unitWhereVendas(extIds: number[]): string {
+  if (extIds.length === 0) return "1=1";
+  if (extIds.length === 1) return `uu.unidade = ${extIds[0]}`;
+  return `uu.unidade IN (${extIds.join(",")})`;
+}
+
+// ─── Dashboard KPIs (usa dashboard_faturamento pré-calculado) ─────────────────
+
+export async function getDashboardKpis(extIds: number[], ano: number, mes: number) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `unidade = ${extIds[0]}`
+    : `unidade IN (${extIds.join(",")})`;
+
+  const rows = await queryExternal<{
+    total_vendas: number;
+    quantidade_vendas: number;
+    ticket_medio_por_venda: number;
+    total_clientes_novos: number;
+    total_clientes_antigos: number;
+    total_servicos_realizados: number;
+    total_servicos_base: number;
+    total_servicos_extra: number;
+    total_produtos_vendidos: number;
+  }>(`
+    SELECT 
+      COALESCE(SUM(total_vendas), 0) as total_vendas,
+      COALESCE(SUM(quantidade_vendas), 0) as quantidade_vendas,
+      COALESCE(AVG(ticket_medio_por_venda), 0) as ticket_medio_por_venda,
+      COALESCE(SUM(total_clientes_novos), 0) as total_clientes_novos,
+      COALESCE(SUM(total_clientes_antigos), 0) as total_clientes_antigos,
+      COALESCE(SUM(total_servicos_realizados), 0) as total_servicos_realizados,
+      COALESCE(SUM(total_servicos_base), 0) as total_servicos_base,
+      COALESCE(SUM(total_servicos_extra), 0) as total_servicos_extra,
+      COALESCE(SUM(total_produtos_vendidos), 0) as total_produtos_vendidos
+    FROM dashboard_faturamento
+    WHERE ${unitCond} AND ano = ? AND mes = ?
+  `, [ano, mes]);
+
+  // Mês anterior para comparação
+  const mesAnt = mes === 1 ? 12 : mes - 1;
+  const anoAnt = mes === 1 ? ano - 1 : ano;
+  const rowsAnt = await queryExternal<{ total_vendas: number; quantidade_vendas: number }>(`
+    SELECT 
+      COALESCE(SUM(total_vendas), 0) as total_vendas,
+      COALESCE(SUM(quantidade_vendas), 0) as quantidade_vendas
+    FROM dashboard_faturamento
+    WHERE ${unitCond} AND ano = ? AND mes = ?
+  `, [anoAnt, mesAnt]);
+
+  const cur = rows[0] ?? {};
+  const ant = rowsAnt[0] ?? {};
+  const fat = Number(cur.total_vendas ?? 0);
+  const fatAnt = Number(ant.total_vendas ?? 0);
+  const atend = Number(cur.quantidade_vendas ?? 0);
+  const atendAnt = Number(ant.quantidade_vendas ?? 0);
+  const totalClientes = Number(cur.total_clientes_novos ?? 0) + Number(cur.total_clientes_antigos ?? 0);
+
+  return {
+    faturamento: fat,
+    faturamentoAnterior: fatAnt,
+    crescimentoFat: fatAnt > 0 ? ((fat - fatAnt) / fatAnt) * 100 : 0,
+    atendimentos: atend,
+    atendimentosAnterior: atendAnt,
+    crescimentoAtend: atendAnt > 0 ? ((atend - atendAnt) / atendAnt) * 100 : 0,
+    ticketMedio: Number(cur.ticket_medio_por_venda ?? 0),
+    clientesNovos: Number(cur.total_clientes_novos ?? 0),
+    clientesAntigos: Number(cur.total_clientes_antigos ?? 0),
+    totalClientes,
+    servicosBase: Number(cur.total_servicos_base ?? 0),
+    servicosExtra: Number(cur.total_servicos_extra ?? 0),
+    servicosTotal: Number(cur.total_servicos_realizados ?? 0),
+    produtosVendidos: Number(cur.total_produtos_vendidos ?? 0),
+  };
+}
+
+// ─── Faturamento mensal histórico ─────────────────────────────────────────────
+
+export async function getFaturamentoMensal(extIds: number[], meses: number = 12) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `unidade = ${extIds[0]}`
+    : `unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    ano: number;
+    mes: number;
+    total_vendas: number;
+    quantidade_vendas: number;
+    ticket_medio_por_venda: number;
+    total_clientes_novos: number;
+    total_clientes_antigos: number;
+  }>(`
+    SELECT 
+      ano, mes,
+      COALESCE(SUM(total_vendas), 0) as total_vendas,
+      COALESCE(SUM(quantidade_vendas), 0) as quantidade_vendas,
+      COALESCE(AVG(ticket_medio_por_venda), 0) as ticket_medio_por_venda,
+      COALESCE(SUM(total_clientes_novos), 0) as total_clientes_novos,
+      COALESCE(SUM(total_clientes_antigos), 0) as total_clientes_antigos
+    FROM dashboard_faturamento
+    WHERE ${unitCond} AND total_vendas > 0
+    GROUP BY ano, mes
+    ORDER BY ano DESC, mes DESC
+    LIMIT ${Number(meses)}
+  `, []);
+}
+
+// ─── Faturamento por forma de pagamento ──────────────────────────────────────
+
+export async function getFaturamentoPorPagamento(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    forma: string;
+    tipo: string;
+    total: number;
+    qtd_vendas: number;
+  }>(`
+    SELECT 
+      fp.nome as forma,
+      fp.tipo,
+      COALESCE(SUM(vp.valor), 0) as total,
+      COUNT(DISTINCT v.id) as qtd_vendas
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_pagamentos vp ON vp.venda = v.id
+    JOIN formas_pagamentos fp ON fp.id = vp.forma_pagamento
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+    GROUP BY fp.id, fp.nome, fp.tipo
+    ORDER BY total DESC
+  `, [dataInicio, dataFim]);
+}
+
+// ─── Faturamento diário ───────────────────────────────────────────────────────
+
+export async function getFaturamentoDiario(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    dia: string;
+    faturamento: number;
+    atendimentos: number;
+    clientes: number;
+  }>(`
+    SELECT 
+      DATE(v.data_criacao) as dia,
+      COALESCE(SUM(vp.valor_total), 0) as faturamento,
+      COUNT(DISTINCT v.id) as atendimentos,
+      COUNT(DISTINCT v.cliente) as clientes
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+    GROUP BY DATE(v.data_criacao)
+    ORDER BY dia ASC
+  `, [dataInicio, dataFim]);
+}
+
+// ─── Faturamento por produto/serviço ─────────────────────────────────────────
+
+export async function getFaturamentoPorProduto(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    produto_id: number;
+    produto_nome: string;
+    tipo: string;
+    quantidade: number;
+    total: number;
+  }>(`
+    SELECT 
+      MIN(p.id) as produto_id,
+      MIN(p.nome) as produto_nome,
+      MIN(p.tipo) as tipo,
+      SUM(vp.quantidade) as quantidade,
+      COALESCE(SUM(vp.valor_total), 0) as total
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    JOIN produtos p ON p.id = vp.produto
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+    GROUP BY LOWER(TRIM(p.nome)), p.tipo
+    ORDER BY total DESC
+    LIMIT 50
+  `, [dataInicio, dataFim]);
+}
+
+// ─── Colaboradores (usa dashboard_colaboradores pré-calculado) ────────────────
+
+export async function getColaboradores(extIds: number[], ano: number, mes: number) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `dc.unidade = ${extIds[0]}`
+    : `dc.unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    colaborador_id: number;
+    colaborador_nome: string;
+    unidade_id: number;
+    total_vendas: number;
+    total_servicos_realizados: number;
+    total_clientes_novos: number;
+    total_clientes_antigos: number;
+    total_clientes_geral: number;
+    media_consumo_cliente: number;
+    fidelizacao: number;
+    nps: number;
+    total_produtos_vendidos: number;
+    total_produtos_vendidos_reais: number;
+    media_servicos_cliente: number;
+    media_itens_cliente: number;
+    estrela: number;
+  }>(`
+    SELECT 
+      dc.colaborador as colaborador_id,
+      u.nome as colaborador_nome,
+      dc.unidade as unidade_id,
+      COALESCE(dc.total_vendas, 0) as total_vendas,
+      COALESCE(dc.total_servicos_realizados, 0) as total_servicos_realizados,
+      COALESCE(dc.total_clientes_novos, 0) as total_clientes_novos,
+      COALESCE(dc.total_clientes_antigos, 0) as total_clientes_antigos,
+      COALESCE(dc.total_clientes_geral, 0) as total_clientes_geral,
+      COALESCE(dc.media_consumo_cliente, 0) as media_consumo_cliente,
+      COALESCE(dc.fidelizacao, 0) as fidelizacao,
+      COALESCE(dc.nps, 0) as nps,
+      COALESCE(dc.total_produtos_vendidos, 0) as total_produtos_vendidos,
+      COALESCE(dc.total_produtos_vendidos_reais, 0) as total_produtos_vendidos_reais,
+      COALESCE(dc.media_servicos_cliente, 0) as media_servicos_cliente,
+      COALESCE(dc.media_itens_cliente, 0) as media_itens_cliente,
+      COALESCE(dc.estrela, 0) as estrela
+    FROM dashboard_colaboradores dc
+    JOIN usuarios u ON u.id = dc.colaborador
+    WHERE ${unitCond} AND dc.ano = ? AND dc.mes = ?
+    ORDER BY dc.total_vendas DESC
+  `, [ano, mes]);
+}
+
+// ─── Ranking de unidades ──────────────────────────────────────────────────────
+
+export async function getRankingUnidades(extIds: number[], ano: number, mes: number) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `df.unidade = ${extIds[0]}`
+    : `df.unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    unidade_id: number;
+    unidade_nome: string;
+    total_vendas: number;
+    quantidade_vendas: number;
+    ticket_medio_por_venda: number;
+    total_clientes_novos: number;
+    total_clientes_antigos: number;
+  }>(`
+    SELECT 
+      df.unidade as unidade_id,
+      un.nome as unidade_nome,
+      COALESCE(df.total_vendas, 0) as total_vendas,
+      COALESCE(df.quantidade_vendas, 0) as quantidade_vendas,
+      COALESCE(df.ticket_medio_por_venda, 0) as ticket_medio_por_venda,
+      COALESCE(df.total_clientes_novos, 0) as total_clientes_novos,
+      COALESCE(df.total_clientes_antigos, 0) as total_clientes_antigos
+    FROM dashboard_faturamento df
+    JOIN unidades un ON un.id = df.unidade
+    WHERE ${unitCond} AND df.ano = ? AND df.mes = ?
+    ORDER BY df.total_vendas DESC
+  `, [ano, mes]);
+}
+
+// ─── Clientes (Raio X) ────────────────────────────────────────────────────────
+
+export async function getClientesStatus(extIds: number[]) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
+    : `ultima_visita_unidade IN (${extIds.join(",")})`;
+
+  const rows = await queryExternal<{
+    total: number;
+    ativos: number;
+    em_risco: number;
+    perdidos: number;
+    novos_30d: number;
+  }>(`
+    SELECT 
+      COUNT(*) as total,
+      SUM(CASE WHEN DATEDIFF(NOW(), ultima_visita) <= 60 THEN 1 ELSE 0 END) as ativos,
+      SUM(CASE WHEN DATEDIFF(NOW(), ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as em_risco,
+      SUM(CASE WHEN DATEDIFF(NOW(), ultima_visita) > 90 THEN 1 ELSE 0 END) as perdidos,
+      SUM(CASE WHEN DATEDIFF(NOW(), data_criacao) <= 30 THEN 1 ELSE 0 END) as novos_30d
+    FROM clientes
+    WHERE ${unitCond} AND status = 1 AND ultima_visita IS NOT NULL
+  `);
+  return rows[0] ?? { total: 0, ativos: 0, em_risco: 0, perdidos: 0, novos_30d: 0 };
+}
+
+export async function getClientesPerdidosRecentes(
+  extIds: number[],
+  diasMin: number = 61,
+  diasMax: number = 120,
+  limit: number = 50
+) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `c.ultima_visita_unidade = ${extIds[0]}`
+    : `c.ultima_visita_unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    id: number;
+    nome: string;
+    telefone: string;
+    ultima_visita: Date;
+    dias_ausente: number;
+    total_visitas: number;
+    total_gasto: number;
+  }>(`
+    SELECT 
+      c.id,
+      c.nome,
+      c.telefone,
+      c.ultima_visita,
+      DATEDIFF(NOW(), c.ultima_visita) as dias_ausente,
+      (SELECT COUNT(*) FROM vendas v2 
+       JOIN usuarios u2 ON v2.usuario = u2.id 
+       WHERE v2.cliente = c.id 
+         AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u2.unidade = ${extIds[0]}` : `u2.unidade IN (${extIds.join(",")})`})
+         AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL) as total_visitas,
+      (SELECT COALESCE(SUM(vp2.valor_total), 0) FROM vendas v2 
+       JOIN usuarios u2 ON v2.usuario = u2.id 
+       JOIN vendas_produtos vp2 ON vp2.venda = v2.id
+       WHERE v2.cliente = c.id 
+         AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u2.unidade = ${extIds[0]}` : `u2.unidade IN (${extIds.join(",")})`})
+         AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL) as total_gasto
+    FROM clientes c
+    WHERE ${unitCond}
+      AND c.status = 1
+      AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN ? AND ?
+    ORDER BY dias_ausente ASC
+    LIMIT ?
+  `, [diasMin, diasMax, limit]);
+}
+
+// ─── Visão geral do Raio X ────────────────────────────────────────────────────
+
+export async function getRaioXVisaoGeral(extIds: number[]) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
+    : `ultima_visita_unidade IN (${extIds.join(",")})`;
+
+  // Status atual de todos os clientes
+  const statusRows = await queryExternal<{
+    status_label: string;
+    total: number;
+  }>(`
+    SELECT 
+      CASE 
+        WHEN DATEDIFF(NOW(), ultima_visita) <= 60 THEN 'ativo'
+        WHEN DATEDIFF(NOW(), ultima_visita) BETWEEN 61 AND 90 THEN 'em_risco'
+        ELSE 'perdido'
+      END as status_label,
+      COUNT(*) as total
+    FROM clientes
+    WHERE ${unitCond} AND status = 1 AND ultima_visita IS NOT NULL
+    GROUP BY status_label
+  `);
+
+  const statusMap: Record<string, number> = {};
+  for (const r of statusRows) {
+    statusMap[r.status_label] = Number(r.total);
+  }
+
+  // One-shots (apenas 1 visita)
+  const oneShotRows = await queryExternal<{ total: number }>(`
+    SELECT COUNT(DISTINCT c.id) as total
+    FROM clientes c
+    WHERE ${unitCond} AND c.status = 1
+      AND (
+        SELECT COUNT(*) FROM vendas v 
+        JOIN usuarios u ON v.usuario = u.id 
+        WHERE v.cliente = c.id 
+          AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u.unidade = ${extIds[0]}` : `u.unidade IN (${extIds.join(",")})`})
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL
+      ) = 1
+  `);
+
+  return {
+    ativos: statusMap["ativo"] ?? 0,
+    emRisco: statusMap["em_risco"] ?? 0,
+    perdidos: statusMap["perdido"] ?? 0,
+    oneShots: Number(oneShotRows[0]?.total ?? 0),
+    total: (statusMap["ativo"] ?? 0) + (statusMap["em_risco"] ?? 0) + (statusMap["perdido"] ?? 0),
+  };
+}
+
+// ─── Churn por barbeiro ───────────────────────────────────────────────────────
+
+export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    colaborador_id: number;
+    colaborador_nome: string;
+    total_clientes: number;
+    ativos: number;
+    em_risco: number;
+    perdidos: number;
+    one_shots: number;
+    media_visitas: number;
+    media_gasto: number;
+  }>(`
+    SELECT 
+      uu.id as colaborador_id,
+      uu.nome as colaborador_nome,
+      COUNT(DISTINCT vp.venda) as total_clientes,
+      COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN v.cliente END) as ativos,
+      COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN v.cliente END) as em_risco,
+      COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 90 THEN v.cliente END) as perdidos,
+      COUNT(DISTINCT CASE WHEN (
+        SELECT COUNT(*) FROM vendas v3 
+        JOIN usuarios u3 ON v3.usuario = u3.id 
+        WHERE v3.cliente = v.cliente 
+          AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u3.unidade = ${extIds[0]}` : `u3.unidade IN (${extIds.join(",")})`})
+          AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL
+      ) = 1 THEN v.cliente END) as one_shots,
+      AVG((
+        SELECT COUNT(*) FROM vendas v4 
+        JOIN usuarios u4 ON v4.usuario = u4.id 
+        WHERE v4.cliente = v.cliente 
+          AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u4.unidade = ${extIds[0]}` : `u4.unidade IN (${extIds.join(",")})`})
+          AND v4.comanda_temp = 0 AND v4.cancelado_motivo IS NULL
+      )) as media_visitas,
+      AVG(c.consumo) as media_gasto
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN clientes c ON c.id = v.cliente
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND v.cliente IS NOT NULL
+      AND v.cliente != 2
+    GROUP BY uu.id, uu.nome
+    HAVING total_clientes > 0
+    ORDER BY total_clientes DESC
+  `, [dataInicio, dataFim]);
+}
+
+// ─── Cadência de visitas ──────────────────────────────────────────────────────
+
+export async function getCadenciaVisitas(extIds: number[]) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    faixa: string;
+    total: number;
+  }>(`
+    SELECT 
+      CASE 
+        WHEN visitas = 1 THEN '1 visita'
+        WHEN visitas BETWEEN 2 AND 3 THEN '2-3 visitas'
+        WHEN visitas BETWEEN 4 AND 6 THEN '4-6 visitas'
+        WHEN visitas BETWEEN 7 AND 12 THEN '7-12 visitas'
+        ELSE '13+ visitas'
+      END as faixa,
+      COUNT(*) as total
+    FROM (
+      SELECT v.cliente, COUNT(*) as visitas
+      FROM vendas v
+      JOIN usuarios uu ON v.usuario = uu.id
+      WHERE ${unitCond}
+        AND v.comanda_temp = 0
+        AND v.cancelado_motivo IS NULL
+        AND v.cliente IS NOT NULL
+        AND v.cliente != 2
+      GROUP BY v.cliente
+    ) sub
+    GROUP BY faixa
+    ORDER BY MIN(visitas)
+  `);
+}
+
+// ─── Diagnóstico de clientes ──────────────────────────────────────────────────
+
+export async function getDiagnosticoClientes(extIds: number[]) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
+    : `ultima_visita_unidade IN (${extIds.join(",")})`;
+
+  // Distribuição por dias de ausência
+  const rows = await queryExternal<{
+    faixa_dias: string;
+    total: number;
+    percentual: number;
+  }>(`
+    SELECT 
+      CASE 
+        WHEN DATEDIFF(NOW(), ultima_visita) <= 30 THEN '0-30 dias'
+        WHEN DATEDIFF(NOW(), ultima_visita) BETWEEN 31 AND 60 THEN '31-60 dias'
+        WHEN DATEDIFF(NOW(), ultima_visita) BETWEEN 61 AND 90 THEN '61-90 dias'
+        WHEN DATEDIFF(NOW(), ultima_visita) BETWEEN 91 AND 120 THEN '91-120 dias'
+        WHEN DATEDIFF(NOW(), ultima_visita) BETWEEN 121 AND 180 THEN '121-180 dias'
+        ELSE '180+ dias'
+      END as faixa_dias,
+      COUNT(*) as total,
+      ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 1) as percentual
+    FROM clientes
+    WHERE ${unitCond} AND status = 1 AND ultima_visita IS NOT NULL
+    GROUP BY faixa_dias
+    ORDER BY MIN(DATEDIFF(NOW(), ultima_visita))
+  `);
+  return rows;
+}
+
+// ─── Cohort de clientes ───────────────────────────────────────────────────────
+
+export async function getCohortClientes(extIds: number[]) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  // Cohort por mês de primeira visita
+  return queryExternal<{
+    cohort: string;
+    total_entrada: number;
+    voltaram: number;
+    taxa_retencao: number;
+  }>(`
+    SELECT 
+      DATE_FORMAT(MIN(v.data_criacao), '%Y-%m') as cohort,
+      COUNT(DISTINCT v.cliente) as total_entrada,
+      COUNT(DISTINCT CASE WHEN 
+        (SELECT COUNT(*) FROM vendas v2 
+         JOIN usuarios uu2 ON v2.usuario = uu2.id
+         WHERE v2.cliente = v.cliente 
+           AND (${unitCond.replace(/uu\./g, "uu2.")})
+           AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL
+        ) > 1 THEN v.cliente END) as voltaram,
+      ROUND(
+        COUNT(DISTINCT CASE WHEN 
+          (SELECT COUNT(*) FROM vendas v2 
+           JOIN usuarios uu2 ON v2.usuario = uu2.id
+           WHERE v2.cliente = v.cliente 
+             AND (${unitCond.replace(/uu\./g, "uu2.")})
+             AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL
+          ) > 1 THEN v.cliente END) * 100.0 / 
+        NULLIF(COUNT(DISTINCT v.cliente), 0), 1
+      ) as taxa_retencao
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    WHERE ${unitCond}
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND v.cliente IS NOT NULL
+      AND v.cliente != 2
+      AND v.data_criacao >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+    GROUP BY DATE_FORMAT(MIN(v.data_criacao), '%Y-%m')
+    ORDER BY cohort DESC
+    LIMIT 12
+  `);
+}
+
+// ─── Ações de reativação (clientes perdidos com contato) ─────────────────────
+
+export async function getAcoesReativacao(extIds: number[], limit: number = 100) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `c.ultima_visita_unidade = ${extIds[0]}`
+    : `c.ultima_visita_unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    id: number;
+    nome: string;
+    telefone: string;
+    ultima_visita: Date;
+    dias_ausente: number;
+    prioridade: string;
+    tipo_acao: string;
+  }>(`
+    SELECT 
+      c.id,
+      c.nome,
+      c.telefone,
+      c.ultima_visita,
+      DATEDIFF(NOW(), c.ultima_visita) as dias_ausente,
+      CASE 
+        WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 'alta'
+        WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 91 AND 120 THEN 'media'
+        ELSE 'baixa'
+      END as prioridade,
+      CASE 
+        WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 'risco'
+        WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 91 AND 120 THEN 'perdido_recente'
+        ELSE 'perdido'
+      END as tipo_acao
+    FROM clientes c
+    WHERE ${unitCond}
+      AND c.status = 1
+      AND c.ultima_visita IS NOT NULL
+      AND DATEDIFF(NOW(), c.ultima_visita) > 60
+      AND c.telefone IS NOT NULL
+      AND c.telefone != ''
+    ORDER BY dias_ausente ASC
+    LIMIT ?
+  `, [limit]);
+}
+
+// ─── Barbeiros (lista) ────────────────────────────────────────────────────────
+
+export async function getBarbeiros(extIds: number[], ano: number, mes: number) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `dc.unidade = ${extIds[0]}`
+    : `dc.unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    id: number;
+    nome: string;
+    unidade_id: number;
+  }>(`
+    SELECT DISTINCT u.id, u.nome, dc.unidade as unidade_id
+    FROM dashboard_colaboradores dc
+    JOIN usuarios u ON u.id = dc.colaborador
+    WHERE ${unitCond} AND dc.ano = ? AND dc.mes = ?
+    ORDER BY u.nome ASC
+  `, [ano, mes]);
+}

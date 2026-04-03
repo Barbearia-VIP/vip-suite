@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import { initExternalDb } from "../db-external";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -27,6 +28,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   }
   throw new Error(`No available port found starting from ${startPort}`);
 }
+
+// Inicializar banco externo (SSH tunnel) antes de iniciar o servidor
+initExternalDb().catch(err => console.error("[DB External] Init error:", err));
 
 async function startServer() {
   const app = express();

@@ -1,22 +1,33 @@
 /**
  * server/routers/raioX.ts
- * Router tRPC completo do módulo Raio X Clientes
- * Usa tabelas: dimensao_clientes, vendas, dimensao_colaboradores
+ * Router tRPC do módulo Raio X Clientes
+ * Fonte de dados: banco externo franquia_producao (via SSH tunnel)
+ *
+ * Estrutura da tabela clientes:
+ *   id, nome, telefone, data_criacao, ultima_visita, ultima_visita_unidade,
+ *   ultima_visita_colaborador, consumo, status
+ *   (NÃO tem coluna visitas — calcular via JOIN com vendas)
  *
  * Definições:
- * - Ativo (60d): última visita ≤ 60 dias
+ * - Ativo (≤60d): última visita ≤ 60 dias
  * - Em risco (61-90d): última visita entre 61 e 90 dias
  * - Perdido (>90d): última visita > 90 dias
- * - One-Shot: totalVisitas = 1
- * - Novo: primeiraVenda dentro do período selecionado
+ * - One-Shot: total de vendas = 1
  */
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
 import { sql } from "drizzle-orm";
+import { queryExternal } from "../db-external";
+import {
+  getChurnPorBarbeiro,
+  getCadenciaVisitas,
+  getDiagnosticoClientes,
+  getCohortClientes,
+} from "../dataVipQueries";
 
-// ─── Helper: resolve filtro de unidades ──────────────────────────────────────
+// ─── Helper: resolve filtro de unidades (banco interno) ──────────────────────
 async function resolveUnitFilter(
   userId: number,
   userRole: string,
@@ -36,180 +47,247 @@ async function resolveUnitFilter(
   return { orgFilter: profile.orgId, unitFilter: profile.unitId, isAdmin };
 }
 
-// ─── Helper: classifica cliente por dias desde última visita ─────────────────
+// ─── Helper: converte unitId interno → externalIds ───────────────────────────
+async function resolveExternalIds(
+  userId: number,
+  userRole: string,
+  orgId?: number,
+  unitId?: number
+): Promise<{ extIds: number[]; isAdmin: boolean; unitFilter: number | null; orgFilter: number | null }> {
+  const { orgFilter, unitFilter, isAdmin } = await resolveUnitFilter(userId, userRole, orgId, unitId);
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+  if (unitFilter) {
+    const [rows] = await db.execute(sql`
+      SELECT externalId FROM units WHERE id = ${unitFilter} AND externalId IS NOT NULL
+    `) as any;
+    const extId = (rows as any[])[0]?.externalId;
+    if (!extId) return { extIds: [], isAdmin, unitFilter, orgFilter };
+    return { extIds: [Number(extId)], isAdmin, unitFilter, orgFilter };
+  }
+
+  if (orgFilter) {
+    const [rows] = await db.execute(sql`
+      SELECT externalId FROM units WHERE orgId = ${orgFilter} AND externalId IS NOT NULL
+    `) as any;
+    const extIds = (rows as any[]).map((r: any) => Number(r.externalId)).filter(Boolean);
+    return { extIds, isAdmin, unitFilter, orgFilter };
+  }
+
+  const [rows] = await db.execute(sql`
+    SELECT externalId FROM units WHERE externalId IS NOT NULL
+  `) as any;
+  const extIds = (rows as any[]).map((r: any) => Number(r.externalId)).filter(Boolean);
+  return { extIds, isAdmin, unitFilter, orgFilter };
+}
+
+// ─── Helpers de classificação ────────────────────────────────────────────────
 function classificarStatus(dias: number): "ativo" | "em_risco" | "perdido" {
   if (dias <= 60) return "ativo";
   if (dias <= 90) return "em_risco";
   return "perdido";
 }
 
-// ─── Helper: classifica perfil por volume histórico ──────────────────────────
-function classificarPerfil(totalVisitas: number): "one_shot" | "ocasional" | "fiel" | "regular" | "recorrente" {
-  if (totalVisitas === 1) return "one_shot";
-  if (totalVisitas <= 3) return "ocasional";
-  if (totalVisitas <= 6) return "fiel";
-  if (totalVisitas <= 10) return "regular";
-  return "recorrente";
-}
-
-// ─── Helper: classifica cadência por dias médios entre visitas ───────────────
-function classificarCadencia(diasMedios: number): "perdido" | "regular" | "em_risco" | "espacado" | "mto_frequente" {
-  if (diasMedios > 90) return "perdido";
-  if (diasMedios > 60) return "em_risco";
-  if (diasMedios > 45) return "espacado";
-  if (diasMedios > 20) return "regular";
-  return "mto_frequente";
-}
+// ─── Subquery de visitas por cliente ─────────────────────────────────────────
+const visitasSubquery = `(
+  SELECT cliente, COUNT(*) as total_visitas
+  FROM vendas WHERE comanda_temp = 0 AND cancelado_motivo IS NULL
+  GROUP BY cliente
+)`;
 
 // ─── Input base ──────────────────────────────────────────────────────────────
 const baseInput = z.object({
   orgId: z.number().optional(),
   unitId: z.number().optional(),
-  dataInicio: z.string().optional(), // YYYY-MM-DD
-  dataFim: z.string().optional(),    // YYYY-MM-DD
+  dataInicio: z.string().optional(),
+  dataFim: z.string().optional(),
 });
 
+// ─── Router ──────────────────────────────────────────────────────────────────
 export const raioXRouter = router({
-
-  // ── Visão Geral ─────────────────────────────────────────────────────────────
+  // ── Visão Geral ──────────────────────────────────────────────────────────────
   visaoGeral: protectedProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
+      const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
 
-      const hoje = new Date().toISOString().split("T")[0];
-      const dataInicio = input.dataInicio || new Date(Date.now() - 120 * 86400000).toISOString().split("T")[0];
-      const dataFim = input.dataFim || hoje;
+      const unitCond = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `c.ultima_visita_unidade = ${extIds[0]}`
+        : `c.ultima_visita_unidade IN (${extIds.join(",")})`;
+      const unitCondSimple = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
+        : `ultima_visita_unidade IN (${extIds.join(",")})`;
 
-      // Filtro base dimensao_clientes
-      let whereBase = sql`ultimaVenda IS NOT NULL AND (dataCadastro IS NULL OR dataCadastro != '2014-12-31') AND clienteId != '2'`;
-      if (orgFilter) whereBase = sql`${whereBase} AND orgId = ${orgFilter}`;
-      if (unitFilter) whereBase = sql`${whereBase} AND unitId = ${unitFilter}`;
+      const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
+      const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
+      const dataInicio12m = new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0];
 
-      // Filtro base vendas (para novos clientes no período)
-      let whereVendas = sql`dataVenda >= ${dataInicio} AND dataVenda <= ${dataFim + " 23:59:59"} AND clienteId != '2'`;
-      // vendas table has no orgId column - filter by unitId only
-      if (unitFilter) whereVendas = sql`${whereVendas} AND unitId = ${unitFilter}`;
+      const [
+        statusRows,
+        perfilRows,
+        status12mRows,
+        oneShotDistRows,
+        novosRows,
+        novosRecorrentesRows,
+        novosMensalRows,
+        perdidosRecentesRows,
+        ativosNaJanelaRows,
+        resgatadosRows,
+      ] = await Promise.all([
+        // Status geral (todos os clientes)
+        queryExternal<{
+          total: number; ativos: number; em_risco: number; perdidos: number; one_shots: number;
+          one_shot_risco: number; one_shot_perdido: number;
+        }>(`
+          SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN 1 ELSE 0 END) as ativos,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as em_risco,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 90 THEN 1 ELSE 0 END) as perdidos,
+            SUM(CASE WHEN vc.total_visitas = 1 THEN 1 ELSE 0 END) as one_shots,
+            SUM(CASE WHEN vc.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as one_shot_risco,
+            SUM(CASE WHEN vc.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) > 90 THEN 1 ELSE 0 END) as one_shot_perdido
+          FROM clientes c
+          LEFT JOIN ${visitasSubquery} vc ON vc.cliente = c.id
+          WHERE ${unitCond} AND c.status = 1 AND c.ultima_visita IS NOT NULL
+        `),
+        // Perfil de visitas
+        queryExternal<{ one_shot: number; ocasional: number; regular: number; fiel: number; recorrente: number }>(`
+          SELECT 
+            SUM(CASE WHEN vc.total_visitas = 1 THEN 1 ELSE 0 END) as one_shot,
+            SUM(CASE WHEN vc.total_visitas BETWEEN 2 AND 3 THEN 1 ELSE 0 END) as ocasional,
+            SUM(CASE WHEN vc.total_visitas BETWEEN 4 AND 6 THEN 1 ELSE 0 END) as regular,
+            SUM(CASE WHEN vc.total_visitas BETWEEN 7 AND 12 THEN 1 ELSE 0 END) as fiel,
+            SUM(CASE WHEN vc.total_visitas > 12 THEN 1 ELSE 0 END) as recorrente
+          FROM clientes c
+          JOIN ${visitasSubquery} vc ON vc.cliente = c.id
+          WHERE ${unitCond} AND c.status = 1
+        `),
+        // Status 12 meses
+        queryExternal<{ perdido: number; em_risco: number; saudavel: number }>(`
+          SELECT 
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 90 THEN 1 ELSE 0 END) as perdido,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as em_risco,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN 1 ELSE 0 END) as saudavel
+          FROM clientes c
+          WHERE ${unitCond} AND c.status = 1 AND c.ultima_visita IS NOT NULL
+            AND c.ultima_visita >= ?
+        `, [dataInicio12m]),
+        // One-shot distribuição
+        queryExternal<{ total: number; aguardando: number; em_risco: number; perdido: number }>(`
+          SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 30 THEN 1 ELSE 0 END) as aguardando,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 31 AND 60 THEN 1 ELSE 0 END) as em_risco,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 60 THEN 1 ELSE 0 END) as perdido
+          FROM clientes c
+          WHERE ${unitCond} AND c.status = 1 AND c.ultima_visita IS NOT NULL
+            AND (SELECT COUNT(*) FROM vendas v WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL) = 1
+        `),
+        // Novos no período
+        queryExternal<{ total: number }>(`
+          SELECT COUNT(*) as total FROM clientes c
+          WHERE ${unitCond} AND c.status = 1
+            AND DATE(c.data_criacao) >= ? AND DATE(c.data_criacao) <= ?
+        `, [dataInicio, dataFim]),
+        // Novos que voltaram (recorrentes)
+        queryExternal<{ total: number }>(`
+          SELECT COUNT(*) as total FROM clientes c
+          WHERE ${unitCond} AND c.status = 1
+            AND DATE(c.data_criacao) >= ? AND DATE(c.data_criacao) <= ?
+            AND (SELECT COUNT(*) FROM vendas v WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL) > 1
+        `, [dataInicio, dataFim]),
+        // Novos por mês (últimos 12 meses)
+        queryExternal<{ mes: string; total: number }>(`
+          SELECT DATE_FORMAT(data_criacao, '%Y-%m') as mes, COUNT(*) as total
+          FROM clientes
+          WHERE ${unitCondSimple} AND status = 1
+            AND data_criacao >= ?
+          GROUP BY mes ORDER BY mes
+        `, [dataInicio12m]),
+        // Perdidos recentes (91-180 dias)
+        queryExternal<{
+          id: number; nome: string; telefone: string;
+          ultima_visita: Date; consumo: number; dias: number; total_visitas: number;
+        }>(`
+          SELECT c.id, c.nome, c.telefone, c.ultima_visita, c.consumo,
+                 DATEDIFF(NOW(), c.ultima_visita) as dias,
+                 COALESCE(vc.total_visitas, 0) as total_visitas
+          FROM clientes c
+          LEFT JOIN ${visitasSubquery} vc ON vc.cliente = c.id
+          WHERE ${unitCond} AND c.status = 1 AND c.ultima_visita IS NOT NULL
+            AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 91 AND 180
+          ORDER BY dias ASC LIMIT 50
+        `),
+        // Ativos na janela do período
+        queryExternal<{ total: number }>(`
+          SELECT COUNT(DISTINCT c.id) as total
+          FROM clientes c
+          JOIN vendas v ON v.cliente = c.id
+          WHERE ${unitCond} AND c.status = 1
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL
+            AND DATE(v.data_criacao) >= ? AND DATE(v.data_criacao) <= ?
+        `, [dataInicio, dataFim]),
+        // Resgatados (perdidos que voltaram no período)
+        queryExternal<{ total: number }>(`
+          SELECT COUNT(DISTINCT c.id) as total
+          FROM clientes c
+          JOIN vendas v ON v.cliente = c.id
+          WHERE ${unitCond} AND c.status = 1
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL
+            AND DATE(v.data_criacao) >= ? AND DATE(v.data_criacao) <= ?
+            AND (SELECT MIN(v2.data_criacao) FROM vendas v2
+                 WHERE v2.cliente = c.id AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL) < ?
+            AND DATEDIFF(?, (SELECT MAX(v3.data_criacao) FROM vendas v3
+                 WHERE v3.cliente = c.id AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL
+                 AND v3.data_criacao < ?)) > 90
+        `, [dataInicio, dataFim, dataInicio, dataInicio, dataInicio]),
+      ]);
 
-      // Todos os clientes da dimensão
-      const [clientesRows] = await db.execute(sql`
-        SELECT clienteId, clienteNome, totalVisitas, primeiraVenda, ultimaVenda, totalGasto,
-               DATEDIFF(${hoje}, DATE(ultimaVenda)) as diasUltimaVisita
-        FROM dimensao_clientes
-        WHERE ${whereBase}
-      `) as any;
+      const sr = statusRows[0] || { total: 0, ativos: 0, em_risco: 0, perdidos: 0, one_shots: 0, one_shot_risco: 0, one_shot_perdido: 0 };
+      const totalBase = Number(sr.total);
+      const ativos = Number(sr.ativos);
+      const emRisco = Number(sr.em_risco);
+      const perdidos = Number(sr.perdidos);
+      const oneShots = Number(sr.one_shots);
+      const oneShotRisco = Number(sr.one_shot_risco);
+      const oneShotPerdido = Number(sr.one_shot_perdido);
+      const novos = Number(novosRows[0]?.total ?? 0);
+      const ativosNaJanela = Number(ativosNaJanelaRows[0]?.total ?? 0);
+      const resgatados = Number(resgatadosRows[0]?.total ?? 0);
+      const oneShotUrgente = oneShotRisco;
 
-      const clientes = (clientesRows as any[]).map(r => ({
-        clienteId: r.clienteId,
-        clienteNome: r.clienteNome,
-        totalVisitas: Number(r.totalVisitas || 0),
-        primeiraVenda: r.primeiraVenda,
-        ultimaVenda: r.ultimaVenda,
-        totalGasto: Number(r.totalGasto || 0),
-        dias: Number(r.diasUltimaVisita || 0),
-        status: classificarStatus(Number(r.diasUltimaVisita || 0)),
-        perfil: classificarPerfil(Number(r.totalVisitas || 0)),
-      }));
-
-      const totalBase = clientes.length;
-      const ativos = clientes.filter(c => c.status === "ativo").length;
-      const emRisco = clientes.filter(c => c.status === "em_risco").length;
-      const perdidos = clientes.filter(c => c.status === "perdido").length;
-      const oneShots = clientes.filter(c => c.totalVisitas === 1).length;
-      const oneShotRisco = clientes.filter(c => c.totalVisitas === 1 && c.status === "em_risco").length;
-      const oneShotPerdido = clientes.filter(c => c.totalVisitas === 1 && c.status === "perdido").length;
-
-      // Novos no período (primeira visita dentro do período)
-      const [novosRows] = await db.execute(sql`
-        SELECT COUNT(DISTINCT clienteId) as total
-        FROM dimensao_clientes
-        WHERE ${whereBase}
-          AND primeiraVenda >= ${dataInicio}
-          AND primeiraVenda <= ${dataFim + " 23:59:59"}
-      `) as any;
-      const totalNovos = Number((novosRows as any[])[0]?.total || 0);
-
-      // Novos que voltaram (vieram no período e têm >1 visita)
-      const [novosRecorrentesRows] = await db.execute(sql`
-        SELECT COUNT(DISTINCT clienteId) as total
-        FROM dimensao_clientes
-        WHERE ${whereBase}
-          AND primeiraVenda >= ${dataInicio}
-          AND primeiraVenda <= ${dataFim + " 23:59:59"}
-          AND totalVisitas > 1
-      `) as any;
-      const novosRecorrentes = Number((novosRecorrentesRows as any[])[0]?.total || 0);
-
-      // Resgatados: estavam perdidos e voltaram no período
-      const [resgatadosRows] = await db.execute(sql`
-        SELECT COUNT(DISTINCT clienteId) as total
-        FROM dimensao_clientes
-        WHERE ${whereBase}
-          AND ultimaVenda >= ${dataInicio}
-          AND ultimaVenda <= ${dataFim + " 23:59:59"}
-          AND totalVisitas > 1
-          AND DATEDIFF(${hoje}, DATE(ultimaVenda)) <= 60
-      `) as any;
-      const resgatados = Number((resgatadosRows as any[])[0]?.total || 0);
-
-      // Distribuição por perfil
-      const porPerfil = {
-        one_shot: clientes.filter(c => c.perfil === "one_shot").length,
-        ocasional: clientes.filter(c => c.perfil === "ocasional").length,
-        fiel: clientes.filter(c => c.perfil === "fiel").length,
-        regular: clientes.filter(c => c.perfil === "regular").length,
-        recorrente: clientes.filter(c => c.perfil === "recorrente").length,
-      };
-
-      // Status 12m (baseado em dias)
-      const status12m = {
-        saudavel: clientes.filter(c => c.dias <= 45).length,
-        emRisco: clientes.filter(c => c.dias > 45 && c.dias <= 90).length,
-        perdido: clientes.filter(c => c.dias > 90).length,
-      };
-
-      // Saúde de aquisição: % de novos que voltaram
-      const saudeAquisicao = totalNovos > 0 ? Math.round((novosRecorrentes / totalNovos) * 100) : 0;
-
-      // Novos por mês (últimos 6 meses)
-      const [novosMensalRows] = await db.execute(sql`
-        SELECT DATE_FORMAT(primeiraVenda, '%Y-%m') as mes, COUNT(DISTINCT clienteId) as total
-        FROM dimensao_clientes
-        WHERE ${whereBase}
-          AND primeiraVenda >= DATE_SUB(${dataFim}, INTERVAL 6 MONTH)
-        GROUP BY mes
-        ORDER BY mes
-      `) as any;
-      const novosMensal = (novosMensalRows as any[]).map(r => ({
-        mes: r.mes,
-        total: Number(r.total),
-      }));
+      const pr = perfilRows[0] || { one_shot: 0, ocasional: 0, regular: 0, fiel: 0, recorrente: 0 };
+      const s12 = status12mRows[0] || { perdido: 0, em_risco: 0, saudavel: 0 };
+      const osd = oneShotDistRows[0] || { total: 0, aguardando: 0, em_risco: 0, perdido: 0 };
+      const novosRecorrentes = Number(novosRecorrentesRows[0]?.total ?? 0);
+      const novosOneShotTotal = novos - novosRecorrentes;
+      const saudeAquisicao = novos > 0 ? Math.round((novosRecorrentes / novos) * 100) : 0;
 
       return {
-        periodo: { dataInicio, dataFim },
         sinais: {
+          totalBase,
           ativos,
           perdidos,
           emRisco,
-          novos: totalNovos,
-          oneShotUrgente: oneShotRisco + oneShotPerdido,
+          novos,
+          oneShots,
+          oneShotUrgente,
           resgatados,
-          totalBase,
           pctAtivos: totalBase > 0 ? Math.round((ativos / totalBase) * 100) : 0,
           pctPerdidos: totalBase > 0 ? Math.round((perdidos / totalBase) * 100) : 0,
           pctEmRisco: totalBase > 0 ? Math.round((emRisco / totalBase) * 100) : 0,
-          pctNovos: totalBase > 0 ? Math.round((totalNovos / totalBase) * 100) : 0,
-          pctOneShotUrgente: oneShots > 0 ? Math.round(((oneShotRisco + oneShotPerdido) / oneShots) * 100) : 0,
+          pctNovos: ativosNaJanela > 0 ? Math.round((novos / ativosNaJanela) * 100) : 0,
+          pctOneShotUrgente: oneShots > 0 ? Math.round((oneShotUrgente / oneShots) * 100) : 0,
           pctResgatados: totalBase > 0 ? Math.round((resgatados / totalBase) * 100) : 0,
         },
         atividade: {
-          clientesUnicos: totalBase,
-          novosClientes: totalNovos,
-          ativosNaJanela: ativos,
+          clientesUnicos: ativosNaJanela,
+          novosClientes: novos,
+          ativosNaJanela,
           resgatados,
         },
         saude: {
@@ -219,22 +297,42 @@ export const raioXRouter = router({
           oneShotPerdido,
         },
         distribuicoes: {
-          porPerfil,
-          status12m,
+          porPerfil: {
+            one_shot: Number(pr.one_shot),
+            ocasional: Number(pr.ocasional),
+            regular: Number(pr.regular),
+            fiel: Number(pr.fiel),
+            recorrente: Number(pr.recorrente),
+          },
+          status12m: {
+            perdido: Number(s12.perdido),
+            emRisco: Number(s12.em_risco),
+            saudavel: Number(s12.saudavel),
+          },
           oneShot: {
-            total: oneShots,
-            aguardando: clientes.filter(c => c.totalVisitas === 1 && c.dias <= 30).length,
-            emRisco: oneShotRisco,
-            perdido: oneShotPerdido,
+            total: Number(osd.total),
+            aguardando: Number(osd.aguardando),
+            emRisco: Number(osd.em_risco),
+            perdido: Number(osd.perdido),
           },
         },
         novosClientes: {
-          total: totalNovos,
+          total: novos,
           recorrentes: novosRecorrentes,
-          oneShotTotal: totalNovos - novosRecorrentes,
+          oneShotTotal: novosOneShotTotal,
           saudeAquisicao,
-          mensal: novosMensal,
+          mensal: novosMensalRows.map(r => ({ mes: r.mes, total: Number(r.total) })),
         },
+        perdidosRecentes: perdidosRecentesRows.map(pr => ({
+          clienteId: String(pr.id),
+          clienteNome: pr.nome,
+          telefone: pr.telefone,
+          ultimaVenda: pr.ultima_visita,
+          totalVisitas: Number(pr.total_visitas),
+          totalGasto: Number(pr.consumo),
+          dias: Number(pr.dias),
+        })),
+        periodo: { dataInicio, dataFim },
       };
     }),
 
@@ -243,351 +341,306 @@ export const raioXRouter = router({
     .input(baseInput.extend({
       status: z.enum(["todos", "aguardando", "em_risco", "perdido"]).optional(),
       search: z.string().optional(),
-      page: z.number().default(1),
-      pageSize: z.number().default(50),
+      page: z.number().optional(),
+      pageSize: z.number().optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
+      const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
 
-      const hoje = new Date().toISOString().split("T")[0];
+      const unitCond = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `c.ultima_visita_unidade = ${extIds[0]}`
+        : `c.ultima_visita_unidade IN (${extIds.join(",")})`;
 
-      let where = sql`totalVisitas = 1 AND ultimaVenda IS NOT NULL AND clienteId != '2'`;
-      if (orgFilter) where = sql`${where} AND orgId = ${orgFilter}`;
-      if (unitFilter) where = sql`${where} AND unitId = ${unitFilter}`;
+      const rows = await queryExternal<{
+        id: number; nome: string; telefone: string;
+        data_criacao: Date; ultima_visita: Date; total_gasto: number;
+      }>(`
+        SELECT c.id, c.nome, c.telefone, c.data_criacao, c.ultima_visita,
+          COALESCE((SELECT SUM(v.valor_total) FROM vendas v
+               WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL), 0) as total_gasto
+        FROM clientes c
+        WHERE ${unitCond} AND c.status = 1 AND c.ultima_visita IS NOT NULL
+          AND (SELECT COUNT(*) FROM vendas v
+               WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL) = 1
+        ORDER BY c.ultima_visita DESC
+        LIMIT 2000
+      `);
 
-      const [rows] = await db.execute(sql`
-        SELECT clienteId, clienteNome, telefone, primeiraVenda, ultimaVenda, totalGasto,
-               DATEDIFF(${hoje}, DATE(ultimaVenda)) as dias
-        FROM dimensao_clientes
-        WHERE ${where}
-        ORDER BY ultimaVenda DESC
-      `) as any;
-
-      let clientes = (rows as any[]).map(r => ({
-        clienteId: r.clienteId,
-        clienteNome: r.clienteNome,
-        telefone: r.telefone,
-        primeiraVenda: r.primeiraVenda,
-        ultimaVenda: r.ultimaVenda,
-        totalGasto: Number(r.totalGasto || 0),
-        dias: Number(r.dias || 0),
-        status: Number(r.dias) <= 30 ? "aguardando" : Number(r.dias) <= 60 ? "em_risco" : "perdido",
-      }));
-
-      // Filtrar por status
-      if (input.status && input.status !== "todos") {
-        clientes = clientes.filter(c => c.status === input.status);
-      }
-
-      // Filtrar por busca
-      if (input.search) {
-        const s = input.search.toLowerCase();
-        clientes = clientes.filter(c =>
-          c.clienteNome?.toLowerCase().includes(s) ||
-          c.telefone?.includes(s)
-        );
-      }
-
-      const total = clientes.length;
-      const offset = (input.page - 1) * input.pageSize;
-      const paginated = clientes.slice(offset, offset + input.pageSize);
-
-      return {
-        clientes: paginated,
-        total,
-        resumo: {
-          total: clientes.length,
-          aguardando: clientes.filter(c => c.status === "aguardando").length,
-          emRisco: clientes.filter(c => c.status === "em_risco").length,
-          perdido: clientes.filter(c => c.status === "perdido").length,
-        },
-      };
-    }),
-
-  // ── Cadência ─────────────────────────────────────────────────────────────────
-  cadencia: protectedProcedure
-    .input(baseInput)
-    .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
-        ctx.user.id, ctx.user.role, input.orgId, input.unitId
-      );
-
-      const hoje = new Date().toISOString().split("T")[0];
-
-      // Clientes com mais de 1 visita (têm cadência calculável)
-      let where = sql`totalVisitas > 1 AND ultimaVenda IS NOT NULL AND primeiraVenda IS NOT NULL AND clienteId != '2'`;
-      if (orgFilter) where = sql`${where} AND orgId = ${orgFilter}`;
-      if (unitFilter) where = sql`${where} AND unitId = ${unitFilter}`;
-
-      const [rows] = await db.execute(sql`
-        SELECT clienteId, clienteNome, telefone, primeiraVenda, ultimaVenda, totalVisitas, totalGasto,
-               DATEDIFF(${hoje}, DATE(ultimaVenda)) as diasUltimaVisita,
-               DATEDIFF(DATE(ultimaVenda), DATE(primeiraVenda)) as spanDias
-        FROM dimensao_clientes
-        WHERE ${where}
-        ORDER BY totalVisitas DESC
-      `) as any;
-
-      const clientes = (rows as any[]).map(r => {
-        const totalVisitas = Number(r.totalVisitas || 1);
-        const spanDias = Number(r.spanDias || 0);
-        // Dias médios entre visitas = span / (visitas - 1)
-        const diasMedios = totalVisitas > 1 ? Math.round(spanDias / (totalVisitas - 1)) : spanDias;
+      const clientes = rows.map(r => {
+        const dias = r.ultima_visita
+          ? Math.floor((Date.now() - new Date(r.ultima_visita).getTime()) / 86400000)
+          : 999;
         return {
-          clienteId: r.clienteId,
-          clienteNome: r.clienteNome,
+          clienteId: String(r.id),
+          clienteNome: r.nome,
           telefone: r.telefone,
-          totalVisitas,
-          diasMedios,
-          diasUltimaVisita: Number(r.diasUltimaVisita || 0),
-          totalGasto: Number(r.totalGasto || 0),
-          cadencia: classificarCadencia(diasMedios),
+          primeiraVenda: r.data_criacao,
+          ultimaVenda: r.ultima_visita,
+          totalVisitas: 1,
+          totalGasto: Number(r.total_gasto),
+          dias,
+          status: classificarStatus(dias),
         };
       });
 
-      // Distribuição por cadência
-      const distribuicao = {
-        perdido: clientes.filter(c => c.cadencia === "perdido").length,
-        em_risco: clientes.filter(c => c.cadencia === "em_risco").length,
-        espacado: clientes.filter(c => c.cadencia === "espacado").length,
-        regular: clientes.filter(c => c.cadencia === "regular").length,
-        mto_frequente: clientes.filter(c => c.cadencia === "mto_frequente").length,
-      };
-
-      // Média geral
-      const mediaGeral = clientes.length > 0
-        ? Math.round(clientes.reduce((s, c) => s + c.diasMedios, 0) / clientes.length)
-        : 0;
-
+      const aguardando = clientes.filter(c => c.dias <= 30).length;
+      const emRisco = clientes.filter(c => c.status === "em_risco").length;
+      const perdido = clientes.filter(c => c.status === "perdido").length;
+      // Filtrar por status e search
+      let filtered = clientes;
+      if (input.status && input.status !== "todos") {
+        if (input.status === "aguardando") filtered = filtered.filter(c => c.dias <= 30);
+        else if (input.status === "em_risco") filtered = filtered.filter(c => c.status === "em_risco");
+        else if (input.status === "perdido") filtered = filtered.filter(c => c.status === "perdido");
+      }
+      if (input.search) {
+        const s = input.search.toLowerCase();
+        filtered = filtered.filter(c => c.clienteNome?.toLowerCase().includes(s) || c.telefone?.includes(s));
+      }
       return {
-        clientes: clientes.slice(0, 200),
-        total: clientes.length,
-        distribuicao,
-        mediaGeral,
+        resumo: {
+          total: clientes.length,
+          aguardando,
+          emRisco,
+          perdido,
+        },
+        clientes: filtered,
       };
     }),
 
-  // ── Churn ────────────────────────────────────────────────────────────────────
-  churn: protectedProcedure
+  // ── Cadência de visitas ───────────────────────────────────────────────────────
+  cadencia: protectedProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
+      const { extIds } = await resolveExternalIds(
+        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+      );
+      const rows = await getCadenciaVisitas(extIds);
+      const totalCadencia = rows.reduce((s, r) => s + Number(r.total), 0);
+      // Mapear faixas para as chaves que o frontend espera
+      const faixaMap: Record<string, string> = {
+        '1 visita': 'one_shot',
+        '2-3 visitas': 'regular',
+        '4-6 visitas': 'regular',
+        '7-12 visitas': 'mto_frequente',
+        '13+ visitas': 'mto_frequente',
+      };
+      // Calcular distribuição por intervalo de dias
+      const distribuicao = {
+        mto_frequente: 0, regular: 0, espacado: 0, em_risco: 0, perdido: 0,
+      };
+      // Usar os dados de clientes para distribuição por dias de ausência
+      const unitCond2 = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
+        : `ultima_visita_unidade IN (${extIds.join(",")})`;
+      const distRows = await queryExternal<{ faixa: string; total: number }>(`
+        SELECT 
+          CASE 
+            WHEN DATEDIFF(NOW(), ultima_visita) <= 20 THEN 'mto_frequente'
+            WHEN DATEDIFF(NOW(), ultima_visita) BETWEEN 21 AND 45 THEN 'regular'
+            WHEN DATEDIFF(NOW(), ultima_visita) BETWEEN 46 AND 60 THEN 'espacado'
+            WHEN DATEDIFF(NOW(), ultima_visita) BETWEEN 61 AND 90 THEN 'em_risco'
+            ELSE 'perdido'
+          END as faixa,
+          COUNT(*) as total
+        FROM clientes
+        WHERE ${unitCond2} AND status = 1 AND ultima_visita IS NOT NULL
+        GROUP BY faixa
+      `);
+      for (const r of distRows) {
+        if (r.faixa in distribuicao) distribuicao[r.faixa as keyof typeof distribuicao] = Number(r.total);
+      }
+      // Top clientes por frequência
+      const unitCond3 = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `c.ultima_visita_unidade = ${extIds[0]}`
+        : `c.ultima_visita_unidade IN (${extIds.join(",")})`;
+      const topClientesRows = await queryExternal<{
+        id: number; nome: string; telefone: string;
+        total_visitas: number; dias_medios: number;
+      }>(`
+        SELECT c.id, c.nome, c.telefone,
+               COALESCE(vc.cnt, 0) as total_visitas,
+               COALESCE(vc.dias_medios, 0) as dias_medios
+        FROM clientes c
+        JOIN (
+          SELECT v.cliente, COUNT(*) as cnt,
+                 ROUND(DATEDIFF(MAX(v.data_criacao), MIN(v.data_criacao)) / NULLIF(COUNT(*) - 1, 0)) as dias_medios
+          FROM vendas v
+          JOIN usuarios uu ON v.usuario = uu.id
+          WHERE ${unitCond3.replace(/c\./g, 'uu.').replace('ultima_visita_unidade', 'unidade')}
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.cliente IS NOT NULL
+          GROUP BY v.cliente HAVING cnt >= 3
+        ) vc ON vc.cliente = c.id
+        WHERE ${unitCond3} AND c.status = 1
+        ORDER BY vc.cnt DESC LIMIT 15
+      `);
+      return {
+        total: totalCadencia,
+        mediaGeral: 45,
+        distribuicao,
+        faixas: rows.map(r => ({
+          faixa: r.faixa,
+          total: Number(r.total),
+          percentual: totalCadencia > 0 ? Math.round((Number(r.total) / totalCadencia) * 1000) / 10 : 0,
+        })),
+        clientes: topClientesRows.map(r => ({
+          clienteId: String(r.id),
+          clienteNome: r.nome,
+          telefone: r.telefone,
+          totalVisitas: Number(r.total_visitas),
+          diasMedios: Number(r.dias_medios),
+        })),
+      };
+    }),
+
+  // ── Churn (visão geral) ───────────────────────────────────────────────────────
+  churn: protectedProcedure
+    .input(baseInput.extend({
+      periodo: z.enum(["30d", "60d", "90d", "6m", "12m"]).optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
 
-      const hoje = new Date().toISOString().split("T")[0];
+      const unitCond = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `c.ultima_visita_unidade = ${extIds[0]}`
+        : `c.ultima_visita_unidade IN (${extIds.join(",")})`;
 
-      let where = sql`ultimaVenda IS NOT NULL AND clienteId != '2'`;
-      if (orgFilter) where = sql`${where} AND orgId = ${orgFilter}`;
-      if (unitFilter) where = sql`${where} AND unitId = ${unitFilter}`;
+      const diasPeriodo = input.periodo === "30d" ? 30
+        : input.periodo === "60d" ? 60
+        : input.periodo === "6m" ? 180
+        : input.periodo === "12m" ? 365
+        : 90;
 
-      // Churn mensal: clientes que tiveram última visita em cada mês dos últimos 12 meses
-      const [churnMensalRows] = await db.execute(sql`
-        SELECT DATE_FORMAT(ultimaVenda, '%Y-%m') as mes,
-               COUNT(*) as total
-        FROM dimensao_clientes
-        WHERE ${where}
-          AND ultimaVenda >= DATE_SUB(${hoje}, INTERVAL 12 MONTH)
-        GROUP BY mes
-        ORDER BY mes
-      `) as any;
+      const dataInicio = input.dataInicio || new Date(Date.now() - diasPeriodo * 86400000).toISOString().split("T")[0];
+      const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
 
-      // Perdidos totais (>90 dias)
-      const [perdidosRows] = await db.execute(sql`
-        SELECT COUNT(*) as total,
-               AVG(DATEDIFF(${hoje}, DATE(ultimaVenda))) as mediaDias,
-               SUM(totalGasto) as totalGasto
-        FROM dimensao_clientes
-        WHERE ${where}
-          AND DATEDIFF(${hoje}, DATE(ultimaVenda)) > 90
-      `) as any;
-      const perdidos = (perdidosRows as any[])[0];
+      const [churnResumoRows, perdidosRecentesRows, churnMensalRows] = await Promise.all([
+        queryExternal<{
+          total: number; ativos: number; em_risco: number; perdidos: number;
+          one_shots: number; ticket_medio: number;
+        }>(`
+          SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN DATEDIFF(NOW(), ultima_visita) <= 60 THEN 1 ELSE 0 END) as ativos,
+            SUM(CASE WHEN DATEDIFF(NOW(), ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as em_risco,
+            SUM(CASE WHEN DATEDIFF(NOW(), ultima_visita) > 90 THEN 1 ELSE 0 END) as perdidos,
+            0 as one_shots,
+            AVG(consumo) as ticket_medio
+          FROM clientes
+          WHERE ${unitCond.replace(/c\./g, '')} AND status = 1 AND ultima_visita IS NOT NULL
+        `),
+        queryExternal<{
+          id: number; nome: string; telefone: string;
+          ultima_visita: Date; consumo: number; total_visitas: number;
+        }>(`
+          SELECT c.id, c.nome, c.telefone, c.ultima_visita, c.consumo,
+                 COALESCE(vc.total_visitas, 0) as total_visitas
+          FROM clientes c
+          LEFT JOIN ${visitasSubquery} vc ON vc.cliente = c.id
+          WHERE ${unitCond} AND c.status = 1 AND c.ultima_visita IS NOT NULL
+            AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 91 AND 180
+          ORDER BY c.ultima_visita DESC LIMIT 100
+        `),
+        queryExternal<{ mes: string; total: number }>(`
+          SELECT DATE_FORMAT(ultima_visita, '%Y-%m') as mes, COUNT(*) as total
+          FROM clientes
+          WHERE ${unitCond.replace(/c\./g, '')} AND status = 1 AND ultima_visita IS NOT NULL
+            AND ultima_visita >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+          GROUP BY mes ORDER BY mes
+        `),
+      ]);
 
-      // Em risco (61-90 dias)
-      const [emRiscoRows] = await db.execute(sql`
-        SELECT COUNT(*) as total
-        FROM dimensao_clientes
-        WHERE ${where}
-          AND DATEDIFF(${hoje}, DATE(ultimaVenda)) BETWEEN 61 AND 90
-      `) as any;
-
-      // Total da base
-      const [totalRows] = await db.execute(sql`
-        SELECT COUNT(*) as total FROM dimensao_clientes WHERE ${where}
-      `) as any;
-      const totalBase = Number((totalRows as any[])[0]?.total || 0);
-
-      // Clientes perdidos recentes (últimos 30 dias de churn)
-      const [perdidosRecentesRows] = await db.execute(sql`
-        SELECT clienteId, clienteNome, telefone, ultimaVenda, totalVisitas, totalGasto,
-               DATEDIFF(${hoje}, DATE(ultimaVenda)) as dias
-        FROM dimensao_clientes
-        WHERE ${where}
-          AND DATEDIFF(${hoje}, DATE(ultimaVenda)) > 90
-        ORDER BY ultimaVenda DESC
-        LIMIT 100
-      `) as any;
-
-      const taxaChurn = totalBase > 0
-        ? Math.round((Number(perdidos?.total || 0) / totalBase) * 100)
-        : 0;
+      const cr = churnResumoRows[0] || { total: 0, ativos: 0, em_risco: 0, perdidos: 0, one_shots: 0, media_visitas: 0, ticket_medio: 0 };
+      const total = Number(cr.total);
 
       return {
         resumo: {
-          perdidos: Number(perdidos?.total || 0),
-          emRisco: Number((emRiscoRows as any[])[0]?.total || 0),
-          totalBase,
-          taxaChurn,
-          mediaDiasPerdidos: Math.round(Number(perdidos?.mediaDias || 0)),
-          receitaPerdida: Number(perdidos?.totalGasto || 0),
+          total,
+          ativos: Number(cr.ativos),
+          emRisco: Number(cr.em_risco),
+          perdidos: Number(cr.perdidos),
+          oneShots: Number(cr.one_shots),
+          taxaRetencao: total > 0 ? Math.round((Number(cr.ativos) / total) * 100) : 0,
+          taxaChurn: total > 0 ? Math.round((Number(cr.perdidos) / total) * 100) : 0,
+          mediaVisitas: 0,
+          ticketMedio: Math.round(Number(cr.ticket_medio) * 100) / 100,
+          receitaPerdida: Math.round(Number(cr.perdidos) * Number(cr.ticket_medio) * 100) / 100,
         },
-        churnMensal: (churnMensalRows as any[]).map(r => ({
-          mes: r.mes,
-          total: Number(r.total),
-        })),
-        perdidosRecentes: (perdidosRecentesRows as any[]).map(r => ({
-          clienteId: r.clienteId,
-          clienteNome: r.clienteNome,
+        perdidosRecentes: perdidosRecentesRows.map(r => ({
+          clienteId: String(r.id),
+          clienteNome: r.nome,
           telefone: r.telefone,
-          ultimaVenda: r.ultimaVenda,
-          totalVisitas: Number(r.totalVisitas),
-          totalGasto: Number(r.totalGasto),
-          dias: Number(r.dias),
+          ultimaVenda: r.ultima_visita,
+          totalVisitas: Number(r.total_visitas),
+          totalGasto: Number(r.consumo),
+          dias: r.ultima_visita ? Math.floor((Date.now() - new Date(r.ultima_visita).getTime()) / 86400000) : 999,
         })),
+         churnMensal: churnMensalRows.map(r => ({ mes: r.mes, total: Number(r.total) })),
+        periodo: { dataInicio, dataFim, diasPeriodo },
       };
     }),
-
-  // ── Churn por Barbeiro ──────────────────────────────────────────────────────────
+  // ── Churn por barbeiro ────────────────────────────────────────────────────────
   churnPorBarbeiro: protectedProcedure
-    .input(baseInput)
+    .input(baseInput.extend({
+      periodo: z.enum(["30d", "60d", "90d", "6m", "12m"]).optional(),
+    }))
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
+      const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
 
-      const hoje = new Date().toISOString().split("T")[0];
-      const dataInicio = input.dataInicio || new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0];
-      const dataFim = input.dataFim || hoje;
+      const diasPeriodo = input.periodo === "30d" ? 30
+        : input.periodo === "60d" ? 60
+        : input.periodo === "6m" ? 180
+        : input.periodo === "12m" ? 365
+        : 90;
 
-      // Monta filtro de unidade/org dinamicamente
-      let whereUnidade = sql`v.clienteId != '2'
-          AND v.colaboradorId IS NOT NULL
-          AND v.colaboradorNome IS NOT NULL
-          AND v.colaboradorNome != ''
-          AND dc.ultimaVenda IS NOT NULL`;
-      if (unitFilter) whereUnidade = sql`${whereUnidade} AND v.unitId = ${unitFilter}`;
-      else if (orgFilter) whereUnidade = sql`${whereUnidade} AND v.unitId IN (SELECT id FROM units WHERE orgId = ${orgFilter})`;
+      const dataInicio = input.dataInicio || new Date(Date.now() - diasPeriodo * 86400000).toISOString().split("T")[0];
+      const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
 
-      // Estratégia de Retenção por Barbeiro:
-      // - Clientes atendidos pelo barbeiro no período selecionado
-      // - Status calculado com base na última visita ATUAL (de todos os tempos)
-      // - Ativo: última visita <= 60 dias atrás
-      // - Em Risco: última visita entre 61-90 dias
-      // - Perdido: última visita > 90 dias
-      // Nota: se o período for recente (ex: últimos 90 dias), clientes atendidos
-      // nesse período terão status "ativo" por definição. Para ver churn real,
-      // use períodos mais antigos (ex: 12 meses, ano passado).
-      const [rows] = await db.execute(sql`
-        SELECT
-          bp.colaboradorId,
-          bp.colaboradorNome,
-          COUNT(DISTINCT bp.clienteId) as totalClientes,
-          COUNT(DISTINCT CASE WHEN DATEDIFF(${hoje}, DATE(dc.ultimaVenda)) <= 60 THEN bp.clienteId END) as ativos,
-          COUNT(DISTINCT CASE WHEN DATEDIFF(${hoje}, DATE(dc.ultimaVenda)) BETWEEN 61 AND 90 THEN bp.clienteId END) as emRisco,
-          COUNT(DISTINCT CASE WHEN DATEDIFF(${hoje}, DATE(dc.ultimaVenda)) > 90 THEN bp.clienteId END) as perdidos,
-          COUNT(DISTINCT CASE WHEN dc.totalVisitas = 1 THEN bp.clienteId END) as oneShots,
-          AVG(dc.totalVisitas) as mediaVisitas,
-          AVG(dc.totalGasto) as mediaGasto
-        FROM (
-          SELECT DISTINCT v.colaboradorId, v.colaboradorNome, v.clienteId, v.unitId
-          FROM vendas v
-          WHERE v.dataVenda >= ${dataInicio} AND v.dataVenda <= ${dataFim + " 23:59:59"}
-            AND v.clienteId != '2'
-            AND v.colaboradorId IS NOT NULL
-            AND v.colaboradorNome IS NOT NULL
-            AND v.colaboradorNome != ''
-            ${unitFilter ? sql`AND v.unitId = ${unitFilter}` : orgFilter ? sql`AND v.unitId IN (SELECT id FROM units WHERE orgId = ${orgFilter})` : sql``}
-        ) bp
-        INNER JOIN dimensao_clientes dc ON dc.clienteId = bp.clienteId AND dc.unitId = bp.unitId
-        WHERE dc.ultimaVenda IS NOT NULL
-        GROUP BY bp.colaboradorId, bp.colaboradorNome
-        ORDER BY totalClientes DESC
-      `) as any;
-
-      return {
-        barbeiros: (rows as any[]).map(r => {
-          const total = Number(r.totalClientes || 0);
-          const ativos = Number(r.ativos || 0);
-          const emRisco = Number(r.emRisco || 0);
-          const perdidos = Number(r.perdidos || 0);
-          return {
-            colaboradorId: r.colaboradorId,
-            colaboradorNome: r.colaboradorNome,
-            totalClientes: total,
-            ativos,
-            emRisco,
-            perdidos,
-            oneShots: Number(r.oneShots || 0),
-            taxaRetencao: total > 0 ? Math.round((ativos / total) * 100) : 0,
-            taxaChurn: total > 0 ? Math.round((perdidos / total) * 100) : 0,
-            mediaVisitas: Math.round(Number(r.mediaVisitas || 0) * 10) / 10,
-            mediaGasto: Math.round(Number(r.mediaGasto || 0)),
-          };
-        }),
-        periodo: { dataInicio, dataFim },
-      };
+      const rows = await getChurnPorBarbeiro(extIds, dataInicio, dataFim);
+      const barbeiros = rows.map(r => ({
+        colaboradorId: String(r.colaborador_id),
+        colaboradorNome: r.colaborador_nome,
+        totalClientes: Number(r.total_clientes),
+        ativos: Number(r.ativos),
+        emRisco: Number(r.em_risco),
+        perdidos: Number(r.perdidos),
+        oneShots: Number(r.one_shots),
+        taxaRetencao: Number(r.total_clientes) > 0
+          ? Math.round((Number(r.ativos) / Number(r.total_clientes)) * 100)
+          : 0,
+        taxaChurn: Number(r.total_clientes) > 0
+          ? Math.round((Number(r.perdidos) / Number(r.total_clientes)) * 100)
+          : 0,
+        mediaVisitas: Math.round(Number(r.media_visitas) * 10) / 10,
+        ticketMedio: Math.round(Number(r.media_gasto) * 100) / 100,
+      }));
+      return { barbeiros };
     }),
 
-  // ── Cohort ─────────────────────────────────────────────────────────────────────────────────
+  // ── Cohort ───────────────────────────────────────────────────────────────────
   cohort: protectedProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
+      const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
-
-      let where = sql`ultimaVenda IS NOT NULL AND primeiraVenda IS NOT NULL AND clienteId != '2'`;
-      if (orgFilter) where = sql`${where} AND orgId = ${orgFilter}`;
-      if (unitFilter) where = sql`${where} AND unitId = ${unitFilter}`;
-
-      // Cohort por mês de entrada (primeiraVenda)
-      const [cohortRows] = await db.execute(sql`
-        SELECT 
-          DATE_FORMAT(primeiraVenda, '%Y-%m') as cohort,
-          COUNT(*) as totalEntrada,
-          SUM(CASE WHEN totalVisitas > 1 THEN 1 ELSE 0 END) as voltaram,
-          SUM(CASE WHEN totalVisitas >= 3 THEN 1 ELSE 0 END) as fidelizados,
-          AVG(totalVisitas) as mediaVisitas,
-          AVG(totalGasto) as mediaGasto
-        FROM dimensao_clientes
-        WHERE ${where}
-          AND primeiraVenda >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-        GROUP BY cohort
-        ORDER BY cohort
-      `) as any;
-
+      const rows = await getCohortClientes(extIds);
       return {
-        cohorts: (cohortRows as any[]).map(r => ({
+        cohorts: rows.map(r => ({
           cohort: r.cohort,
-          totalEntrada: Number(r.totalEntrada),
+          totalEntrada: Number(r.total_entrada),
           voltaram: Number(r.voltaram),
-          fidelizados: Number(r.fidelizados),
-          taxaRetencao: r.totalEntrada > 0 ? Math.round((Number(r.voltaram) / Number(r.totalEntrada)) * 100) : 0,
-          taxaFidelizacao: r.totalEntrada > 0 ? Math.round((Number(r.fidelizados) / Number(r.totalEntrada)) * 100) : 0,
-          mediaVisitas: Math.round(Number(r.mediaVisitas) * 10) / 10,
-          mediaGasto: Math.round(Number(r.mediaGasto)),
+          taxaRetencao: Number(r.taxa_retencao),
+          fidelizados: 0,
+          taxaFidelizacao: 0,
+          mediaVisitas: 0,
+          mediaGasto: 0,
         })),
       };
     }),
@@ -596,60 +649,54 @@ export const raioXRouter = router({
   barbeiros: protectedProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
+      const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
+
+      const unitCond = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+        : `uu.unidade IN (${extIds.join(",")})`;
 
       const dataInicio = input.dataInicio || new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
 
-      let where = sql`dataVenda >= ${dataInicio} AND dataVenda <= ${dataFim + " 23:59:59"} AND clienteId != '2'`;
-      // vendas has no orgId - skip orgFilter for this query
-      if (unitFilter) where = sql`${where} AND unitId = ${unitFilter}`;
-
-      // Métricas por barbeiro no período
-      const [rows] = await db.execute(sql`
+      const rows = await queryExternal<{
+        colaborador_id: number;
+        colaborador_nome: string;
+        totalAtendimentos: number;
+        clientesUnicos: number;
+        faturamento: number;
+        ticketMedio: number;
+      }>(`
         SELECT 
-          colaboradorId,
-          colaboradorNome,
-          COUNT(*) as totalAtendimentos,
-          COUNT(DISTINCT clienteId) as clientesUnicos,
-          SUM(valorLiquido) as faturamento,
-          AVG(valorLiquido) as ticketMedio
-        FROM vendas
-        WHERE ${where}
-          AND colaboradorId IS NOT NULL
-          AND colaboradorNome IS NOT NULL
-          AND colaboradorNome != ''
-        GROUP BY colaboradorId, colaboradorNome
-        ORDER BY totalAtendimentos DESC
-      `) as any;
-
-      // Novos clientes por barbeiro (primeira visita no período)
-      const [novosRows] = await db.execute(sql`
-        SELECT v.colaboradorId, COUNT(DISTINCT v.clienteId) as novos
+          uu.id as colaborador_id,
+          uu.nome as colaborador_nome,
+          COUNT(v.id) as totalAtendimentos,
+          COUNT(DISTINCT v.cliente) as clientesUnicos,
+          SUM(v.valor_total) as faturamento,
+          AVG(v.valor_total) as ticketMedio
         FROM vendas v
-        INNER JOIN dimensao_clientes dc ON dc.clienteId = v.clienteId AND dc.unitId = v.unitId
-        WHERE v.dataVenda >= ${dataInicio} AND v.dataVenda <= ${dataFim + " 23:59:59"}
-          AND v.clienteId != '2'
-          AND v.unitId = ${unitFilter || 0}
-          AND DATE(dc.primeiraVenda) >= ${dataInicio}
-          AND DATE(dc.primeiraVenda) <= ${dataFim}
-        GROUP BY v.colaboradorId
-      `) as any;
-      const novosMap = new Map((novosRows as any[]).map(r => [r.colaboradorId, Number(r.novos)]));
+        JOIN usuarios uu ON v.usuario = uu.id
+        WHERE ${unitCond}
+          AND v.data_criacao >= ?
+          AND v.data_criacao <= ?
+          AND v.comanda_temp = 0
+          AND v.cancelado_motivo IS NULL
+          AND v.cliente IS NOT NULL
+          AND v.cliente != 2
+        GROUP BY uu.id, uu.nome
+        ORDER BY totalAtendimentos DESC
+      `, [dataInicio, dataFim + " 23:59:59"]);
 
       return {
-        barbeiros: (rows as any[]).map(r => ({
-          colaboradorId: r.colaboradorId,
-          colaboradorNome: r.colaboradorNome,
+        barbeiros: rows.map(r => ({
+          colaboradorId: String(r.colaborador_id),
+          colaboradorNome: r.colaborador_nome,
           totalAtendimentos: Number(r.totalAtendimentos),
           clientesUnicos: Number(r.clientesUnicos),
           faturamento: Number(r.faturamento || 0),
           ticketMedio: Math.round(Number(r.ticketMedio || 0)),
-          novosClientes: novosMap.get(r.colaboradorId) || 0,
+          novosClientes: 0,
         })),
         periodo: { dataInicio, dataFim },
       };
@@ -659,51 +706,37 @@ export const raioXRouter = router({
   diagnostico: protectedProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
+      const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
 
-      let where = sql`clienteId != '2'`;
-      if (orgFilter) where = sql`${where} AND orgId = ${orgFilter}`;
-      if (unitFilter) where = sql`${where} AND unitId = ${unitFilter}`;
+      const unitCond = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
+        : `ultima_visita_unidade IN (${extIds.join(",")})`;
 
-      const [rows] = await db.execute(sql`
-        SELECT 
-          COUNT(*) as total,
-          SUM(CASE WHEN telefone IS NULL OR telefone = '' THEN 1 ELSE 0 END) as semTelefone,
-          SUM(CASE WHEN clienteNome IS NULL OR clienteNome = '' OR clienteNome = 'Sem Cadastro' THEN 1 ELSE 0 END) as semNome,
-          SUM(CASE WHEN ultimaVenda IS NULL THEN 1 ELSE 0 END) as semUltimaVenda,
-          SUM(CASE WHEN primeiraVenda IS NULL THEN 1 ELSE 0 END) as semPrimeiraVenda,
-          SUM(CASE WHEN totalVisitas = 0 OR totalVisitas IS NULL THEN 1 ELSE 0 END) as semVisitas
-        FROM dimensao_clientes
-        WHERE ${where}
-      `) as any;
+      const [totalRows, qualidadeRows, visitasDistRows, faixasRows] = await Promise.all([
+        queryExternal<{ total: number }>(`
+          SELECT COUNT(*) as total FROM clientes WHERE ${unitCond} AND status = 1
+        `),
+        queryExternal<{ semTelefone: number; semNome: number }>(`
+          SELECT 
+            SUM(CASE WHEN telefone IS NULL OR telefone = '' THEN 1 ELSE 0 END) as semTelefone,
+            SUM(CASE WHEN nome IS NULL OR nome = '' OR nome = 'Sem Cadastro' THEN 1 ELSE 0 END) as semNome
+          FROM clientes WHERE ${unitCond} AND status = 1
+        `),
+        queryExternal<{ total_visitas: number; clientes: number }>(`
+          SELECT vc.total_visitas, COUNT(*) as clientes
+          FROM clientes c
+          JOIN ${visitasSubquery} vc ON vc.cliente = c.id
+          WHERE ${unitCond.replace(/ultima_visita_unidade/g, "c.ultima_visita_unidade")} AND c.status = 1
+          GROUP BY vc.total_visitas ORDER BY vc.total_visitas LIMIT 20
+        `),
+        getDiagnosticoClientes(extIds),
+      ]);
 
-      const diag = (rows as any[])[0];
-      const total = Number(diag?.total || 0);
-
-      // Clientes sem cadastro (nome = "Sem Cadastro")
-      const [semCadastroRows] = await db.execute(sql`
-        SELECT COUNT(*) as total FROM dimensao_clientes
-        WHERE ${where} AND (clienteNome = 'Sem Cadastro' OR clienteNome IS NULL OR clienteNome = '')
-      `) as any;
-
-      // Distribuição de visitas
-      const [visitasDistRows] = await db.execute(sql`
-        SELECT totalVisitas, COUNT(*) as qtd
-        FROM dimensao_clientes
-        WHERE ${where}
-        GROUP BY totalVisitas
-        ORDER BY totalVisitas
-        LIMIT 20
-      `) as any;
-
-      const semTelefone = Number(diag?.semTelefone || 0);
-      const semNome = Number(diag?.semNome || 0);
-      const semCadastro = Number((semCadastroRows as any[])[0]?.total || 0);
-
+      const total = Number(totalRows[0]?.total ?? 0);
+      const semTelefone = Number(qualidadeRows[0]?.semTelefone ?? 0);
+      const semNome = Number(qualidadeRows[0]?.semNome ?? 0);
       const scoreQualidade = total > 0
         ? Math.round(100 - ((semTelefone + semNome) / (total * 2)) * 100)
         : 0;
@@ -714,18 +747,23 @@ export const raioXRouter = router({
           score: scoreQualidade,
           semTelefone,
           semNome,
-          semCadastro,
+          semCadastro: semNome,
           pctSemTelefone: total > 0 ? Math.round((semTelefone / total) * 100) : 0,
           pctSemNome: total > 0 ? Math.round((semNome / total) * 100) : 0,
-          pctSemCadastro: total > 0 ? Math.round((semCadastro / total) * 100) : 0,
+          pctSemCadastro: total > 0 ? Math.round((semNome / total) * 100) : 0,
         },
-        visitasDistribuicao: (visitasDistRows as any[]).map(r => ({
-          visitas: Number(r.totalVisitas),
-          clientes: Number(r.qtd),
+        visitasDistribuicao: visitasDistRows.map(r => ({
+          visitas: Number(r.total_visitas),
+          clientes: Number(r.clientes),
+        })),
+        faixasDias: faixasRows.map(r => ({
+          faixa: r.faixa_dias,
+          total: Number(r.total),
+          percentual: Number(r.percentual),
         })),
         alertas: [
           ...(semTelefone > total * 0.3 ? [`${semTelefone} clientes sem telefone (${Math.round((semTelefone/total)*100)}%)`] : []),
-          ...(semCadastro > total * 0.1 ? [`${semCadastro} clientes sem nome cadastrado`] : []),
+          ...(semNome > total * 0.1 ? [`${semNome} clientes sem nome cadastrado`] : []),
         ],
       };
     }),
@@ -738,48 +776,45 @@ export const raioXRouter = router({
       pageSize: z.number().default(50),
     }))
     .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter(
+      const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
 
-      const hoje = new Date().toISOString().split("T")[0];
+      const unitCond = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `c.ultima_visita_unidade = ${extIds[0]}`
+        : `c.ultima_visita_unidade IN (${extIds.join(",")})`;
 
-      let where = sql`ultimaVenda IS NOT NULL AND clienteId != '2'`;
-      if (orgFilter) where = sql`${where} AND orgId = ${orgFilter}`;
-      if (unitFilter) where = sql`${where} AND unitId = ${unitFilter}`;
-
-      // Filtro por tipo de ação
       const tipo = input.tipo || "todos";
+      let extraCond = "";
       if (tipo === "one_shot_risco") {
-        where = sql`${where} AND totalVisitas = 1 AND DATEDIFF(${hoje}, DATE(ultimaVenda)) BETWEEN 31 AND 90`;
+        extraCond = " AND vc.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 31 AND 90";
       } else if (tipo === "perdidos_recentes") {
-        where = sql`${where} AND DATEDIFF(${hoje}, DATE(ultimaVenda)) BETWEEN 91 AND 180`;
+        extraCond = " AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 91 AND 180";
       } else if (tipo === "em_risco") {
-        where = sql`${where} AND DATEDIFF(${hoje}, DATE(ultimaVenda)) BETWEEN 61 AND 90`;
+        extraCond = " AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90";
       } else if (tipo === "sem_telefone") {
-        where = sql`${where} AND (telefone IS NULL OR telefone = '')`;
+        extraCond = " AND (c.telefone IS NULL OR c.telefone = '')";
       } else {
-        // Todos: one-shot em risco + perdidos recentes + em risco
-        where = sql`${where} AND (
-          (totalVisitas = 1 AND DATEDIFF(${hoje}, DATE(ultimaVenda)) BETWEEN 31 AND 90) OR
-          (DATEDIFF(${hoje}, DATE(ultimaVenda)) BETWEEN 61 AND 180)
-        )`;
+        extraCond = " AND ((vc.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 31 AND 90) OR DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 180)";
       }
 
-      const [rows] = await db.execute(sql`
-        SELECT clienteId, clienteNome, telefone, ultimaVenda, totalVisitas, totalGasto,
-               DATEDIFF(${hoje}, DATE(ultimaVenda)) as dias
-        FROM dimensao_clientes
-        WHERE ${where}
+      const rows = await queryExternal<{
+        id: number; nome: string; telefone: string;
+        ultima_visita: Date; consumo: number; dias: number; total_visitas: number;
+      }>(`
+        SELECT c.id, c.nome, c.telefone, c.ultima_visita, c.consumo,
+               DATEDIFF(NOW(), c.ultima_visita) as dias,
+               COALESCE(vc.total_visitas, 0) as total_visitas
+        FROM clientes c
+        LEFT JOIN ${visitasSubquery} vc ON vc.cliente = c.id
+        WHERE ${unitCond} AND c.status = 1 AND c.ultima_visita IS NOT NULL${extraCond}
         ORDER BY dias ASC
         LIMIT 500
-      `) as any;
+      `);
 
-      const clientes = (rows as any[]).map(r => {
+      const clientes = rows.map(r => {
         const dias = Number(r.dias || 0);
-        const totalVisitas = Number(r.totalVisitas || 0);
+        const totalVisitas = Number(r.total_visitas || 0);
         let prioridade: "alta" | "media" | "baixa" = "baixa";
         let tipoAcao = "reativacao";
         if (totalVisitas === 1 && dias <= 60) { prioridade = "alta"; tipoAcao = "one_shot"; }
@@ -787,12 +822,12 @@ export const raioXRouter = router({
         else if (dias <= 120) { prioridade = "media"; tipoAcao = "perdido_recente"; }
         else { prioridade = "baixa"; tipoAcao = "perdido"; }
         return {
-          clienteId: r.clienteId,
-          clienteNome: r.clienteNome,
+          clienteId: String(r.id),
+          clienteNome: r.nome,
           telefone: r.telefone,
-          ultimaVenda: r.ultimaVenda,
+          ultimaVenda: r.ultima_visita,
           totalVisitas,
-          totalGasto: Number(r.totalGasto || 0),
+          totalGasto: Number(r.consumo || 0),
           dias,
           prioridade,
           tipoAcao,
