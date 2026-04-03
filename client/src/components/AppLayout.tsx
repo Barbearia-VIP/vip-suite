@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
@@ -225,9 +225,36 @@ interface AppLayoutProps {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const [location, navigate] = useLocation();
-  const { activeModule, setActiveModule, selectedUnit, setSelectedUnit, availableUnits, sidebarCollapsed, setSidebarCollapsed } = useApp();
+  const { activeModule, setActiveModule, selectedUnit, setSelectedUnit, availableUnits, setAvailableUnits, sidebarCollapsed, setSidebarCollapsed } = useApp();
   const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // ── Carregar organizações e unidades do usuário ──────────────────────────
+  const orgsQuery = trpc.orgs.list.useQuery(undefined, { enabled: !!user });
+  const firstOrgId = orgsQuery.data?.[0]?.id ?? 0;
+  const unitsQuery = trpc.orgs.units.useQuery(
+    { orgId: firstOrgId },
+    { enabled: !!firstOrgId }
+  );
+
+  useEffect(() => {
+    if (unitsQuery.data && unitsQuery.data.length > 0) {
+      const mapped = unitsQuery.data.map((u: any) => ({
+        id: u.id,
+        name: u.name,
+        slug: u.slug,
+        orgId: u.orgId,
+        city: u.city ?? undefined,
+        state: u.state ?? undefined,
+      }));
+      setAvailableUnits(mapped);
+      // Auto-selecionar a primeira unidade se nenhuma estiver selecionada
+      const stored = localStorage.getItem("vip_selected_unit");
+      if (!stored && mapped.length > 0) {
+        setSelectedUnit(mapped[0]);
+      }
+    }
+  }, [unitsQuery.data]);
 
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => {
