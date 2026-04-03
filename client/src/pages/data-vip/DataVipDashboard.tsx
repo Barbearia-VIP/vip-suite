@@ -587,9 +587,9 @@ export default function DataVipDashboard() {
         </Card>
       </div>
 
-      {/* Evolução Diária + Formas de pagamento */}
-      <div className="grid lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2 bg-[oklch(0.12_0.01_240)] border-[oklch(0.22_0.02_240)]">
+      {/* Evolução Diária — linha inteira */}
+      <div>
+        <Card className="bg-[oklch(0.12_0.01_240)] border-[oklch(0.22_0.02_240)]">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -726,74 +726,10 @@ export default function DataVipDashboard() {
             }
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Formas de Pagamento</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {prodQ.isLoading
-              ? <Skeleton className="h-48 w-full" />
-              : pagamentos.length === 0
-                ? <div className="h-48 flex items-center justify-center text-muted-foreground text-sm text-center">
-                    Sem dados
-                  </div>
-                : <>
-                    <ResponsiveContainer width="100%" height={120}>
-                      <PieChart>
-                        <Pie data={pagamentos} dataKey="total" cx="50%" cy="50%" outerRadius={50} innerRadius={25}>
-                          {pagamentos.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                        </Pie>
-                        <Tooltip formatter={(v: number) => fmt(v)} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="space-y-1 mt-2">
-                      {pagamentos.slice(0, 4).map((p, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs">
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                            {p.forma || "Outros"}
-                          </span>
-                          <span className="font-medium">{fmt(p.total)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-            }
-          </CardContent>
-        </Card>
       </div>
 
-      {/* Top colaboradores + Top produtos */}
+      {/* Top Serviços + Formas de Pagamento */}
       <div className="grid lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-medium">Top Colaboradores</CardTitle>
-            <Button asChild variant="ghost" size="sm" className="text-xs h-7">
-              <Link href="/data-vip/colaboradores">Ver todos <ChevronRight className="w-3 h-3 ml-1" /></Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {colaborQ.isLoading
-              ? <Skeleton className="h-32 w-full" />
-              : colabs.length === 0
-                ? <p className="text-sm text-muted-foreground text-center py-4">Sem dados para este período</p>
-                : <div className="space-y-2">
-                    {colabs.map((c, i) => (
-                      <div key={c.colaboradorId} className="flex items-center gap-3">
-                        <span className="text-xs text-muted-foreground w-4">{i + 1}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{c.colaboradorNome}</p>
-                          <p className="text-xs text-muted-foreground">{c.atendimentos} atend. · {fmt(c.ticketMedio)} ticket</p>
-                        </div>
-                        <span className="text-sm font-semibold text-green-400">{fmt(c.faturamento)}</span>
-                      </div>
-                    ))}
-                  </div>
-            }
-          </CardContent>
-        </Card>
-
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-medium">Top Serviços</CardTitle>
@@ -826,6 +762,108 @@ export default function DataVipDashboard() {
             }
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Formas de Pagamento</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {prodQ.isLoading
+              ? <Skeleton className="h-48 w-full" />
+              : pagamentos.length === 0
+                ? <div className="h-48 flex items-center justify-center text-muted-foreground text-sm text-center">
+                    Sem dados
+                  </div>
+                : <>
+                    <ResponsiveContainer width="100%" height={120}>
+                      <PieChart>
+                        <Pie data={pagamentos} dataKey="total" cx="50%" cy="50%" outerRadius={50} innerRadius={25}>
+                          {pagamentos.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip formatter={(v: number) => fmt(v)} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-1 mt-2">
+                      {pagamentos.slice(0, 6).map((p, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs">
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                            {p.forma || "Outros"}
+                          </span>
+                          <span className="font-medium">{fmt(p.total)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+            }
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Colaboradores — lista completa detalhada */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Users className="w-4 h-4 text-primary" />
+            Colaboradores
+          </h2>
+          <Button asChild variant="ghost" size="sm" className="text-xs h-7">
+            <Link href="/data-vip/colaboradores">Ver detalhes <ChevronRight className="w-3 h-3 ml-1" /></Link>
+          </Button>
+        </div>
+        {colaborQ.isLoading
+          ? <div className="space-y-3"><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></div>
+          : colabs.length === 0
+            ? <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Sem dados para este período</CardContent></Card>
+            : <div className="space-y-3">
+                {colabs.map((c, i) => {
+                  const initials = c.colaboradorNome.split("_").map((p: string) => p[0]).join("").slice(0, 2).toUpperCase();
+                  const avatarColors = ["oklch(0.55 0.15 200)","oklch(0.55 0.12 75)","oklch(0.50 0.15 145)","oklch(0.50 0.15 280)","oklch(0.50 0.12 30)"];
+                  const ac = avatarColors[i % avatarColors.length];
+                  return (
+                    <Card key={c.colaboradorId} className="bg-[oklch(0.12_0.01_240)] border-[oklch(0.22_0.02_240)]">
+                      <CardContent className="pt-4 pb-4">
+                        {/* Cabeçalho do colaborador */}
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0" style={{ background: ac }}>
+                            {i + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-foreground">{c.colaboradorNome}</p>
+                            <p className="text-xs text-muted-foreground">{c.diasTrabalhados} dias trabalhados</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Fat./dia</p>
+                            <p className="text-sm font-bold" style={{ color: ac }}>{fmt(c.faturamentoDia)}/dia</p>
+                          </div>
+                        </div>
+                        {/* Grid de KPIs */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-2">
+                          {[
+                            { label: "Faturamento",    value: fmt(c.faturamento) },
+                            { label: "Atendimentos",   value: String(c.atendimentos) },
+                            { label: "Ticket Médio",   value: fmt(c.ticketMedio) },
+                            { label: "Fat. / Dia",     value: fmt(c.faturamentoDia) },
+                            { label: "Serviços",       value: String(c.servicos) },
+                            { label: "Extras (qtd)",   value: String(c.extraQtd) },
+                            { label: "Extras (R$)",    value: fmt(c.extraValor) },
+                            { label: "Clientes",       value: String(c.clientes) },
+                            { label: "Novos Clientes", value: String(c.clientesNovos) },
+                            { label: "Produtos (Qtd)", value: String(c.produtosQtd) },
+                            { label: "Produtos (R$)",  value: fmt(c.produtosValor) },
+                          ].map(({ label, value }) => (
+                            <div key={label} className="flex items-center justify-between py-1 border-b border-border/40">
+                              <span className="text-xs text-muted-foreground">{label}</span>
+                              <span className="text-xs font-semibold text-foreground">{value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+        }
       </div>
 
       {/* Acesso rápido */}

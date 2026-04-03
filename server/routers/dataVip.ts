@@ -418,16 +418,20 @@ export const dataVipRouter = router({
           colaboradorId: String(r.colaborador_id),
           colaboradorNome: r.colaborador_nome,
           tipoColaborador: "barbeiro",
-          faturamento: Number(r.total_vendas),
-          atendimentos: Number(r.total_servicos_realizados),
-          clientes: Number(r.total_clientes_geral),
-          ticketMedio: Number(r.total_clientes_geral) > 0
-            ? Math.round((Number(r.total_vendas) / Number(r.total_clientes_geral)) * 100) / 100
-            : 0,
+          faturamento: Number(r.faturamento),
+          atendimentos: Number(r.atendimentos),
+          clientes: Number(r.clientes),
+          clientesNovos: Number(r.clientes_novos),
+          ticketMedio: Math.round(Number(r.ticket_medio) * 100) / 100,
+          diasTrabalhados: Number(r.dias_trabalhados),
+          faturamentoDia: Math.round(Number(r.faturamento_dia) * 100) / 100,
+          servicos: Number(r.servicos),
+          extraQtd: Number(r.extra_qtd),
+          extraValor: Number(r.extra_valor),
+          produtosQtd: Number(r.produtos_qtd),
+          produtosValor: Number(r.produtos_valor),
           fidelizacao: 0,
           nps: 0,
-          mediaConsumo: 0,
-          produtosVendidos: 0,
           estrela: 0,
         }));
       }
@@ -442,13 +446,19 @@ export const dataVipRouter = router({
         faturamento: Number(r.total_vendas),
         atendimentos: Number(r.total_servicos_realizados),
         clientes: Number(r.total_clientes_geral),
+        clientesNovos: Number(r.total_clientes_novos),
         ticketMedio: r.total_clientes_geral > 0
           ? Math.round((Number(r.total_vendas) / Number(r.total_clientes_geral)) * 100) / 100
           : 0,
+        diasTrabalhados: 0, // não disponível no modo mensal (dashboard_colaboradores)
+        faturamentoDia: 0,
+        servicos: Number(r.total_servicos_realizados),
+        extraQtd: 0,
+        extraValor: 0,
+        produtosQtd: Number(r.total_produtos_vendidos),
+        produtosValor: Number(r.total_produtos_vendidos_reais),
         fidelizacao: Number(r.fidelizacao),
         nps: Number(r.nps),
-        mediaConsumo: Number(r.media_consumo_cliente),
-        produtosVendidos: Number(r.total_produtos_vendidos),
         estrela: Number(r.estrela),
       }));
     }),
@@ -501,12 +511,14 @@ export const dataVipRouter = router({
       return colabs.map(c => {
         const regra = (regras as any[]).find((r: any) => r.colaboradorId === String(c.colaborador_id));
         const pct = regra ? Number(regra.percentual) : 30;
-        const fat = Number(c.total_vendas);
+        // Suporta tanto o retorno de getColaboradoresByRange (faturamento) quanto getColaboradores (total_vendas)
+        const fat = Number((c as any).faturamento ?? (c as any).total_vendas ?? 0);
+        const atend = Number((c as any).atendimentos ?? (c as any).total_servicos_realizados ?? 0);
         return {
           colaboradorId: String(c.colaborador_id),
           colaboradorNome: c.colaborador_nome,
           faturamento: fat,
-          atendimentos: Number(c.total_servicos_realizados),
+          atendimentos: atend,
           percentual: pct,
           comissao: Math.round(fat * (pct / 100) * 100) / 100,
         };

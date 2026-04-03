@@ -659,37 +659,62 @@ export async function getColaboradoresByRange(extIds: number[], dataInicio: stri
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
+  const unitCondV2 = unitCond.replace(/uu\.unidade/g, 'uu2.unidade');
   const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
 
   return queryExternal<{
     colaborador_id: number;
     colaborador_nome: string;
-    total_vendas: number;
-    total_servicos_realizados: number;
-    total_clientes_novos: number;
-    total_clientes_antigos: number;
-    total_clientes_geral: number;
+    faturamento: number;
+    atendimentos: number;
+    ticket_medio: number;
+    dias_trabalhados: number;
+    faturamento_dia: number;
+    servicos: number;
+    extra_qtd: number;
+    extra_valor: number;
+    clientes: number;
+    clientes_novos: number;
+    produtos_qtd: number;
+    produtos_valor: number;
   }>(`
     SELECT
       uu.id as colaborador_id,
       uu.nome as colaborador_nome,
-      COALESCE(SUM(v.valor_total), 0) as total_vendas,
-      COUNT(DISTINCT v.id) as total_servicos_realizados,
-      COUNT(DISTINCT CASE WHEN c.data_criacao >= ? THEN v.cliente END) as total_clientes_novos,
-      COUNT(DISTINCT CASE WHEN c.data_criacao < ? OR c.data_criacao IS NULL THEN v.cliente END) as total_clientes_antigos,
-      COUNT(DISTINCT v.cliente) as total_clientes_geral
+      COALESCE(SUM(vp.valor_total), 0) as faturamento,
+      COUNT(DISTINCT v.id) as atendimentos,
+      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
+      COUNT(DISTINCT DATE(v.data_criacao)) as dias_trabalhados,
+      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT DATE(v.data_criacao)), 0), 0) as faturamento_dia,
+      COUNT(CASE WHEN p.tipo = 'ser' THEN 1 END) as servicos,
+      COUNT(CASE WHEN p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL) THEN 1 END) as extra_qtd,
+      COALESCE(SUM(CASE WHEN p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL) THEN vp.valor_total END), 0) as extra_valor,
+      COUNT(DISTINCT v.cliente) as clientes,
+      COUNT(DISTINCT CASE
+        WHEN NOT EXISTS (
+          SELECT 1 FROM vendas v2
+          JOIN usuarios uu2 ON v2.usuario = uu2.id
+          WHERE v2.cliente = v.cliente
+            AND ${unitCondV2}
+            AND v2.data_criacao < ?
+            AND v2.comanda_temp = 0
+            AND v2.status != 0
+        ) THEN v.cliente
+      END) as clientes_novos,
+      COUNT(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN 1 END) as produtos_qtd,
+      COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.valor_total END), 0) as produtos_valor
     FROM vendas v
     JOIN usuarios uu ON v.usuario = uu.id
-    LEFT JOIN clientes c ON c.id = v.cliente
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    JOIN produtos p ON p.id = vp.produto
     WHERE ${unitCond}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.cancelado_motivo IS NULL
       AND v.status != 0
     GROUP BY uu.id, uu.nome
-    ORDER BY total_vendas DESC
-  `, [dataInicio, dataInicio, dataInicio, dataFimExcl]);
+    ORDER BY faturamento DESC
+  `, [dataInicio, dataInicio, dataFimExcl]);
 }
 
 // ─── Ranking de unidades ──────────────────────────────────────────────────────
