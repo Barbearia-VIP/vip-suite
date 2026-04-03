@@ -73,6 +73,114 @@ async function recalcularResumo(db: any, unitId: number) {
   });
 }
 
+// ─── Sincronização de avaliações do Google ──────────────────────────────────
+
+async function fetchAllGoogleReviews(accessToken: string, savedLocationPath?: string): Promise<any[]> {
+  // Se já temos o locationPath salvo, usar diretamente
+  if (savedLocationPath?.includes("accounts/") && savedLocationPath?.includes("locations/")) {
+    let allReviews: any[] = [];
+    let pageToken: string | undefined;
+    do {
+      const url = new URL(`https://mybusiness.googleapis.com/v4/${savedLocationPath}/reviews`);
+      url.searchParams.set("pageSize", "50");
+      if (pageToken) url.searchParams.set("pageToken", pageToken);
+      const revRes = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!revRes.ok) break;
+      const revData = await revRes.json();
+      if (revData.error) break;
+      allReviews = allReviews.concat(revData.reviews || []);
+      pageToken = revData.nextPageToken;
+    } while (pageToken);
+    return allReviews;
+  }
+  // Descobrir location automaticamente
+  const accountsRes = await fetch("https://mybusinessaccountmanagement.googleapis.com/v1/accounts", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!accountsRes.ok) return [];
+  const accountsData = await accountsRes.json();
+  if (!accountsData.accounts?.length) return [];
+  for (const account of accountsData.accounts) {
+    if (account.type === "PERSONAL") continue;
+    const locRes = await fetch(
+      `https://mybusinessbusinessinformation.googleapis.com/v1/${account.name}/locations?readMask=name,title`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!locRes.ok) continue;
+    const locData = await locRes.json();
+    if (!locData.locations?.length) continue;
+    const locationPath = `${account.name}/${locData.locations[0].name}`;
+    let allReviews: any[] = [];
+    let pageToken: string | undefined;
+    do {
+      const url = new URL(`https://mybusiness.googleapis.com/v4/${locationPath}/reviews`);
+      url.searchParams.set("pageSize", "50");
+      if (pageToken) url.searchParams.set("pageToken", pageToken);
+      const revRes = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (!revRes.ok) break;
+      const revData = await revRes.json();
+      if (revData.error) break;
+      allReviews = allReviews.concat(revData.reviews || []);
+      pageToken = revData.nextPageToken;
+    } while (pageToken);
+    return allReviews;
+  }
+  return [];
+}
+
+async function sincronizarAvaliacoesDoGoogle(unitId: number, db: any, accessToken: string, conexao: any): Promise<number> {
+  try {
+    const reviews = await fetchAllGoogleReviews(accessToken, conexao.googleLocationName || undefined);
+    if (!reviews.length) return 0;
+    let importadas = 0;
+    for (const review of reviews) {
+      const reviewId = review.reviewId || review.name?.split("/").pop() || String(Date.now());
+      const externalId = `google-business-${reviewId}`;
+      const nota = review.starRating === "FIVE" ? 5 : review.starRating === "FOUR" ? 4 : review.starRating === "THREE" ? 3 : review.starRating === "TWO" ? 2 : 1;
+      const sentimento = determineSentimento(nota);
+      const dataAvaliacao = review.createTime ? new Date(review.createTime) : new Date();
+      const respostaExistente = review.reviewReply?.comment || null;
+      const avalData = {
+        unitId,
+        plataforma: "google" as const,
+        externalId,
+        autorNome: review.reviewer?.displayName || "Anônimo",
+        autorFoto: review.reviewer?.profilePhotoUrl || null,
+        nota: String(nota),
+        comentario: review.comment || "",
+        sentimento,
+        dataAvaliacao,
+        urlAvaliacao: review.name || null,
+        isVerificado: true,
+        ...(respostaExistente ? {
+          resposta: respostaExistente,
+          respostaPublicada: true,
+          respondidoEm: review.reviewReply?.updateTime ? new Date(review.reviewReply.updateTime) : new Date(),
+        } : {}),
+      };
+      const existing = await db.select({ id: repAvaliacoes.id })
+        .from(repAvaliacoes)
+        .where(and(eq(repAvaliacoes.unitId, unitId), eq(repAvaliacoes.externalId, externalId)))
+        .limit(1);
+      if (existing.length > 0) {
+        // Atualizar dados existentes (pode ter nova resposta do Google)
+        await db.update(repAvaliacoes).set(avalData).where(eq(repAvaliacoes.id, existing[0].id));
+      } else {
+        await db.insert(repAvaliacoes).values(avalData);
+        importadas++;
+      }
+    }
+    if (importadas > 0) {
+      console.log(`[Reputação Auto] Unidade ${unitId}: ${importadas} novas avaliações importadas do Google.`);
+      await recalcularResumo(db, unitId);
+    }
+    return importadas;
+  } catch (err) {
+    console.error(`[Reputação Auto] Erro ao sincronizar avaliações da unidade ${unitId}:`, err);
+    return 0;
+  }
+}
+
 // ─── Lógica principal do ciclo ───────────────────────────────────────────────
 
 async function processarAutoRespostaUnidade(unitId: number) {
@@ -87,28 +195,17 @@ async function processarAutoRespostaUnidade(unitId: number) {
     const autoResponderAtivo = config.autoResponder || config.autoResponderPositivas || config.autoResponderNegativas;
     if (!autoResponderAtivo) return;
 
-    // 2. Buscar avaliações sem resposta desta unidade
-    const avaliacoesSemResposta = await db.select()
-      .from(repAvaliacoes)
-      .where(and(
-        eq(repAvaliacoes.unitId, unitId),
-        isNull(repAvaliacoes.resposta),
-      ))
-      .limit(20); // Processar até 20 por ciclo para não sobrecarregar
-
-    if (avaliacoesSemResposta.length === 0) return;
-
-    // 3. Buscar conexão Google da unidade
+    // 2. Buscar conexão Google da unidade
     const [conexao] = await db.select()
       .from(repConexoes)
       .where(and(eq(repConexoes.unitId, unitId), eq(repConexoes.plataforma, "google")))
       .limit(1);
 
-    // 4. Buscar prompt da unidade (aiPrompt da tabela units)
+    // 3. Buscar prompt da unidade (aiPrompt da tabela units)
     const unit = await getUnitById(unitId);
     const unitAiPrompt = (unit as any)?.aiPrompt || null;
 
-    // 5. Obter access token Google (com refresh automático)
+    // 4. Obter access token Google (com refresh automático)
     let accessToken: string | null = conexao?.googleAccessToken || null;
     if (conexao?.googleRefreshToken) {
       const { clientId, clientSecret } = getGoogleCredentials(conexao);
@@ -125,9 +222,24 @@ async function processarAutoRespostaUnidade(unitId: number) {
       }
     }
 
+    // 5. Sincronizar avaliações do Google antes de responder (para ter dados atualizados)
+    if (accessToken && conexao) {
+      await sincronizarAvaliacoesDoGoogle(unitId, db, accessToken, conexao);
+    }
+
+    // 6. Buscar avaliações sem resposta desta unidade (após sincronização)
+    const avaliacoesSemResposta = await db.select()
+      .from(repAvaliacoes)
+      .where(and(
+        eq(repAvaliacoes.unitId, unitId),
+        isNull(repAvaliacoes.resposta),
+      ))
+      .limit(20); // Processar até 20 por ciclo para não sobrecarregar
+
+    if (avaliacoesSemResposta.length === 0) return;
+
     let respondidas = 0;
     let erros = 0;
-
     for (const avaliacao of avaliacoesSemResposta) {
       try {
         const nota = parseFloat(String(avaliacao.nota));

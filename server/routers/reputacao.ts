@@ -230,15 +230,14 @@ export const reputacaoRouter = router({
         .from(repAvaliacoes)
         .where(and(eq(repAvaliacoes.unitId, input.unitId), sql`${repAvaliacoes.resposta} IS NULL`));
 
-      // Evolução últimos 6 meses
+      // Evolução histórica completa (desde o primeiro comentário)
       const evolucao = await db.execute(sql`
         SELECT 
           DATE_FORMAT(dataAvaliacao, '%Y-%m') as mes,
           COUNT(*) as total,
-          AVG(CAST(nota AS DECIMAL(3,1))) as media
+          ROUND(AVG(CAST(nota AS DECIMAL(3,1))), 2) as media
         FROM rep_avaliacoes
         WHERE unitId = ${input.unitId}
-          AND dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
         GROUP BY mes
         ORDER BY mes ASC
       `);

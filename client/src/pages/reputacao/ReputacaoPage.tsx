@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,9 +11,96 @@ import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Link } from "wouter";
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from "recharts";
+// Recharts removido — usando SVG puro para evitar conflito de layout com ResponsiveContainer
+
+// ---- Gráfico SVG puro (sem Recharts) ----
+type EvolucaoItem = { mes: string; mesLabel: string; media: number; total: number };
+
+function EvolucaoChart({ data, notaMediaGeral }: { data: EvolucaoItem[]; notaMediaGeral: number | null }) {
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; item: EvolucaoItem } | null>(null);
+  const W = 600; const H = 200;
+  const PAD = { top: 16, right: 16, bottom: 32, left: 32 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
+  const minY = 0; const maxY = 5;
+  const toX = (i: number) => PAD.left + (i / Math.max(data.length - 1, 1)) * chartW;
+  const toY = (v: number) => PAD.top + chartH - ((v - minY) / (maxY - minY)) * chartH;
+  if (data.length === 0) return null;
+  const pts = data.map((d, i) => `${toX(i)},${toY(d.media)}`).join(" ");
+  const areaPath = `M${toX(0)},${toY(data[0].media)} ` +
+    data.slice(1).map((d, i) => `L${toX(i + 1)},${toY(d.media)}`).join(" ") +
+    ` L${toX(data.length - 1)},${PAD.top + chartH} L${toX(0)},${PAD.top + chartH} Z`;
+  const linePath = `M${pts.split(" ").join(" L")}`;
+  // x-axis labels: show ~8 evenly spaced
+  const step = data.length > 12 ? Math.ceil(data.length / 8) : 1;
+  const yTicks = [1, 2, 3, 4, 5];
+  return (
+    <div style={{ position: "relative", width: "100%" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: 240, display: "block", overflow: "visible" }}>
+        <defs>
+          <linearGradient id="svgGradNota" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        {/* grid lines */}
+        {yTicks.map(t => (
+          <g key={t}>
+            <line x1={PAD.left} y1={toY(t)} x2={PAD.left + chartW} y2={toY(t)}
+              stroke="hsl(var(--border))" strokeWidth={1} strokeDasharray="3 3" />
+            <text x={PAD.left - 4} y={toY(t) + 4} fontSize={9} fill="hsl(var(--muted-foreground))" textAnchor="end">{t}</text>
+          </g>
+        ))}
+        {/* reference line: media geral */}
+        {notaMediaGeral && (
+          <>
+            <line x1={PAD.left} y1={toY(notaMediaGeral)} x2={PAD.left + chartW} y2={toY(notaMediaGeral)}
+              stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="4 4" strokeOpacity={0.5} />
+            <text x={PAD.left + chartW - 2} y={toY(notaMediaGeral) - 4} fontSize={9}
+              fill="hsl(var(--muted-foreground))" textAnchor="end">Média: {notaMediaGeral.toFixed(1)}★</text>
+          </>
+        )}
+        {/* area fill */}
+        <path d={areaPath} fill="url(#svgGradNota)" />
+        {/* line */}
+        <polyline points={pts} fill="none" stroke="hsl(var(--primary))" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        {/* dots (only when ≤ 24 points) */}
+        {data.length <= 24 && data.map((d, i) => (
+          <circle key={i} cx={toX(i)} cy={toY(d.media)} r={4}
+            fill="hsl(var(--primary))" stroke="hsl(var(--background))" strokeWidth={2}
+            style={{ cursor: "pointer" }}
+            onMouseEnter={(e) => { const rect = (e.target as SVGElement).closest("svg")!.getBoundingClientRect(); const svgX = toX(i) / W * rect.width + rect.left; const svgY = toY(d.media) / H * rect.height + rect.top; setTooltip({ x: svgX, y: svgY, item: d }); }}
+            onMouseLeave={() => setTooltip(null)}
+          />
+        ))}
+        {/* x-axis labels */}
+        {data.map((d, i) => i % step === 0 && (
+          <text key={i} x={toX(i)} y={H - 4} fontSize={9} fill="hsl(var(--muted-foreground))" textAnchor="middle">{d.mesLabel}</text>
+        ))}
+        {/* hover zones for many points */}
+        {data.length > 24 && data.map((d, i) => (
+          <rect key={i} x={toX(i) - chartW / data.length / 2} y={PAD.top} width={chartW / data.length} height={chartH}
+            fill="transparent" style={{ cursor: "pointer" }}
+            onMouseEnter={(e) => { const rect2 = (e.target as SVGElement).closest("svg")!.getBoundingClientRect(); const svgX = toX(i) / W * rect2.width + rect2.left; const svgY = toY(d.media) / H * rect2.height + rect2.top; setTooltip({ x: svgX, y: svgY, item: d }); }}
+            onMouseLeave={() => setTooltip(null)}
+          />
+        ))}
+      </svg>
+      {tooltip && (
+        <div style={{
+          position: "fixed", left: tooltip.x + 12, top: tooltip.y - 40,
+          background: "hsl(var(--card))", border: "1px solid hsl(var(--border))",
+          borderRadius: 8, padding: "6px 10px", fontSize: 12, pointerEvents: "none", zIndex: 50,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        }}>
+          <div className="font-semibold">{tooltip.item.mesLabel}</div>
+          <div>{tooltip.item.media} ★ &nbsp;<span className="text-muted-foreground">({tooltip.item.total} avaliações)</span></div>
+        </div>
+      )}
+    </div>
+  );
+}
+// ---- fim EvolucaoChart ----
 
 function StarRating({ rating }: { rating: number }) {
   return (
@@ -70,9 +158,17 @@ export default function ReputacaoPage() {
   const semResposta = dashQuery.data?.semResposta || 0;
   const evolucao = (dashQuery.data?.evolucao || []).map((e: any) => ({
     mes: e.mes,
-    media: parseFloat(e.media || 0).toFixed(1),
+    mesLabel: (() => {
+      const [ano, m] = (e.mes as string).split("-");
+      const meses = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+      return `${meses[parseInt(m,10)-1]}/${ano.slice(2)}`;
+    })(),
+    media: parseFloat(parseFloat(e.media || 0).toFixed(1)),
     total: Number(e.total),
   }));
+  const notaMediaGeral = resumo ? parseFloat(String(resumo.notaMedia)) : null;
+  const primeiraMes = evolucao.length > 0 ? evolucao[0].mes : null;
+  const dadosInsuficientes = evolucao.length > 0 && evolucao.reduce((s, e) => s + e.total, 0) < 10;
 
   const kpis = [
     { label: "Nota Média", value: resumo ? parseFloat(String(resumo.notaMedia)).toFixed(1) : "—", icon: Star, color: "text-amber-500", bg: "bg-amber-500/10", sub: "de 5 estrelas" },
@@ -124,26 +220,32 @@ export default function ReputacaoPage() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-primary" />Evolução da Nota Média (6 meses)
+              <TrendingUp className="w-4 h-4 text-primary" />
+              Evolução da Nota Média
+              {primeiraMes && (
+                <span className="text-xs font-normal text-muted-foreground ml-1">
+                  desde {(() => { const [a,m] = primeiraMes.split("-"); const ms=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]; return `${ms[parseInt(m,10)-1]}/${a}`; })()}
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {evolucao.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-sm gap-2">
                 <BarChart3 className="w-8 h-8 opacity-30" />
-                <p>Nenhum dado disponível.</p>
-                <Button size="sm" variant="outline" asChild><Link href="/reputacao/integracoes">Importar avaliações</Link></Button>
+                <p>Nenhum dado disponível. Sincronize para importar avaliações.</p>
+                <Button size="sm" variant="outline" asChild><Link href="/reputacao/integracoes">Configurar Integração</Link></Button>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={evolucao}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-                  <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v: any) => [`${v} ★`, "Nota Média"]} />
-                  <Line type="monotone" dataKey="media" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 4 }} />
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="space-y-3">
+                {dadosInsuficientes && (
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span>Poucos dados no período — sincronize para importar avaliações recentes do Google e obter uma visão mais precisa da evolução.</span>
+                  </div>
+                )}
+<EvolucaoChart data={evolucao} notaMediaGeral={notaMediaGeral} />
+              </div>
             )}
           </CardContent>
         </Card>
