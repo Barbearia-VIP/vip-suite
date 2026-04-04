@@ -241,7 +241,10 @@ function TabPeriodo({ orgId, unitId, dataInicio, dataFim }: AberturasChartProps)
   // Calcula SPLY (mesmo período ano anterior) e Méd. 6m a partir dos dados disponíveis
   const { mediaSply, media6m } = useMemo(() => {
     if (!q.data || q.data.length === 0) return { mediaSply: 0, media6m: 0 };
-    const anoAtual = new Date(dataInicio + "T12:00:00Z").getUTCFullYear();
+    if (!dataInicio || typeof dataInicio !== "string" || dataInicio.length < 4) return { mediaSply: 0, media6m: 0 };
+    const parsedDate = new Date(dataInicio + "T12:00:00Z");
+    if (isNaN(parsedDate.getTime())) return { mediaSply: 0, media6m: 0 };
+    const anoAtual = parsedDate.getUTCFullYear();
     // SPLY: dados do ano anterior ao período atual
     const splyData = q.data.filter(d => {
       const ano = parseInt(d.dia.slice(0, 4));
