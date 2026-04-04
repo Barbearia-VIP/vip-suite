@@ -233,7 +233,6 @@ interface FiltrosState {
   inicioAno: number;
   fimMes: number;     // 0-indexed
   fimAno: number;
-  tipo: "todos" | "colaborador" | "caixa";
   colaboradorId: number | undefined;
 }
 
@@ -266,21 +265,11 @@ function FiltrosPanel({
 
   const anos = getAnos();
 
-  // Filtrar colaboradores por tipo selecionado
-  const colabsFiltrados = useMemo(() => {
-    if (local.tipo === "todos") return colaboradores;
-    if (local.tipo === "colaborador") return colaboradores.filter(c => c.tipo === "barbeiro");
-    if (local.tipo === "caixa") return colaboradores.filter(c => c.tipo === "recepcao");
-    return colaboradores;
-  }, [colaboradores, local.tipo]);
-
-  function handleTipoChange(tipo: "todos" | "colaborador" | "caixa") {
-    setLocal(prev => ({ ...prev, tipo, colaboradorId: undefined }));
-  }
-
   function handleAplicar() {
     onFiltrosChange(local);
   }
+
+  const colabSelecionado = colaboradores.find(c => c.id === filtros.colaboradorId);
 
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -292,11 +281,9 @@ function FiltrosPanel({
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-primary" />
           <span className="text-sm font-semibold">Filtros</span>
-          {/* Badge resumo dos filtros aplicados */}
           <span className="text-xs text-muted-foreground">
             {MESES_ABREV[filtros.inicioMes]}/{filtros.inicioAno} → {MESES_ABREV[filtros.fimMes]}/{filtros.fimAno}
-            {filtros.tipo !== "todos" && ` · ${filtros.tipo === "colaborador" ? "Colaboradores" : "Caixa"}`}
-            {filtros.colaboradorId && ` · ${colaboradores.find(c => c.id === filtros.colaboradorId)?.nome ?? "..."}`}
+            {colabSelecionado && ` · ${colabSelecionado.nome}`}
           </span>
         </div>
         {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
@@ -304,7 +291,7 @@ function FiltrosPanel({
 
       {open && (
         <div className="border-t border-border px-4 py-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
 
             {/* Início */}
             <div className="space-y-1.5">
@@ -352,34 +339,12 @@ function FiltrosPanel({
               </div>
             </div>
 
-            {/* Tipo + Colaborador */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Tipo
-              </label>
-              <div className="flex gap-1">
-                {(["todos", "colaborador", "caixa"] as const).map(t => (
-                  <button
-                    key={t}
-                    onClick={() => handleTipoChange(t)}
-                    className={`flex-1 text-xs py-2 rounded-lg border transition-colors font-medium ${
-                      local.tipo === t
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-muted border-border text-muted-foreground hover:bg-muted/80"
-                    }`}
-                  >
-                    {t === "todos" ? "Todos" : t === "colaborador" ? "Colab." : "Caixa"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Colaborador */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Colaborador
-                {colabsFiltrados.length > 0 && (
-                  <span className="ml-1 text-muted-foreground/60 font-normal">({colabsFiltrados.length})</span>
+                {colaboradores.length > 0 && (
+                  <span className="ml-1 text-muted-foreground/60 font-normal">({colaboradores.length})</span>
                 )}
               </label>
               <select
@@ -388,11 +353,11 @@ function FiltrosPanel({
                   ...prev,
                   colaboradorId: e.target.value ? Number(e.target.value) : undefined,
                 }))}
-                disabled={loadingColabs || local.tipo === "todos"}
+                disabled={loadingColabs}
                 className="w-full text-sm bg-muted border border-border rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
               >
-                <option value="">Todos</option>
-                {colabsFiltrados.map(c => (
+                <option value="">Todos os colaboradores</option>
+                {colaboradores.map(c => (
                   <option key={c.id} value={c.id}>{c.nome}</option>
                 ))}
               </select>
@@ -426,7 +391,6 @@ export default function MensalPage() {
   const defaultFilters = useMemo(() => getDefaultFilters(), []);
   const [filtrosAplicados, setFiltrosAplicados] = useState<FiltrosAplicados>({
     ...defaultFilters,
-    tipo: "todos",
     colaboradorId: undefined,
   });
 
@@ -463,7 +427,6 @@ export default function MensalPage() {
       dataInicio,
       dataFim,
       colaboradorId: filtrosAplicados.colaboradorId,
-      tipo: filtrosAplicados.tipo,
     },
     { enabled: !!org?.id }
   );

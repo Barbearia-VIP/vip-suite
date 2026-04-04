@@ -571,16 +571,8 @@ export async function getFaturamentoMensalDetalhadoFiltrado(
   // Filtro de colaborador individual
   const colabCond = colaboradorId ? `AND vp.colaborador = ${colaboradorId}` : "";
 
-  // Filtro de tipo: 'colaborador' = vp.colaborador (barbeiro), 'caixa' = v.usuario (caixa/recepcionista)
-  // Para tipo 'caixa', filtramos por usuarios que são caixa (tipo='recepcao' na dimensao_colaboradores)
-  // Para tipo 'colaborador', filtramos por barbeiros
-  // Sem filtro = todos
-  let tipoCond = "";
-  if (tipo === "colaborador") {
-    tipoCond = `AND EXISTS (SELECT 1 FROM dimensao_colaboradores dc2 WHERE dc2.colaboradorId = vp.colaborador AND dc2.tipoColaborador = 'barbeiro')`;
-  } else if (tipo === "caixa") {
-    tipoCond = `AND EXISTS (SELECT 1 FROM dimensao_colaboradores dc2 WHERE dc2.colaboradorId = vp.colaborador AND dc2.tipoColaborador = 'recepcao')`;
-  }
+  // Sem filtro de tipo (removido — tabela dimensao_colaboradores não existe no banco externo)
+  const tipoCond = "";
 
   const rows = await queryExternal<{
     ano: number;
@@ -656,15 +648,16 @@ export async function getListaColaboradoresMensal(extIds: number[]) {
     SELECT DISTINCT
       uu.id as colaborador_id,
       uu.nome as colaborador_nome,
-      COALESCE(dc.tipoColaborador, 'barbeiro') as tipo
+      'colaborador' as tipo
     FROM vendas_produtos vp
     JOIN usuarios uu ON uu.id = vp.colaborador
-    LEFT JOIN dimensao_colaboradores dc ON dc.colaboradorId = uu.id
     JOIN vendas v ON v.id = vp.venda
     WHERE ${unitCond}
       AND v.comanda_temp = 0
       AND v.status != 0
       AND v.cancelado_motivo IS NULL
+      AND uu.nome IS NOT NULL
+      AND uu.nome != ''
     ORDER BY uu.nome ASC
   `, []);
 }

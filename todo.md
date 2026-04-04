@@ -753,3 +753,10 @@
 - [x] Frontend: gráfico Evolução Mensal usa faturamentoMensalFiltrado
 - [x] Frontend: tabela Detalhamento Mensal usa mesmos dados filtrados
 - [x] Frontend: KPIs do Período usa mesesNoPeriodo calculado do intervalo
+
+## Ajustes Filtros Mensal (solicitado)
+- [x] Remover botões de Tipo (Todos/Colab./Caixa) do painel de filtros
+- [x] Seletor de colaborador deve funcionar corretamente (mostrar todos, selecionar um)
+- [x] Filtro de colaborador deve atualizar gráfico, KPIs e tabela ao aplicar
+- [x] Corrigir query getListaColaboradoresMensal (remover JOIN com dimensao_colaboradores inexistente)
+- [x] Remover filtro de tipo da query getFaturamentoMensalDetalhadoFiltrado (tabela não existe)
