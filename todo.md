@@ -692,3 +692,6 @@
 
 ## Composição Produtos - Subdivisão
 - [x] Subdividir "Produtos" em Prod. Cabelo, Prod. Barba e Prod. Empório usando campo categoria do banco externo
+
+## Comparativo de Períodos - Datas nos cabeçalhos
+- [x] Exibir datas do período abaixo de cada cabeçalho de coluna (ex: "01 out – 31 out 2025" em amarelo)

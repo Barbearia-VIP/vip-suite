@@ -82,6 +82,38 @@ export default function FaturamentoPage() {
   const [ano, mes] = periodo.split("-").map(Number);
   const periodoLabel = `${MESES_FULL[mes - 1]} ${ano}`;
 
+  // Formata intervalo de datas para exibir nos cabeçalhos da tabela comparativa
+  const MESES_ABREV = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  function fmtIntervalo(inicio: Date, fim: Date): string {
+    const d1 = inicio.getDate().toString().padStart(2, "0");
+    const m1 = MESES_ABREV[inicio.getMonth()];
+    const d2 = fim.getDate().toString().padStart(2, "0");
+    const m2 = MESES_ABREV[fim.getMonth()];
+    const y2 = fim.getFullYear();
+    if (inicio.getMonth() === fim.getMonth() && inicio.getFullYear() === fim.getFullYear()) {
+      return `${d1} ${m1} – ${d2} ${m1} ${y2}`;
+    }
+    return `${d1} ${m1} – ${d2} ${m2} ${y2}`;
+  }
+
+  // Datas de cada coluna comparativa
+  const dtAtualInicio = new Date(ano, mes - 1, 1);
+  const dtAtualFim = new Date(ano, mes, 0);
+  const dtPerAntInicio = new Date(ano, mes - 2, 1);
+  const dtPerAntFim = new Date(ano, mes - 1, 0);
+  const dtAnoAntInicio = new Date(ano - 1, mes - 1, 1);
+  const dtAnoAntFim = new Date(ano - 1, mes, 0);
+  const dtMed6Inicio = new Date(ano, mes - 7, 1);
+  const dtMed6Fim = new Date(ano, mes - 1, 0);
+  const dtMed12Inicio = new Date(ano, mes - 13, 1);
+  const dtMed12Fim = new Date(ano, mes - 1, 0);
+
+  const labelAtual = fmtIntervalo(dtAtualInicio, dtAtualFim);
+  const labelPerAnt = fmtIntervalo(dtPerAntInicio, dtPerAntFim);
+  const labelAnoAnt = fmtIntervalo(dtAnoAntInicio, dtAnoAntFim);
+  const labelMed6 = `${MESES_ABREV[dtMed6Inicio.getMonth()]} ${dtMed6Inicio.getFullYear()} – ${MESES_ABREV[dtMed6Fim.getMonth()]} ${dtMed6Fim.getFullYear()}`;
+  const labelMed12 = `${MESES_ABREV[dtMed12Inicio.getMonth()]} ${dtMed12Inicio.getFullYear()} – ${MESES_ABREV[dtMed12Fim.getMonth()]} ${dtMed12Fim.getFullYear()}`;
+
   const composicaoExemplos: Record<string, string> = {
     "Serviço Base": "Corte, Barba, Corte Infantil...",
     "Serviço Extra": "Black Mask, Hidratação, Sobrancelha...",
@@ -175,14 +207,29 @@ export default function FaturamentoPage() {
               <thead>
                 <tr className="border-b border-white/10 bg-white/5">
                   <th className="text-left px-4 py-3 text-muted-foreground font-medium min-w-[120px]">Categoria</th>
-                  <th className="text-right px-4 py-3 text-yellow-400 font-semibold min-w-[110px]">Atual</th>
-                  <th className="text-right px-4 py-3 text-muted-foreground font-medium min-w-[100px]">Per. Anterior</th>
+                  <th className="text-right px-4 py-3 min-w-[110px]">
+                    <div className="text-yellow-400 font-semibold">Atual</div>
+                    <div className="text-yellow-400/70 font-normal text-[10px] mt-0.5">{labelAtual}</div>
+                  </th>
+                  <th className="text-right px-4 py-3 text-muted-foreground font-medium min-w-[100px]">
+                    <div>Per. Anterior</div>
+                    <div className="text-muted-foreground/70 font-normal text-[10px] mt-0.5">{labelPerAnt}</div>
+                  </th>
                   <th className="px-2 py-3 min-w-[70px]"></th>
-                  <th className="text-right px-4 py-3 text-muted-foreground font-medium min-w-[100px]">Ano Anterior</th>
+                  <th className="text-right px-4 py-3 text-muted-foreground font-medium min-w-[100px]">
+                    <div>Ano Anterior</div>
+                    <div className="text-muted-foreground/70 font-normal text-[10px] mt-0.5">{labelAnoAnt}</div>
+                  </th>
                   <th className="px-2 py-3 min-w-[70px]"></th>
-                  <th className="text-right px-4 py-3 text-muted-foreground font-medium min-w-[100px]">Méd. 6 meses</th>
+                  <th className="text-right px-4 py-3 text-muted-foreground font-medium min-w-[100px]">
+                    <div>Méd. 6 meses</div>
+                    <div className="text-muted-foreground/70 font-normal text-[10px] mt-0.5">{labelMed6}</div>
+                  </th>
                   <th className="px-2 py-3 min-w-[70px]"></th>
-                  <th className="text-right px-4 py-3 text-muted-foreground font-medium min-w-[100px]">Méd. 12 meses</th>
+                  <th className="text-right px-4 py-3 text-muted-foreground font-medium min-w-[100px]">
+                    <div>Méd. 12 meses</div>
+                    <div className="text-muted-foreground/70 font-normal text-[10px] mt-0.5">{labelMed12}</div>
+                  </th>
                   <th className="px-2 py-3 min-w-[70px]"></th>
                 </tr>
               </thead>
