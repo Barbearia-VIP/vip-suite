@@ -95,6 +95,27 @@ async function getUnitNameMap(): Promise<Record<number, string>> {
   return map;
 }
 
+// ─── Helper: converte erros de conexão SSH em mensagem amigável ─────────────────
+function handleExternalDbError(err: unknown): never {
+  const msg = (err as any)?.message ?? String(err);
+  const isConnErr =
+    msg.includes("handshake") ||
+    msg.includes("Connection lost") ||
+    msg.includes("ECONNRESET") ||
+    msg.includes("ECONNREFUSED") ||
+    msg.includes("ETIMEDOUT") ||
+    msg.includes("closed state") ||
+    msg.includes("Timed out") ||
+    (err as any)?.code === "PROTOCOL_CONNECTION_LOST";
+  if (isConnErr) {
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message: "Banco de dados externo temporariamente indisponível. O sistema está reconectando automaticamente.",
+    });
+  }
+  throw err;
+}
+
 // ─── Router ──────────────────────────────────────────────────────────────────
 export const dataVipRouter = router({
   // ── Dashboard KPIs ──────────────────────────────────────────────────────────
@@ -107,6 +128,7 @@ export const dataVipRouter = router({
       dataFim: z.string().optional(),    // YYYY-MM-DD — filtro livre
     }))
     .query(async ({ ctx, input }) => {
+      try {
       const { extIds, isAdmin, orgFilter } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
@@ -180,6 +202,7 @@ export const dataVipRouter = router({
         isAdmin,
         isRangeMode: false,
       };
+      } catch (err) { handleExternalDbError(err); }
     }),
 
   // ── Faturamento mensal ───────────────────────────────────────────────────────
@@ -921,7 +944,7 @@ export const dataVipRouter = router({
       return { success: true, count: input.servicos.length };
     }),
 
-  // ── Evolução diária (gráfico) ────────────────────────────────────────────────
+  // ── Evolução diária (gráfico) ──────────────────────────────────────────────────────────────────────────────────
   evolucaoDiaria: protectedProcedure
     .input(z.object({
       orgId: z.number().optional(),
@@ -930,6 +953,7 @@ export const dataVipRouter = router({
       dataFim: z.string(),    // YYYY-MM-DD (inclusivo)
     }))
     .query(async ({ ctx, input }) => {
+      try {
       const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
@@ -946,6 +970,6 @@ export const dataVipRouter = router({
         extraQtd: Number(r.extra_qtd),
         extraValor: Number(r.extra_valor),
       }));
+      } catch (err) { handleExternalDbError(err); }
     }),
-
 });

@@ -389,6 +389,31 @@ export default function DataVipDashboard() {
         </div>
       </div>
 
+      {/* Banner de erro de conexão */}
+      {(dashQ.isError || colaborQ.isError || evolQ.isError || prodQ.isError) && (
+        <div className="flex items-center gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-400">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <div className="flex-1">
+            <span className="font-medium">Banco de dados temporariamente indisponível.</span>
+            {" "}O sistema está tentando reconectar automaticamente. Aguarde alguns instantes e clique em Atualizar.
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10 shrink-0"
+            onClick={() => {
+              dashQ.refetch();
+              evolQ.refetch();
+              colaborQ.refetch();
+              prodQ.refetch();
+            }}
+          >
+            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+            Tentar novamente
+          </Button>
+        </div>
+      )}
+
       {/* Badge de modo range */}
       {isRangeMode && (
         <div className="flex items-center gap-2">
@@ -886,7 +911,35 @@ export default function DataVipDashboard() {
           </Button>
         </div>
         {colaborQ.isLoading
-          ? <div className="space-y-3"><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></div>
+          ? (
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Card key={i} className="bg-[oklch(0.12_0.01_240)] border-[oklch(0.22_0.02_240)]">
+                  <CardContent className="pt-4 pb-4">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Skeleton className="w-9 h-9 rounded-full" />
+                      <div className="flex-1 space-y-1.5">
+                        <Skeleton className="h-4 w-36" />
+                        <Skeleton className="h-3 w-24" />
+                      </div>
+                      <div className="text-right space-y-1">
+                        <Skeleton className="h-3 w-16 ml-auto" />
+                        <Skeleton className="h-4 w-20 ml-auto" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-2">
+                      {Array.from({ length: 11 }).map((_, j) => (
+                        <div key={j} className="flex items-center justify-between py-1 border-b border-border/40">
+                          <Skeleton className="h-3 w-20" />
+                          <Skeleton className="h-3 w-14" />
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )
           : colabs.length === 0
             ? <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Sem dados para este período</CardContent></Card>
             : <div className="space-y-3">

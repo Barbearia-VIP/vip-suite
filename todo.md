@@ -623,3 +623,12 @@
 - [x] Redesenhar gráfico Distribuição de Sentimentos com visual moderno e impactante
 - [x] Bug: erro INSERT na tabela regras_comissao (ON DUPLICATE KEY / colaboradorId 200) na página Comissões
 - [x] Bug persistente: INSERT regras_comissao corrigido — adicionada coluna updatedAt e UNIQUE KEY (orgId, colaboradorId)
+
+## Melhorias UX Data VIP Dashboard (Sessão Atual)
+
+- [x] Banner de erro amigável quando banco externo está indisponível (amarelo com botão "Tentar novamente")
+- [x] Skeletons de carregamento realistas para cards de colaboradores (5 cards animados com grid de KPIs)
+- [x] Helper handleExternalDbError no router dataVip.ts — converte erros SSH/handshake em SERVICE_UNAVAILABLE com mensagem em português
+- [x] Try/catch com handleExternalDbError nas procedures dashboard e evolucaoDiaria
+- [ ] Validar dados de colaboradores quando SSH reconectar (aguardando estabilização do servidor externo)
+- [ ] Testar lógica em múltiplas unidades além de Joinville
