@@ -1,10 +1,9 @@
 /**
  * MensalPage.tsx — Análise mensal detalhada do Data VIP
- * KPIs com comparativos SPLY/MOM/M12/M6 posicionados abaixo do gráfico de faturamento.
- * O seletor de período (3/6/12/24 meses) controla tanto o gráfico quanto os KPIs.
- * Os KPIs exibem dados do último mês completo do período selecionado.
+ * KPIs mostram a SOMA do período selecionado (3/6/12/24 meses) com comparativos SPLY/MOM/M12/M6.
+ * Um único seletor de período controla tanto os gráficos quanto os KPIs.
  */
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
@@ -27,8 +26,6 @@ function fmtMoeda(v: number) {
 }
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-const MESES_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-                    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 // ── Badge de variação ────────────────────────────────────────────────────────
 function PctBadge({ pct }: { pct: number | null }) {
@@ -123,23 +120,15 @@ export default function MensalPage() {
   const { org } = useOrg();
   const [meses, setMeses] = useState(12);
 
-  // Período do último mês completo para os KPIs
-  // Derivado do seletor de meses: usa o mês mais recente do histórico
-  const now = new Date();
-  // O mês mais recente do período é sempre o mês atual
-  const periodoKpi = useMemo(() => {
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  }, []);
-
-  // Gráfico histórico
+  // Gráfico histórico (usa o mesmo seletor de período)
   const qHistorico = trpc.dataVip.faturamentoMensal.useQuery(
     { orgId: org?.id, unitId: selectedUnit?.id, meses },
     { enabled: !!org?.id }
   );
 
-  // KPIs do último mês do período
-  const qKpis = trpc.dataVip.kpisMensais.useQuery(
-    { orgId: org?.id, unitId: selectedUnit?.id, periodo: periodoKpi },
+  // KPIs do período selecionado (SOMA de N meses completos)
+  const qKpis = trpc.dataVip.kpisPeriodoMensal.useQuery(
+    { orgId: org?.id, unitId: selectedUnit?.id, meses },
     { enabled: !!org?.id }
   );
 
@@ -154,10 +143,6 @@ export default function MensalPage() {
   const totFat   = data.reduce((s, d) => s + d.faturamento, 0);
   const totAtend = data.reduce((s, d) => s + d.atendimentos, 0);
   const avgTicket = totAtend > 0 ? totFat / totAtend : 0;
-
-  // Label do mês dos KPIs
-  const [kpiAno, kpiMes] = periodoKpi.split("-").map(Number);
-  const kpiLabel = `${MESES_FULL[kpiMes - 1]} ${kpiAno}`;
 
   return (
     <div className="p-6 space-y-6">
@@ -227,12 +212,18 @@ export default function MensalPage() {
         </CardContent>
       </Card>
 
-      {/* ── KPIs do mês atual (logo abaixo do gráfico de faturamento) ──────── */}
+      {/* ── KPIs do período (soma dos N meses selecionados) ────────────────── */}
       <div>
         <div className="mb-3">
-          <h2 className="text-base font-semibold">KPIs — {kpiLabel}</h2>
+          <h2 className="text-base font-semibold">
+            KPIs do Período
+            {qKpis.data?.periodoLabel
+              ? <span className="text-muted-foreground font-normal text-sm ml-2">({qKpis.data.periodoLabel})</span>
+              : null
+            }
+          </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            SPLY = mesmo mês ano anterior · MOM = mês anterior · M12 = média 12 meses · M6 = média 6 meses
+            SPLY = mesmo período ano anterior · MOM = período anterior equivalente · M12 = média mensal 12m · M6 = média mensal 6m
           </p>
         </div>
 

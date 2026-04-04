@@ -1452,4 +1452,167 @@ export const dataVipRouter = router({
         ],
       };
     }),
+
+  // Procedure que agrega KPIs de N meses completos (soma do período selecionado)
+  // Comparativos: SPLY = mesmo período N meses um ano antes, MOM = N meses imediatamente anteriores
+  // M12 = média mensal dos últimos 12 meses, M6 = média mensal dos últimos 6 meses
+  kpisPeriodoMensal: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      meses: z.number().int().min(1).max(24),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+      const { extIds } = await resolveExternalIds(
+        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+      );
+      const N = input.meses;
+      const now = new Date();
+      // Período atual: últimos N meses completos
+      // Ex: N=3, hoje=abr/2026 → período = jan/2026 a mar/2026
+      const fimMes = new Date(now.getFullYear(), now.getMonth(), 0); // último dia do mês anterior
+      const inicioMes = new Date(now.getFullYear(), now.getMonth() - N, 1); // 1º do mês N meses atrás
+      const periodoAtualInicio = inicioMes.toISOString().slice(0, 10);
+      const periodoAtualFim = fimMes.toISOString().slice(0, 10);
+      // SPLY: mesmo período, um ano antes
+      const splyInicio = new Date(inicioMes.getFullYear() - 1, inicioMes.getMonth(), 1).toISOString().slice(0, 10);
+      const splyFim = new Date(fimMes.getFullYear() - 1, fimMes.getMonth() + 1, 0).toISOString().slice(0, 10);
+      // MOM: N meses imediatamente anteriores ao período atual
+      const momFim = new Date(inicioMes.getFullYear(), inicioMes.getMonth(), 0);
+      const momInicio = new Date(momFim.getFullYear(), momFim.getMonth() - N + 1, 1);
+      const momInicioStr = momInicio.toISOString().slice(0, 10);
+      const momFimStr = momFim.toISOString().slice(0, 10);
+      // M6 e M12: média mensal dos 6/12 meses anteriores ao período atual
+      const m6FimExcl = periodoAtualInicio;
+      const m6InicioStr = new Date(inicioMes.getFullYear(), inicioMes.getMonth() - 6, 1).toISOString().slice(0, 10);
+      const m12FimExcl = periodoAtualInicio;
+      const m12InicioStr = new Date(inicioMes.getFullYear(), inicioMes.getMonth() - 12, 1).toISOString().slice(0, 10);
+      // Datas exclusivas para getDiasTrabalhados
+      const atualFimExcl = new Date(fimMes.getFullYear(), fimMes.getMonth() + 1, 1).toISOString().slice(0, 10);
+      const momFimExcl = new Date(momFim.getFullYear(), momFim.getMonth() + 1, 1).toISOString().slice(0, 10);
+      const splyFimExcl = new Date(fimMes.getFullYear() - 1, fimMes.getMonth() + 1, 1).toISOString().slice(0, 10);
+      const [kAtual, kMom, kSply, diasAtual, diasMom, diasSply, diasM6, diasM12] = await Promise.all([
+        getKpisRealtimeByRange(extIds, periodoAtualInicio, periodoAtualFim),
+        getKpisRealtimeByRange(extIds, momInicioStr, momFimStr),
+        getKpisRealtimeByRange(extIds, splyInicio, splyFim),
+        getDiasTrabalhados(extIds, periodoAtualInicio, atualFimExcl),
+        getDiasTrabalhados(extIds, momInicioStr, momFimExcl),
+        getDiasTrabalhados(extIds, splyInicio, splyFimExcl),
+        getDiasTrabalhadosMedia(extIds, m6InicioStr, m6FimExcl),
+        getDiasTrabalhadosMedia(extIds, m12InicioStr, m12FimExcl),
+      ]);
+      // M6 e M12: média mensal dos KPIs
+      const m6Rows = await Promise.all(
+        Array.from({ length: 6 }, (_, i) => {
+          const d = new Date(inicioMes.getFullYear(), inicioMes.getMonth() - 1 - i, 1);
+          const ini = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+          const fim = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+          return getKpisRealtimeByRange(extIds, ini, fim);
+        })
+      );
+      const m12Rows = await Promise.all(
+        Array.from({ length: 12 }, (_, i) => {
+          const d = new Date(inicioMes.getFullYear(), inicioMes.getMonth() - 1 - i, 1);
+          const ini = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+          const fim = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+          return getKpisRealtimeByRange(extIds, ini, fim);
+        })
+      );
+      const avgKpiP = (rows: typeof m6Rows, key: keyof typeof m6Rows[0]) => {
+        const vals = rows.map(r => Number(r[key])).filter(v => v > 0);
+        return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+      };
+      const pctP = (atual: number, ref: number): number | null => {
+        if (ref === 0) return null;
+        return Math.round((atual - ref) / ref * 1000) / 10;
+      };
+      const fatAtual = kAtual.faturamento;
+      const diasA = diasAtual.diasTrabalhados;
+      const fatDiaAtual = diasA > 0 ? fatAtual / diasA : 0;
+      const fatDiaMom = diasMom.diasTrabalhados > 0 ? kMom.faturamento / diasMom.diasTrabalhados : 0;
+      const fatDiaSply = diasSply.diasTrabalhados > 0 ? kSply.faturamento / diasSply.diasTrabalhados : 0;
+      const fatDiaM6 = diasM6.mediaDias > 0 ? avgKpiP(m6Rows, "faturamento") / diasM6.mediaDias : 0;
+      const fatDiaM12 = diasM12.mediaDias > 0 ? avgKpiP(m12Rows, "faturamento") / diasM12.mediaDias : 0;
+      const MESES_ABREV = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+      const periodoLabel = `${MESES_ABREV[inicioMes.getMonth()]}/${inicioMes.getFullYear()} – ${MESES_ABREV[fimMes.getMonth()]}/${fimMes.getFullYear()}`;
+      return {
+        periodoLabel,
+        periodoAtualInicio,
+        periodoAtualFim,
+        kpis: [
+          { key: "faturamento", label: "FATURAMENTO", tipo: "moeda",
+            valor: fatAtual,
+            sply: { valor: kSply.faturamento, pct: pctP(fatAtual, kSply.faturamento) },
+            mom:  { valor: kMom.faturamento,  pct: pctP(fatAtual, kMom.faturamento) },
+            m12:  { valor: avgKpiP(m12Rows, "faturamento"), pct: pctP(fatAtual, avgKpiP(m12Rows, "faturamento")) },
+            m6:   { valor: avgKpiP(m6Rows,  "faturamento"), pct: pctP(fatAtual, avgKpiP(m6Rows,  "faturamento")) },
+          },
+          { key: "atendimentos", label: "ATENDIMENTOS", tipo: "numero",
+            valor: kAtual.atendimentos,
+            sply: { valor: kSply.atendimentos, pct: pctP(kAtual.atendimentos, kSply.atendimentos) },
+            mom:  { valor: kMom.atendimentos,  pct: pctP(kAtual.atendimentos, kMom.atendimentos) },
+            m12:  { valor: avgKpiP(m12Rows, "atendimentos"), pct: pctP(kAtual.atendimentos, avgKpiP(m12Rows, "atendimentos")) },
+            m6:   { valor: avgKpiP(m6Rows,  "atendimentos"), pct: pctP(kAtual.atendimentos, avgKpiP(m6Rows,  "atendimentos")) },
+          },
+          { key: "ticketMedio", label: "TICKET MÉDIO", tipo: "moeda",
+            valor: kAtual.ticketMedio,
+            sply: { valor: kSply.ticketMedio, pct: pctP(kAtual.ticketMedio, kSply.ticketMedio) },
+            mom:  { valor: kMom.ticketMedio,  pct: pctP(kAtual.ticketMedio, kMom.ticketMedio) },
+            m12:  { valor: avgKpiP(m12Rows, "ticketMedio"), pct: pctP(kAtual.ticketMedio, avgKpiP(m12Rows, "ticketMedio")) },
+            m6:   { valor: avgKpiP(m6Rows,  "ticketMedio"), pct: pctP(kAtual.ticketMedio, avgKpiP(m6Rows,  "ticketMedio")) },
+          },
+          { key: "clientes", label: "CLIENTES", tipo: "numero",
+            valor: kAtual.totalClientes,
+            sply: { valor: kSply.totalClientes, pct: pctP(kAtual.totalClientes, kSply.totalClientes) },
+            mom:  { valor: kMom.totalClientes,  pct: pctP(kAtual.totalClientes, kMom.totalClientes) },
+            m12:  { valor: avgKpiP(m12Rows, "totalClientes"), pct: pctP(kAtual.totalClientes, avgKpiP(m12Rows, "totalClientes")) },
+            m6:   { valor: avgKpiP(m6Rows,  "totalClientes"), pct: pctP(kAtual.totalClientes, avgKpiP(m6Rows,  "totalClientes")) },
+          },
+          { key: "clientesNovos", label: "CLIENTES NOVOS", tipo: "numero",
+            valor: kAtual.clientesNovos,
+            sply: { valor: kSply.clientesNovos, pct: pctP(kAtual.clientesNovos, kSply.clientesNovos) },
+            mom:  { valor: kMom.clientesNovos,  pct: pctP(kAtual.clientesNovos, kMom.clientesNovos) },
+            m12:  { valor: avgKpiP(m12Rows, "clientesNovos"), pct: pctP(kAtual.clientesNovos, avgKpiP(m12Rows, "clientesNovos")) },
+            m6:   { valor: avgKpiP(m6Rows,  "clientesNovos"), pct: pctP(kAtual.clientesNovos, avgKpiP(m6Rows,  "clientesNovos")) },
+          },
+          { key: "extrasQtd", label: "EXTRAS (QTD)", tipo: "numero",
+            valor: kAtual.servicosExtra,
+            sply: { valor: kSply.servicosExtra, pct: pctP(kAtual.servicosExtra, kSply.servicosExtra) },
+            mom:  { valor: kMom.servicosExtra,  pct: pctP(kAtual.servicosExtra, kMom.servicosExtra) },
+            m12:  { valor: avgKpiP(m12Rows, "servicosExtra"), pct: pctP(kAtual.servicosExtra, avgKpiP(m12Rows, "servicosExtra")) },
+            m6:   { valor: avgKpiP(m6Rows,  "servicosExtra"), pct: pctP(kAtual.servicosExtra, avgKpiP(m6Rows,  "servicosExtra")) },
+          },
+          { key: "extrasValor", label: "EXTRAS (R$)", tipo: "moeda",
+            valor: kAtual.servicosExtraTotal,
+            sply: { valor: kSply.servicosExtraTotal, pct: pctP(kAtual.servicosExtraTotal, kSply.servicosExtraTotal) },
+            mom:  { valor: kMom.servicosExtraTotal,  pct: pctP(kAtual.servicosExtraTotal, kMom.servicosExtraTotal) },
+            m12:  { valor: avgKpiP(m12Rows, "servicosExtraTotal"), pct: pctP(kAtual.servicosExtraTotal, avgKpiP(m12Rows, "servicosExtraTotal")) },
+            m6:   { valor: avgKpiP(m6Rows,  "servicosExtraTotal"), pct: pctP(kAtual.servicosExtraTotal, avgKpiP(m6Rows,  "servicosExtraTotal")) },
+          },
+          { key: "servicosTotais", label: "SERVIÇOS TOTAIS", tipo: "numero",
+            valor: kAtual.servicosTotal,
+            sply: { valor: kSply.servicosTotal, pct: pctP(kAtual.servicosTotal, kSply.servicosTotal) },
+            mom:  { valor: kMom.servicosTotal,  pct: pctP(kAtual.servicosTotal, kMom.servicosTotal) },
+            m12:  { valor: avgKpiP(m12Rows, "servicosTotal"), pct: pctP(kAtual.servicosTotal, avgKpiP(m12Rows, "servicosTotal")) },
+            m6:   { valor: avgKpiP(m6Rows,  "servicosTotal"), pct: pctP(kAtual.servicosTotal, avgKpiP(m6Rows,  "servicosTotal")) },
+          },
+          { key: "diasTrabalhados", label: "DIAS TRABALHADOS", tipo: "numero",
+            valor: diasA,
+            sply: { valor: diasSply.diasTrabalhados, pct: pctP(diasA, diasSply.diasTrabalhados) },
+            mom:  { valor: diasMom.diasTrabalhados,  pct: pctP(diasA, diasMom.diasTrabalhados) },
+            m12:  { valor: diasM12.mediaDias, pct: pctP(diasA, diasM12.mediaDias) },
+            m6:   { valor: diasM6.mediaDias,  pct: pctP(diasA, diasM6.mediaDias) },
+          },
+          { key: "fatDia", label: "FAT./DIA TRABALHADO", tipo: "moeda",
+            valor: fatDiaAtual,
+            sply: { valor: fatDiaSply, pct: pctP(fatDiaAtual, fatDiaSply) },
+            mom:  { valor: fatDiaMom,  pct: pctP(fatDiaAtual, fatDiaMom) },
+            m12:  { valor: fatDiaM12,  pct: pctP(fatDiaAtual, fatDiaM12) },
+            m6:   { valor: fatDiaM6,   pct: pctP(fatDiaAtual, fatDiaM6) },
+          },
+        ],
+      };
+      } catch (err) { handleExternalDbError(err); }
+    }),
 });

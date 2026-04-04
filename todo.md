@@ -708,3 +708,8 @@
 - [x] Remover seletor de mês próprio dos KPIs — usar período do topo (3/6/12/24 meses)
 - [x] Mover cards de KPIs para logo abaixo do gráfico de Faturamento Mensal
 - [x] KPIs mostram dados do último mês do período selecionado com comparativos SPLY/MOM/M12/M6
+
+## Mensal - KPIs soma do período selecionado
+- [x] Criar procedure backend kpisPeriodoMensal que agrega KPIs de N meses completos (soma do período)
+- [x] Comparativos SPLY/MOM/M12/M6 calculados para o período equivalente (mesmo N meses anterior)
+- [x] Frontend usa meses selecionado no topo para chamar a procedure
