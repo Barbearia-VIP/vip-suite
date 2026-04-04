@@ -310,6 +310,39 @@ export async function getDiasTrabalhados(
 }
 
 /**
+ * Calcula a média de dias trabalhados por mês num período de vários meses.
+ * Agrupa por mês e conta dias únicos com venda em cada mês, depois tira a média.
+ * Mais preciso que contar dias totais e dividir pelo número de meses.
+ */
+export async function getDiasTrabalhadosMedia(
+  extIds: number[],
+  dataInicio: string,
+  dataFim: string // exclusivo
+): Promise<{ mediaDias: number }> {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  const rows = await queryExternal<{ mes: string; dias: number }>(`
+    SELECT 
+      DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
+      COUNT(DISTINCT DATE(v.data_criacao)) as dias
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+    GROUP BY DATE_FORMAT(v.data_criacao, '%Y-%m')
+  `, [dataInicio, dataFim]);
+
+  if (rows.length === 0) return { mediaDias: 0 };
+  const totalDias = rows.reduce((s, r) => s + Number(r.dias), 0);
+  return { mediaDias: Math.round((totalDias / rows.length) * 10) / 10 };
+}
+
+/**
  * Conta serviços extra e soma seu valor total.
  * Serviços extra = tipo='ser' E (categoria='extra' OU categoria IS NULL).
  * A categoria vem do banco externo (tabela produtos.categoria).

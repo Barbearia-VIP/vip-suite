@@ -22,6 +22,7 @@ import {
   getColaboradoresByRange,
   getRankingUnidades,
   getDiasTrabalhados,
+  getDiasTrabalhadosMedia,
   getServicosExtra,
   getTopBarbeiros,
   getTopItens,
@@ -565,8 +566,8 @@ export const dataVipRouter = router({
         getDiasTrabalhados(extIds, dataInicio, new Date(ano, mes, 1).toISOString().split("T")[0]),
         getDiasTrabalhados(extIds, dataInicioAnt, new Date(anoAnt, mesAnt, 1).toISOString().split("T")[0]),
         getDiasTrabalhados(extIds, dataInicioAnoAnt, new Date(ano - 1, mes, 1).toISOString().split("T")[0]),
-        getDiasTrabalhados(extIds, dataInicioMed6, new Date(ano, mes, 1).toISOString().split("T")[0]),
-        getDiasTrabalhados(extIds, dataInicioMed12, new Date(ano, mes, 1).toISOString().split("T")[0]),
+        getDiasTrabalhadosMedia(extIds, dataInicioMed6, new Date(ano, mes - 1, 1).toISOString().split("T")[0]),
+        getDiasTrabalhadosMedia(extIds, dataInicioMed12, new Date(ano, mes - 1, 1).toISOString().split("T")[0]),
         getTopBarbeiros(extIds, dataInicio, dataFim),
         getTopItens(extIds, dataInicio, dataFim),
         getComposicaoGrupo(extIds, dataInicio, dataFim),
@@ -574,8 +575,8 @@ export const dataVipRouter = router({
 
       // Médias divididas por 6 e 12 meses
       // diasTrabalhados = total de dias com atendimento no período / número de meses
-      const med6 = { fatBase: med6Raw.fatBase / 6, fatExtra: med6Raw.fatExtra / 6, fatProdutos: med6Raw.fatProdutos / 6, fatTotal: med6Raw.fatTotal / 6, diasTrabalhados: diasMed6Raw.diasTrabalhados / 6 };
-      const med12 = { fatBase: med12Raw.fatBase / 12, fatExtra: med12Raw.fatExtra / 12, fatProdutos: med12Raw.fatProdutos / 12, fatTotal: med12Raw.fatTotal / 12, diasTrabalhados: diasMed12Raw.diasTrabalhados / 12 };
+      const med6 = { fatBase: med6Raw.fatBase / 6, fatExtra: med6Raw.fatExtra / 6, fatProdutos: med6Raw.fatProdutos / 6, fatTotal: med6Raw.fatTotal / 6, diasTrabalhados: diasMed6Raw.mediaDias };
+      const med12 = { fatBase: med12Raw.fatBase / 12, fatExtra: med12Raw.fatExtra / 12, fatProdutos: med12Raw.fatProdutos / 12, fatTotal: med12Raw.fatTotal / 12, diasTrabalhados: diasMed12Raw.mediaDias };
 
       const pct = (a: number, b: number) => b > 0 ? Math.round(((a - b) / b) * 1000) / 10 : null;
       const r = (v: number) => Math.round(v * 100) / 100;

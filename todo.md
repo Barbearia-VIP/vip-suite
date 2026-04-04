@@ -676,3 +676,6 @@
 - [x] Corrigir Dias trab. nas médias de 6 e 12 meses (estava somando, deve ser média)
 - [x] Adicionar Fat/dia trab. para médias de 6 e 12 meses (estava vazio)
 - [x] Adicionar pctDias e pctFatDia para med6 e med12 (variação vs. atual)
+
+## Correção Média Dias Trabalhados 6m/12m (2ª iteração)
+- [x] Reavaliação: média dias trab. 6m esperada ~26, 12m ~25 — corrigido com getDiasTrabalhadosMedia (GROUP BY mês)
