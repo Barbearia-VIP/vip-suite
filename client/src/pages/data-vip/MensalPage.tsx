@@ -17,6 +17,7 @@ import {
   BarChart3, AlertCircle, DollarSign, Users, TrendingUp,
   UserPlus, Gift, Scissors, CalendarDays, Activity,
   BarChart2, TrendingDown, Sigma, Minus, Filter, ChevronDown, ChevronUp,
+  User, X,
 } from "lucide-react";
 
 // ── Formatadores ─────────────────────────────────────────────────────────────
@@ -475,11 +476,17 @@ export default function MensalPage() {
     return ini === fim ? ini : `${ini} – ${fim}`;
   }, [filtrosAplicados]);
 
+  // Colaborador selecionado (para badge no cabeçalho)
+  const colabSelecionado = useMemo(
+    () => (qColabs.data ?? []).find(c => c.id === filtrosAplicados.colaboradorId),
+    [qColabs.data, filtrosAplicados.colaboradorId]
+  );
+
   return (
     <div className="p-6 space-y-6">
       {/* Cabeçalho */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-primary" /> Análise Mensal
           </h1>
@@ -487,6 +494,26 @@ export default function MensalPage() {
             {selectedUnit ? selectedUnit.name : "Todas as unidades"}
           </p>
         </div>
+
+        {/* Badge de colaborador ativo */}
+        {colabSelecionado && (
+          <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-xl px-3 py-2 self-center">
+            <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/20">
+              <User className="w-3.5 h-3.5 text-primary" />
+            </div>
+            <div className="flex flex-col leading-tight">
+              <span className="text-[10px] font-bold tracking-widest text-primary/70 uppercase">Visualizando</span>
+              <span className="text-sm font-semibold text-foreground">{colabSelecionado.nome}</span>
+            </div>
+            <button
+              onClick={() => setFiltrosAplicados(prev => ({ ...prev, colaboradorId: undefined }))}
+              className="ml-1 p-1 rounded-lg hover:bg-primary/20 transition-colors text-muted-foreground hover:text-foreground"
+              title="Remover filtro de colaborador"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Painel de Filtros ───────────────────────────────────────────────── */}

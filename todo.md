@@ -769,3 +769,7 @@
 - [x] Backend: atualizar procedure kpisPeriodoMensal para aceitar colaboradorId e filtrar os dados
 - [x] Backend: atualizar getKpisRealtimeByRange para aceitar e aplicar colaboradorId em todas as queries SQL
 - [x] Frontend: passar colaboradorId dos filtros aplicados para a query kpisPeriodoMensal
+
+## Indicador Visual de Colaborador no Cabeçalho
+- [x] Exibir badge com nome do colaborador selecionado no cabeçalho da página Mensal
+- [x] Badge deve ter botão de remover (×) para limpar o filtro rapidamente
