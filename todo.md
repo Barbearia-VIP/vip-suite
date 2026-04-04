@@ -703,3 +703,8 @@
 - [x] Criar procedure backend kpisMensais com: faturamento, atendimentos, ticket médio, clientes, clientes novos, extras qtd, extras R$, serviços totais, dias trabalhados, fat/dia
 - [x] Calcular comparativos SPLY (ano anterior), MOM (mês anterior), M12 (média 12m), M6 (média 6m) para cada KPI
 - [x] Implementar 10 cards de KPIs no frontend abaixo do gráfico mensal com estilo do modelo
+
+## Mensal - KPIs ajuste de posição e seletor
+- [x] Remover seletor de mês próprio dos KPIs — usar período do topo (3/6/12/24 meses)
+- [x] Mover cards de KPIs para logo abaixo do gráfico de Faturamento Mensal
+- [x] KPIs mostram dados do último mês do período selecionado com comparativos SPLY/MOM/M12/M6
