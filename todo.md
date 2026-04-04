@@ -728,3 +728,28 @@
 
 ## Bug - getFaturamentoMensalDetalhado
 - [x] Corrigir erro "Unknown column 'v.valor_liquido'" na função getFaturamentoMensalDetalhado — corrigido para SUM(vp.valor_total)
+
+## Mensal - Filtro Avançado
+- [ ] Seletor de Início (Mês + Ano) e Fim (Mês + Ano) com botão reset
+- [ ] Filtro de Tipo: Todos / Colaborador / Caixa
+- [ ] Seletor de Colaborador individual com lista completa e contagem
+- [ ] Botão "Aplicar Filtros" em amarelo
+- [ ] Padrão: últimos 3 meses, Tipo = Todos, Colaborador = Todos
+- [ ] Backend: procedure listarColaboradoresMensal para popular o seletor
+- [ ] Backend: adaptar getFaturamentoMensalDetalhado para filtrar por colaboradorId e tipo
+
+## Data VIP Mensal — Painel de Filtros Avançado
+
+- [x] Backend: função getFaturamentoMensalDetalhadoFiltrado com filtros dataInicio/dataFim/colaboradorId/tipo
+- [x] Backend: função getListaColaboradoresMensal para listar colaboradores ativos
+- [x] Backend: procedure listarColaboradoresMensal (orgId/unitId → extIds)
+- [x] Backend: procedure faturamentoMensalFiltrado (orgId/unitId/dataInicio/dataFim/colaboradorId/tipo)
+- [x] Frontend: painel de filtros colapsável com header resumo (Fev/2026 → Abr/2026)
+- [x] Frontend: seletores Início e Fim (mês + ano independentes)
+- [x] Frontend: botões de Tipo (Todos / Colab. / Caixa)
+- [x] Frontend: seletor de Colaborador com contagem e filtro por tipo
+- [x] Frontend: botão "Aplicar Filtros" em amarelo/dourado
+- [x] Frontend: padrão 3 meses (Fev–Abr 2026), Tipo=Todos, Colaborador=Todos
+- [x] Frontend: gráfico Evolução Mensal usa faturamentoMensalFiltrado
+- [x] Frontend: tabela Detalhamento Mensal usa mesmos dados filtrados
+- [x] Frontend: KPIs do Período usa mesesNoPeriodo calculado do intervalo

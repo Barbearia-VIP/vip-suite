@@ -1,10 +1,9 @@
 /**
  * MensalPage.tsx — Análise mensal detalhada do Data VIP
- * Gráfico Evolução Mensal com toggle linha/barras, seletor de métrica,
- * cards de resumo (acumulado/média/máximo/mínimo) e tooltip rico.
- * KPIs mostram a SOMA do período selecionado (3/6/12/24 meses) com comparativos SPLY/MOM/M12/M6.
+ * Painel de filtros avançado: data início/fim (mês+ano), tipo (Todos/Colaborador/Caixa),
+ * colaborador individual. Gráfico Evolução Mensal, KPIs do período e tabela detalhada.
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
@@ -17,7 +16,7 @@ import {
 import {
   BarChart3, AlertCircle, DollarSign, Users, TrendingUp,
   UserPlus, Gift, Scissors, CalendarDays, Activity,
-  BarChart2, TrendingDown, Sigma, Minus,
+  BarChart2, TrendingDown, Sigma, Minus, Filter, ChevronDown, ChevronUp,
 } from "lucide-react";
 
 // ── Formatadores ─────────────────────────────────────────────────────────────
@@ -38,6 +37,47 @@ function fmtNum(v: number, decimals = 0) {
 }
 
 const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const MESES_NOMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+// ── Helpers de data ──────────────────────────────────────────────────────────
+function getDefaultFilters() {
+  const now = new Date();
+  const fimMes = now.getMonth(); // 0-indexed, mês atual
+  const fimAno = now.getFullYear();
+  // Início: 3 meses atrás
+  let inicioMes = fimMes - 2;
+  let inicioAno = fimAno;
+  if (inicioMes < 0) {
+    inicioMes += 12;
+    inicioAno -= 1;
+  }
+  return {
+    inicioMes,   // 0-indexed
+    inicioAno,
+    fimMes,      // 0-indexed
+    fimAno,
+  };
+}
+
+// Converte mês 0-indexed + ano para string 'YYYY-MM-DD' (início do mês)
+function toDataInicio(mes: number, ano: number): string {
+  return `${ano}-${String(mes + 1).padStart(2, "0")}-01`;
+}
+
+// Converte mês 0-indexed + ano para string 'YYYY-MM-DD' (início do mês seguinte = exclusive)
+function toDataFim(mes: number, ano: number): string {
+  const nextMes = mes + 1;
+  if (nextMes > 11) {
+    return `${ano + 1}-01-01`;
+  }
+  return `${ano}-${String(nextMes + 1).padStart(2, "0")}-01`;
+}
+
+// Gera lista de anos disponíveis (últimos 5 anos)
+function getAnos(): number[] {
+  const ano = new Date().getFullYear();
+  return [ano, ano - 1, ano - 2, ano - 3, ano - 4];
+}
 
 // ── Configuração de métricas ─────────────────────────────────────────────────
 type MetricKey =
@@ -187,25 +227,250 @@ function KpiSkeleton() {
   );
 }
 
+// ── Painel de Filtros ────────────────────────────────────────────────────────
+interface FiltrosState {
+  inicioMes: number;  // 0-indexed
+  inicioAno: number;
+  fimMes: number;     // 0-indexed
+  fimAno: number;
+  tipo: "todos" | "colaborador" | "caixa";
+  colaboradorId: number | undefined;
+}
+
+interface FiltrosAplicados extends FiltrosState {}
+
+interface Colaborador {
+  id: number;
+  nome: string;
+  tipo: string;
+}
+
+function FiltrosPanel({
+  filtros,
+  onFiltrosChange,
+  colaboradores,
+  loadingColabs,
+}: {
+  filtros: FiltrosState;
+  onFiltrosChange: (f: FiltrosAplicados) => void;
+  colaboradores: Colaborador[];
+  loadingColabs: boolean;
+}) {
+  const [local, setLocal] = useState<FiltrosState>(filtros);
+  const [open, setOpen] = useState(true);
+
+  // Sincronizar quando filtros externos mudam (ex: mudança de unidade)
+  useEffect(() => {
+    setLocal(filtros);
+  }, [filtros.inicioMes, filtros.inicioAno, filtros.fimMes, filtros.fimAno]);
+
+  const anos = getAnos();
+
+  // Filtrar colaboradores por tipo selecionado
+  const colabsFiltrados = useMemo(() => {
+    if (local.tipo === "todos") return colaboradores;
+    if (local.tipo === "colaborador") return colaboradores.filter(c => c.tipo === "barbeiro");
+    if (local.tipo === "caixa") return colaboradores.filter(c => c.tipo === "recepcao");
+    return colaboradores;
+  }, [colaboradores, local.tipo]);
+
+  function handleTipoChange(tipo: "todos" | "colaborador" | "caixa") {
+    setLocal(prev => ({ ...prev, tipo, colaboradorId: undefined }));
+  }
+
+  function handleAplicar() {
+    onFiltrosChange(local);
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      {/* Header do painel */}
+      <button
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/30 transition-colors"
+        onClick={() => setOpen(v => !v)}
+      >
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-primary" />
+          <span className="text-sm font-semibold">Filtros</span>
+          {/* Badge resumo dos filtros aplicados */}
+          <span className="text-xs text-muted-foreground">
+            {MESES_ABREV[filtros.inicioMes]}/{filtros.inicioAno} → {MESES_ABREV[filtros.fimMes]}/{filtros.fimAno}
+            {filtros.tipo !== "todos" && ` · ${filtros.tipo === "colaborador" ? "Colaboradores" : "Caixa"}`}
+            {filtros.colaboradorId && ` · ${colaboradores.find(c => c.id === filtros.colaboradorId)?.nome ?? "..."}`}
+          </span>
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+      </button>
+
+      {open && (
+        <div className="border-t border-border px-4 py-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+
+            {/* Início */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Início</label>
+              <div className="flex gap-2">
+                <select
+                  value={local.inicioMes}
+                  onChange={e => setLocal(prev => ({ ...prev, inicioMes: Number(e.target.value) }))}
+                  className="flex-1 text-sm bg-muted border border-border rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {MESES_NOMES.map((nome, i) => (
+                    <option key={i} value={i}>{nome}</option>
+                  ))}
+                </select>
+                <select
+                  value={local.inicioAno}
+                  onChange={e => setLocal(prev => ({ ...prev, inicioAno: Number(e.target.value) }))}
+                  className="w-20 text-sm bg-muted border border-border rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {anos.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Fim */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fim</label>
+              <div className="flex gap-2">
+                <select
+                  value={local.fimMes}
+                  onChange={e => setLocal(prev => ({ ...prev, fimMes: Number(e.target.value) }))}
+                  className="flex-1 text-sm bg-muted border border-border rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {MESES_NOMES.map((nome, i) => (
+                    <option key={i} value={i}>{nome}</option>
+                  ))}
+                </select>
+                <select
+                  value={local.fimAno}
+                  onChange={e => setLocal(prev => ({ ...prev, fimAno: Number(e.target.value) }))}
+                  className="w-20 text-sm bg-muted border border-border rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  {anos.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Tipo + Colaborador */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Tipo
+              </label>
+              <div className="flex gap-1">
+                {(["todos", "colaborador", "caixa"] as const).map(t => (
+                  <button
+                    key={t}
+                    onClick={() => handleTipoChange(t)}
+                    className={`flex-1 text-xs py-2 rounded-lg border transition-colors font-medium ${
+                      local.tipo === t
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted border-border text-muted-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    {t === "todos" ? "Todos" : t === "colaborador" ? "Colab." : "Caixa"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Colaborador */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Colaborador
+                {colabsFiltrados.length > 0 && (
+                  <span className="ml-1 text-muted-foreground/60 font-normal">({colabsFiltrados.length})</span>
+                )}
+              </label>
+              <select
+                value={local.colaboradorId ?? ""}
+                onChange={e => setLocal(prev => ({
+                  ...prev,
+                  colaboradorId: e.target.value ? Number(e.target.value) : undefined,
+                }))}
+                disabled={loadingColabs || local.tipo === "todos"}
+                className="w-full text-sm bg-muted border border-border rounded-lg px-2 py-2 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+              >
+                <option value="">Todos</option>
+                {colabsFiltrados.map(c => (
+                  <option key={c.id} value={c.id}>{c.nome}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Botão Aplicar */}
+          <div className="flex justify-end mt-4">
+            <button
+              onClick={handleAplicar}
+              className="px-6 py-2 rounded-lg text-sm font-bold transition-all
+                bg-amber-400 hover:bg-amber-300 text-black shadow-md hover:shadow-amber-400/30"
+            >
+              Aplicar Filtros
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Página principal ─────────────────────────────────────────────────────────
 export default function MensalPage() {
   const { selectedUnit } = useApp();
   const { org } = useOrg();
-  const [meses, setMeses] = useState(12);
   const [metricKey, setMetricKey] = useState<MetricKey>("faturamento");
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
 
+  // Filtros aplicados (controlam as queries)
+  const defaultFilters = useMemo(() => getDefaultFilters(), []);
+  const [filtrosAplicados, setFiltrosAplicados] = useState<FiltrosAplicados>({
+    ...defaultFilters,
+    tipo: "todos",
+    colaboradorId: undefined,
+  });
+
   const metricCfg = METRICAS.find(m => m.key === metricKey)!;
 
-  // Gráfico detalhado (usa faturamentoMensalDetalhado para ter todos os campos)
-  const qDetalhado = trpc.dataVip.faturamentoMensalDetalhado.useQuery(
-    { orgId: org?.id, unitId: selectedUnit?.id, meses },
+  // Strings de data para as queries
+  const dataInicio = useMemo(
+    () => toDataInicio(filtrosAplicados.inicioMes, filtrosAplicados.inicioAno),
+    [filtrosAplicados.inicioMes, filtrosAplicados.inicioAno]
+  );
+  const dataFim = useMemo(
+    () => toDataFim(filtrosAplicados.fimMes, filtrosAplicados.fimAno),
+    [filtrosAplicados.fimMes, filtrosAplicados.fimAno]
+  );
+
+  // Número de meses no período (para KPIs)
+  const mesesNoPeriodo = useMemo(() => {
+    const diffAnos = filtrosAplicados.fimAno - filtrosAplicados.inicioAno;
+    const diffMeses = filtrosAplicados.fimMes - filtrosAplicados.inicioMes;
+    return Math.max(1, diffAnos * 12 + diffMeses + 1);
+  }, [filtrosAplicados]);
+
+  // Lista de colaboradores
+  const qColabs = trpc.dataVip.listarColaboradoresMensal.useQuery(
+    { orgId: org?.id, unitId: selectedUnit?.id },
     { enabled: !!org?.id }
   );
 
-  // KPIs do período selecionado (SOMA de N meses completos)
+  // Gráfico detalhado com filtros
+  const qDetalhado = trpc.dataVip.faturamentoMensalFiltrado.useQuery(
+    {
+      orgId: org?.id,
+      unitId: selectedUnit?.id,
+      dataInicio,
+      dataFim,
+      colaboradorId: filtrosAplicados.colaboradorId,
+      tipo: filtrosAplicados.tipo,
+    },
+    { enabled: !!org?.id }
+  );
+
+  // KPIs do período selecionado (usa meses calculados)
   const qKpis = trpc.dataVip.kpisPeriodoMensal.useQuery(
-    { orgId: org?.id, unitId: selectedUnit?.id, meses },
+    { orgId: org?.id, unitId: selectedUnit?.id, meses: mesesNoPeriodo },
     { enabled: !!org?.id }
   );
 
@@ -235,9 +500,16 @@ export default function MensalPage() {
 
   const isLoading = qDetalhado.isLoading;
 
+  // Label do período aplicado
+  const periodoLabel = useMemo(() => {
+    const ini = `${MESES_NOMES[filtrosAplicados.inicioMes]}/${filtrosAplicados.inicioAno}`;
+    const fim = `${MESES_NOMES[filtrosAplicados.fimMes]}/${filtrosAplicados.fimAno}`;
+    return ini === fim ? ini : `${ini} – ${fim}`;
+  }, [filtrosAplicados]);
+
   return (
     <div className="p-6 space-y-6">
-      {/* Cabeçalho com seletor único de período */}
+      {/* Cabeçalho */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -247,16 +519,15 @@ export default function MensalPage() {
             {selectedUnit ? selectedUnit.name : "Todas as unidades"}
           </p>
         </div>
-        <select
-          value={meses}
-          onChange={e => setMeses(Number(e.target.value))}
-          className="text-sm bg-muted border border-border rounded px-2 py-1.5"
-        >
-          {[3, 6, 12, 24].map(n => (
-            <option key={n} value={n}>Últimos {n} meses</option>
-          ))}
-        </select>
       </div>
+
+      {/* ── Painel de Filtros ───────────────────────────────────────────────── */}
+      <FiltrosPanel
+        filtros={filtrosAplicados}
+        onFiltrosChange={setFiltrosAplicados}
+        colaboradores={qColabs.data ?? []}
+        loadingColabs={qColabs.isLoading}
+      />
 
       {/* ── Gráfico Evolução Mensal ─────────────────────────────────────────── */}
       <Card className="overflow-hidden">
@@ -266,6 +537,7 @@ export default function MensalPage() {
             <CardTitle className="flex items-center gap-2 text-base">
               <TrendingUp className="w-4 h-4 text-primary" />
               Evolução Mensal
+              <span className="text-xs text-muted-foreground font-normal ml-1">({periodoLabel})</span>
             </CardTitle>
 
             {/* Controles: toggle linha/barras + seletor de métrica */}
@@ -359,7 +631,7 @@ export default function MensalPage() {
             <Skeleton className="h-64 w-full" />
           ) : chartData.length === 0 ? (
             <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
-              <AlertCircle className="w-4 h-4 mr-2" /> Sem dados — sincronize para ver o histórico
+              <AlertCircle className="w-4 h-4 mr-2" /> Sem dados para o período selecionado
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={260}>

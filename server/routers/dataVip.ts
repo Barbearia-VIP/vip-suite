@@ -31,6 +31,8 @@ import {
   getFaturamentoPorDiaSemana,
   getFaturamentoPorFaixaHoraria,
   getFaturamentoMensalDetalhado,
+  getFaturamentoMensalDetalhadoFiltrado,
+  getListaColaboradoresMensal,
 } from "../dataVipQueries";
 
 // Inicializa scheduler automático (08:00 BRT)
@@ -1632,4 +1634,48 @@ export const dataVipRouter = router({
       };
       } catch (err) { handleExternalDbError(err); }
     }),
+  // ── Lista colaboradores para filtro mensal ──────────────────────────────────
+  listarColaboradoresMensal: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { extIds } = await resolveExternalIds(
+        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+      );
+      const rows = await getListaColaboradoresMensal(extIds);
+      return rows.map(r => ({
+        id: Number(r.colaborador_id),
+        nome: String(r.colaborador_nome),
+        tipo: String(r.tipo),
+      }));
+    }),
+
+  // ── Faturamento mensal com filtros avançados ────────────────────────────────
+  faturamentoMensalFiltrado: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(), // 'YYYY-MM-DD'
+      dataFim: z.string(),    // 'YYYY-MM-DD' (exclusive)
+      colaboradorId: z.number().optional(),
+      tipo: z.enum(["todos", "colaborador", "caixa"]).optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(
+          ctx.user.id, ctx.user.role, input.orgId, input.unitId
+        );
+        const tipoFiltro = input.tipo === "todos" ? undefined : input.tipo;
+        return await getFaturamentoMensalDetalhadoFiltrado(
+          extIds,
+          input.dataInicio,
+          input.dataFim,
+          input.colaboradorId,
+          tipoFiltro,
+        );
+      } catch (err) { handleExternalDbError(err); }
+    }),
+
 });

@@ -555,6 +555,120 @@ export async function getFaturamentoMensalDetalhado(extIds: number[], meses: num
   }));
 }
 
+// ─── Faturamento mensal detalhado com filtros (data, colaborador, tipo) ──────
+
+export async function getFaturamentoMensalDetalhadoFiltrado(
+  extIds: number[],
+  dataInicioStr: string,
+  dataFimStr: string,
+  colaboradorId?: number,
+  tipo?: string // 'colaborador' | 'caixa' | undefined = todos
+) {
+  const unitCondV = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  // Filtro de colaborador individual
+  const colabCond = colaboradorId ? `AND vp.colaborador = ${colaboradorId}` : "";
+
+  // Filtro de tipo: 'colaborador' = vp.colaborador (barbeiro), 'caixa' = v.usuario (caixa/recepcionista)
+  // Para tipo 'caixa', filtramos por usuarios que são caixa (tipo='recepcao' na dimensao_colaboradores)
+  // Para tipo 'colaborador', filtramos por barbeiros
+  // Sem filtro = todos
+  let tipoCond = "";
+  if (tipo === "colaborador") {
+    tipoCond = `AND EXISTS (SELECT 1 FROM dimensao_colaboradores dc2 WHERE dc2.colaboradorId = vp.colaborador AND dc2.tipoColaborador = 'barbeiro')`;
+  } else if (tipo === "caixa") {
+    tipoCond = `AND EXISTS (SELECT 1 FROM dimensao_colaboradores dc2 WHERE dc2.colaboradorId = vp.colaborador AND dc2.tipoColaborador = 'recepcao')`;
+  }
+
+  const rows = await queryExternal<{
+    ano: number;
+    mes: number;
+    faturamento: number;
+    atendimentos: number;
+    ticket_medio: number;
+    clientes: number;
+    clientes_novos: number;
+    extras_qtd: number;
+    extras_valor: number;
+    servicos_total: number;
+    produtos_qtd: number;
+    produtos_valor: number;
+  }>(`
+    SELECT
+      YEAR(v.data_criacao) as ano,
+      MONTH(v.data_criacao) as mes,
+      COALESCE(SUM(vp.valor_total), 0) as faturamento,
+      COUNT(DISTINCT v.id) as atendimentos,
+      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
+      COUNT(DISTINCT v.cliente) as clientes,
+      COUNT(DISTINCT CASE WHEN cl.data_criacao >= DATE_FORMAT(v.data_criacao, '%Y-%m-01') THEN v.cliente END) as clientes_novos,
+      COUNT(CASE WHEN p.tipo = 'ser' AND p.categoria != 'base' THEN 1 END) as extras_qtd,
+      COALESCE(SUM(CASE WHEN p.tipo = 'ser' AND p.categoria != 'base' AND p.categoria IS NOT NULL THEN vp.valor_total ELSE 0 END), 0) as extras_valor,
+      COUNT(CASE WHEN p.tipo = 'ser' THEN 1 END) as servicos_total,
+      COUNT(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN 1 END) as produtos_qtd,
+      COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.valor_total ELSE 0 END), 0) as produtos_valor
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    JOIN produtos p ON p.id = vp.produto
+    LEFT JOIN clientes cl ON cl.id = v.cliente
+    WHERE ${unitCondV}
+      ${colabCond}
+      ${tipoCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND v.status != 0
+    GROUP BY YEAR(v.data_criacao), MONTH(v.data_criacao)
+    ORDER BY ano ASC, mes ASC
+  `, [dataInicioStr, dataFimStr]);
+
+  return rows.map(r => ({
+    periodo: `${r.ano}-${String(Number(r.mes)).padStart(2, '0')}`,
+    faturamento: Number(r.faturamento),
+    atendimentos: Number(r.atendimentos),
+    ticketMedio: Number(r.ticket_medio),
+    clientes: Number(r.clientes),
+    clientesNovos: Number(r.clientes_novos),
+    extrasQtd: Number(r.extras_qtd),
+    extrasValor: Number(r.extras_valor),
+    servicosTotal: Number(r.servicos_total),
+    produtosQtd: Number(r.produtos_qtd),
+    produtosValor: Number(r.produtos_valor),
+  }));
+}
+
+// ─── Lista colaboradores para filtro mensal ──────────────────────────────────
+
+export async function getListaColaboradoresMensal(extIds: number[]) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    colaborador_id: number;
+    colaborador_nome: string;
+    tipo: string;
+  }>(`
+    SELECT DISTINCT
+      uu.id as colaborador_id,
+      uu.nome as colaborador_nome,
+      COALESCE(dc.tipoColaborador, 'barbeiro') as tipo
+    FROM vendas_produtos vp
+    JOIN usuarios uu ON uu.id = vp.colaborador
+    LEFT JOIN dimensao_colaboradores dc ON dc.colaboradorId = uu.id
+    JOIN vendas v ON v.id = vp.venda
+    WHERE ${unitCond}
+      AND v.comanda_temp = 0
+      AND v.status != 0
+      AND v.cancelado_motivo IS NULL
+    ORDER BY uu.nome ASC
+  `, []);
+}
+
 // ─── Faturamento por forma de pagamento ──────────────────────────────────────
 
 export async function getFaturamentoPorPagamento(extIds: number[], dataInicio: string, dataFim: string) {
