@@ -671,3 +671,8 @@
 ## Correção Granularidade Semana - Aberturas
 - [x] Diagnosticar e corrigir granularidade "Semana" que não exibe dados no bloco Aberturas
 - [x] Corrigir campo 'dia' retornando como objeto Date (usar DATE_FORMAT em vez de DATE() no SQL)
+
+## Correção Comparativo de Períodos - Médias
+- [x] Corrigir Dias trab. nas médias de 6 e 12 meses (estava somando, deve ser média)
+- [x] Adicionar Fat/dia trab. para médias de 6 e 12 meses (estava vazio)
+- [x] Adicionar pctDias e pctFatDia para med6 e med12 (variação vs. atual)

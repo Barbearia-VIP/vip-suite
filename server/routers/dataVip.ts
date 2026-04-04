@@ -556,7 +556,7 @@ export const dataVipRouter = router({
       const dataInicioMed12 = med12Inicio.toISOString().split("T")[0];
       const dataFimMed12 = med12Fim.toISOString().split("T")[0];
 
-      const [atual, anterior, anoAnterior, med6Raw, med12Raw, diasAtual, diasAnt, diasAnoAnt, topBarbeiros, topItens, composicao] = await Promise.all([
+      const [atual, anterior, anoAnterior, med6Raw, med12Raw, diasAtual, diasAnt, diasAnoAnt, diasMed6Raw, diasMed12Raw, topBarbeiros, topItens, composicao] = await Promise.all([
         getKpisPeriodo(extIds, dataInicio, dataFim),
         getKpisPeriodo(extIds, dataInicioAnt, dataFimAnt),
         getKpisPeriodo(extIds, dataInicioAnoAnt, dataFimAnoAnt),
@@ -565,14 +565,17 @@ export const dataVipRouter = router({
         getDiasTrabalhados(extIds, dataInicio, new Date(ano, mes, 1).toISOString().split("T")[0]),
         getDiasTrabalhados(extIds, dataInicioAnt, new Date(anoAnt, mesAnt, 1).toISOString().split("T")[0]),
         getDiasTrabalhados(extIds, dataInicioAnoAnt, new Date(ano - 1, mes, 1).toISOString().split("T")[0]),
+        getDiasTrabalhados(extIds, dataInicioMed6, new Date(ano, mes, 1).toISOString().split("T")[0]),
+        getDiasTrabalhados(extIds, dataInicioMed12, new Date(ano, mes, 1).toISOString().split("T")[0]),
         getTopBarbeiros(extIds, dataInicio, dataFim),
         getTopItens(extIds, dataInicio, dataFim),
         getComposicaoGrupo(extIds, dataInicio, dataFim),
       ]);
 
       // Médias divididas por 6 e 12 meses
-      const med6 = { fatBase: med6Raw.fatBase / 6, fatExtra: med6Raw.fatExtra / 6, fatProdutos: med6Raw.fatProdutos / 6, fatTotal: med6Raw.fatTotal / 6, diasTrabalhados: med6Raw.atendimentos / 6 };
-      const med12 = { fatBase: med12Raw.fatBase / 12, fatExtra: med12Raw.fatExtra / 12, fatProdutos: med12Raw.fatProdutos / 12, fatTotal: med12Raw.fatTotal / 12, diasTrabalhados: med12Raw.atendimentos / 12 };
+      // diasTrabalhados = total de dias com atendimento no período / número de meses
+      const med6 = { fatBase: med6Raw.fatBase / 6, fatExtra: med6Raw.fatExtra / 6, fatProdutos: med6Raw.fatProdutos / 6, fatTotal: med6Raw.fatTotal / 6, diasTrabalhados: diasMed6Raw.diasTrabalhados / 6 };
+      const med12 = { fatBase: med12Raw.fatBase / 12, fatExtra: med12Raw.fatExtra / 12, fatProdutos: med12Raw.fatProdutos / 12, fatTotal: med12Raw.fatTotal / 12, diasTrabalhados: diasMed12Raw.diasTrabalhados / 12 };
 
       const pct = (a: number, b: number) => b > 0 ? Math.round(((a - b) / b) * 1000) / 10 : null;
       const r = (v: number) => Math.round(v * 100) / 100;
@@ -595,8 +598,8 @@ export const dataVipRouter = router({
           atual: { fatBase: r(atual.fatBase), fatExtra: r(atual.fatExtra), fatProdutos: r(atual.fatProdutos), fatTotal: r(atual.fatTotal), diasTrabalhados: diasAtual.diasTrabalhados, fatPorDia: diasAtual.diasTrabalhados > 0 ? r(atual.fatTotal / diasAtual.diasTrabalhados) : 0 },
           anterior: { fatBase: r(anterior.fatBase), fatExtra: r(anterior.fatExtra), fatProdutos: r(anterior.fatProdutos), fatTotal: r(anterior.fatTotal), diasTrabalhados: diasAnt.diasTrabalhados, fatPorDia: diasAnt.diasTrabalhados > 0 ? r(anterior.fatTotal / diasAnt.diasTrabalhados) : 0, pctBase: pct(atual.fatBase, anterior.fatBase), pctExtra: pct(atual.fatExtra, anterior.fatExtra), pctProdutos: pct(atual.fatProdutos, anterior.fatProdutos), pctTotal: pct(atual.fatTotal, anterior.fatTotal), pctDias: pct(diasAtual.diasTrabalhados, diasAnt.diasTrabalhados), pctFatDia: diasAnt.diasTrabalhados > 0 && diasAtual.diasTrabalhados > 0 ? pct(atual.fatTotal / diasAtual.diasTrabalhados, anterior.fatTotal / diasAnt.diasTrabalhados) : null },
           anoAnterior: { fatBase: r(anoAnterior.fatBase), fatExtra: r(anoAnterior.fatExtra), fatProdutos: r(anoAnterior.fatProdutos), fatTotal: r(anoAnterior.fatTotal), diasTrabalhados: diasAnoAnt.diasTrabalhados, fatPorDia: diasAnoAnt.diasTrabalhados > 0 ? r(anoAnterior.fatTotal / diasAnoAnt.diasTrabalhados) : 0, pctBase: pct(atual.fatBase, anoAnterior.fatBase), pctExtra: pct(atual.fatExtra, anoAnterior.fatExtra), pctProdutos: pct(atual.fatProdutos, anoAnterior.fatProdutos), pctTotal: pct(atual.fatTotal, anoAnterior.fatTotal), pctDias: pct(diasAtual.diasTrabalhados, diasAnoAnt.diasTrabalhados), pctFatDia: diasAnoAnt.diasTrabalhados > 0 && diasAtual.diasTrabalhados > 0 ? pct(atual.fatTotal / diasAtual.diasTrabalhados, anoAnterior.fatTotal / diasAnoAnt.diasTrabalhados) : null },
-          med6: { fatBase: r(med6.fatBase), fatExtra: r(med6.fatExtra), fatProdutos: r(med6.fatProdutos), fatTotal: r(med6.fatTotal), diasTrabalhados: r(med6.diasTrabalhados), fatPorDia: 0, pctBase: pct(atual.fatBase, med6.fatBase), pctExtra: pct(atual.fatExtra, med6.fatExtra), pctProdutos: pct(atual.fatProdutos, med6.fatProdutos), pctTotal: pct(atual.fatTotal, med6.fatTotal), pctDias: null, pctFatDia: null },
-          med12: { fatBase: r(med12.fatBase), fatExtra: r(med12.fatExtra), fatProdutos: r(med12.fatProdutos), fatTotal: r(med12.fatTotal), diasTrabalhados: r(med12.diasTrabalhados), fatPorDia: 0, pctBase: pct(atual.fatBase, med12.fatBase), pctExtra: pct(atual.fatExtra, med12.fatExtra), pctProdutos: pct(atual.fatProdutos, med12.fatProdutos), pctTotal: pct(atual.fatTotal, med12.fatTotal), pctDias: null, pctFatDia: null },
+          med6: { fatBase: r(med6.fatBase), fatExtra: r(med6.fatExtra), fatProdutos: r(med6.fatProdutos), fatTotal: r(med6.fatTotal), diasTrabalhados: r(med6.diasTrabalhados), fatPorDia: med6.diasTrabalhados > 0 ? r(med6.fatTotal / med6.diasTrabalhados) : 0, pctBase: pct(atual.fatBase, med6.fatBase), pctExtra: pct(atual.fatExtra, med6.fatExtra), pctProdutos: pct(atual.fatProdutos, med6.fatProdutos), pctTotal: pct(atual.fatTotal, med6.fatTotal), pctDias: pct(diasAtual.diasTrabalhados, med6.diasTrabalhados), pctFatDia: med6.diasTrabalhados > 0 && diasAtual.diasTrabalhados > 0 ? pct(atual.fatTotal / diasAtual.diasTrabalhados, med6.fatTotal / med6.diasTrabalhados) : null },
+          med12: { fatBase: r(med12.fatBase), fatExtra: r(med12.fatExtra), fatProdutos: r(med12.fatProdutos), fatTotal: r(med12.fatTotal), diasTrabalhados: r(med12.diasTrabalhados), fatPorDia: med12.diasTrabalhados > 0 ? r(med12.fatTotal / med12.diasTrabalhados) : 0, pctBase: pct(atual.fatBase, med12.fatBase), pctExtra: pct(atual.fatExtra, med12.fatExtra), pctProdutos: pct(atual.fatProdutos, med12.fatProdutos), pctTotal: pct(atual.fatTotal, med12.fatTotal), pctDias: pct(diasAtual.diasTrabalhados, med12.diasTrabalhados), pctFatDia: med12.diasTrabalhados > 0 && diasAtual.diasTrabalhados > 0 ? pct(atual.fatTotal / diasAtual.diasTrabalhados, med12.fatTotal / med12.diasTrabalhados) : null },
         },
         topBarbeiros: topBarbeiros.map(b => ({
           id: String(b.colaborador_id),
