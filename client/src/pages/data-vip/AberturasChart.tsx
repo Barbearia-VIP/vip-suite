@@ -118,10 +118,12 @@ interface ChartAreaProps {
   data: { label: string; valor: number }[];
   chartType: ChartType;
   media: number;
+  mediaSply?: number;
+  media6m?: number;
   height?: number;
 }
 
-function ChartArea({ data, chartType, media, height = 280 }: ChartAreaProps) {
+function ChartArea({ data, chartType, media, mediaSply, media6m, height = 280 }: ChartAreaProps) {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     return (
@@ -162,6 +164,8 @@ function ChartArea({ data, chartType, media, height = 280 }: ChartAreaProps) {
           <YAxis tickFormatter={fmtShort} tick={{ fontSize: 10, fill: "#888" }} tickLine={false} axisLine={false} width={48} />
           <Tooltip content={<CustomTooltip />} />
           <ReferenceLine y={media} stroke="#888" strokeDasharray="4 3" label={{ value: "Média", position: "right", fontSize: 10, fill: "#888" }} />
+          {mediaSply !== undefined && mediaSply > 0 && <ReferenceLine y={mediaSply} stroke="#F59E0B" strokeDasharray="4 3" label={{ value: "Méd. SPLY", position: "right", fontSize: 9, fill: "#F59E0B" }} />}
+          {media6m !== undefined && media6m > 0 && <ReferenceLine y={media6m} stroke="#3B82F6" strokeDasharray="4 3" label={{ value: "Méd. 6m", position: "right", fontSize: 9, fill: "#3B82F6" }} />}
           <Area type="monotone" dataKey="valor" stroke={GOLD} strokeWidth={2} fill="url(#areaGold)" dot={false} activeDot={{ r: 4, fill: GOLD }} />
         </AreaChart>
       </ResponsiveContainer>
@@ -176,6 +180,8 @@ function ChartArea({ data, chartType, media, height = 280 }: ChartAreaProps) {
         <YAxis tickFormatter={fmtShort} tick={{ fontSize: 10, fill: "#888" }} tickLine={false} axisLine={false} width={48} />
         <Tooltip content={<CustomTooltip />} />
         <ReferenceLine y={media} stroke="#888" strokeDasharray="4 3" label={{ value: "Média", position: "right", fontSize: 10, fill: "#888" }} />
+        {mediaSply !== undefined && mediaSply > 0 && <ReferenceLine y={mediaSply} stroke="#F59E0B" strokeDasharray="4 3" label={{ value: "Méd. SPLY", position: "right", fontSize: 9, fill: "#F59E0B" }} />}
+        {media6m !== undefined && media6m > 0 && <ReferenceLine y={media6m} stroke="#3B82F6" strokeDasharray="4 3" label={{ value: "Méd. 6m", position: "right", fontSize: 9, fill: "#3B82F6" }} />}
         <Bar dataKey="valor" fill={GOLD} radius={[3, 3, 0, 0]} maxBarSize={48} />
       </BarChart>
     </ResponsiveContainer>
@@ -232,6 +238,27 @@ function TabPeriodo({ orgId, unitId, dataInicio, dataFim }: AberturasChartProps)
     { retry: false }
   );
 
+  // Calcula SPLY (mesmo período ano anterior) e Méd. 6m a partir dos dados disponíveis
+  const { mediaSply, media6m } = useMemo(() => {
+    if (!q.data || q.data.length === 0) return { mediaSply: 0, media6m: 0 };
+    const anoAtual = new Date(dataInicio + "T12:00:00Z").getUTCFullYear();
+    // SPLY: dados do ano anterior ao período atual
+    const splyData = q.data.filter(d => {
+      const ano = parseInt(d.dia.slice(0, 4));
+      return ano < anoAtual;
+    });
+    const mediaSply = splyData.length > 0
+      ? splyData.reduce((s, d) => s + d.faturamento, 0) / splyData.length
+      : 0;
+    // Méd. 6m: média dos últimos 6 meses de dados disponíveis
+    const sorted = [...q.data].sort((a, b) => a.dia.localeCompare(b.dia));
+    const last6m = sorted.slice(-180); // ~6 meses em dias
+    const media6m = last6m.length > 0
+      ? last6m.reduce((s, d) => s + d.faturamento, 0) / last6m.length
+      : 0;
+    return { mediaSply, media6m };
+  }, [q.data, dataInicio]);
+
   const data = useMemo(() => {
     if (!q.data) return [];
     if (gran === "dia") {
@@ -241,13 +268,18 @@ function TabPeriodo({ orgId, unitId, dataInicio, dataFim }: AberturasChartProps)
       const weeks: Record<string, number> = {};
       q.data.forEach(d => {
         const dt = new Date(d.dia + "T12:00:00Z");
-        const day = dt.getUTCDay();
+        // 0=Dom, 1=Seg ... 6=Sáb. Recua até a segunda-feira anterior.
+        const dayOfWeek = dt.getUTCDay(); // 0=Dom
+        const daysFromMon = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
         const mon = new Date(dt);
-        mon.setUTCDate(dt.getUTCDate() - day + 1);
-        const key = mon.toISOString().slice(5, 10);
+        mon.setUTCDate(dt.getUTCDate() - daysFromMon);
+        const key = mon.toISOString().slice(0, 10); // YYYY-MM-DD da segunda
         weeks[key] = (weeks[key] ?? 0) + d.faturamento;
       });
-      return Object.entries(weeks).map(([k, v]) => ({ label: k, valor: v }));
+      // Ordena por data e formata como MM-DD
+      return Object.entries(weeks)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => ({ label: k.slice(5), valor: v }));
     }
     // mes
     const months: Record<string, number> = {};
@@ -279,8 +311,14 @@ function TabPeriodo({ orgId, unitId, dataInicio, dataFim }: AberturasChartProps)
         ))}
       </div>
       <KpiBar acumulado={acumulado} media={media} maximo={{ valor: maxItem.valor, label: maxItem.label }} minimo={{ valor: minItem.valor, label: minItem.label }} />
-      <ChartArea data={data} chartType={chartType} media={media} />
-      <div className="mt-2 flex justify-end">
+      <ChartArea data={data} chartType={chartType} media={media} mediaSply={mediaSply} media6m={media6m} />
+      {/* Legenda das linhas de referência */}
+      <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1"><span className="inline-block w-6 h-px border-t-2 border-dashed border-zinc-400"></span>Média Atual: {fmt(media)}</span>
+          {mediaSply > 0 && <span className="flex items-center gap-1"><span className="inline-block w-6 h-px border-t-2 border-dashed border-yellow-500"></span>Méd. SPLY: {fmt(mediaSply)}</span>}
+          {media6m > 0 && <span className="flex items-center gap-1"><span className="inline-block w-6 h-px border-t-2 border-dashed border-blue-400"></span>Méd. 6m: {fmt(media6m)}</span>}
+        </div>
         <ChartToggle chartType={chartType} onChange={setChartType} />
       </div>
       <RankingTable items={data.slice(0, 20).map(d => ({ label: d.label, valor: d.valor }))} title="Período" />

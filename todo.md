@@ -661,3 +661,9 @@
 - [x] Frontend: Pagamento por forma de pagamento
 - [x] Frontend: Faixa horária com picos e ociosidade
 - [x] Integrar AberturasChart na FaturamentoPage.tsx
+
+## Correções Aberturas - Por Período
+
+- [x] Corrigir agrupamento por semana (erro ao calcular início da semana)
+- [x] Adicionar 3 linhas de referência no gráfico: Média Atual, Méd. SPLY, Méd. 6m
+- [x] Exibir legenda das 3 linhas abaixo do gráfico (como no sistema de referência)
