@@ -635,10 +635,20 @@ export async function getFaturamentoMensalDetalhadoFiltrado(
 
 // ─── Lista colaboradores para filtro mensal ──────────────────────────────────
 
-export async function getListaColaboradoresMensal(extIds: number[]) {
+export async function getListaColaboradoresMensal(
+  extIds: number[],
+  dataInicio?: string,
+  dataFim?: string
+) {
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
+
+  // Filtro de período: se fornecido, mostra apenas colaboradores com vendas no intervalo
+  const periodoCond = (dataInicio && dataFim)
+    ? `AND v.data_criacao >= ? AND v.data_criacao < ?`
+    : "";
+  const params: string[] = (dataInicio && dataFim) ? [dataInicio, dataFim] : [];
 
   return queryExternal<{
     colaborador_id: number;
@@ -658,8 +668,9 @@ export async function getListaColaboradoresMensal(extIds: number[]) {
       AND v.cancelado_motivo IS NULL
       AND uu.nome IS NOT NULL
       AND uu.nome != ''
+      ${periodoCond}
     ORDER BY uu.nome ASC
-  `, []);
+  `, params);
 }
 
 // ─── Faturamento por forma de pagamento ──────────────────────────────────────

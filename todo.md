@@ -760,3 +760,7 @@
 - [x] Filtro de colaborador deve atualizar gráfico, KPIs e tabela ao aplicar
 - [x] Corrigir query getListaColaboradoresMensal (remover JOIN com dimensao_colaboradores inexistente)
 - [x] Remover filtro de tipo da query getFaturamentoMensalDetalhadoFiltrado (tabela não existe)
+
+## Filtro Colaboradores por Período
+- [x] Backend: adicionar dataInicio/dataFim na procedure listarColaboradoresMensal e na query getListaColaboradoresMensal
+- [x] Frontend: passar dataInicio/dataFim dos filtros aplicados para a query de colaboradores, mostrando apenas quem tem vendas no período

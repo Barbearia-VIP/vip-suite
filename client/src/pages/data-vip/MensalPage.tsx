@@ -413,9 +413,14 @@ export default function MensalPage() {
     return Math.max(1, diffAnos * 12 + diffMeses + 1);
   }, [filtrosAplicados]);
 
-  // Lista de colaboradores
+  // Strings de data para a query de colaboradores (usa filtros aplicados para mostrar
+  // apenas colaboradores com vendas no período selecionado)
+  const colabDataInicio = dataInicio;
+  const colabDataFim = dataFim;
+
+  // Lista de colaboradores filtrada pelo período aplicado
   const qColabs = trpc.dataVip.listarColaboradoresMensal.useQuery(
-    { orgId: org?.id, unitId: selectedUnit?.id },
+    { orgId: org?.id, unitId: selectedUnit?.id, dataInicio: colabDataInicio, dataFim: colabDataFim },
     { enabled: !!org?.id }
   );
 

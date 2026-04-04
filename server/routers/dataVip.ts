@@ -1639,12 +1639,14 @@ export const dataVipRouter = router({
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
+      dataInicio: z.string().optional(), // 'YYYY-MM-DD' — filtra colaboradores com vendas no período
+      dataFim: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
-      const rows = await getListaColaboradoresMensal(extIds);
+      const rows = await getListaColaboradoresMensal(extIds, input.dataInicio, input.dataFim);
       return rows.map(r => ({
         id: Number(r.colaborador_id),
         nome: String(r.colaborador_nome),
