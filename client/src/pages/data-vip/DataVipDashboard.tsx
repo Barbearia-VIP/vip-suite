@@ -259,10 +259,15 @@ export default function DataVipDashboard() {
 
   const colaborParams = useMemo(() => {
     if (filter.mode === "range") {
-      const [ano, mes] = filter.dataInicio.slice(0, 7).split("-");
-      return { orgId, unitId, periodo: `${ano}-${mes}` };
+      // Modo range: passar dataInicio e dataFim diretamente
+      return { orgId, unitId, dataInicio: filter.dataInicio, dataFim: filter.dataFim };
     }
-    return { orgId, unitId, periodo: filter.periodo };
+    // Modo mensal: calcular início e fim do mês e passar como range
+    const [ano, mes] = filter.periodo.split("-").map(Number);
+    const dataInicio = `${ano}-${String(mes).padStart(2, "0")}-01`;
+    const lastDay = new Date(ano, mes, 0).getDate();
+    const dataFim = `${ano}-${String(mes).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    return { orgId, unitId, dataInicio, dataFim };
   }, [filter, orgId, unitId]);
 
   // Verifica se é o mês atual (dados incompletos)
@@ -308,7 +313,7 @@ export default function DataVipDashboard() {
 
   const d = dashQ.data;
   const evolData = evolQ.data ?? [];
-  const colabs = (colaborQ.data ?? []).slice(0, 5);
+  const colabs = colaborQ.data ?? [];
   const produtos = (prodQ.data?.porProduto ?? []).slice(0, 5);
   const pagamentos = prodQ.data?.porPagamento ?? [];
 
