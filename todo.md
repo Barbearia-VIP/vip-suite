@@ -644,3 +644,20 @@
 - [x] Frontend: Seção Composição por grupo com barra de progresso
 - [x] Frontend: Seção Top Barbeiros com ranking e barra de progresso
 - [x] Frontend: Seção Top Itens com ranking de serviços
+
+## Bloco Aberturas - Página Faturamento
+
+- [x] Backend: queries para 7 visualizações (periodo, barbeiro, grupo, item, diaSemana, pagamento, faixaHoraria)
+- [x] Frontend: componente AberturasChart.tsx com 7 abas seleçionáveis
+- [x] Frontend: gráfico Recharts (Barra/Linha/Pizza) com área preenchida amarela
+- [x] Frontend: KPIs Acumulado, Média, Máximo, Mínimo acima do gráfico
+- [x] Frontend: linha de referência Média Atual no gráfico
+- [x] Frontend: tabela de ranking abaixo do gráfico
+- [x] Frontend: Por período com granularidade Dia/Semana/Mês
+- [x] Frontend: Por barbeiro com ranking e participação
+- [x] Frontend: Por grupo (Serviço Base, Extra, Produtos)
+- [x] Frontend: Por item com filtro Top 10/20/50/Todos
+- [x] Frontend: Dia da semana (Dom a Sáb)
+- [x] Frontend: Pagamento por forma de pagamento
+- [x] Frontend: Faixa horária com picos e ociosidade
+- [x] Integrar AberturasChart na FaturamentoPage.tsx

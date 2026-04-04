@@ -27,6 +27,8 @@ import {
   getTopItens,
   getComposicaoGrupo,
   getKpisPeriodo,
+  getFaturamentoPorDiaSemana,
+  getFaturamentoPorFaixaHoraria,
 } from "../dataVipQueries";
 
 // Inicializa scheduler automático (08:00 BRT)
@@ -1055,6 +1057,184 @@ export const dataVipRouter = router({
         `);
       }
       return { success: true, count: input.servicos.length };
+    }),
+
+  // ── Aberturas: Por barbeiro ──────────────────────────────────────────────────────────────────────────────────
+  aberturasBarbeiro: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        const rows = await getTopBarbeiros(extIds, input.dataInicio, input.dataFim);
+        const total = rows.reduce((s, r) => s + Number(r.faturamento), 0);
+        const avg = rows.length > 0 ? total / rows.length : 0;
+        const maxRow = rows.reduce((m, r) => Number(r.faturamento) > m.val ? { val: Number(r.faturamento), label: r.colaborador_nome } : m, { val: 0, label: '' });
+        const minRow = rows.length > 0 ? rows.reduce((m, r) => Number(r.faturamento) < m.val ? { val: Number(r.faturamento), label: r.colaborador_nome } : m, { val: Number(rows[0].faturamento), label: rows[0].colaborador_nome }) : { val: 0, label: '' };
+        return {
+          acumulado: total, media: avg,
+          maximo: { valor: maxRow.val, label: maxRow.label },
+          minimo: { valor: minRow.val, label: minRow.label },
+          items: rows.map(r => ({
+            label: r.colaborador_nome, valor: Number(r.faturamento),
+            atendimentos: Number(r.atendimentos),
+            pct: total > 0 ? Math.round((Number(r.faturamento) / total) * 1000) / 10 : 0,
+          })),
+        };
+      } catch (err) { handleExternalDbError(err); }
+    }),
+
+  // ── Aberturas: Por grupo ──────────────────────────────────────────────────────────────────────────────────
+  aberturasGrupo: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        const rows = await getComposicaoGrupo(extIds, input.dataInicio, input.dataFim);
+        const total = rows.reduce((s, r) => s + Number(r.total), 0);
+        const avg = rows.length > 0 ? total / rows.length : 0;
+        const maxRow = rows.reduce((m, r) => Number(r.total) > m.val ? { val: Number(r.total), label: r.grupo } : m, { val: 0, label: '' });
+        const minRow = rows.length > 0 ? rows.reduce((m, r) => Number(r.total) < m.val ? { val: Number(r.total), label: r.grupo } : m, { val: Number(rows[0].total), label: rows[0].grupo }) : { val: 0, label: '' };
+        return {
+          acumulado: total, media: avg,
+          maximo: { valor: maxRow.val, label: maxRow.label },
+          minimo: { valor: minRow.val, label: minRow.label },
+          items: rows.map(r => ({
+            label: r.grupo, valor: Number(r.total),
+            quantidade: Number(r.quantidade),
+            pct: total > 0 ? Math.round((Number(r.total) / total) * 1000) / 10 : 0,
+          })),
+        };
+      } catch (err) { handleExternalDbError(err); }
+    }),
+
+  // ── Aberturas: Por item ──────────────────────────────────────────────────────────────────────────────────
+  aberturasItem: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+      limit: z.number().default(20),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        const allRows = await getTopItens(extIds, input.dataInicio, input.dataFim);
+        const rows = input.limit === 0 ? allRows : allRows.slice(0, input.limit);
+        const totalAll = allRows.reduce((s, r) => s + Number(r.total), 0);
+        const avg = rows.length > 0 ? rows.reduce((s, r) => s + Number(r.total), 0) / rows.length : 0;
+        const maxRow = rows.reduce((m, r) => Number(r.total) > m.val ? { val: Number(r.total), label: r.nome } : m, { val: 0, label: '' });
+        const minRow = rows.length > 0 ? rows.reduce((m, r) => Number(r.total) < m.val ? { val: Number(r.total), label: r.nome } : m, { val: Number(rows[0].total), label: rows[0].nome }) : { val: 0, label: '' };
+        return {
+          acumulado: totalAll, media: avg,
+          maximo: { valor: maxRow.val, label: maxRow.label },
+          minimo: { valor: minRow.val, label: minRow.label },
+          items: rows.map(r => ({
+            label: r.nome,
+            grupo: r.tipo === 'ser' && r.categoria === 'base' ? 'Serviço Base' : r.tipo === 'ser' ? 'Serviço Extra' : 'Produto',
+            valor: Number(r.total), quantidade: Number(r.quantidade),
+            pct: totalAll > 0 ? Math.round((Number(r.total) / totalAll) * 1000) / 10 : 0,
+          })),
+        };
+      } catch (err) { handleExternalDbError(err); }
+    }),
+
+  // ── Aberturas: Por dia da semana ──────────────────────────────────────────────────────────────────────────────────
+  aberturasDiaSemana: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        const rows = await getFaturamentoPorDiaSemana(extIds, input.dataInicio, input.dataFim);
+        const diasNomes = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        const mapped = diasNomes.map((nome, idx) => {
+          const row = rows.find(r => Number(r.dia_semana) === idx + 1);
+          return { label: nome, valor: row ? Number(row.total) : 0, atendimentos: row ? Number(row.atendimentos) : 0 };
+        });
+        const total = mapped.reduce((s, r) => s + r.valor, 0);
+        const avg = total / 7;
+        const maxRow = mapped.reduce((m, r) => r.valor > m.val ? { val: r.valor, label: r.label } : m, { val: 0, label: '' });
+        const minRow = mapped.reduce((m, r) => r.valor < m.val ? { val: r.valor, label: r.label } : m, { val: mapped[0]?.valor ?? 0, label: mapped[0]?.label ?? '' });
+        return {
+          acumulado: total, media: avg,
+          maximo: { valor: maxRow.val, label: maxRow.label },
+          minimo: { valor: minRow.val, label: minRow.label },
+          items: mapped,
+        };
+      } catch (err) { handleExternalDbError(err); }
+    }),
+
+  // ── Aberturas: Por pagamento ──────────────────────────────────────────────────────────────────────────────────
+  aberturasPagamento: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        const rows = await getFaturamentoPorPagamento(extIds, input.dataInicio, input.dataFim);
+        const total = rows.reduce((s, r) => s + Number(r.total), 0);
+        const avg = rows.length > 0 ? total / rows.length : 0;
+        const maxRow = rows.reduce((m, r) => Number(r.total) > m.val ? { val: Number(r.total), label: r.forma } : m, { val: 0, label: '' });
+        const minRow = rows.length > 0 ? rows.reduce((m, r) => Number(r.total) < m.val ? { val: Number(r.total), label: r.forma } : m, { val: Number(rows[0].total), label: rows[0].forma }) : { val: 0, label: '' };
+        return {
+          acumulado: total, media: avg,
+          maximo: { valor: maxRow.val, label: maxRow.label },
+          minimo: { valor: minRow.val, label: minRow.label },
+          items: rows.map(r => ({
+            label: r.forma, tipo: r.tipo, valor: Number(r.total),
+            atendimentos: Number(r.qtd_vendas),
+            pct: total > 0 ? Math.round((Number(r.total) / total) * 1000) / 10 : 0,
+          })),
+        };
+      } catch (err) { handleExternalDbError(err); }
+    }),
+
+  // ── Aberturas: Faixa horária ──────────────────────────────────────────────────────────────────────────────────
+  aberturasFaixaHoraria: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        const rows = await getFaturamentoPorFaixaHoraria(extIds, input.dataInicio, input.dataFim);
+        const total = rows.reduce((s, r) => s + Number(r.total), 0);
+        const avg = rows.length > 0 ? total / rows.length : 0;
+        const maxRow = rows.reduce((m, r) => Number(r.total) > m.val ? { val: Number(r.total), label: r.faixa } : m, { val: 0, label: '' });
+        const minRow = rows.length > 0 ? rows.reduce((m, r) => Number(r.total) < m.val ? { val: Number(r.total), label: r.faixa } : m, { val: Number(rows[0].total), label: rows[0].faixa }) : { val: 0, label: '' };
+        return {
+          acumulado: total, media: avg,
+          maximo: { valor: maxRow.val, label: maxRow.label },
+          minimo: { valor: minRow.val, label: minRow.label },
+          items: rows.map(r => ({
+            label: r.faixa, valor: Number(r.total),
+            atendimentos: Number(r.atendimentos),
+            pct: total > 0 ? Math.round((Number(r.total) / total) * 1000) / 10 : 0,
+          })),
+        };
+      } catch (err) { handleExternalDbError(err); }
     }),
 
   // ── Evolução diária (gráfico) ──────────────────────────────────────────────────────────────────────────────────

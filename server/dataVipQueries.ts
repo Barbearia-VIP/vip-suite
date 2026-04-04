@@ -1273,3 +1273,105 @@ export async function getKpisPeriodo(extIds: number[], dataInicio: string, dataF
     atendimentos: Number(r?.atendimentos ?? 0),
   };
 }
+
+// ─── Faturamento por dia da semana ────────────────────────────────────────────
+
+export async function getFaturamentoPorDiaSemana(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+
+  return queryExternal<{
+    dia_semana: number;
+    total: number;
+    atendimentos: number;
+  }>(`
+    SELECT 
+      DAYOFWEEK(v.data_criacao) as dia_semana,
+      COALESCE(SUM(vp.valor_total), 0) as total,
+      COUNT(DISTINCT v.id) as atendimentos
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+    GROUP BY DAYOFWEEK(v.data_criacao)
+    ORDER BY dia_semana ASC
+  `, [dataInicio, dataFimExcl]);
+}
+
+// ─── Faturamento por faixa horária ───────────────────────────────────────────
+
+export async function getFaturamentoPorFaixaHoraria(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+
+  return queryExternal<{
+    faixa: string;
+    hora_inicio: number;
+    total: number;
+    atendimentos: number;
+  }>(`
+    SELECT 
+      CASE
+        WHEN HOUR(v.data_criacao) BETWEEN 7 AND 8 THEN '07-09'
+        WHEN HOUR(v.data_criacao) BETWEEN 9 AND 10 THEN '09-11'
+        WHEN HOUR(v.data_criacao) BETWEEN 11 AND 12 THEN '11-13'
+        WHEN HOUR(v.data_criacao) BETWEEN 13 AND 14 THEN '13-15'
+        WHEN HOUR(v.data_criacao) BETWEEN 15 AND 16 THEN '15-17'
+        WHEN HOUR(v.data_criacao) BETWEEN 17 AND 18 THEN '17-19'
+        WHEN HOUR(v.data_criacao) BETWEEN 19 AND 20 THEN '19-21'
+        ELSE 'Outros'
+      END as faixa,
+      CASE
+        WHEN HOUR(v.data_criacao) BETWEEN 7 AND 8 THEN 7
+        WHEN HOUR(v.data_criacao) BETWEEN 9 AND 10 THEN 9
+        WHEN HOUR(v.data_criacao) BETWEEN 11 AND 12 THEN 11
+        WHEN HOUR(v.data_criacao) BETWEEN 13 AND 14 THEN 13
+        WHEN HOUR(v.data_criacao) BETWEEN 15 AND 16 THEN 15
+        WHEN HOUR(v.data_criacao) BETWEEN 17 AND 18 THEN 17
+        WHEN HOUR(v.data_criacao) BETWEEN 19 AND 20 THEN 19
+        ELSE 99
+      END as hora_inicio,
+      COALESCE(SUM(vp.valor_total), 0) as total,
+      COUNT(DISTINCT v.id) as atendimentos
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+    GROUP BY
+      CASE
+        WHEN HOUR(v.data_criacao) BETWEEN 7 AND 8 THEN '07-09'
+        WHEN HOUR(v.data_criacao) BETWEEN 9 AND 10 THEN '09-11'
+        WHEN HOUR(v.data_criacao) BETWEEN 11 AND 12 THEN '11-13'
+        WHEN HOUR(v.data_criacao) BETWEEN 13 AND 14 THEN '13-15'
+        WHEN HOUR(v.data_criacao) BETWEEN 15 AND 16 THEN '15-17'
+        WHEN HOUR(v.data_criacao) BETWEEN 17 AND 18 THEN '17-19'
+        WHEN HOUR(v.data_criacao) BETWEEN 19 AND 20 THEN '19-21'
+        ELSE 'Outros'
+      END,
+      CASE
+        WHEN HOUR(v.data_criacao) BETWEEN 7 AND 8 THEN 7
+        WHEN HOUR(v.data_criacao) BETWEEN 9 AND 10 THEN 9
+        WHEN HOUR(v.data_criacao) BETWEEN 11 AND 12 THEN 11
+        WHEN HOUR(v.data_criacao) BETWEEN 13 AND 14 THEN 13
+        WHEN HOUR(v.data_criacao) BETWEEN 15 AND 16 THEN 15
+        WHEN HOUR(v.data_criacao) BETWEEN 17 AND 18 THEN 17
+        WHEN HOUR(v.data_criacao) BETWEEN 19 AND 20 THEN 19
+        ELSE 99
+      END
+    ORDER BY hora_inicio ASC
+  `, [dataInicio, dataFimExcl]);
+}

@@ -9,6 +9,7 @@ import { useOrg } from "@/hooks/useOrg";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DollarSign, TrendingUp, TrendingDown, Minus, Users, Package, Scissors, Zap, AlertCircle, RefreshCw } from "lucide-react";
+import { AberturasChart } from "./AberturasChart";
 import { Button } from "@/components/ui/button";
 
 const MESES_LABEL = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -346,6 +347,16 @@ export default function FaturamentoPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Bloco Aberturas */}
+      {d && (
+        <AberturasChart
+          orgId={org?.id}
+          unitId={selectedUnit?.id}
+          dataInicio={d.dataInicio}
+          dataFim={d.dataFim}
+        />
+      )}
     </div>
   );
 }
