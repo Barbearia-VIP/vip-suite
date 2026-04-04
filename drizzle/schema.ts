@@ -1282,3 +1282,23 @@ export const servicoCategorias = mysqlTable("servico_categorias", {
 
 export type ServicoCategoria = typeof servicoCategorias.$inferSelect;
 export type InsertServicoCategoria = typeof servicoCategorias.$inferInsert;
+
+// ─────────────────────────────────────────────
+// DATA VIP — Registro de contatos WhatsApp com clientes
+// Salva cada vez que um colaborador envia mensagem via WhatsApp para um cliente
+// ─────────────────────────────────────────────
+export const clienteContatos = mysqlTable("cliente_contatos", {
+  id: int("id").autoincrement().primaryKey(),
+  clienteExtId: int("clienteExtId").notNull(), // ID do cliente no banco externo
+  orgId: int("orgId"),                          // FK → organizations.id
+  unitId: int("unitId"),                        // FK → units.id
+  mensagem: text("mensagem"),                   // Mensagem enviada
+  criadoEm: timestamp("criadoEm").defaultNow().notNull(),
+}, (t) => [
+  index("idx_cliente_contatos_cliente").on(t.clienteExtId),
+  index("idx_cliente_contatos_unit").on(t.unitId),
+  index("idx_cliente_contatos_org").on(t.orgId),
+]);
+
+export type ClienteContato = typeof clienteContatos.$inferSelect;
+export type InsertClienteContato = typeof clienteContatos.$inferInsert;

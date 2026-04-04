@@ -818,3 +818,15 @@
 - [x] Frontend: exibir número do telefone abaixo do nome no drawer
 - [x] Frontend: modal de envio com campo de mensagem personalizada e número do cliente
 - [x] Frontend: botão "Abrir WhatsApp" abre link wa.me com mensagem pré-preenchida
+
+## Melhorias WhatsApp Painel de Clientes
+- [ ] Backend: tabela cliente_contatos (clienteId, orgId, unitId, mensagem, criadoEm)
+- [ ] Backend: procedure registrarContato (salva contato feito via WhatsApp)
+- [ ] Backend: procedure buscarUltimoContato (retorna data do último contato por clienteId)
+- [ ] Backend: clienteDetalhes retorna ultimoContato
+- [ ] Backend: clientesChurnRisco retorna ultimoContato de cada cliente
+- [ ] Frontend: templates de mensagem no modal WhatsApp (3 atalhos: sentimos falta, promoção, agendamento)
+- [ ] Frontend: ao clicar "Abrir WhatsApp" registrar contato no banco automaticamente
+- [ ] Frontend: badge "Contatado" na tabela Churn & Risco para clientes já contatados
+- [ ] Frontend: checkbox de seleção múltipla na tabela Churn & Risco
+- [ ] Frontend: botão "Contatar selecionados" com modal de envio em massa

@@ -1856,4 +1856,88 @@ export const dataVipRouter = router({
       } catch (err) { handleExternalDbError(err); }
     }),
 
+  // ── Registrar contato WhatsApp com cliente ────────────────────────────────────────────
+  registrarContatoCliente: protectedProcedure
+    .input(z.object({
+      clienteExtId: z.number(),
+      mensagem: z.string().optional(),
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const { getDb: getLocalDb } = await import("../db.js");
+        const { clienteContatos } = await import("../../drizzle/schema.js");
+        const localDb = await getLocalDb();
+        if (!localDb) return { ok: false };
+        await localDb.insert(clienteContatos).values({
+          clienteExtId: input.clienteExtId,
+          mensagem: input.mensagem ?? null,
+          orgId: input.orgId ?? null,
+          unitId: input.unitId ?? null,
+        });
+        return { ok: true };
+      } catch (err) {
+        console.error('[registrarContatoCliente]', err);
+        return { ok: false };
+      }
+    }),
+
+  // ── Buscar último contato WhatsApp de um cliente ────────────────────────────────────────
+  buscarUltimoContato: protectedProcedure
+    .input(z.object({
+      clienteExtId: z.number(),
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      try {
+        const { getDb: getLocalDb } = await import("../db.js");
+        const { clienteContatos } = await import("../../drizzle/schema.js");
+        const { desc, eq, and } = await import("drizzle-orm");
+        const localDb = await getLocalDb();
+        if (!localDb) return null;
+        const conditions: any[] = [eq(clienteContatos.clienteExtId, input.clienteExtId)];
+        if (input.unitId) conditions.push(eq(clienteContatos.unitId, input.unitId));
+        const rows = await localDb
+          .select()
+          .from(clienteContatos)
+          .where(and(...conditions))
+          .orderBy(desc(clienteContatos.criadoEm))
+          .limit(1);
+        return rows[0] ?? null;
+      } catch (err) {
+        console.error('[buscarUltimoContato]', err);
+        return null;
+      }
+    }),
+
+  // ── Listar todos os contatos WhatsApp de um cliente ────────────────────────────────────────
+  listarContatosCliente: protectedProcedure
+    .input(z.object({
+      clienteExtId: z.number(),
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      try {
+        const { getDb: getLocalDb } = await import("../db.js");
+        const { clienteContatos } = await import("../../drizzle/schema.js");
+        const { desc, eq, and } = await import("drizzle-orm");
+        const localDb = await getLocalDb();
+        if (!localDb) return [];
+        const conditions: any[] = [eq(clienteContatos.clienteExtId, input.clienteExtId)];
+        if (input.unitId) conditions.push(eq(clienteContatos.unitId, input.unitId));
+        return await localDb
+          .select()
+          .from(clienteContatos)
+          .where(and(...conditions))
+          .orderBy(desc(clienteContatos.criadoEm))
+          .limit(20);
+      } catch (err) {
+        console.error('[listarContatosCliente]', err);
+        return [];
+      }
+    }),
+
 });

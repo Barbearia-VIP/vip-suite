@@ -169,7 +169,15 @@ function exportarCSV(dados: any[], nomeArquivo: string) {
 // ── Abas ──────────────────────────────────────────────────────────────────────
 type Aba = "visao_geral" | "churn_risco" | "top_clientes";
 
-// ── Componente principal ──────────────────────────────────────────────────────
+// ── Templates de mensagem WhatsApp ─────────────────────────────────────────
+const WA_TEMPLATES = [
+  { label: "Sentimos sua falta",     texto: (nome: string) => `Olá ${nome}! Sentimos sua falta por aqui. Que tal marcar um horário? Estamos com agenda disponível para você! 😊` },
+  { label: "Promoção especial",      texto: (nome: string) => `Olá ${nome}! Temos uma promoção especial para clientes VIP como você. Entre em contato e saiba mais! 🎉` },
+  { label: "Agendamento disponível", texto: (nome: string) => `Olá ${nome}! Temos horários disponíveis esta semana. Gostaria de agendar? Responda esta mensagem! ✂️` },
+  { label: "Retorno cadência",        texto: (nome: string) => `Olá ${nome}! Está na hora de cuidar do visual! Já faz um tempo desde sua última visita. Que tal agendar hoje? 💈` },
+];
+
+// ── Componente principal ─────────────────────────────────────────────────────────────────────────────────
 export default function ClientesPage() {
   const { selectedUnit } = useApp();
   const { org }          = useOrg();
@@ -185,11 +193,23 @@ export default function ClientesPage() {
 
   // Churn & Risco
   const [churnStatus, setChurnStatus]   = useState<"em_risco" | "perdido" | null>(null);
+  const [churnSelecionados, setChurnSelecionados] = useState<Set<number>>(new Set());
+  const [massaModal, setMassaModal]     = useState(false);
+  const [massaMsg, setMassaMsg]         = useState("");
+  const [contatadosLocal, setContatadosLocal] = useState<Set<number>>(new Set());
 
-  // Detalhes do cliente
   const [clienteDetalhesId, setClienteDetalhesId] = useState<number | null>(null);
   const [whatsappModal, setWhatsappModal] = useState(false);
   const [whatsappMsg, setWhatsappMsg] = useState("");
+
+  const mutRegistrarContato = trpc.dataVip.registrarContatoCliente.useMutation();
+
+  const handleAbrirWhatsApp = useCallback((clienteId: number, telefone: string, msg: string) => {
+    const num = telefone.replace(/\D/g, "");
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank");
+    mutRegistrarContato.mutate({ orgId: org?.id, unitId: selectedUnit?.id, clienteExtId: clienteId, mensagem: msg });
+    setContatadosLocal(prev => { const next = new Set(prev); next.add(clienteId); return next; });
+  }, [mutRegistrarContato, org?.id, selectedUnit?.id]);
 
   const dataInicio = toDateStr(filtros.iniMes, filtros.iniAno, false);
   const dataFim    = toDateStr(filtros.fimMes, filtros.fimAno, true);
@@ -491,7 +511,7 @@ export default function ClientesPage() {
                   {colabNome && ` · ${colabNome}`}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {/* Filtro de status */}
                 <div className="flex gap-1">
                   {([null, "em_risco", "perdido"] as const).map(s => (
@@ -508,6 +528,15 @@ export default function ClientesPage() {
                     </button>
                   ))}
                 </div>
+                {churnSelecionados.size > 0 && (
+                  <button
+                    onClick={() => setMassaModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold transition-colors"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Contatar {churnSelecionados.size} selecionados
+                  </button>
+                )}
                 <button
                   onClick={() => exportarCSV(qChurn.data ?? [], `churn-risco-${dataInicio}-${dataFim}.csv`)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted/50 transition-colors"
@@ -521,43 +550,87 @@ export default function ClientesPage() {
             {qChurn.isLoading ? (
               <div className="space-y-2">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
             ) : (
+              <>
+              {/* Selecionar todos */}
+              {(qChurn.data ?? []).length > 0 && (
+                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-border/50">
+                  <input
+                    type="checkbox"
+                    id="sel-todos"
+                    checked={churnSelecionados.size === (qChurn.data ?? []).length && (qChurn.data ?? []).length > 0}
+                    onChange={e => {
+                      if (e.target.checked) setChurnSelecionados(new Set((qChurn.data ?? []).map(c => c.clienteId)));
+                      else setChurnSelecionados(new Set());
+                    }}
+                    className="w-4 h-4 rounded accent-primary cursor-pointer"
+                  />
+                  <label htmlFor="sel-todos" className="text-xs text-muted-foreground cursor-pointer">
+                    {churnSelecionados.size === 0 ? "Selecionar todos" : `${churnSelecionados.size} selecionado(s)`}
+                  </label>
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border">
+                      <th className="py-2 px-3 text-left w-8"></th>
                       {["#", "Cliente", "Status", "Visitas", "Valor Total", "Dias s/ vir"].map((h, i) => (
                         <th key={i} className={`py-2 px-3 text-xs font-semibold text-muted-foreground ${i > 2 ? "text-right" : "text-left"}`}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {(qChurn.data ?? []).map((c, i) => (
-                      <tr key={c.clienteId} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                        <td className="py-2.5 px-3 text-muted-foreground font-mono text-xs">#{i + 1}</td>
-                        <td className="py-2.5 px-3 font-medium">
-                          <button onClick={() => setClienteDetalhesId(c.clienteId)} className="text-primary hover:underline text-left">{c.nome}</button>
-                        </td>
-                        <td className="py-2.5 px-3"><StatusBadge status={c.status} /></td>
-                        <td className="py-2.5 px-3 text-right text-muted-foreground">{fmtNum(c.visitas)}</td>
-                        <td className="py-2.5 px-3 text-right font-semibold text-foreground">{fmtMoeda(c.valorTotal)}</td>
-                        <td className="py-2.5 px-3 text-right">
-                          <span className={`font-medium ${c.diasSemVir > 75 ? "text-red-400" : "text-orange-400"}`}>{c.diasSemVir}d</span>
-                        </td>
-                      </tr>
-                    ))}
+                    {(qChurn.data ?? []).map((c, i) => {
+                      const isSelected = churnSelecionados.has(c.clienteId);
+                      const foiContatado = contatadosLocal.has(c.clienteId);
+                      return (
+                        <tr key={c.clienteId} className={`border-b border-border/50 hover:bg-muted/20 transition-colors ${isSelected ? "bg-primary/5" : ""}`}>
+                          <td className="py-2.5 px-3">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={e => {
+                                setChurnSelecionados(prev => {
+                                  const next = new Set(prev);
+                                  if (e.target.checked) next.add(c.clienteId);
+                                  else next.delete(c.clienteId);
+                                  return next;
+                                });
+                              }}
+                              className="w-4 h-4 rounded accent-primary cursor-pointer"
+                            />
+                          </td>
+                          <td className="py-2.5 px-3 text-muted-foreground font-mono text-xs">#{i + 1}</td>
+                          <td className="py-2.5 px-3 font-medium">
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => setClienteDetalhesId(c.clienteId)} className="text-primary hover:underline text-left">{c.nome}</button>
+                              {foiContatado && (
+                                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-green-500/20 text-green-400 border border-green-500/30">Contatado</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3"><StatusBadge status={c.status} /></td>
+                          <td className="py-2.5 px-3 text-right text-muted-foreground">{fmtNum(c.visitas)}</td>
+                          <td className="py-2.5 px-3 text-right font-semibold text-foreground">{fmtMoeda(c.valorTotal)}</td>
+                          <td className="py-2.5 px-3 text-right">
+                            <span className={`font-medium ${c.diasSemVir > 75 ? "text-red-400" : "text-orange-400"}`}>{c.diasSemVir}d</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {(qChurn.data ?? []).length === 0 && (
-                      <tr><td colSpan={6} className="py-8 text-center text-muted-foreground text-sm">Nenhum cliente em risco ou perdido no período</td></tr>
+                      <tr><td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">Nenhum cliente em risco ou perdido no período</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </CardContent>
         </Card>
       )}
-
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* ABA: TOP CLIENTES                                                  */}
+      {/* ABA: TOP CLIENTESS                                                  */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {aba === "top_clientes" && (
         <Card>
@@ -661,9 +734,71 @@ export default function ClientesPage() {
         </Card>
       )}
 
+      {/* ── Modal de Envio em Massa WhatsApp ──────────────────────────────────── */}
+      {massaModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setMassaModal(false)}>
+          <div className="bg-card border border-border rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-green-500" />
+                Contatar {churnSelecionados.size} clientes
+              </h3>
+              <button onClick={() => setMassaModal(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Os links do WhatsApp serão abertos um a um. Cada cliente receberá a mesma mensagem personalizada com seu nome.
+            </p>
+            <p className="text-xs text-muted-foreground mb-1.5">Templates rápidos:</p>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {WA_TEMPLATES.map((t, i) => (
+                <button
+                  key={i}
+                  onClick={() => setMassaMsg(t.texto("[nome]"))}
+                  className="px-2.5 py-1 rounded-full border border-border text-xs hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <label className="text-xs text-muted-foreground block mb-1.5">Mensagem (use [nome] para personalizar)</label>
+            <textarea
+              value={massaMsg}
+              onChange={e => setMassaMsg(e.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50 mb-4"
+              placeholder="Olá [nome]! ..."
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setMassaModal(false)} className="flex-1 py-2 rounded-lg border border-border text-sm font-medium hover:bg-accent transition-colors">Cancelar</button>
+              <button
+                onClick={() => {
+                  const selecionados = (qChurn.data ?? []).filter(c => churnSelecionados.has(c.clienteId));
+                  selecionados.forEach((c, idx) => {
+                    const telefone = (c as any).telefone;
+                    if (!telefone) return;
+                    const msg = massaMsg.replace(/\[nome\]/gi, c.nome);
+                    setTimeout(() => {
+                      handleAbrirWhatsApp(c.clienteId, telefone, msg);
+                    }, idx * 800);
+                  });
+                  setMassaModal(false);
+                  setChurnSelecionados(new Set());
+                }}
+                className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                Enviar para {churnSelecionados.size} clientes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Espaço entre abas e sheet */}
 
-      {/* ── Sheet de Detalhes do Cliente ─────────────────────────────────── */}
+      {/* ── Sheet de Detalhes do Cliente ────────────────────────────────── */}
       <Sheet open={clienteDetalhesId !== null} onOpenChange={open => { if (!open) setClienteDetalhesId(null); }}>
         <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader className="mb-4">
@@ -801,6 +936,18 @@ export default function ClientesPage() {
                 <Phone className="w-3 h-3" />
                 {qDetalhe.data.telefone}
               </p>
+              <p className="text-xs text-muted-foreground mb-1.5">Templates rápidos:</p>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {WA_TEMPLATES.map((t, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setWhatsappMsg(t.texto(qDetalhe.data!.nome))}
+                    className="px-2.5 py-1 rounded-full border border-border text-xs hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
               <label className="text-xs text-muted-foreground block mb-1.5">Mensagem</label>
               <textarea
                 value={whatsappMsg}
