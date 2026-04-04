@@ -2184,3 +2184,149 @@ export async function getListaColaboradoresClientes(extIds: number[], dataInicio
   `, [dataInicio, dataFimExcl]);
   return rows.map(r => ({ id: Number(r.id), nome: String(r.nome), total: Number(r.total) }));
 }
+
+// ── Detalhes de um cliente específico ────────────────────────────────────────
+export async function getClienteDetalhes(extIds: number[], clienteId: number) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  // KPIs gerais do cliente
+  const kpiRows = await queryExternal<{
+    nome: string;
+    total_visitas: number;
+    valor_total: number;
+    ticket_medio: number;
+    primeira_visita: Date | null;
+    ultima_visita: Date | null;
+    dias_sem_vir: number;
+  }>(`
+    SELECT
+      COALESCE(c.nome, CONCAT('Cliente #', v.cliente)) as nome,
+      COUNT(DISTINCT v.id) as total_visitas,
+      COALESCE(SUM(vp.valor_total), 0) as valor_total,
+      COALESCE(SUM(vp.valor_total) / COUNT(DISTINCT v.id), 0) as ticket_medio,
+      MIN(v.data_criacao) as primeira_visita,
+      MAX(v.data_criacao) as ultima_visita,
+      DATEDIFF(NOW(), MAX(v.data_criacao)) as dias_sem_vir
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    LEFT JOIN clientes c ON c.id = v.cliente
+    WHERE ${unitCond}
+      AND v.cliente = ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+  `, [clienteId]);
+
+  if (!kpiRows.length || !kpiRows[0].total_visitas) return null;
+  const kpi = kpiRows[0];
+
+  // Últimas 20 visitas
+  const visitasRows = await queryExternal<{
+    venda_id: number;
+    data: Date;
+    colaborador: string;
+    valor: number;
+    servicos: string;
+  }>(`
+    SELECT
+      v.id as venda_id,
+      v.data_criacao as data,
+      COALESCE(u.nome, 'Desconhecido') as colaborador,
+      COALESCE(SUM(vp.valor_total), 0) as valor,
+      GROUP_CONCAT(DISTINCT vp.descricao ORDER BY vp.descricao SEPARATOR ', ') as servicos
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN usuarios u ON v.usuario = u.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    WHERE ${unitCond}
+      AND v.cliente = ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+    GROUP BY v.id, v.data_criacao, u.nome
+    ORDER BY v.data_criacao DESC
+    LIMIT 20
+  `, [clienteId]);
+
+  // Top 5 serviços mais consumidos
+  const servicosRows = await queryExternal<{
+    servico: string;
+    quantidade: number;
+    valor_total: number;
+  }>(`
+    SELECT
+      vp.descricao as servico,
+      COUNT(*) as quantidade,
+      COALESCE(SUM(vp.valor_total), 0) as valor_total
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    WHERE ${unitCond}
+      AND v.cliente = ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+    GROUP BY vp.descricao
+    ORDER BY quantidade DESC
+    LIMIT 5
+  `, [clienteId]);
+
+  // Evolução mensal de gasto (últimos 12 meses)
+  const evolRows = await queryExternal<{
+    periodo: string;
+    visitas: number;
+    valor: number;
+  }>(`
+    SELECT
+      DATE_FORMAT(v.data_criacao, '%Y-%m') as periodo,
+      COUNT(DISTINCT v.id) as visitas,
+      COALESCE(SUM(vp.valor_total), 0) as valor
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    WHERE ${unitCond}
+      AND v.cliente = ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+      AND v.data_criacao >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+    GROUP BY DATE_FORMAT(v.data_criacao, '%Y-%m')
+    ORDER BY periodo ASC
+  `, [clienteId]);
+
+  const dias = Number(kpi.dias_sem_vir ?? 0);
+  let status: string;
+  if (dias <= 30) status = "assiduo";
+  else if (dias <= 45) status = "regular";
+  else if (dias <= 60) status = "espacando";
+  else if (dias <= 75) status = "em_risco";
+  else status = "perdido";
+
+  return {
+    clienteId,
+    nome: String(kpi.nome),
+    totalVisitas: Number(kpi.total_visitas),
+    valorTotal: Number(kpi.valor_total),
+    ticketMedio: Number(kpi.ticket_medio),
+    primeiraVisita: kpi.primeira_visita ? new Date(kpi.primeira_visita).toISOString().slice(0, 10) : null,
+    ultimaVisita: kpi.ultima_visita ? new Date(kpi.ultima_visita).toISOString().slice(0, 10) : null,
+    diasSemVir: dias,
+    status,
+    visitas: visitasRows.map(r => ({
+      vendaId: Number(r.venda_id),
+      data: new Date(r.data).toISOString().slice(0, 10),
+      colaborador: String(r.colaborador),
+      valor: Number(r.valor),
+      servicos: String(r.servicos ?? ""),
+    })),
+    topServicos: servicosRows.map(r => ({
+      servico: String(r.servico),
+      quantidade: Number(r.quantidade),
+      valorTotal: Number(r.valor_total),
+    })),
+    evolucaoMensal: evolRows.map(r => ({
+      periodo: String(r.periodo),
+      visitas: Number(r.visitas),
+      valor: Number(r.valor),
+    })),
+  };
+}

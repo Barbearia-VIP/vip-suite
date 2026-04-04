@@ -802,3 +802,11 @@
 - [x] Frontend: aba "Top Clientes" com tabela expandida (50/100), paginação, busca e botão exportar CSV
 - [x] Frontend: seletor de colaborador no painel de filtros da ClientesPage
 - [x] Frontend: todos os indicadores respondem ao colaborador selecionado
+
+## Painel Lateral de Detalhes do Cliente
+- [x] Backend: query getClienteDetalhes (info do cliente, KPIs, histórico de visitas, serviços mais consumidos, evolução de gasto mensal)
+- [x] Frontend: Sheet/Drawer lateral que abre ao clicar no nome do cliente nas tabelas Churn & Risco e Top Clientes
+- [x] Frontend: seção de KPIs do cliente (total visitas, valor total, ticket médio, dias sem vir, status)
+- [x] Frontend: mini-gráfico de evolução de gasto mensal
+- [x] Frontend: lista de últimas visitas com data, serviços e valor
+- [x] Frontend: serviços mais consumidos (top 5)

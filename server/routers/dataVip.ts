@@ -42,6 +42,7 @@ import {
   getClientesChurnRisco,
   getClientesTopExpandido,
   getListaColaboradoresClientes,
+  getClienteDetalhes,
 } from "../dataVipQueries";
 
 // Inicializa scheduler automático (08:00 BRT)
@@ -1815,6 +1816,20 @@ export const dataVipRouter = router({
         return await getListaColaboradoresClientes(extIds, input.dataInicio, input.dataFim);
       } catch (err) { handleExternalDbError(err); }
     }),
+  // ── Detalhes de um cliente específico ────────────────────────────────────────────────
+  clienteDetalhes: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      clienteId: z.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        return await getClienteDetalhes(extIds, input.clienteId);
+      } catch (err) { handleExternalDbError(err); }
+    }),
+
   // ── Faturamento mensal com filtros avançados ────────────────────────────────────────────
   faturamentoMensalFiltrado: protectedProcedure
     .input(z.object({

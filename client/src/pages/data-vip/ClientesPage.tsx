@@ -9,14 +9,15 @@ import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Line, ComposedChart,
+  ResponsiveContainer, Line, ComposedChart, AreaChart, Area,
 } from "recharts";
 import {
   Users, UserPlus, UserCheck, CalendarDays, DollarSign,
   TrendingUp, RefreshCw, ChevronDown, ChevronUp, Star,
-  AlertTriangle, Search, Download, User, X,
+  AlertTriangle, Search, Download, User, X, Scissors, Clock,
 } from "lucide-react";
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
@@ -184,6 +185,9 @@ export default function ClientesPage() {
   // Churn & Risco
   const [churnStatus, setChurnStatus]   = useState<"em_risco" | "perdido" | null>(null);
 
+  // Detalhes do cliente
+  const [clienteDetalhesId, setClienteDetalhesId] = useState<number | null>(null);
+
   const dataInicio = toDateStr(filtros.iniMes, filtros.iniAno, false);
   const dataFim    = toDateStr(filtros.fimMes, filtros.fimAno, true);
   const base       = { orgId: org?.id, unitId: selectedUnit?.id };
@@ -205,6 +209,10 @@ export default function ClientesPage() {
   const qTopExp  = trpc.dataVip.clientesTopExpandido.useQuery(
     { ...base, dataInicio, dataFim, limit: TOP_LIMIT, offset: topOffset, search: topSearch, colaboradorId },
     { enabled: enabled && aba === "top_clientes" }
+  );
+  const qDetalhe = trpc.dataVip.clienteDetalhes.useQuery(
+    { ...base, clienteId: clienteDetalhesId ?? 0 },
+    { enabled: enabled && clienteDetalhesId !== null }
   );
 
   // ── Dados derivados ───────────────────────────────────────────────────────
@@ -523,7 +531,9 @@ export default function ClientesPage() {
                     {(qChurn.data ?? []).map((c, i) => (
                       <tr key={c.clienteId} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                         <td className="py-2.5 px-3 text-muted-foreground font-mono text-xs">#{i + 1}</td>
-                        <td className="py-2.5 px-3 font-medium text-foreground">{c.nome}</td>
+                        <td className="py-2.5 px-3 font-medium">
+                          <button onClick={() => setClienteDetalhesId(c.clienteId)} className="text-primary hover:underline text-left">{c.nome}</button>
+                        </td>
                         <td className="py-2.5 px-3"><StatusBadge status={c.status} /></td>
                         <td className="py-2.5 px-3 text-right text-muted-foreground">{fmtNum(c.visitas)}</td>
                         <td className="py-2.5 px-3 text-right font-semibold text-foreground">{fmtMoeda(c.valorTotal)}</td>
@@ -603,7 +613,9 @@ export default function ClientesPage() {
                       {(qTopExp.data ?? []).map((c, i) => (
                         <tr key={c.clienteId} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                           <td className="py-2.5 px-3 text-muted-foreground font-mono text-xs">#{topOffset + i + 1}</td>
-                          <td className="py-2.5 px-3 font-medium text-foreground">{c.nome}</td>
+                          <td className="py-2.5 px-3 font-medium">
+                            <button onClick={() => setClienteDetalhesId(c.clienteId)} className="text-primary hover:underline text-left">{c.nome}</button>
+                          </td>
                           <td className="py-2.5 px-3"><StatusBadge status={c.status} /></td>
                           <td className="py-2.5 px-3 text-right text-muted-foreground">{fmtNum(c.visitas)}</td>
                           <td className="py-2.5 px-3 text-right font-semibold text-foreground">{fmtMoeda(c.valorTotal)}</td>
@@ -645,6 +657,110 @@ export default function ClientesPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Espaço entre abas e sheet */}
+
+      {/* ── Sheet de Detalhes do Cliente ─────────────────────────────────── */}
+      <Sheet open={clienteDetalhesId !== null} onOpenChange={open => { if (!open) setClienteDetalhesId(null); }}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="flex items-center gap-2">
+              <User className="w-5 h-5 text-primary" />
+              {qDetalhe.isLoading ? "Carregando..." : (qDetalhe.data?.nome ?? "Cliente")}
+            </SheetTitle>
+          </SheetHeader>
+
+          {qDetalhe.isLoading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+            </div>
+          ) : qDetalhe.data ? (
+            <div className="space-y-6">
+              {/* KPIs do cliente */}
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { icon: <CalendarDays className="w-4 h-4" />, label: "Total Visitas", val: fmtNum(qDetalhe.data.totalVisitas) },
+                  { icon: <DollarSign className="w-4 h-4" />, label: "Valor Total", val: fmtMoeda(qDetalhe.data.valorTotal) },
+                  { icon: <TrendingUp className="w-4 h-4" />, label: "Ticket Médio", val: fmtMoeda(qDetalhe.data.ticketMedio) },
+                  { icon: <Clock className="w-4 h-4" />, label: "Dias s/ Vir", val: `${qDetalhe.data.diasSemVir}d` },
+                ].map((item, i) => (
+                  <div key={i} className="bg-muted/30 rounded-lg p-3">
+                    <div className="flex items-center gap-1.5 text-muted-foreground mb-1">{item.icon}<span className="text-xs">{item.label}</span></div>
+                    <p className="text-base font-bold text-foreground">{item.val}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Status e datas */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <StatusBadge status={qDetalhe.data.status} />
+                {qDetalhe.data.primeiraVisita && <span className="text-xs text-muted-foreground">1ª visita: {qDetalhe.data.primeiraVisita}</span>}
+                {qDetalhe.data.ultimaVisita && <span className="text-xs text-muted-foreground">Última: {qDetalhe.data.ultimaVisita}</span>}
+              </div>
+
+              {/* Evolução mensal de gasto */}
+              {qDetalhe.data.evolucaoMensal.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold mb-2 flex items-center gap-1.5"><TrendingUp className="w-4 h-4 text-primary" /> Evolução de Gasto (12m)</p>
+                  <div className="h-36">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={qDetalhe.data.evolucaoMensal.map(r => ({ label: r.periodo.slice(0, 7), valor: r.valor, visitas: r.visitas }))}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
+                        <Tooltip formatter={(v: number) => fmtMoeda(v)} />
+                        <Area type="monotone" dataKey="valor" stroke="#d4a017" fill="#d4a01733" strokeWidth={2} name="Valor" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* Top serviços */}
+              {qDetalhe.data.topServicos.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold mb-2 flex items-center gap-1.5"><Scissors className="w-4 h-4 text-primary" /> Serviços Mais Consumidos</p>
+                  <div className="space-y-2">
+                    {qDetalhe.data.topServicos.map((s, i) => (
+                      <div key={i} className="flex items-center justify-between py-1.5 border-b border-border/50">
+                        <span className="text-sm text-foreground">{s.servico}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-muted-foreground">{s.quantidade}x</span>
+                          <span className="text-sm font-semibold text-foreground">{fmtMoeda(s.valorTotal)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Últimas visitas */}
+              {qDetalhe.data.visitas.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold mb-2 flex items-center gap-1.5"><CalendarDays className="w-4 h-4 text-primary" /> Últimas Visitas</p>
+                  <div className="space-y-2">
+                    {qDetalhe.data.visitas.map((v, i) => (
+                      <div key={i} className="bg-muted/20 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-foreground">{v.data}</span>
+                          <span className="text-sm font-bold text-primary">{fmtMoeda(v.valor)}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{v.colaborador}</p>
+                        {v.servicos && <p className="text-xs text-muted-foreground mt-0.5 truncate">{v.servicos}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
+              <User className="w-10 h-10 mb-2 opacity-30" />
+              <p className="text-sm">Dados não disponíveis</p>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
     </div>
   );
