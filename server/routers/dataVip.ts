@@ -1480,6 +1480,7 @@ export const dataVipRouter = router({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
       meses: z.number().int().min(1).max(24),
+      colaboradorId: z.number().optional(), // filtra KPIs por colaborador
     }))
     .query(async ({ ctx, input }) => {
       try {
@@ -1487,6 +1488,7 @@ export const dataVipRouter = router({
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
       const N = input.meses;
+      const colabId = input.colaboradorId;
       const now = new Date();
       // Período atual: últimos N meses completos
       // Ex: N=3, hoje=abr/2026 → período = jan/2026 a mar/2026
@@ -1512,9 +1514,9 @@ export const dataVipRouter = router({
       const momFimExcl = new Date(momFim.getFullYear(), momFim.getMonth() + 1, 1).toISOString().slice(0, 10);
       const splyFimExcl = new Date(fimMes.getFullYear() - 1, fimMes.getMonth() + 1, 1).toISOString().slice(0, 10);
       const [kAtual, kMom, kSply, diasAtual, diasMom, diasSply, diasM6, diasM12] = await Promise.all([
-        getKpisRealtimeByRange(extIds, periodoAtualInicio, periodoAtualFim),
-        getKpisRealtimeByRange(extIds, momInicioStr, momFimStr),
-        getKpisRealtimeByRange(extIds, splyInicio, splyFim),
+        getKpisRealtimeByRange(extIds, periodoAtualInicio, periodoAtualFim, colabId),
+        getKpisRealtimeByRange(extIds, momInicioStr, momFimStr, colabId),
+        getKpisRealtimeByRange(extIds, splyInicio, splyFim, colabId),
         getDiasTrabalhados(extIds, periodoAtualInicio, atualFimExcl),
         getDiasTrabalhados(extIds, momInicioStr, momFimExcl),
         getDiasTrabalhados(extIds, splyInicio, splyFimExcl),
@@ -1527,7 +1529,7 @@ export const dataVipRouter = router({
           const d = new Date(inicioMes.getFullYear(), inicioMes.getMonth() - 1 - i, 1);
           const ini = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
           const fim = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
-          return getKpisRealtimeByRange(extIds, ini, fim);
+          return getKpisRealtimeByRange(extIds, ini, fim, colabId);
         })
       );
       const m12Rows = await Promise.all(
@@ -1535,7 +1537,7 @@ export const dataVipRouter = router({
           const d = new Date(inicioMes.getFullYear(), inicioMes.getMonth() - 1 - i, 1);
           const ini = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
           const fim = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
-          return getKpisRealtimeByRange(extIds, ini, fim);
+          return getKpisRealtimeByRange(extIds, ini, fim, colabId);
         })
       );
       const avgKpiP = (rows: typeof m6Rows, key: keyof typeof m6Rows[0]) => {

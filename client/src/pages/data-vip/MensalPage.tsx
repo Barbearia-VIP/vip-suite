@@ -436,9 +436,9 @@ export default function MensalPage() {
     { enabled: !!org?.id }
   );
 
-  // KPIs do período selecionado (usa meses calculados)
+  // KPIs do período selecionado (usa meses calculados + colaborador filtrado)
   const qKpis = trpc.dataVip.kpisPeriodoMensal.useQuery(
-    { orgId: org?.id, unitId: selectedUnit?.id, meses: mesesNoPeriodo },
+    { orgId: org?.id, unitId: selectedUnit?.id, meses: mesesNoPeriodo, colaboradorId: filtrosAplicados.colaboradorId },
     { enabled: !!org?.id }
   );
 

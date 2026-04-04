@@ -764,3 +764,8 @@
 ## Filtro Colaboradores por Período
 - [x] Backend: adicionar dataInicio/dataFim na procedure listarColaboradoresMensal e na query getListaColaboradoresMensal
 - [x] Frontend: passar dataInicio/dataFim dos filtros aplicados para a query de colaboradores, mostrando apenas quem tem vendas no período
+
+## KPIs do Período filtrados por colaborador
+- [x] Backend: atualizar procedure kpisPeriodoMensal para aceitar colaboradorId e filtrar os dados
+- [x] Backend: atualizar getKpisRealtimeByRange para aceitar e aplicar colaboradorId em todas as queries SQL
+- [x] Frontend: passar colaboradorId dos filtros aplicados para a query kpisPeriodoMensal

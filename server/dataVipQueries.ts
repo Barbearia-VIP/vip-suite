@@ -124,12 +124,21 @@ async function getKpisRealtime(extIds: number[], ano: number, mes: number) {
 }
 
 /** Busca KPIs por range de datas livre (tempo real, tabela vendas) */
-export async function getKpisRealtimeByRange(extIds: number[], dataInicio: string, dataFim: string) {
+export async function getKpisRealtimeByRange(
+  extIds: number[],
+  dataInicio: string,
+  dataFim: string,
+  colaboradorId?: number
+) {
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
   // dataFim é inclusivo: adicionar 1 dia para usar < no WHERE
   const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+
+  // Filtro de colaborador (filtra por vp.colaborador quando fornecido)
+  const colabCond = colaboradorId ? `AND vp.colaborador = ${colaboradorId}` : "";
+  const colabCondV = colaboradorId ? `AND v.usuario = ${colaboradorId}` : "";
 
   // Faturamento e atendimentos via JOIN vendas_produtos (só conta vendas com itens)
   const rows = await queryExternal<{
@@ -149,6 +158,7 @@ export async function getKpisRealtimeByRange(extIds: number[], dataInicio: strin
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
       AND v.status != 0
+      ${colabCond}
   `, [dataInicio, dataFimExcl]);
 
   // Clientes novos = primeira visita nesta unidade no período
@@ -156,12 +166,14 @@ export async function getKpisRealtimeByRange(extIds: number[], dataInicio: strin
     SELECT COUNT(DISTINCT v.cliente) as novos
     FROM vendas v
     JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
     WHERE ${unitCond}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
       AND v.status != 0
       AND v.cliente IS NOT NULL
+      ${colabCond}
       AND v.cliente NOT IN (
         SELECT DISTINCT v2.cliente
         FROM vendas v2
@@ -197,6 +209,7 @@ export async function getKpisRealtimeByRange(extIds: number[], dataInicio: strin
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
       AND v.status != 0
+      ${colabCond}
   `, [dataInicio, dataFimExcl]);
 
   const fat = Number(rows[0]?.total_vendas ?? 0);
