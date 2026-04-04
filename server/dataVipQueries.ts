@@ -656,11 +656,11 @@ export async function getColaboradores(extIds: number[], ano: number, mes: numbe
 // ─── Colaboradores por range de datas (tempo real, tabela vendas) ───────────────
 
 export async function getColaboradoresByRange(extIds: number[], dataInicio: string, dataFim: string) {
-  // Filtro de unidade: colaborador (vp.usuario) deve pertencer à unidade selecionada
+  // O campo v.caixa identifica o barbeiro que realizou o atendimento
+  // (v.usuario é quem registrou a venda, ex: recepcionista/caixa)
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `colab.unidade = ${extIds[0]}`
     : `colab.unidade IN (${extIds.join(",")})`;
-  // Para subquery de clientes novos: verifica se cliente já visitou a unidade antes
   const unitCondV2 = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu2.unidade = ${extIds[0]}`
     : `uu2.unidade IN (${extIds.join(",")})`;
@@ -686,8 +686,8 @@ export async function getColaboradoresByRange(extIds: number[], dataInicio: stri
       colab.id as colaborador_id,
       colab.nome as colaborador_nome,
       COALESCE(SUM(vp.valor_total), 0) as faturamento,
-      COUNT(DISTINCT vp.venda) as atendimentos,
-      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT vp.venda), 0), 0) as ticket_medio,
+      COUNT(DISTINCT v.id) as atendimentos,
+      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
       COUNT(DISTINCT DATE(v.data_criacao)) as dias_trabalhados,
       COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT DATE(v.data_criacao)), 0), 0) as faturamento_dia,
       COUNT(CASE WHEN p.tipo = 'ser' THEN 1 END) as servicos,
@@ -707,9 +707,9 @@ export async function getColaboradoresByRange(extIds: number[], dataInicio: stri
       END) as clientes_novos,
       COUNT(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN 1 END) as produtos_qtd,
       COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.valor_total END), 0) as produtos_valor
-    FROM vendas_produtos vp
-    JOIN usuarios colab ON colab.id = vp.usuario
-    JOIN vendas v ON v.id = vp.venda
+    FROM vendas v
+    JOIN usuarios colab ON colab.id = v.caixa
+    JOIN vendas_produtos vp ON vp.venda = v.id
     JOIN produtos p ON p.id = vp.produto
     WHERE ${unitCond}
       AND v.data_criacao >= ?

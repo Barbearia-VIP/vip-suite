@@ -948,4 +948,27 @@ export const dataVipRouter = router({
       }));
     }),
 
+  // ── Debug temporário: identificar campo do barbeiro ──────────────────────────────
+  debugVpCols: protectedProcedure
+    .input(z.object({}))
+    .query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const { queryExternal } = await import("../db-external");
+      // Verificar campos de vendas_produtos
+      const vpCols = await queryExternal<{ Field: string }>("DESCRIBE vendas_produtos", []);
+      // Verificar se caixa=900 (Wuesley) tem vendas em março
+      const wuesleyCaixa = await queryExternal<any>(
+        `SELECT COUNT(*) as total, SUM(valor_total) as fat FROM vendas WHERE caixa=900 AND data_criacao>='2026-03-01' AND data_criacao<'2026-04-01' AND comanda_temp=0 AND status!=0`, []
+      );
+      // Verificar por caixa em março para unidade 29
+      const porCaixa = await queryExternal<any>(
+        `SELECT v.caixa, u.nome, COUNT(*) as vendas, SUM(v.valor_total) as fat FROM vendas v JOIN usuarios u ON u.id=v.caixa WHERE u.unidade=29 AND v.data_criacao>='2026-03-01' AND v.data_criacao<'2026-04-01' AND v.comanda_temp=0 AND v.status!=0 GROUP BY v.caixa, u.nome ORDER BY fat DESC LIMIT 10`, []
+      );
+      return {
+        vpCols: vpCols.map((c: any) => c.Field),
+        wuesleyCaixa,
+        porCaixa,
+      };
+    }),
+
 });
