@@ -686,3 +686,6 @@
 
 ## Renomeação Ranking Colaboradores
 - [x] Renomear "Ranking Barbeiros" para "Ranking Colaboradores" na página de Faturamento
+
+## Top Itens - Limite
+- [x] Alterar exibição de Top Itens de 8 para 12 itens

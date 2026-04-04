@@ -322,7 +322,7 @@ export default function FaturamentoPage() {
             ) : !d?.topItens.length ? (
               <p className="text-sm text-muted-foreground text-center py-4">Sem dados no período</p>
             ) : (
-              d.topItens.slice(0, 8).map((item, i) => (
+              d.topItens.slice(0, 12).map((item, i) => (
                 <div key={i}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
