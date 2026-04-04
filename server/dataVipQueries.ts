@@ -1620,3 +1620,411 @@ export async function getFaturamentoPorFaixaHoraria(extIds: number[], dataInicio
     ORDER BY hora_inicio ASC
   `, [dataInicio, dataFimExcl]);
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PAINEL DE CLIENTES — queries completas
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** KPIs gerais do painel de clientes para um período */
+export async function getClientesKpis(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+
+  // Total clientes únicos no período + novos (primeira visita na unidade)
+  const rows = await queryExternal<{
+    total_clientes: number;
+    total_atendimentos: number;
+    valor_total: number;
+  }>(`
+    SELECT
+      COUNT(DISTINCT v.cliente) as total_clientes,
+      COUNT(DISTINCT v.id) as total_atendimentos,
+      COALESCE(SUM(vp.valor_total), 0) as valor_total
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+      AND v.cliente IS NOT NULL
+  `, [dataInicio, dataFimExcl]);
+
+  // Clientes novos = primeira visita nesta unidade no período
+  const novosRows = await queryExternal<{ novos: number }>(`
+    SELECT COUNT(DISTINCT v.cliente) as novos
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+      AND v.cliente IS NOT NULL
+      AND v.cliente NOT IN (
+        SELECT DISTINCT v2.cliente
+        FROM vendas v2
+        JOIN usuarios uu2 ON v2.usuario = uu2.id
+        WHERE uu2.unidade ${extIds.length === 1 ? `= ${extIds[0]}` : extIds.length > 1 ? `IN (${extIds.join(',')})` : '> 0'}
+          AND v2.data_criacao < ?
+          AND v2.comanda_temp = 0
+          AND v2.status != 0
+          AND v2.cliente IS NOT NULL
+      )
+  `, [dataInicio, dataFimExcl, dataInicio]);
+
+  // Novos que retornaram = clientes novos no período que tiveram 2+ visitas no período
+  const novosRetornaramRows = await queryExternal<{ retornaram: number }>(`
+    SELECT COUNT(*) as retornaram
+    FROM (
+      SELECT v.cliente
+      FROM vendas v
+      JOIN usuarios uu ON v.usuario = uu.id
+      WHERE ${unitCond}
+        AND v.data_criacao >= ?
+        AND v.data_criacao < ?
+        AND v.comanda_temp = 0
+        AND v.status != 0
+        AND v.cliente IS NOT NULL
+        AND v.cliente NOT IN (
+          SELECT DISTINCT v2.cliente
+          FROM vendas v2
+          JOIN usuarios uu2 ON v2.usuario = uu2.id
+          WHERE uu2.unidade ${extIds.length === 1 ? `= ${extIds[0]}` : extIds.length > 1 ? `IN (${extIds.join(',')})` : '> 0'}
+            AND v2.data_criacao < ?
+            AND v2.comanda_temp = 0
+            AND v2.status != 0
+            AND v2.cliente IS NOT NULL
+        )
+      GROUP BY v.cliente
+      HAVING COUNT(DISTINCT v.id) >= 2
+    ) sub
+  `, [dataInicio, dataFimExcl, dataInicio]);
+
+  // Retenção 30d novos: % de novos que voltaram em até 30 dias
+  const retencao30dRows = await queryExternal<{ retencao: number }>(`
+    SELECT 
+      ROUND(
+        100.0 * COUNT(DISTINCT CASE WHEN v2.id IS NOT NULL THEN v.cliente END)
+        / NULLIF(COUNT(DISTINCT v.cliente), 0)
+      , 1) as retencao
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    LEFT JOIN vendas v2 ON v2.cliente = v.cliente
+      AND v2.data_criacao > v.data_criacao
+      AND v2.data_criacao <= DATE_ADD(v.data_criacao, INTERVAL 30 DAY)
+      AND v2.comanda_temp = 0
+      AND v2.status != 0
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+      AND v.cliente IS NOT NULL
+      AND v.cliente NOT IN (
+        SELECT DISTINCT v3.cliente
+        FROM vendas v3
+        JOIN usuarios uu3 ON v3.usuario = uu3.id
+        WHERE uu3.unidade ${extIds.length === 1 ? `= ${extIds[0]}` : extIds.length > 1 ? `IN (${extIds.join(',')})` : '> 0'}
+          AND v3.data_criacao < ?
+          AND v3.comanda_temp = 0
+          AND v3.status != 0
+          AND v3.cliente IS NOT NULL
+      )
+  `, [dataInicio, dataFimExcl, dataInicio]);
+
+  const total = Number(rows[0]?.total_clientes ?? 0);
+  const atend = Number(rows[0]?.total_atendimentos ?? 0);
+  const valorTotal = Number(rows[0]?.valor_total ?? 0);
+  const novos = Number(novosRows[0]?.novos ?? 0);
+  const novosRetornaram = Number(novosRetornaramRows[0]?.retornaram ?? 0);
+  const retencao30d = Number(retencao30dRows[0]?.retencao ?? 0);
+
+  return {
+    totalClientes: total,
+    novos,
+    novosRetornaram,
+    novosRetornaramPct: novos > 0 ? Math.round((novosRetornaram / novos) * 100 * 10) / 10 : 0,
+    novosPctTotal: total > 0 ? Math.round((novos / total) * 100 * 10) / 10 : 0,
+    atendimentos: atend,
+    ticketMedio: atend > 0 ? valorTotal / atend : 0,
+    valorTotal,
+    retencao30dNovos: retencao30d,
+  };
+}
+
+/** Distribuição por status (Assíduo, Regular, Espaçando, 1ª Vez, Em Risco, Perdido)
+ * Baseado na cadência de visitas do cliente:
+ * - Assíduo: visita com frequência < 80% da cadência esperada (≤ 30d)
+ * - Regular: 80-120% da cadência (31-45d)
+ * - Espaçando: 120-180% da cadência (46-60d)
+ * - Em Risco: 2x+ a cadência, 31-75d sem vir
+ * - Perdido: 2x+ a cadência, > 75d sem vir
+ * - 1ª Vez: apenas 1 visita, última há ≤ 30d
+ * Simplificação: usamos dias desde última visita na unidade
+ */
+export async function getClientesDistribuicaoStatus(extIds: number[]) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `c.ultima_visita_unidade = ${extIds[0]}`
+    : `c.ultima_visita_unidade IN (${extIds.join(",")})`;
+  const unitCondV = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  const rows = await queryExternal<{
+    status_label: string;
+    total: number;
+  }>(`
+    SELECT
+      CASE
+        WHEN total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) <= 30 THEN '1a_vez'
+        WHEN DATEDIFF(NOW(), c.ultima_visita) <= 30 THEN 'assiduo'
+        WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 31 AND 45 THEN 'regular'
+        WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 46 AND 60 THEN 'espacando'
+        WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 75 THEN 'em_risco'
+        ELSE 'perdido'
+      END as status_label,
+      COUNT(*) as total
+    FROM clientes c
+    JOIN (
+      SELECT v.cliente, COUNT(DISTINCT v.id) as total_visitas
+      FROM vendas v
+      JOIN usuarios uu ON v.usuario = uu.id
+      WHERE ${unitCondV}
+        AND v.comanda_temp = 0
+        AND v.status != 0
+        AND v.cliente IS NOT NULL
+      GROUP BY v.cliente
+    ) vc ON vc.cliente = c.id
+    WHERE ${unitCond}
+      AND c.status = 1
+      AND c.ultima_visita IS NOT NULL
+    GROUP BY status_label
+  `);
+
+  const map: Record<string, number> = {};
+  for (const r of rows) map[r.status_label] = Number(r.total);
+
+  return {
+    assiduo: map["assiduo"] ?? 0,
+    regular: map["regular"] ?? 0,
+    espacando: map["espacando"] ?? 0,
+    primeiraVez: map["1a_vez"] ?? 0,
+    emRisco: map["em_risco"] ?? 0,
+    perdido: map["perdido"] ?? 0,
+    total: Object.values(map).reduce((s, v) => s + v, 0),
+  };
+}
+
+/** Evolução mensal: clientes únicos e novos por mês no período */
+export async function getClientesEvolucaoMensal(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+
+  const rows = await queryExternal<{
+    ano: number;
+    mes: number;
+    clientes_unicos: number;
+    novos: number;
+  }>(`
+    SELECT
+      YEAR(v.data_criacao) as ano,
+      MONTH(v.data_criacao) as mes,
+      COUNT(DISTINCT v.cliente) as clientes_unicos,
+      COUNT(DISTINCT CASE
+        WHEN NOT EXISTS (
+          SELECT 1 FROM vendas v2
+          JOIN usuarios uu2 ON v2.usuario = uu2.id
+          WHERE v2.cliente = v.cliente
+            AND uu2.unidade ${extIds.length === 1 ? `= ${extIds[0]}` : extIds.length > 1 ? `IN (${extIds.join(',')})` : '> 0'}
+            AND v2.data_criacao < DATE_FORMAT(v.data_criacao, '%Y-%m-01')
+            AND v2.comanda_temp = 0
+            AND v2.status != 0
+        ) THEN v.cliente
+      END) as novos
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+      AND v.cliente IS NOT NULL
+    GROUP BY YEAR(v.data_criacao), MONTH(v.data_criacao)
+    ORDER BY ano ASC, mes ASC
+  `, [dataInicio, dataFimExcl]);
+
+  return rows.map(r => ({
+    periodo: `${r.ano}-${String(Number(r.mes)).padStart(2, "0")}`,
+    clientesUnicos: Number(r.clientes_unicos),
+    novos: Number(r.novos),
+  }));
+}
+
+/** Distribuição por frequência de visitas no período */
+export async function getClientesDistribuicaoFrequencia(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+
+  const rows = await queryExternal<{ faixa: string; ordem: number; total: number }>(`
+    SELECT
+      CASE
+        WHEN visitas = 1 AND dias_desde_visita <= 30 THEN '1x (aguardando)'
+        WHEN visitas = 1 AND dias_desde_visita > 30 AND dias_desde_visita <= 60 THEN '1x (>30d)'
+        WHEN visitas = 1 AND dias_desde_visita > 60 THEN '1x (>60d)'
+        WHEN visitas = 2 THEN '2 vezes'
+        WHEN visitas BETWEEN 3 AND 4 THEN '3-4 vezes'
+        WHEN visitas BETWEEN 5 AND 9 THEN '5-9 vezes'
+        WHEN visitas BETWEEN 10 AND 12 THEN '10-12 vezes'
+        WHEN visitas BETWEEN 13 AND 15 THEN '13-15 vezes'
+        WHEN visitas BETWEEN 16 AND 20 THEN '16-20 vezes'
+        WHEN visitas BETWEEN 21 AND 30 THEN '21-30 vezes'
+        ELSE '30+ vezes'
+      END as faixa,
+      CASE
+        WHEN visitas = 1 AND dias_desde_visita <= 30 THEN 1
+        WHEN visitas = 1 AND dias_desde_visita > 30 AND dias_desde_visita <= 60 THEN 2
+        WHEN visitas = 1 AND dias_desde_visita > 60 THEN 3
+        WHEN visitas = 2 THEN 4
+        WHEN visitas BETWEEN 3 AND 4 THEN 5
+        WHEN visitas BETWEEN 5 AND 9 THEN 6
+        WHEN visitas BETWEEN 10 AND 12 THEN 7
+        WHEN visitas BETWEEN 13 AND 15 THEN 8
+        WHEN visitas BETWEEN 16 AND 20 THEN 9
+        WHEN visitas BETWEEN 21 AND 30 THEN 10
+        ELSE 11
+      END as ordem,
+      COUNT(*) as total
+    FROM (
+      SELECT
+        v.cliente,
+        COUNT(DISTINCT v.id) as visitas,
+        DATEDIFF(NOW(), MAX(v.data_criacao)) as dias_desde_visita
+      FROM vendas v
+      JOIN usuarios uu ON v.usuario = uu.id
+      WHERE ${unitCond}
+        AND v.data_criacao >= ?
+        AND v.data_criacao < ?
+        AND v.comanda_temp = 0
+        AND v.status != 0
+        AND v.cliente IS NOT NULL
+      GROUP BY v.cliente
+    ) sub
+    GROUP BY faixa, ordem
+    ORDER BY ordem ASC
+  `, [dataInicio, dataFimExcl]);
+
+  return rows.map(r => ({
+    faixa: r.faixa,
+    total: Number(r.total),
+  }));
+}
+
+/** Distribuição por dias sem vir (baseado na última visita atual dos clientes que visitaram no período) */
+export async function getClientesDistribuicaoDiasSemVir(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+
+  const rows = await queryExternal<{ faixa: string; total: number }>(`
+    SELECT
+      CASE
+        WHEN DATEDIFF(NOW(), ultima_visita_periodo) <= 20 THEN 'ate_20d'
+        WHEN DATEDIFF(NOW(), ultima_visita_periodo) BETWEEN 21 AND 30 THEN '21_30d'
+        WHEN DATEDIFF(NOW(), ultima_visita_periodo) BETWEEN 31 AND 45 THEN '31_45d'
+        WHEN DATEDIFF(NOW(), ultima_visita_periodo) BETWEEN 46 AND 75 THEN '46_75d'
+        ELSE 'mais_75d'
+      END as faixa,
+      COUNT(*) as total
+    FROM (
+      SELECT v.cliente, MAX(v.data_criacao) as ultima_visita_periodo
+      FROM vendas v
+      JOIN usuarios uu ON v.usuario = uu.id
+      WHERE ${unitCond}
+        AND v.data_criacao >= ?
+        AND v.data_criacao < ?
+        AND v.comanda_temp = 0
+        AND v.status != 0
+        AND v.cliente IS NOT NULL
+      GROUP BY v.cliente
+    ) sub
+    GROUP BY faixa
+  `, [dataInicio, dataFimExcl]);
+
+  const map: Record<string, number> = {};
+  for (const r of rows) map[r.faixa] = Number(r.total);
+
+  return {
+    ate20d: map["ate_20d"] ?? 0,
+    d21a30: map["21_30d"] ?? 0,
+    d31a45: map["31_45d"] ?? 0,
+    d46a75: map["46_75d"] ?? 0,
+    mais75d: map["mais_75d"] ?? 0,
+  };
+}
+
+/** Top N clientes por valor total no período */
+export async function getClientesTop(extIds: number[], dataInicio: string, dataFim: string, limit = 10) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+
+  const rows = await queryExternal<{
+    cliente_id: number;
+    nome: string;
+    visitas: number;
+    valor_total: number;
+    ultima_visita: Date | null;
+    dias_sem_vir: number;
+  }>(`
+    SELECT
+      v.cliente as cliente_id,
+      COALESCE(c.nome, CONCAT('Cliente #', v.cliente)) as nome,
+      COUNT(DISTINCT v.id) as visitas,
+      COALESCE(SUM(vp.valor_total), 0) as valor_total,
+      MAX(v.data_criacao) as ultima_visita,
+      DATEDIFF(NOW(), MAX(v.data_criacao)) as dias_sem_vir
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    LEFT JOIN clientes c ON c.id = v.cliente
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+      AND v.cliente IS NOT NULL
+    GROUP BY v.cliente, c.nome
+    ORDER BY valor_total DESC
+    LIMIT ${Number(limit)}
+  `, [dataInicio, dataFimExcl]);
+
+  return rows.map(r => {
+    const dias = Number(r.dias_sem_vir ?? 0);
+    let status: string;
+    if (dias <= 30) status = "assiduo";
+    else if (dias <= 45) status = "regular";
+    else if (dias <= 60) status = "espacando";
+    else if (dias <= 75) status = "em_risco";
+    else status = "perdido";
+
+    return {
+      clienteId: Number(r.cliente_id),
+      nome: String(r.nome),
+      visitas: Number(r.visitas),
+      valorTotal: Number(r.valor_total),
+      diasSemVir: dias,
+      status,
+    };
+  });
+}

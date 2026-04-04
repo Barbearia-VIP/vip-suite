@@ -33,6 +33,12 @@ import {
   getFaturamentoMensalDetalhado,
   getFaturamentoMensalDetalhadoFiltrado,
   getListaColaboradoresMensal,
+  getClientesKpis,
+  getClientesDistribuicaoStatus,
+  getClientesEvolucaoMensal,
+  getClientesDistribuicaoFrequencia,
+  getClientesDistribuicaoDiasSemVir,
+  getClientesTop,
 } from "../dataVipQueries";
 
 // Inicializa scheduler automático (08:00 BRT)
@@ -354,28 +360,48 @@ export const dataVipRouter = router({
       );
       const { queryExternal } = await import("../db-external");
       const unitCond = extIds.length === 0 ? "1=1"
-        : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
-        : `ultima_visita_unidade IN (${extIds.join(",")})`;
+        : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+        : `uu.unidade IN (${extIds.join(",")})`;
       let searchCond = "";
       const params: unknown[] = [];
       if (input.search) {
-        searchCond = ` AND (nome LIKE ? OR telefone LIKE ?)`;
+        searchCond = ` AND (c.nome LIKE ? OR c.telefone LIKE ?)`;
         params.push(`%${input.search}%`, `%${input.search}%`);
       }
       const offset = (input.page - 1) * input.pageSize;
       const rows = await queryExternal<{
         id: number; nome: string; telefone: string;
-        data_criacao: Date; ultima_visita: Date; visitas: number; consumo: number;
+        data_criacao: Date; ultima_visita: Date; total_visitas: number; total_gasto: number;
       }>(`
-        SELECT id, nome, telefone, data_criacao, ultima_visita, visitas, consumo
-        FROM clientes
-        WHERE ${unitCond} AND status = 1${searchCond}
+        SELECT
+          c.id,
+          COALESCE(c.nome, CONCAT('Cliente #', c.id)) as nome,
+          c.telefone,
+          c.data_criacao,
+          MAX(v.data_criacao) as ultima_visita,
+          COUNT(DISTINCT v.id) as total_visitas,
+          COALESCE(SUM(vp.valor_total), 0) as total_gasto
+        FROM clientes c
+        JOIN vendas v ON v.cliente = c.id
+        JOIN usuarios uu ON v.usuario = uu.id
+        JOIN vendas_produtos vp ON vp.venda = v.id
+        WHERE ${unitCond}
+          AND c.status = 1
+          AND v.comanda_temp = 0
+          AND v.status != 0${searchCond}
+        GROUP BY c.id, c.nome, c.telefone, c.data_criacao
         ORDER BY ultima_visita DESC
         LIMIT ${input.pageSize} OFFSET ${offset}
       `, params);
       const cntRows = await queryExternal<{ total: number }>(`
-        SELECT COUNT(*) as total FROM clientes
-        WHERE ${unitCond} AND status = 1${searchCond}
+        SELECT COUNT(DISTINCT c.id) as total
+        FROM clientes c
+        JOIN vendas v ON v.cliente = c.id
+        JOIN usuarios uu ON v.usuario = uu.id
+        WHERE ${unitCond}
+          AND c.status = 1
+          AND v.comanda_temp = 0
+          AND v.status != 0${searchCond}
       `, params);
       return {
         clientes: rows.map(r => ({
@@ -384,8 +410,8 @@ export const dataVipRouter = router({
           telefone: r.telefone,
           primeiraVenda: r.data_criacao,
           ultimaVenda: r.ultima_visita,
-          totalVisitas: Number(r.visitas),
-          totalGasto: Number(r.consumo),
+          totalVisitas: Number(r.total_visitas),
+          totalGasto: Number(r.total_gasto),
           dias: r.ultima_visita ? Math.floor((Date.now() - new Date(r.ultima_visita).getTime()) / 86400000) : 999,
         })),
         total: Number(cntRows[0]?.total ?? 0),
@@ -1654,6 +1680,90 @@ export const dataVipRouter = router({
         nome: String(r.colaborador_nome),
         tipo: String(r.tipo),
       }));
+    }),
+
+  // ── Painel de Clientes ────────────────────────────────────────────────────────
+  clientesKpis: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(), // 'YYYY-MM-DD'
+      dataFim: z.string(),    // 'YYYY-MM-DD'
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        return await getClientesKpis(extIds, input.dataInicio, input.dataFim);
+      } catch (err) { handleExternalDbError(err); }
+    }),
+
+  clientesDistribuicaoStatus: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        return await getClientesDistribuicaoStatus(extIds);
+      } catch (err) { handleExternalDbError(err); }
+    }),
+
+  clientesEvolucaoMensal: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        return await getClientesEvolucaoMensal(extIds, input.dataInicio, input.dataFim);
+      } catch (err) { handleExternalDbError(err); }
+    }),
+
+  clientesDistribuicaoFrequencia: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        return await getClientesDistribuicaoFrequencia(extIds, input.dataInicio, input.dataFim);
+      } catch (err) { handleExternalDbError(err); }
+    }),
+
+  clientesDistribuicaoDiasSemVir: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        return await getClientesDistribuicaoDiasSemVir(extIds, input.dataInicio, input.dataFim);
+      } catch (err) { handleExternalDbError(err); }
+    }),
+
+  clientesTop: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+      limit: z.number().default(10),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        return await getClientesTop(extIds, input.dataInicio, input.dataFim, input.limit);
+      } catch (err) { handleExternalDbError(err); }
     }),
 
   // ── Faturamento mensal com filtros avançados ────────────────────────────────

@@ -773,3 +773,22 @@
 ## Indicador Visual de Colaborador no Cabeçalho
 - [x] Exibir badge com nome do colaborador selecionado no cabeçalho da página Mensal
 - [x] Badge deve ter botão de remover (×) para limpar o filtro rapidamente
+
+## Painel de Clientes (Data VIP)
+- [x] Backend: query KPIs gerais (total clientes, novos, novos que retornaram, atendimentos, ticket médio, valor total, retenção 30d)
+- [x] Backend: query distribuição por status (Assíduo, Regular, Espaçando, 1ª Vez, Em Risco, Perdido)
+- [x] Backend: query evolução mensal (clientes únicos + novos por mês)
+- [x] Backend: query distribuição por frequência de visitas (1x, 2x, 3-4x, 5-9x, 10-12x, 13-15x, 16-20x, 21-30x, 30+)
+- [x] Backend: query distribuição por dias sem vir (≤20d, 21-30d, 31-45d, 46-75d, >75d)
+- [x] Backend: query composição por status (barras proporcionais)
+- [x] Backend: query Top 10 clientes por valor (nome, status, visitas, valor total, dias sem vir)
+- [x] Frontend: seletor de período (mês/ano início e fim, padrão últimos 12 meses)
+- [x] Frontend: cards KPIs no topo
+- [x] Frontend: cards de distribuição por status (Assíduo, Regular, Espaçando, 1ª Vez, Em Risco, Perdido)
+- [x] Frontend: barra de status da carteira (proporções coloridas)
+- [x] Frontend: gráfico evolução mensal (barras clientes únicos + linha novos)
+- [x] Frontend: barra de distribuição por frequência de visitas
+- [x] Frontend: composição por status (barras horizontais proporcionais)
+- [x] Frontend: barra de distribuição por dias sem vir
+- [x] Frontend: tabela Top 10 clientes por valor
+- [x] Corrigir procedure clientes (query usava colunas visitas/consumo inexistentes na tabela)
