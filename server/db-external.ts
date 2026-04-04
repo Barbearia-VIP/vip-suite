@@ -2,6 +2,7 @@
  * db-external.ts
  * Conexão com o banco MySQL externo (franquia_producao) via túnel SSH.
  * O túnel é criado uma única vez na inicialização do servidor e reutilizado.
+ * Inclui retry automático para queries que falham por conexão fechada.
  */
 
 import { Client as SshClient } from "ssh2";
@@ -31,8 +32,34 @@ let tunnelServer: net.Server | null = null;
 let pool: Pool | null = null;
 let tunnelReady = false;
 let tunnelPromise: Promise<void> | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 // ─── Criar túnel SSH ─────────────────────────────────────────────────────────
+
+function destroyTunnel() {
+  tunnelReady = false;
+  tunnelPromise = null;
+  if (pool) {
+    pool.end().catch(() => {});
+    pool = null;
+  }
+  if (tunnelServer) {
+    tunnelServer.close();
+    tunnelServer = null;
+  }
+  if (sshClient) {
+    sshClient.destroy();
+    sshClient = null;
+  }
+}
+
+function scheduleReconnect(delayMs = 3000) {
+  if (reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    createTunnel().catch(console.error);
+  }, delayMs);
+}
 
 function createTunnel(): Promise<void> {
   if (tunnelReady && pool) return Promise.resolve();
@@ -76,10 +103,19 @@ function createTunnel(): Promise<void> {
           password: DB_PASS,
           database: DB_NAME,
           waitForConnections: true,
-          connectionLimit: 5,
-          queueLimit: 0,
-          connectTimeout: 15000,
+          connectionLimit: 10,       // aumentado de 5 para 10
+          queueLimit: 50,
+          connectTimeout: 30000,     // 30s para conectar
           ssl: { rejectUnauthorized: false },
+          enableKeepAlive: true,
+          keepAliveInitialDelay: 10000,
+        });
+
+        // Detectar erros no pool e reconectar
+        pool.on("connection", (conn) => {
+          conn.on("error", (err) => {
+            console.warn("[SSH Tunnel] Erro na conexão do pool:", err.message);
+          });
         });
 
         tunnelServer = server;
@@ -88,9 +124,34 @@ function createTunnel(): Promise<void> {
         resolve();
       });
 
-      server.on("error", (err) => {
-        console.error("[SSH Tunnel] Erro no servidor local:", err.message);
-        reject(err);
+      server.on("error", (err: NodeJS.ErrnoException) => {
+        // Se a porta já está em uso, o túnel provavelmente já existe
+        if (err.code === "EADDRINUSE") {
+          console.warn("[SSH Tunnel] Porta já em uso — reutilizando pool existente");
+          if (!pool) {
+            pool = mysql.createPool({
+              host: "127.0.0.1",
+              port: LOCAL_TUNNEL_PORT,
+              user: DB_USER,
+              password: DB_PASS,
+              database: DB_NAME,
+              waitForConnections: true,
+              connectionLimit: 10,
+              queueLimit: 50,
+              connectTimeout: 30000,
+              ssl: { rejectUnauthorized: false },
+              enableKeepAlive: true,
+              keepAliveInitialDelay: 10000,
+            });
+          }
+          tunnelServer = server;
+          sshClient = ssh;
+          tunnelReady = true;
+          resolve();
+        } else {
+          console.error("[SSH Tunnel] Erro no servidor local:", err.message);
+          reject(err);
+        }
       });
     });
 
@@ -102,17 +163,8 @@ function createTunnel(): Promise<void> {
 
     ssh.on("close", () => {
       console.warn("[SSH Tunnel] Conexão SSH fechada — reconectando...");
-      tunnelReady = false;
-      tunnelPromise = null;
-      pool = null;
-      if (tunnelServer) {
-        tunnelServer.close();
-        tunnelServer = null;
-      }
-      // Reconectar após 3 segundos
-      setTimeout(() => {
-        createTunnel().catch(console.error);
-      }, 3000);
+      destroyTunnel();
+      scheduleReconnect(3000);
     });
 
     ssh.connect({
@@ -120,9 +172,9 @@ function createTunnel(): Promise<void> {
       port: SSH_PORT,
       username: SSH_USER,
       password: SSH_PASS,
-      readyTimeout: 20000,
-      keepaliveInterval: 30000,
-      keepaliveCountMax: 3,
+      readyTimeout: 30000,
+      keepaliveInterval: 15000,   // keepalive a cada 15s (era 30s)
+      keepaliveCountMax: 5,       // tolera 5 falhas antes de fechar
     });
   });
 
@@ -142,16 +194,42 @@ export async function getExternalPool(): Promise<Pool> {
 }
 
 /**
- * Executa uma query no banco externo e retorna as linhas.
- * Uso: const rows = await queryExternal<MyType>("SELECT ...", [params])
+ * Executa uma query no banco externo com retry automático em caso de
+ * erro de conexão (ECONNRESET, PROTOCOL_CONNECTION_LOST, etc.).
  */
 export async function queryExternal<T = Record<string, unknown>>(
   sql: string,
-  params: unknown[] = []
+  params: unknown[] = [],
+  retries = 2
 ): Promise<T[]> {
-  const p = await getExternalPool();
-  const [rows] = await p.execute(sql, params);
-  return rows as T[];
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const p = await getExternalPool();
+      const [rows] = await p.execute(sql, params);
+      return rows as T[];
+    } catch (err: any) {
+      const isConnectionError =
+        err?.code === "PROTOCOL_CONNECTION_LOST" ||
+        err?.code === "ECONNRESET" ||
+        err?.code === "ECONNREFUSED" ||
+        err?.fatal === true ||
+        err?.message?.includes("closed state") ||
+        err?.message?.includes("Connection lost");
+
+      if (isConnectionError && attempt < retries) {
+        console.warn(
+          `[SSH Tunnel] Erro de conexão na tentativa ${attempt + 1}/${retries + 1}: ${err.message}. Reconectando...`
+        );
+        // Forçar reconexão
+        destroyTunnel();
+        await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+        await createTunnel();
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("queryExternal: número máximo de tentativas atingido");
 }
 
 /**
