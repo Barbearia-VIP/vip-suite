@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
-  ReferenceLine, Dot
+  ReferenceLine, Dot, BarChart, Bar, LabelList
 } from "recharts";
 import {
   DollarSign, Users, Scissors, TrendingUp,
@@ -735,71 +735,140 @@ export default function DataVipDashboard() {
 
       {/* Top Serviços + Formas de Pagamento */}
       <div className="grid lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-medium">Top Serviços</CardTitle>
-            <Button asChild variant="ghost" size="sm" className="text-xs h-7">
-              <Link href="/data-vip/faturamento">Ver detalhes <ChevronRight className="w-3 h-3 ml-1" /></Link>
+        {/* Top Serviços — barras horizontais com ranking */}
+        <Card className="overflow-hidden">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between border-b border-border/40">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Scissors className="w-3.5 h-3.5 text-primary" />
+              </div>
+              <CardTitle className="text-sm font-semibold">Top Serviços</CardTitle>
+            </div>
+            <Button asChild variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground hover:text-foreground">
+              <Link href="/data-vip/faturamento">Ver todos <ChevronRight className="w-3 h-3 ml-1" /></Link>
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4 pb-3">
             {prodQ.isLoading
-              ? <Skeleton className="h-32 w-full" />
+              ? <div className="space-y-3">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
               : produtos.length === 0
-                ? <p className="text-sm text-muted-foreground text-center py-4">Sem dados para este período</p>
-                : <div className="space-y-2">
-                    {produtos.map((p, i) => {
-                      const totalGeral = produtos.reduce((s, x) => s + x.total, 0);
-                      const pct = totalGeral > 0 ? Math.round((p.total / totalGeral) * 100) : 0;
-                      return (
-                        <div key={i} className="space-y-0.5">
-                          <div className="flex justify-between text-xs">
-                            <span className="truncate">{p.produto}</span>
-                            <span className="font-medium">{fmt(p.total)} ({pct}%)</span>
-                          </div>
-                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: COLORS[i % COLORS.length] }} />
-                          </div>
+                ? <p className="text-sm text-muted-foreground text-center py-6">Sem dados para este período</p>
+                : (() => {
+                    const totalGeral = produtos.reduce((s, x) => s + x.total, 0);
+                    return (
+                      <div className="space-y-2.5">
+                        {produtos.map((p, i) => {
+                          const pct = totalGeral > 0 ? (p.total / totalGeral) * 100 : 0;
+                          const rankColors = ["text-yellow-500", "text-slate-400", "text-amber-600", "text-muted-foreground", "text-muted-foreground"];
+                          const barColors = ["#f59e0b", "#6366f1", "#10b981", "#3b82f6", "#ec4899"];
+                          return (
+                            <div key={i} className="group">
+                              <div className="flex items-center justify-between mb-1">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={`text-xs font-bold w-4 shrink-0 ${rankColors[i] ?? "text-muted-foreground"}`}>{i + 1}º</span>
+                                  <span className="text-xs font-medium truncate text-foreground">{p.produto}</span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                  <span className="text-xs text-muted-foreground">{Math.round(pct)}%</span>
+                                  <span className="text-xs font-semibold text-foreground">{fmt(p.total)}</span>
+                                </div>
+                              </div>
+                              <div className="h-1.5 bg-muted/60 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all duration-500"
+                                  style={{ width: `${pct}%`, background: barColors[i] ?? "#6366f1" }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="pt-2 border-t border-border/40 flex justify-between text-xs text-muted-foreground">
+                          <span>Total top {produtos.length}</span>
+                          <span className="font-semibold text-foreground">{fmt(totalGeral)}</span>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    );
+                  })()
             }
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Formas de Pagamento</CardTitle>
+        {/* Formas de Pagamento — donut + lista com percentual */}
+        <Card className="overflow-hidden">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between border-b border-border/40">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+              </div>
+              <CardTitle className="text-sm font-semibold">Formas de Pagamento</CardTitle>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             {prodQ.isLoading
-              ? <Skeleton className="h-48 w-full" />
+              ? <Skeleton className="h-52 w-full" />
               : pagamentos.length === 0
-                ? <div className="h-48 flex items-center justify-center text-muted-foreground text-sm text-center">
-                    Sem dados
-                  </div>
-                : <>
-                    <ResponsiveContainer width="100%" height={120}>
-                      <PieChart>
-                        <Pie data={pagamentos} dataKey="total" cx="50%" cy="50%" outerRadius={50} innerRadius={25}>
-                          {pagamentos.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                        </Pie>
-                        <Tooltip formatter={(v: number) => fmt(v)} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="space-y-1 mt-2">
-                      {pagamentos.slice(0, 6).map((p, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs">
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                            {p.forma || "Outros"}
-                          </span>
-                          <span className="font-medium">{fmt(p.total)}</span>
+                ? <div className="h-52 flex items-center justify-center text-muted-foreground text-sm">Sem dados</div>
+                : (() => {
+                    const totalPag = pagamentos.reduce((s, p) => s + p.total, 0);
+                    const PAG_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#3b82f6", "#ec4899", "#8b5cf6"];
+                    return (
+                      <div className="flex gap-4 items-center">
+                        {/* Donut maior com label central */}
+                        <div className="relative shrink-0">
+                          <ResponsiveContainer width={140} height={140}>
+                            <PieChart>
+                              <Pie
+                                data={pagamentos}
+                                dataKey="total"
+                                cx="50%" cy="50%"
+                                outerRadius={62}
+                                innerRadius={42}
+                                paddingAngle={2}
+                                startAngle={90}
+                                endAngle={-270}
+                              >
+                                {pagamentos.map((_, i) => (
+                                  <Cell key={i} fill={PAG_COLORS[i % PAG_COLORS.length]} stroke="transparent" />
+                                ))}
+                              </Pie>
+                              <Tooltip
+                                formatter={(v: number, _: any, props: any) => [
+                                  `${fmt(v)} (${totalPag > 0 ? Math.round((v / totalPag) * 100) : 0}%)`,
+                                  props.payload?.forma || "Outros"
+                                ]}
+                                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 11 }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                          {/* Label central */}
+                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                            <span className="text-[10px] text-muted-foreground">Total</span>
+                            <span className="text-xs font-bold text-foreground leading-tight">{fmt(totalPag)}</span>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </>
+                        {/* Lista de formas */}
+                        <div className="flex-1 space-y-2 min-w-0">
+                          {pagamentos.slice(0, 6).map((p, i) => {
+                            const pct = totalPag > 0 ? Math.round((p.total / totalPag) * 100) : 0;
+                            return (
+                              <div key={i}>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="flex items-center gap-1.5 text-xs truncate">
+                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: PAG_COLORS[i % PAG_COLORS.length] }} />
+                                    <span className="truncate text-foreground/80">{p.forma || "Outros"}</span>
+                                  </span>
+                                  <span className="text-xs font-semibold text-foreground ml-2 shrink-0">{pct}%</span>
+                                </div>
+                                <div className="h-1 bg-muted/60 rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: PAG_COLORS[i % PAG_COLORS.length] }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()
             }
           </CardContent>
         </Card>
