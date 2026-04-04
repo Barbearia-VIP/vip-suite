@@ -435,31 +435,35 @@ export const dataVipRouter = router({
           estrela: 0,
         }));
       }
-      // Modo mensal (padrão)
+      // Modo mensal (padrão) — usa getColaboradoresByRange para ter extras, dias trabalhados, etc.
       const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const [ano, mes] = periodo.split("-").map(Number);
-      const rows = await getColaboradores(extIds, ano, mes);
+      const dataInicioMes = `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const proximoMes = mes === 12 ? 1 : mes + 1;
+      const anoProximo = mes === 12 ? ano + 1 : ano;
+      const dataFimMes = new Date(anoProximo, proximoMes - 1, 1);
+      dataFimMes.setDate(dataFimMes.getDate() - 1);
+      const dataFimMesStr = dataFimMes.toISOString().slice(0, 10);
+      const rows = await getColaboradoresByRange(extIds, dataInicioMes, dataFimMesStr);
       return rows.map(r => ({
         colaboradorId: String(r.colaborador_id),
         colaboradorNome: r.colaborador_nome,
         tipoColaborador: "barbeiro",
-        faturamento: Number(r.total_vendas),
-        atendimentos: Number(r.total_servicos_realizados),
-        clientes: Number(r.total_clientes_geral),
-        clientesNovos: Number(r.total_clientes_novos),
-        ticketMedio: r.total_clientes_geral > 0
-          ? Math.round((Number(r.total_vendas) / Number(r.total_clientes_geral)) * 100) / 100
-          : 0,
-        diasTrabalhados: 0, // não disponível no modo mensal (dashboard_colaboradores)
-        faturamentoDia: 0,
-        servicos: Number(r.total_servicos_realizados),
-        extraQtd: 0,
-        extraValor: 0,
-        produtosQtd: Number(r.total_produtos_vendidos),
-        produtosValor: Number(r.total_produtos_vendidos_reais),
-        fidelizacao: Number(r.fidelizacao),
-        nps: Number(r.nps),
-        estrela: Number(r.estrela),
+        faturamento: Number(r.faturamento),
+        atendimentos: Number(r.atendimentos),
+        clientes: Number(r.clientes),
+        clientesNovos: Number(r.clientes_novos),
+        ticketMedio: Math.round(Number(r.ticket_medio) * 100) / 100,
+        diasTrabalhados: Number(r.dias_trabalhados),
+        faturamentoDia: Math.round(Number(r.faturamento_dia) * 100) / 100,
+        servicos: Number(r.servicos),
+        extraQtd: Number(r.extra_qtd),
+        extraValor: Number(r.extra_valor),
+        produtosQtd: Number(r.produtos_qtd),
+        produtosValor: Number(r.produtos_valor),
+        fidelizacao: 0,
+        nps: 0,
+        estrela: 0,
       }));
     }),
 
