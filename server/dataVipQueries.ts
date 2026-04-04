@@ -1118,9 +1118,12 @@ export async function getBarbeiros(extIds: number[], ano: number, mes: number) {
 // ─── Top Barbeiros por período ────────────────────────────────────────────────
 
 export async function getTopBarbeiros(extIds: number[], dataInicio: string, dataFim: string) {
+  // Usa vp.colaborador (barbeiro que executou o serviço) em vez de v.usuario (caixa/recepcionista)
   const unitCond = extIds.length === 0 ? "1=1"
-    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
-    : `uu.unidade IN (${extIds.join(",")})`;
+    : extIds.length === 1 ? `colab.unidade = ${extIds[0]}`
+    : `colab.unidade IN (${extIds.join(",")})`;
+
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
 
   return queryExternal<{
     colaborador_id: number;
@@ -1129,24 +1132,23 @@ export async function getTopBarbeiros(extIds: number[], dataInicio: string, data
     atendimentos: number;
   }>(`
     SELECT 
-      u.id as colaborador_id,
-      u.nome as colaborador_nome,
+      colab.id as colaborador_id,
+      colab.nome as colaborador_nome,
       COALESCE(SUM(vp.valor_total), 0) as faturamento,
       COUNT(DISTINCT v.id) as atendimentos
-    FROM vendas v
-    JOIN usuarios uu ON v.usuario = uu.id
-    JOIN usuarios u ON v.usuario = u.id
-    JOIN vendas_produtos vp ON vp.venda = v.id
+    FROM vendas_produtos vp
+    JOIN usuarios colab ON colab.id = vp.colaborador
+    JOIN vendas v ON v.id = vp.venda
+    JOIN produtos p ON p.id = vp.produto
     WHERE ${unitCond}
       AND v.data_criacao >= ?
-      AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
+      AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.cancelado_motivo IS NULL
       AND v.status != 0
-    GROUP BY u.id, u.nome
+    GROUP BY colab.id, colab.nome
     ORDER BY faturamento DESC
     LIMIT 10
-  `, [dataInicio, dataFim]);
+  `, [dataInicio, dataFimExcl]);
 }
 
 // ─── Top Itens (serviços e produtos) por período ──────────────────────────────
