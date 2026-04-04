@@ -281,7 +281,7 @@ export default function FaturamentoPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Users className="w-4 h-4 text-yellow-400" /> Ranking Barbeiros
+              <Users className="w-4 h-4 text-yellow-400" /> Ranking Colaboradores
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">

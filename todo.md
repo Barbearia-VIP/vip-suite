@@ -683,3 +683,6 @@
 ## Ranking Barbeiros - Faturamento
 - [x] Renomear "TOP Barbeiros" para "Ranking Barbeiros" na página de Faturamento
 - [x] Exibir todos os barbeiros (remover limite de 8) no frontend e backend
+
+## Renomeação Ranking Colaboradores
+- [x] Renomear "Ranking Barbeiros" para "Ranking Colaboradores" na página de Faturamento
