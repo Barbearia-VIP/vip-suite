@@ -18,6 +18,7 @@ import {
   Users, UserPlus, UserCheck, CalendarDays, DollarSign,
   TrendingUp, RefreshCw, ChevronDown, ChevronUp, Star,
   AlertTriangle, Search, Download, User, X, Scissors, Clock,
+  MessageSquare, Phone,
 } from "lucide-react";
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
@@ -187,6 +188,8 @@ export default function ClientesPage() {
 
   // Detalhes do cliente
   const [clienteDetalhesId, setClienteDetalhesId] = useState<number | null>(null);
+  const [whatsappModal, setWhatsappModal] = useState(false);
+  const [whatsappMsg, setWhatsappMsg] = useState("");
 
   const dataInicio = toDateStr(filtros.iniMes, filtros.iniAno, false);
   const dataFim    = toDateStr(filtros.fimMes, filtros.fimAno, true);
@@ -664,10 +667,27 @@ export default function ClientesPage() {
       <Sheet open={clienteDetalhesId !== null} onOpenChange={open => { if (!open) setClienteDetalhesId(null); }}>
         <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader className="mb-4">
-            <SheetTitle className="flex items-center gap-2">
-              <User className="w-5 h-5 text-primary" />
-              {qDetalhe.isLoading ? "Carregando..." : (qDetalhe.data?.nome ?? "Cliente")}
-            </SheetTitle>
+            <div className="flex items-center justify-between">
+              <SheetTitle className="flex items-center gap-2">
+                <User className="w-5 h-5 text-primary" />
+                {qDetalhe.isLoading ? "Carregando..." : (qDetalhe.data?.nome ?? "Cliente")}
+              </SheetTitle>
+              {qDetalhe.data?.telefone && (
+                <button
+                  onClick={() => { setWhatsappMsg(`Olá ${qDetalhe.data!.nome}! `); setWhatsappModal(true); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold transition-colors"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  WhatsApp
+                </button>
+              )}
+            </div>
+            {qDetalhe.data?.telefone && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+                <Phone className="w-3 h-3" />
+                <span>{qDetalhe.data.telefone}</span>
+              </div>
+            )}
           </SheetHeader>
 
           {qDetalhe.isLoading ? (
@@ -761,6 +781,56 @@ export default function ClientesPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* ── Modal de Envio WhatsApp ─────────────────────────────────────────── */}
+      {whatsappModal && qDetalhe.data?.telefone && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setWhatsappModal(false)}>
+          <div className="bg-card border border-border rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-green-500" />
+                Enviar via WhatsApp
+              </h3>
+              <button onClick={() => setWhatsappModal(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="mb-3">
+              <p className="text-xs text-muted-foreground mb-1">Para: <span className="text-foreground font-medium">{qDetalhe.data.nome}</span></p>
+              <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1">
+                <Phone className="w-3 h-3" />
+                {qDetalhe.data.telefone}
+              </p>
+              <label className="text-xs text-muted-foreground block mb-1.5">Mensagem</label>
+              <textarea
+                value={whatsappMsg}
+                onChange={e => setWhatsappMsg(e.target.value)}
+                rows={4}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                placeholder="Digite sua mensagem..."
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setWhatsappModal(false)}
+                className="flex-1 py-2 rounded-lg border border-border text-sm font-medium hover:bg-accent transition-colors"
+              >
+                Cancelar
+              </button>
+              <a
+                href={`https://wa.me/${qDetalhe.data.telefone.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappMsg)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setWhatsappModal(false)}
+                className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold text-center transition-colors flex items-center justify-center gap-1.5"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                Abrir WhatsApp
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

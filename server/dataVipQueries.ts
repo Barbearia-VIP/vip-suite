@@ -2194,6 +2194,7 @@ export async function getClienteDetalhes(extIds: number[], clienteId: number) {
   // KPIs gerais do cliente
   const kpiRows = await queryExternal<{
     nome: string;
+    telefone: string | null;
     total_visitas: number;
     valor_total: number;
     ticket_medio: number;
@@ -2203,6 +2204,7 @@ export async function getClienteDetalhes(extIds: number[], clienteId: number) {
   }>(`
     SELECT
       COALESCE(c.nome, CONCAT('Cliente #', v.cliente)) as nome,
+      c.telefone,
       COUNT(DISTINCT v.id) as total_visitas,
       COALESCE(SUM(vp.valor_total), 0) as valor_total,
       COALESCE(SUM(vp.valor_total) / COUNT(DISTINCT v.id), 0) as ticket_medio,
@@ -2304,6 +2306,7 @@ export async function getClienteDetalhes(extIds: number[], clienteId: number) {
   return {
     clienteId,
     nome: String(kpi.nome),
+    telefone: kpi.telefone ?? null,
     totalVisitas: Number(kpi.total_visitas),
     valorTotal: Number(kpi.valor_total),
     ticketMedio: Number(kpi.ticket_medio),

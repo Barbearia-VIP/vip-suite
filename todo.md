@@ -810,3 +810,11 @@
 - [x] Frontend: mini-gráfico de evolução de gasto mensal
 - [x] Frontend: lista de últimas visitas com data, serviços e valor
 - [x] Frontend: serviços mais consumidos (top 5)
+
+## Botão WhatsApp no Painel Lateral de Detalhes do Cliente
+- [x] Verificar se tabela clientes tem campo telefone no banco externo (campo c.telefone existe)
+- [x] Adicionar telefone na query getClienteDetalhes e no objeto de retorno
+- [x] Frontend: botão "WhatsApp" verde no cabeçalho do drawer (visível apenas quando telefone existe)
+- [x] Frontend: exibir número do telefone abaixo do nome no drawer
+- [x] Frontend: modal de envio com campo de mensagem personalizada e número do cliente
+- [x] Frontend: botão "Abrir WhatsApp" abre link wa.me com mensagem pré-preenchida
