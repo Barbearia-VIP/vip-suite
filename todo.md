@@ -698,3 +698,8 @@
 
 ## Resumo Executivo - Card Outros → Dias Trabalhados
 - [x] Substituir card "Outros / R$ 0" por "Dias Trabalhados" do mês selecionado no Resumo Executivo
+
+## Mensal - Painel de KPIs
+- [x] Criar procedure backend kpisMensais com: faturamento, atendimentos, ticket médio, clientes, clientes novos, extras qtd, extras R$, serviços totais, dias trabalhados, fat/dia
+- [x] Calcular comparativos SPLY (ano anterior), MOM (mês anterior), M12 (média 12m), M6 (média 6m) para cada KPI
+- [x] Implementar 10 cards de KPIs no frontend abaixo do gráfico mensal com estilo do modelo
