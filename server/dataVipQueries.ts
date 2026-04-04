@@ -1164,7 +1164,7 @@ export async function getTopItens(extIds: number[], dataInicio: string, dataFim:
     total: number;
   }>(`
     SELECT 
-      p.nome,
+      MIN(p.nome) as nome,
       p.tipo,
       p.categoria,
       SUM(vp.quantidade) as quantidade,
@@ -1216,7 +1216,13 @@ export async function getComposicaoGrupo(extIds: number[], dataInicio: string, d
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
       AND v.status != 0
-    GROUP BY grupo
+    GROUP BY
+      CASE
+        WHEN p.tipo = 'ser' AND p.categoria = 'base' THEN 'Serviço Base'
+        WHEN p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL) THEN 'Serviço Extra'
+        WHEN p.tipo IN ('probar','proemp','proins') THEN 'Produto'
+        ELSE 'Outros'
+      END
     ORDER BY total DESC
   `, [dataInicio, dataFim]);
 }
