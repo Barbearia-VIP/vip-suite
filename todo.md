@@ -679,3 +679,7 @@
 
 ## Correção Média Dias Trabalhados 6m/12m (2ª iteração)
 - [x] Reavaliação: média dias trab. 6m esperada ~26, 12m ~25 — corrigido com getDiasTrabalhadosMedia (GROUP BY mês)
+
+## Ranking Barbeiros - Faturamento
+- [x] Renomear "TOP Barbeiros" para "Ranking Barbeiros" na página de Faturamento
+- [x] Exibir todos os barbeiros (remover limite de 8) no frontend e backend

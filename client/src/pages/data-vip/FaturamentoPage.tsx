@@ -281,7 +281,7 @@ export default function FaturamentoPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Users className="w-4 h-4 text-yellow-400" /> Top Barbeiros
+              <Users className="w-4 h-4 text-yellow-400" /> Ranking Barbeiros
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -290,7 +290,7 @@ export default function FaturamentoPage() {
             ) : !d?.topBarbeiros.length ? (
               <p className="text-sm text-muted-foreground text-center py-4">Sem dados no período</p>
             ) : (
-              d.topBarbeiros.slice(0, 8).map((b, i) => (
+              d.topBarbeiros.map((b, i) => (
                 <div key={i}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">

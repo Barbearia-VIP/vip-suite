@@ -1180,7 +1180,6 @@ export async function getTopBarbeiros(extIds: number[], dataInicio: string, data
       AND v.status != 0
     GROUP BY colab.id, colab.nome
     ORDER BY faturamento DESC
-    LIMIT 10
   `, [dataInicio, dataFimExcl]);
 }
 
