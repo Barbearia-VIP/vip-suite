@@ -85,8 +85,21 @@ export default function FaturamentoPage() {
   const composicaoExemplos: Record<string, string> = {
     "Serviço Base": "Corte, Barba, Corte Infantil...",
     "Serviço Extra": "Black Mask, Hidratação, Sobrancelha...",
-    "Produto": "Cera, Pomada, Shampoo...",
+    "Prod. Cabelo": "Cera, Pomada, Shampoo, Finalizador...",
+    "Prod. Barba": "Balm, Óleo de Barba, Creme...",
+    "Prod. Empório": "Bebidas, Petiscos, Acessórios...",
+    "Prod. Outros": "Produtos sem categoria...",
     "Outros": "Acessórios, Outros...",
+  };
+
+  const composicaoCores: Record<string, string> = {
+    "Serviço Base": "bg-yellow-400",
+    "Serviço Extra": "bg-blue-400",
+    "Prod. Cabelo": "bg-emerald-400",
+    "Prod. Barba": "bg-orange-400",
+    "Prod. Empório": "bg-pink-400",
+    "Prod. Outros": "bg-gray-400",
+    "Outros": "bg-slate-400",
   };
 
   if (isError) {
@@ -270,7 +283,7 @@ export default function FaturamentoPage() {
                       <p className="text-xs text-muted-foreground">{c.pct.toFixed(1)}%</p>
                     </div>
                   </div>
-                  <ProgressBar pct={c.pct} color={i === 0 ? "bg-yellow-400" : i === 1 ? "bg-blue-400" : i === 2 ? "bg-purple-400" : "bg-gray-400"} />
+                  <ProgressBar pct={c.pct} color={composicaoCores[c.grupo] ?? "bg-gray-400"} />
                 </div>
               ))
             )}

@@ -689,3 +689,6 @@
 
 ## Top Itens - Limite
 - [x] Alterar exibição de Top Itens de 8 para 12 itens
+
+## Composição Produtos - Subdivisão
+- [x] Subdividir "Produtos" em Prod. Cabelo, Prod. Barba e Prod. Empório usando campo categoria do banco externo

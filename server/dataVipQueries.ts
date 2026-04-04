@@ -1235,7 +1235,10 @@ export async function getComposicaoGrupo(extIds: number[], dataInicio: string, d
       CASE
         WHEN p.tipo = 'ser' AND p.categoria = 'base' THEN 'Serviço Base'
         WHEN p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL) THEN 'Serviço Extra'
-        WHEN p.tipo IN ('probar','proemp','proins') THEN 'Produto'
+        WHEN p.tipo IN ('probar','proemp','proins') AND p.categoria = 'cabelo' THEN 'Prod. Cabelo'
+        WHEN p.tipo IN ('probar','proemp','proins') AND p.categoria = 'barba' THEN 'Prod. Barba'
+        WHEN p.tipo IN ('probar','proemp','proins') AND p.categoria = 'emporio' THEN 'Prod. Empório'
+        WHEN p.tipo IN ('probar','proemp','proins') THEN 'Prod. Outros'
         ELSE 'Outros'
       END as grupo,
       COALESCE(SUM(vp.valor_total), 0) as total,
@@ -1254,7 +1257,10 @@ export async function getComposicaoGrupo(extIds: number[], dataInicio: string, d
       CASE
         WHEN p.tipo = 'ser' AND p.categoria = 'base' THEN 'Serviço Base'
         WHEN p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL) THEN 'Serviço Extra'
-        WHEN p.tipo IN ('probar','proemp','proins') THEN 'Produto'
+        WHEN p.tipo IN ('probar','proemp','proins') AND p.categoria = 'cabelo' THEN 'Prod. Cabelo'
+        WHEN p.tipo IN ('probar','proemp','proins') AND p.categoria = 'barba' THEN 'Prod. Barba'
+        WHEN p.tipo IN ('probar','proemp','proins') AND p.categoria = 'emporio' THEN 'Prod. Empório'
+        WHEN p.tipo IN ('probar','proemp','proins') THEN 'Prod. Outros'
         ELSE 'Outros'
       END
     ORDER BY total DESC
