@@ -594,6 +594,7 @@ export const dataVipRouter = router({
           fatExtra: r(atual.fatExtra),
           fatProdutos: r(atual.fatProdutos),
           fatOutros: r(atual.fatOutros),
+          diasTrabalhados: diasAtual.diasTrabalhados,
         },
         comparativo: {
           atual: { fatBase: r(atual.fatBase), fatExtra: r(atual.fatExtra), fatProdutos: r(atual.fatProdutos), fatTotal: r(atual.fatTotal), diasTrabalhados: diasAtual.diasTrabalhados, fatPorDia: diasAtual.diasTrabalhados > 0 ? r(atual.fatTotal / diasAtual.diasTrabalhados) : 0 },

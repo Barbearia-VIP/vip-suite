@@ -695,3 +695,6 @@
 
 ## Comparativo de Períodos - Datas nos cabeçalhos
 - [x] Exibir datas do período abaixo de cada cabeçalho de coluna (ex: "01 out – 31 out 2025" em amarelo)
+
+## Resumo Executivo - Card Outros → Dias Trabalhados
+- [x] Substituir card "Outros / R$ 0" por "Dias Trabalhados" do mês selecionado no Resumo Executivo

@@ -8,7 +8,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, TrendingUp, TrendingDown, Minus, Users, Package, Scissors, Zap, AlertCircle, RefreshCw } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Minus, Users, Package, Scissors, Zap, AlertCircle, RefreshCw, CalendarDays } from "lucide-react";
 import { AberturasChart } from "./AberturasChart";
 import { Button } from "@/components/ui/button";
 
@@ -50,6 +50,18 @@ function ResumoCard({ label, value, icon: Icon, highlight = false }: { label: st
         <span className="text-xs text-muted-foreground uppercase tracking-wide">{label}</span>
       </div>
       <p className={`text-xl font-bold ${highlight ? "text-yellow-400" : "text-foreground"}`}>{fmt(value)}</p>
+    </div>
+  );
+}
+
+function ResumoCardDias({ label, value, icon: Icon }: { label: string; value: number; icon: any }) {
+  return (
+    <div className="rounded-xl p-4 border bg-white/5 border-white/10">
+      <div className="flex items-center gap-2 mb-1">
+        <Icon className="w-4 h-4 text-muted-foreground" />
+        <span className="text-xs text-muted-foreground uppercase tracking-wide">{label}</span>
+      </div>
+      <p className="text-xl font-bold text-foreground">{value} <span className="text-sm font-normal text-muted-foreground">dias</span></p>
     </div>
   );
 }
@@ -193,7 +205,7 @@ export default function FaturamentoPage() {
             <ResumoCard label="Fat. Base" value={d?.resumo.fatBase ?? 0} icon={Scissors} />
             <ResumoCard label="Extras" value={d?.resumo.fatExtra ?? 0} icon={Zap} />
             <ResumoCard label="Produtos" value={d?.resumo.fatProdutos ?? 0} icon={Package} />
-            <ResumoCard label="Outros" value={d?.resumo.fatOutros ?? 0} icon={Minus} />
+            <ResumoCardDias label="Dias Trabalhados" value={d?.resumo.diasTrabalhados ?? 0} icon={CalendarDays} />
           </div>
         )}
       </section>
