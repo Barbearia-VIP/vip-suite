@@ -30,6 +30,7 @@ import {
   getKpisPeriodo,
   getFaturamentoPorDiaSemana,
   getFaturamentoPorFaixaHoraria,
+  getFaturamentoMensalDetalhado,
 } from "../dataVipQueries";
 
 // Inicializa scheduler automático (08:00 BRT)
@@ -233,7 +234,23 @@ export const dataVipRouter = router({
       })).reverse();
     }),
 
-  // ── Faturamento por produto e forma de pagamento ─────────────────────────────
+  // ── Faturamento mensal detalhado (evolução com extras, serviços, produtos) ────────────
+  faturamentoMensalDetalhado: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      meses: z.number().default(12),
+    }))
+    .query(async ({ ctx, input }) => {
+      const { extIds } = await resolveExternalIds(
+        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+      );
+      const rows = await getFaturamentoMensalDetalhado(extIds, input.meses);
+      // Retorna em ordem cronológica (mais antigo primeiro)
+      return [...rows].reverse();
+    }),
+
+  // ── Faturamento por produto e forma de pagamento ───────────────────────────────────────
   faturamentoPorProduto: protectedProcedure
     .input(z.object({
       orgId: z.number().optional(),

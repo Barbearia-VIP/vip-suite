@@ -713,3 +713,15 @@
 - [x] Criar procedure backend kpisPeriodoMensal que agrega KPIs de N meses completos (soma do período)
 - [x] Comparativos SPLY/MOM/M12/M6 calculados para o período equivalente (mesmo N meses anterior)
 - [x] Frontend usa meses selecionado no topo para chamar a procedure
+## Mensal - Gráfico Evolução Mensal avançado
+- [ ] Estender backend faturamentoMensal para retornar: extras qtd, extras R$, serviços, produtos qtd, produtos valor, clientes novos
+- [ ] Gráfico com toggle linha/barras e seletor de métrica (10 opções)
+- [ ] Cards de resumo: Acumulado, Média/Mês, Máximo (mês), Mínimo (mês)
+- [ ] Tooltip rico ao hover: valor da métrica + dados secundários do mês
+- [ ] Linha de média tracejada no gráfico
+
+## Mensal - Gráfico Evolução Mensal Avançado
+- [x] Gráfico Evolução Mensal com toggle linha/barras e seletor de métrica (10 opções)
+- [x] Cards de resumo: Acumulado, Média/Mês, Máximo (com mês), Mínimo (com mês)
+- [x] Tooltip rico ao passar o mouse: todos os dados do mês
+- [x] Linha de média tracejada no gráfico

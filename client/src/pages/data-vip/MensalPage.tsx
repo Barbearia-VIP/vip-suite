@@ -1,9 +1,10 @@
 /**
  * MensalPage.tsx — Análise mensal detalhada do Data VIP
+ * Gráfico Evolução Mensal com toggle linha/barras, seletor de métrica,
+ * cards de resumo (acumulado/média/máximo/mínimo) e tooltip rico.
  * KPIs mostram a SOMA do período selecionado (3/6/12/24 meses) com comparativos SPLY/MOM/M12/M6.
- * Um único seletor de período controla tanto os gráficos quanto os KPIs.
  */
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
@@ -11,11 +12,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
+  Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import {
   BarChart3, AlertCircle, DollarSign, Users, TrendingUp,
   UserPlus, Gift, Scissors, CalendarDays, Activity,
+  BarChart2, TrendingDown, Sigma, Minus,
 } from "lucide-react";
 
 // ── Formatadores ─────────────────────────────────────────────────────────────
@@ -25,7 +27,84 @@ function fmtMoeda(v: number) {
   }).format(v);
 }
 
-const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+function fmtMoedaCompact(v: number) {
+  if (v >= 1_000_000) return `R$${(v / 1_000_000).toFixed(1)} mi`;
+  if (v >= 1_000) return `R$${(v / 1_000).toFixed(1)} mil`;
+  return fmtMoeda(v);
+}
+
+function fmtNum(v: number, decimals = 0) {
+  return v.toLocaleString("pt-BR", { maximumFractionDigits: decimals });
+}
+
+const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+// ── Configuração de métricas ─────────────────────────────────────────────────
+type MetricKey =
+  | "faturamento" | "atendimentos" | "ticketMedio" | "clientes" | "clientesNovos"
+  | "extrasQtd" | "extrasValor" | "servicosTotal" | "produtosQtd" | "produtosValor";
+
+interface MetricConfig {
+  key: MetricKey;
+  label: string;
+  color: string;
+  fmt: (v: number) => string;
+  fmtCompact: (v: number) => string;
+  isMoeda: boolean;
+}
+
+const METRICAS: MetricConfig[] = [
+  { key: "faturamento",   label: "Faturamento",       color: "oklch(0.75 0.15 200)", fmt: fmtMoeda, fmtCompact: fmtMoedaCompact, isMoeda: true },
+  { key: "atendimentos",  label: "Atendimentos",       color: "oklch(0.78 0.12 75)",  fmt: v => fmtNum(v), fmtCompact: v => fmtNum(v), isMoeda: false },
+  { key: "ticketMedio",   label: "Ticket Médio",       color: "oklch(0.65 0.15 145)", fmt: fmtMoeda, fmtCompact: fmtMoedaCompact, isMoeda: true },
+  { key: "clientes",      label: "Clientes",           color: "oklch(0.75 0.13 30)",  fmt: v => fmtNum(v), fmtCompact: v => fmtNum(v), isMoeda: false },
+  { key: "clientesNovos", label: "Clientes Novos",     color: "oklch(0.70 0.15 330)", fmt: v => fmtNum(v), fmtCompact: v => fmtNum(v), isMoeda: false },
+  { key: "extrasQtd",     label: "Extras (Qtd)",       color: "oklch(0.72 0.14 60)",  fmt: v => fmtNum(v), fmtCompact: v => fmtNum(v), isMoeda: false },
+  { key: "extrasValor",   label: "Extras (R$)",        color: "oklch(0.68 0.15 50)",  fmt: fmtMoeda, fmtCompact: fmtMoedaCompact, isMoeda: true },
+  { key: "servicosTotal", label: "Serviços Totais",    color: "oklch(0.70 0.14 220)", fmt: v => fmtNum(v), fmtCompact: v => fmtNum(v), isMoeda: false },
+  { key: "produtosQtd",   label: "Produtos (Qtd)",     color: "oklch(0.68 0.13 280)", fmt: v => fmtNum(v), fmtCompact: v => fmtNum(v), isMoeda: false },
+  { key: "produtosValor", label: "Valor Produtos",     color: "oklch(0.65 0.14 290)", fmt: fmtMoeda, fmtCompact: fmtMoedaCompact, isMoeda: true },
+];
+
+// ── Tooltip customizado ───────────────────────────────────────────────────────
+function CustomTooltip({ active, payload, metricCfg }: {
+  active?: boolean;
+  payload?: Array<{ payload: Record<string, number>; value: number }>;
+  metricCfg: MetricConfig;
+}) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  const v = payload[0].value;
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-3 shadow-xl min-w-[200px] text-sm">
+      <div className="flex items-center gap-1.5 mb-2 text-muted-foreground font-medium text-xs">
+        <CalendarDays className="w-3.5 h-3.5" />
+        {d.mesLabel}
+      </div>
+      <div className="text-lg font-bold text-foreground mb-1">
+        {metricCfg.fmt(v)}
+      </div>
+      <div className="text-xs text-muted-foreground mb-2">{metricCfg.label}</div>
+      <div className="border-t border-border pt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+        <span className="text-muted-foreground">Atendimentos:</span>
+        <span className="text-right font-medium">{fmtNum(d.atendimentos)}</span>
+        <span className="text-muted-foreground">Ticket Médio:</span>
+        <span className="text-right font-medium">{fmtMoeda(d.ticketMedio)}</span>
+        <span className="text-muted-foreground">Clientes:</span>
+        <span className="text-right font-medium">{fmtNum(d.clientes)}</span>
+        <span className="text-muted-foreground">Clientes Novos:</span>
+        <span className="text-right font-medium">{fmtNum(d.clientesNovos)}</span>
+        <span className="text-muted-foreground">Extras (Qtd):</span>
+        <span className="text-right font-medium">{fmtNum(d.extrasQtd)}</span>
+        <span className="text-muted-foreground">Extras (R$):</span>
+        <span className="text-right font-medium">{fmtMoedaCompact(d.extrasValor)}</span>
+        <span className="text-muted-foreground">Serviços:</span>
+        <span className="text-right font-medium">{fmtNum(d.servicosTotal)}</span>
+      </div>
+    </div>
+  );
+}
 
 // ── Badge de variação ────────────────────────────────────────────────────────
 function PctBadge({ pct }: { pct: number | null }) {
@@ -73,20 +152,15 @@ function KpiCard({ kpi }: { kpi: KpiData }) {
 
   return (
     <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-2">
-      {/* Cabeçalho */}
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase leading-tight">
           {kpi.label}
         </span>
         {KPI_ICONS[kpi.key]}
       </div>
-
-      {/* Valor principal */}
       <span className="text-xl font-bold text-foreground leading-tight">
         {fmt(kpi.valor)}
       </span>
-
-      {/* Comparativos */}
       <div className="flex flex-wrap gap-x-2 gap-y-0.5">
         {[
           { label: "SPLY", data: kpi.sply },
@@ -103,7 +177,6 @@ function KpiCard({ kpi }: { kpi: KpiData }) {
   );
 }
 
-// ── Skeletons de KPI ─────────────────────────────────────────────────────────
 function KpiSkeleton() {
   return (
     <div className="bg-card border border-border rounded-xl p-4 space-y-2">
@@ -119,9 +192,13 @@ export default function MensalPage() {
   const { selectedUnit } = useApp();
   const { org } = useOrg();
   const [meses, setMeses] = useState(12);
+  const [metricKey, setMetricKey] = useState<MetricKey>("faturamento");
+  const [chartType, setChartType] = useState<"bar" | "line">("bar");
 
-  // Gráfico histórico (usa o mesmo seletor de período)
-  const qHistorico = trpc.dataVip.faturamentoMensal.useQuery(
+  const metricCfg = METRICAS.find(m => m.key === metricKey)!;
+
+  // Gráfico detalhado (usa faturamentoMensalDetalhado para ter todos os campos)
+  const qDetalhado = trpc.dataVip.faturamentoMensalDetalhado.useQuery(
     { orgId: org?.id, unitId: selectedUnit?.id, meses },
     { enabled: !!org?.id }
   );
@@ -132,17 +209,31 @@ export default function MensalPage() {
     { enabled: !!org?.id }
   );
 
-  const data = (qHistorico.data ?? []).map(m => ({
-    mes: MESES[parseInt(m.periodo.split("-")[1]) - 1] + "/" + m.periodo.split("-")[0].slice(2),
-    faturamento: m.faturamento,
-    atendimentos: m.atendimentos,
-    ticketMedio: m.ticketMedio,
-    clientes: m.clientes,
-  }));
+  // Dados formatados para o gráfico
+  const chartData = useMemo(() => {
+    return (qDetalhado.data ?? []).map(m => {
+      const [ano, mesNum] = m.periodo.split("-").map(Number);
+      return {
+        ...m,
+        mesLabel: `${MESES_ABREV[mesNum - 1]}/${String(ano).slice(2)}`,
+      };
+    });
+  }, [qDetalhado.data]);
 
-  const totFat   = data.reduce((s, d) => s + d.faturamento, 0);
-  const totAtend = data.reduce((s, d) => s + d.atendimentos, 0);
-  const avgTicket = totAtend > 0 ? totFat / totAtend : 0;
+  // Estatísticas da métrica selecionada
+  const stats = useMemo(() => {
+    if (!chartData.length) return null;
+    const vals = chartData.map(d => d[metricKey] as number);
+    const total = vals.reduce((s, v) => s + v, 0);
+    const avg = total / vals.length;
+    const maxVal = Math.max(...vals);
+    const minVal = Math.min(...vals);
+    const maxMes = chartData[vals.indexOf(maxVal)]?.mesLabel ?? "";
+    const minMes = chartData[vals.indexOf(minVal)]?.mesLabel ?? "";
+    return { total, avg, maxVal, minVal, maxMes, minMes };
+  }, [chartData, metricKey]);
+
+  const isLoading = qDetalhado.isLoading;
 
   return (
     <div className="p-6 space-y-6">
@@ -167,48 +258,165 @@ export default function MensalPage() {
         </select>
       </div>
 
-      {/* Resumo rápido */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: "Faturamento Total", value: fmtMoeda(totFat) },
-          { label: "Total Atendimentos", value: totAtend.toLocaleString("pt-BR") },
-          { label: "Ticket Médio Geral", value: fmtMoeda(avgTicket) },
-        ].map((k, i) => (
-          <Card key={i}>
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground">{k.label}</p>
-              {qHistorico.isLoading
-                ? <Skeleton className="h-7 w-24 mt-1" />
-                : <p className="text-xl font-bold mt-1">{k.value}</p>
-              }
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* ── Gráfico Evolução Mensal ─────────────────────────────────────────── */}
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            {/* Título + ícone */}
+            <CardTitle className="flex items-center gap-2 text-base">
+              <TrendingUp className="w-4 h-4 text-primary" />
+              Evolução Mensal
+            </CardTitle>
 
-      {/* Gráfico de faturamento */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Faturamento por Mês</CardTitle>
+            {/* Controles: toggle linha/barras + seletor de métrica */}
+            <div className="flex items-center gap-2">
+              {/* Toggle tipo de gráfico */}
+              <div className="flex border border-border rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setChartType("line")}
+                  className={`px-2.5 py-1.5 text-xs flex items-center gap-1 transition-colors ${
+                    chartType === "line"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  <TrendingUp className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setChartType("bar")}
+                  className={`px-2.5 py-1.5 text-xs flex items-center gap-1 transition-colors ${
+                    chartType === "bar"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  <BarChart2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Seletor de métrica */}
+              <select
+                value={metricKey}
+                onChange={e => setMetricKey(e.target.value as MetricKey)}
+                className="text-xs bg-muted border border-border rounded px-2 py-1.5 min-w-[140px]"
+              >
+                {METRICAS.map(m => (
+                  <option key={m.key} value={m.key}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Cards de resumo: Acumulado, Média/Mês, Máximo, Mínimo */}
+          {isLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : stats ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+              <div className="bg-muted/40 rounded-lg p-3">
+                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                  <Sigma className="w-3 h-3" /> Acumulado
+                </div>
+                <div className="text-sm font-bold text-foreground">
+                  {metricCfg.fmtCompact(stats.total)}
+                </div>
+              </div>
+              <div className="bg-muted/40 rounded-lg p-3">
+                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase tracking-wider mb-1">
+                  <Minus className="w-3 h-3" /> Média/Mês
+                </div>
+                <div className="text-sm font-bold text-foreground">
+                  {metricCfg.fmtCompact(stats.avg)}
+                </div>
+              </div>
+              <div className="bg-muted/40 rounded-lg p-3">
+                <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 uppercase tracking-wider mb-1">
+                  <TrendingUp className="w-3 h-3" /> Máximo
+                </div>
+                <div className="text-sm font-bold text-emerald-400">
+                  {metricCfg.fmtCompact(stats.maxVal)}
+                  <span className="text-[10px] text-muted-foreground font-normal ml-1">{stats.maxMes}</span>
+                </div>
+              </div>
+              <div className="bg-muted/40 rounded-lg p-3">
+                <div className="flex items-center gap-1.5 text-[10px] text-red-400 uppercase tracking-wider mb-1">
+                  <TrendingDown className="w-3 h-3" /> Mínimo
+                </div>
+                <div className="text-sm font-bold text-red-400">
+                  {metricCfg.fmtCompact(stats.minVal)}
+                  <span className="text-[10px] text-muted-foreground font-normal ml-1">{stats.minMes}</span>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </CardHeader>
+
         <CardContent>
-          {qHistorico.isLoading ? <Skeleton className="h-56 w-full" /> :
-           data.length === 0 ? (
-            <div className="h-56 flex items-center justify-center text-muted-foreground text-sm">
+          {isLoading ? (
+            <Skeleton className="h-64 w-full" />
+          ) : chartData.length === 0 ? (
+            <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
               <AlertCircle className="w-4 h-4 mr-2" /> Sem dados — sincronize para ver o histórico
             </div>
-           ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0)" />
-                <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-                <YAxis tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(v: number) => [fmtMoeda(v), "Faturamento"]} />
-                <Bar dataKey="faturamento" fill="oklch(0.75 0.15 200)" radius={[3,3,0,0]} />
-              </BarChart>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              {chartType === "bar" ? (
+                <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0)" vertical={false} />
+                  <XAxis dataKey="mesLabel" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tickFormatter={v => metricCfg.isMoeda ? `R$${(v/1000).toFixed(0)}k` : fmtNum(v)}
+                    tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={55}
+                  />
+                  <Tooltip
+                    content={<CustomTooltip metricCfg={metricCfg} />}
+                    cursor={{ fill: "oklch(0.3 0 0 / 0.4)" }}
+                  />
+                  {stats && (
+                    <ReferenceLine
+                      y={stats.avg}
+                      stroke="oklch(0.6 0 0)"
+                      strokeDasharray="5 3"
+                      label={{ value: "Média", position: "right", fontSize: 10, fill: "oklch(0.6 0 0)" }}
+                    />
+                  )}
+                  <Bar dataKey={metricKey} fill={metricCfg.color} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              ) : (
+                <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0)" vertical={false} />
+                  <XAxis dataKey="mesLabel" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tickFormatter={v => metricCfg.isMoeda ? `R$${(v/1000).toFixed(0)}k` : fmtNum(v)}
+                    tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={55}
+                  />
+                  <Tooltip
+                    content={<CustomTooltip metricCfg={metricCfg} />}
+                    cursor={{ stroke: "oklch(0.6 0 0)", strokeWidth: 1 }}
+                  />
+                  {stats && (
+                    <ReferenceLine
+                      y={stats.avg}
+                      stroke="oklch(0.6 0 0)"
+                      strokeDasharray="5 3"
+                      label={{ value: "Média", position: "right", fontSize: 10, fill: "oklch(0.6 0 0)" }}
+                    />
+                  )}
+                  <Line
+                    type="monotone"
+                    dataKey={metricKey}
+                    stroke={metricCfg.color}
+                    strokeWidth={2.5}
+                    dot={{ fill: metricCfg.color, r: 4, strokeWidth: 0 }}
+                    activeDot={{ r: 6, strokeWidth: 2, stroke: "white" }}
+                  />
+                </LineChart>
+              )}
             </ResponsiveContainer>
-           )
-          }
+          )}
         </CardContent>
       </Card>
 
@@ -244,47 +452,7 @@ export default function MensalPage() {
         )}
       </div>
 
-      {/* Gráficos de atendimentos e ticket */}
-      <div className="grid lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Atendimentos por Mês</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {qHistorico.isLoading ? <Skeleton className="h-44 w-full" /> : (
-              <ResponsiveContainer width="100%" height={180}>
-                <LineChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0)" />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="atendimentos" stroke="oklch(0.78 0.12 75)" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Ticket Médio por Mês</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {qHistorico.isLoading ? <Skeleton className="h-44 w-full" /> : (
-              <ResponsiveContainer width="100%" height={180}>
-                <LineChart data={data}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0)" />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-                  <YAxis tickFormatter={v => `R$${v.toFixed(0)}`} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v: number) => [fmtMoeda(v), "Ticket Médio"]} />
-                  <Line type="monotone" dataKey="ticketMedio" stroke="oklch(0.65 0.15 145)" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tabela mensal */}
+      {/* Tabela mensal detalhada */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">Detalhamento Mensal</CardTitle>
@@ -294,23 +462,38 @@ export default function MensalPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-muted-foreground text-xs">
-                  <th className="text-left py-2 pr-4">Mês</th>
-                  <th className="text-right py-2 pr-4">Faturamento</th>
-                  <th className="text-right py-2 pr-4">Atendimentos</th>
-                  <th className="text-right py-2 pr-4">Ticket Médio</th>
-                  <th className="text-right py-2">Clientes</th>
+                  <th className="text-left py-2 pr-3">Mês</th>
+                  <th className="text-right py-2 pr-3">Faturamento</th>
+                  <th className="text-right py-2 pr-3">Atend.</th>
+                  <th className="text-right py-2 pr-3">Ticket Médio</th>
+                  <th className="text-right py-2 pr-3">Clientes</th>
+                  <th className="text-right py-2 pr-3">Extras Qtd</th>
+                  <th className="text-right py-2 pr-3">Extras R$</th>
+                  <th className="text-right py-2">Serviços</th>
                 </tr>
               </thead>
               <tbody>
-                {data.map((r, i) => (
-                  <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
-                    <td className="py-2 pr-4 font-medium">{r.mes}</td>
-                    <td className="py-2 pr-4 text-right text-green-400">{fmtMoeda(r.faturamento)}</td>
-                    <td className="py-2 pr-4 text-right">{r.atendimentos.toLocaleString("pt-BR")}</td>
-                    <td className="py-2 pr-4 text-right">{fmtMoeda(r.ticketMedio)}</td>
-                    <td className="py-2 text-right">{r.clientes.toLocaleString("pt-BR")}</td>
-                  </tr>
-                ))}
+                {isLoading
+                  ? Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={i} className="border-b border-border/50">
+                        {Array.from({ length: 8 }).map((_, j) => (
+                          <td key={j} className="py-2 pr-3"><Skeleton className="h-4 w-full" /></td>
+                        ))}
+                      </tr>
+                    ))
+                  : chartData.map((r, i) => (
+                      <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
+                        <td className="py-2 pr-3 font-medium">{r.mesLabel}</td>
+                        <td className="py-2 pr-3 text-right text-green-400">{fmtMoeda(r.faturamento)}</td>
+                        <td className="py-2 pr-3 text-right">{fmtNum(r.atendimentos)}</td>
+                        <td className="py-2 pr-3 text-right">{fmtMoeda(r.ticketMedio)}</td>
+                        <td className="py-2 pr-3 text-right">{fmtNum(r.clientes)}</td>
+                        <td className="py-2 pr-3 text-right">{fmtNum(r.extrasQtd)}</td>
+                        <td className="py-2 pr-3 text-right">{fmtMoedaCompact(r.extrasValor)}</td>
+                        <td className="py-2 text-right">{fmtNum(r.servicosTotal)}</td>
+                      </tr>
+                    ))
+                }
               </tbody>
             </table>
           </div>

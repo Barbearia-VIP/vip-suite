@@ -479,6 +479,82 @@ export async function getFaturamentoMensal(extIds: number[], meses: number = 12)
   return [mesAtualRow, ...historico];
 }
 
+// ─── Faturamento mensal detalhado (com extras, serviços, produtos) ──────────────
+
+export async function getFaturamentoMensalDetalhado(extIds: number[], meses: number = 12) {
+  const unitCondV = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  const agora = new Date();
+  const anoAtual = agora.getFullYear();
+  const mesAtual = agora.getMonth() + 1;
+
+  // Calcula data de início: N meses atrás
+  const dataInicio = new Date(anoAtual, mesAtual - meses, 1);
+  const dataInicioStr = `${dataInicio.getFullYear()}-${String(dataInicio.getMonth() + 1).padStart(2, '0')}-01`;
+  const proximoMes = mesAtual === 12 ? 1 : mesAtual + 1;
+  const anoProximo = mesAtual === 12 ? anoAtual + 1 : anoAtual;
+  const dataFimStr = `${anoProximo}-${String(proximoMes).padStart(2, '0')}-01`;
+
+  const rows = await queryExternal<{
+    ano: number;
+    mes: number;
+    faturamento: number;
+    atendimentos: number;
+    ticket_medio: number;
+    clientes: number;
+    clientes_novos: number;
+    extras_qtd: number;
+    extras_valor: number;
+    servicos_total: number;
+    produtos_qtd: number;
+    produtos_valor: number;
+  }>(`
+    SELECT
+      YEAR(v.data_criacao) as ano,
+      MONTH(v.data_criacao) as mes,
+      COALESCE(SUM(v.valor_liquido), 0) as faturamento,
+      COUNT(DISTINCT v.id) as atendimentos,
+      COALESCE(AVG(v.valor_liquido), 0) as ticket_medio,
+      COUNT(DISTINCT v.cliente) as clientes,
+      COUNT(DISTINCT CASE WHEN cl.data_criacao >= DATE_FORMAT(v.data_criacao, '%Y-%m-01') THEN v.cliente END) as clientes_novos,
+      COUNT(CASE WHEN p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL OR p.categoria != 'base') AND p.categoria != 'base' THEN 1 END) as extras_qtd,
+      COALESCE(SUM(CASE WHEN p.tipo = 'ser' AND p.categoria != 'base' AND p.categoria IS NOT NULL THEN vp.valor_total ELSE 0 END), 0) as extras_valor,
+      COUNT(CASE WHEN p.tipo = 'ser' THEN 1 END) as servicos_total,
+      COUNT(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN 1 END) as produtos_qtd,
+      COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.valor_total ELSE 0 END), 0) as produtos_valor
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    JOIN produtos p ON p.id = vp.produto
+    LEFT JOIN clientes cl ON cl.id = v.cliente
+    WHERE ${unitCondV}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND v.status != 0
+    GROUP BY YEAR(v.data_criacao), MONTH(v.data_criacao)
+    ORDER BY ano DESC, mes DESC
+    LIMIT ${Number(meses)}
+  `, [dataInicioStr, dataFimStr]);
+
+  return rows.map(r => ({
+    periodo: `${r.ano}-${String(Number(r.mes)).padStart(2, '0')}`,
+    faturamento: Number(r.faturamento),
+    atendimentos: Number(r.atendimentos),
+    ticketMedio: Number(r.ticket_medio),
+    clientes: Number(r.clientes),
+    clientesNovos: Number(r.clientes_novos),
+    extrasQtd: Number(r.extras_qtd),
+    extrasValor: Number(r.extras_valor),
+    servicosTotal: Number(r.servicos_total),
+    produtosQtd: Number(r.produtos_qtd),
+    produtosValor: Number(r.produtos_valor),
+  }));
+}
+
 // ─── Faturamento por forma de pagamento ──────────────────────────────────────
 
 export async function getFaturamentoPorPagamento(extIds: number[], dataInicio: string, dataFim: string) {
