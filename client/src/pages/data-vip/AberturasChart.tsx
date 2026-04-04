@@ -42,6 +42,7 @@ const VIEWS: { id: ViewType; label: string; desc: string }[] = [
 ];
 
 function fmt(v: number) {
+  if (!isFinite(v) || isNaN(v)) return "R$ 0,00";
   if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)} mi`;
   if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(1)} mil`;
   return `R$ ${v.toFixed(2)}`;
@@ -265,21 +266,24 @@ function TabPeriodo({ orgId, unitId, dataInicio, dataFim }: AberturasChartProps)
   const data = useMemo(() => {
     if (!q.data) return [];
     if (gran === "dia") {
-      return q.data.map(d => ({ label: d.dia.slice(5), valor: d.faturamento }));
+      return q.data
+        .filter(d => d.dia && typeof d.dia === "string" && d.dia.length >= 7)
+        .map(d => ({ label: d.dia.slice(5), valor: d.faturamento || 0 }));
     }
     if (gran === "semana") {
       const weeks: Record<string, number> = {};
       q.data.forEach(d => {
+        if (!d.dia || typeof d.dia !== "string" || d.dia.length < 8) return;
         const dt = new Date(d.dia + "T12:00:00Z");
+        if (isNaN(dt.getTime())) return;
         // 0=Dom, 1=Seg ... 6=Sáb. Recua até a segunda-feira anterior.
-        const dayOfWeek = dt.getUTCDay(); // 0=Dom
+        const dayOfWeek = dt.getUTCDay();
         const daysFromMon = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
         const mon = new Date(dt);
         mon.setUTCDate(dt.getUTCDate() - daysFromMon);
-        const key = mon.toISOString().slice(0, 10); // YYYY-MM-DD da segunda
-        weeks[key] = (weeks[key] ?? 0) + d.faturamento;
+        const key = mon.toISOString().slice(0, 10);
+        weeks[key] = (weeks[key] ?? 0) + (d.faturamento || 0);
       });
-      // Ordena por data e formata como MM-DD
       return Object.entries(weeks)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([k, v]) => ({ label: k.slice(5), valor: v }));
@@ -287,16 +291,19 @@ function TabPeriodo({ orgId, unitId, dataInicio, dataFim }: AberturasChartProps)
     // mes
     const months: Record<string, number> = {};
     q.data.forEach(d => {
+      if (!d.dia || typeof d.dia !== "string" || d.dia.length < 7) return;
       const key = d.dia.slice(0, 7);
-      months[key] = (months[key] ?? 0) + d.faturamento;
+      months[key] = (months[key] ?? 0) + (d.faturamento || 0);
     });
-    return Object.entries(months).map(([k, v]) => ({ label: k, valor: v }));
+    return Object.entries(months)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => ({ label: k, valor: v }));
   }, [q.data, gran]);
 
-  const acumulado = data.reduce((s, d) => s + d.valor, 0);
+  const acumulado = data.reduce((s, d) => s + (isFinite(d.valor) ? d.valor : 0), 0);
   const media = data.length > 0 ? acumulado / data.length : 0;
-  const maxItem = data.reduce((m, d) => d.valor > m.valor ? d : m, { label: "", valor: 0 });
-  const minItem = data.length > 0 ? data.reduce((m, d) => d.valor < m.valor ? d : m, data[0]) : { label: "", valor: 0 };
+  const maxItem = data.length > 0 ? data.reduce((m, d) => d.valor > m.valor ? d : m, { label: "", valor: 0 }) : { label: "", valor: 0 };
+  const minItem = data.length > 0 ? data.reduce((m, d) => d.valor < m.valor ? d : m, data[0] ?? { label: "", valor: 0 }) : { label: "", valor: 0 };
 
   if (q.isLoading) return <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">Carregando...</div>;
   if (q.error) return <div className="h-32 flex items-center justify-center text-red-400 text-sm">Dados indisponíveis</div>;

@@ -349,7 +349,9 @@ export default function FaturamentoPage() {
       </div>
 
       {/* Bloco Aberturas */}
-      {d && (
+      {d && d.dataInicio && d.dataFim &&
+        typeof d.dataInicio === "string" && d.dataInicio.length >= 7 &&
+        typeof d.dataFim === "string" && d.dataFim.length >= 7 && (
         <AberturasChart
           orgId={org?.id}
           unitId={selectedUnit?.id}
