@@ -1114,3 +1114,154 @@ export async function getBarbeiros(extIds: number[], ano: number, mes: number) {
     ORDER BY u.nome ASC
   `, [ano, mes]);
 }
+
+// ─── Top Barbeiros por período ────────────────────────────────────────────────
+
+export async function getTopBarbeiros(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    colaborador_id: number;
+    colaborador_nome: string;
+    faturamento: number;
+    atendimentos: number;
+  }>(`
+    SELECT 
+      u.id as colaborador_id,
+      u.nome as colaborador_nome,
+      COALESCE(SUM(vp.valor_total), 0) as faturamento,
+      COUNT(DISTINCT v.id) as atendimentos
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN usuarios u ON v.usuario = u.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND v.status != 0
+    GROUP BY u.id, u.nome
+    ORDER BY faturamento DESC
+    LIMIT 10
+  `, [dataInicio, dataFim]);
+}
+
+// ─── Top Itens (serviços e produtos) por período ──────────────────────────────
+
+export async function getTopItens(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    nome: string;
+    tipo: string;
+    categoria: string | null;
+    quantidade: number;
+    total: number;
+  }>(`
+    SELECT 
+      p.nome,
+      p.tipo,
+      p.categoria,
+      SUM(vp.quantidade) as quantidade,
+      COALESCE(SUM(vp.valor_total), 0) as total
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    JOIN produtos p ON p.id = vp.produto
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND v.status != 0
+    GROUP BY LOWER(TRIM(p.nome)), p.tipo, p.categoria
+    ORDER BY total DESC
+    LIMIT 20
+  `, [dataInicio, dataFim]);
+}
+
+// ─── Composição por grupo (Fat. Base, Extra, Produtos) ───────────────────────
+
+export async function getComposicaoGrupo(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  return queryExternal<{
+    grupo: string;
+    total: number;
+    quantidade: number;
+  }>(`
+    SELECT 
+      CASE
+        WHEN p.tipo = 'ser' AND p.categoria = 'base' THEN 'Serviço Base'
+        WHEN p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL) THEN 'Serviço Extra'
+        WHEN p.tipo IN ('probar','proemp','proins') THEN 'Produto'
+        ELSE 'Outros'
+      END as grupo,
+      COALESCE(SUM(vp.valor_total), 0) as total,
+      COUNT(*) as quantidade
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    JOIN produtos p ON p.id = vp.produto
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND v.status != 0
+    GROUP BY grupo
+    ORDER BY total DESC
+  `, [dataInicio, dataFim]);
+}
+
+// ─── KPIs simples de um período (para comparativos) ──────────────────────────
+
+export async function getKpisPeriodo(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+
+  const rows = await queryExternal<{
+    fat_base: number;
+    fat_extra: number;
+    fat_produtos: number;
+    fat_outros: number;
+    fat_total: number;
+    atendimentos: number;
+  }>(`
+    SELECT 
+      COALESCE(SUM(CASE WHEN p.tipo = 'ser' AND p.categoria = 'base' THEN vp.valor_total END), 0) as fat_base,
+      COALESCE(SUM(CASE WHEN p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL) THEN vp.valor_total END), 0) as fat_extra,
+      COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.valor_total END), 0) as fat_produtos,
+      COALESCE(SUM(CASE WHEN p.tipo NOT IN ('ser','probar','proemp','proins') THEN vp.valor_total END), 0) as fat_outros,
+      COALESCE(SUM(vp.valor_total), 0) as fat_total,
+      COUNT(DISTINCT v.id) as atendimentos
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    JOIN produtos p ON p.id = vp.produto
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND v.status != 0
+  `, [dataInicio, dataFim]);
+
+  const r = rows[0];
+  return {
+    fatBase: Number(r?.fat_base ?? 0),
+    fatExtra: Number(r?.fat_extra ?? 0),
+    fatProdutos: Number(r?.fat_produtos ?? 0),
+    fatOutros: Number(r?.fat_outros ?? 0),
+    fatTotal: Number(r?.fat_total ?? 0),
+    atendimentos: Number(r?.atendimentos ?? 0),
+  };
+}

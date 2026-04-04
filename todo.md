@@ -632,3 +632,15 @@
 - [x] Try/catch com handleExternalDbError nas procedures dashboard e evolucaoDiaria
 - [ ] Validar dados de colaboradores quando SSH reconectar (aguardando estabilização do servidor externo)
 - [ ] Testar lógica em múltiplas unidades além de Joinville
+
+## Reformulação Página Faturamento Data VIP
+
+- [x] Backend: procedure faturamentoDetalhado com comparativos (per. anterior, ano anterior, méd. 6m, méd. 12m)
+- [x] Backend: procedure topBarbeiros com ranking por faturamento e % do total
+- [x] Backend: procedure topItens com ranking de serviços/produtos mais vendidos
+- [x] Backend: procedure composicaoGrupo com Fat. Base, Extra, Produtos por categoria
+- [x] Frontend: Resumo Executivo — cards Total Geral, Fat. Base, Extras, Produtos, Outros
+- [x] Frontend: Tabela comparativa multi-período com variações percentuais coloridas
+- [x] Frontend: Seção Composição por grupo com barra de progresso
+- [x] Frontend: Seção Top Barbeiros com ranking e barra de progresso
+- [x] Frontend: Seção Top Itens com ranking de serviços

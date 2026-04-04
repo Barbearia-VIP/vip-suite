@@ -23,6 +23,10 @@ import {
   getRankingUnidades,
   getDiasTrabalhados,
   getServicosExtra,
+  getTopBarbeiros,
+  getTopItens,
+  getComposicaoGrupo,
+  getKpisPeriodo,
 } from "../dataVipQueries";
 
 // Inicializa scheduler automático (08:00 BRT)
@@ -508,9 +512,118 @@ export const dataVipRouter = router({
       return { success: true };
     }),
 
-  // ── Comissões ───────────────────────────────────────────────────────────────────────────────────
-  comissoes: protectedProcedure
+  // ── Faturamento Detalhado (Resumo Executivo + Comparativos) ──────────────────────────────────────────────────────────────────────────────────
+  faturamentoDetalhado: protectedProcedure
     .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      periodo: z.string().optional(), // YYYY-MM
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+      const { extIds } = await resolveExternalIds(
+        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+      );
+      const now = new Date();
+      const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const [ano, mes] = periodo.split("-").map(Number);
+
+      // Datas do período atual
+      const dataInicio = `${ano}-${String(mes).padStart(2, "0")}-01`;
+      const dataFim = new Date(ano, mes, 0).toISOString().split("T")[0];
+
+      // Período anterior (mês anterior)
+      const mesAnt = mes === 1 ? 12 : mes - 1;
+      const anoAnt = mes === 1 ? ano - 1 : ano;
+      const dataInicioAnt = `${anoAnt}-${String(mesAnt).padStart(2, "0")}-01`;
+      const dataFimAnt = new Date(anoAnt, mesAnt, 0).toISOString().split("T")[0];
+
+      // Ano anterior (mesmo mês)
+      const dataInicioAnoAnt = `${ano - 1}-${String(mes).padStart(2, "0")}-01`;
+      const dataFimAnoAnt = new Date(ano - 1, mes, 0).toISOString().split("T")[0];
+
+      // Média 6 meses (6 meses anteriores ao atual)
+      const med6Inicio = new Date(ano, mes - 7, 1);
+      const med6Fim = new Date(ano, mes - 1, 0);
+      const dataInicioMed6 = med6Inicio.toISOString().split("T")[0];
+      const dataFimMed6 = med6Fim.toISOString().split("T")[0];
+
+      // Média 12 meses (12 meses anteriores ao atual)
+      const med12Inicio = new Date(ano, mes - 13, 1);
+      const med12Fim = new Date(ano, mes - 1, 0);
+      const dataInicioMed12 = med12Inicio.toISOString().split("T")[0];
+      const dataFimMed12 = med12Fim.toISOString().split("T")[0];
+
+      const [atual, anterior, anoAnterior, med6Raw, med12Raw, diasAtual, diasAnt, diasAnoAnt, topBarbeiros, topItens, composicao] = await Promise.all([
+        getKpisPeriodo(extIds, dataInicio, dataFim),
+        getKpisPeriodo(extIds, dataInicioAnt, dataFimAnt),
+        getKpisPeriodo(extIds, dataInicioAnoAnt, dataFimAnoAnt),
+        getKpisPeriodo(extIds, dataInicioMed6, dataFimMed6),
+        getKpisPeriodo(extIds, dataInicioMed12, dataFimMed12),
+        getDiasTrabalhados(extIds, dataInicio, new Date(ano, mes, 1).toISOString().split("T")[0]),
+        getDiasTrabalhados(extIds, dataInicioAnt, new Date(anoAnt, mesAnt, 1).toISOString().split("T")[0]),
+        getDiasTrabalhados(extIds, dataInicioAnoAnt, new Date(ano - 1, mes, 1).toISOString().split("T")[0]),
+        getTopBarbeiros(extIds, dataInicio, dataFim),
+        getTopItens(extIds, dataInicio, dataFim),
+        getComposicaoGrupo(extIds, dataInicio, dataFim),
+      ]);
+
+      // Médias divididas por 6 e 12 meses
+      const med6 = { fatBase: med6Raw.fatBase / 6, fatExtra: med6Raw.fatExtra / 6, fatProdutos: med6Raw.fatProdutos / 6, fatTotal: med6Raw.fatTotal / 6, diasTrabalhados: med6Raw.atendimentos / 6 };
+      const med12 = { fatBase: med12Raw.fatBase / 12, fatExtra: med12Raw.fatExtra / 12, fatProdutos: med12Raw.fatProdutos / 12, fatTotal: med12Raw.fatTotal / 12, diasTrabalhados: med12Raw.atendimentos / 12 };
+
+      const pct = (a: number, b: number) => b > 0 ? Math.round(((a - b) / b) * 1000) / 10 : null;
+      const r = (v: number) => Math.round(v * 100) / 100;
+
+      const totalBarbeiros = topBarbeiros.reduce((s, b) => s + Number(b.faturamento), 0);
+      const totalItens = topItens.reduce((s, i) => s + Number(i.total), 0);
+
+      return {
+        periodo,
+        dataInicio,
+        dataFim,
+        resumo: {
+          total: r(atual.fatTotal),
+          fatBase: r(atual.fatBase),
+          fatExtra: r(atual.fatExtra),
+          fatProdutos: r(atual.fatProdutos),
+          fatOutros: r(atual.fatOutros),
+        },
+        comparativo: {
+          atual: { fatBase: r(atual.fatBase), fatExtra: r(atual.fatExtra), fatProdutos: r(atual.fatProdutos), fatTotal: r(atual.fatTotal), diasTrabalhados: diasAtual.diasTrabalhados, fatPorDia: diasAtual.diasTrabalhados > 0 ? r(atual.fatTotal / diasAtual.diasTrabalhados) : 0 },
+          anterior: { fatBase: r(anterior.fatBase), fatExtra: r(anterior.fatExtra), fatProdutos: r(anterior.fatProdutos), fatTotal: r(anterior.fatTotal), diasTrabalhados: diasAnt.diasTrabalhados, fatPorDia: diasAnt.diasTrabalhados > 0 ? r(anterior.fatTotal / diasAnt.diasTrabalhados) : 0, pctBase: pct(atual.fatBase, anterior.fatBase), pctExtra: pct(atual.fatExtra, anterior.fatExtra), pctProdutos: pct(atual.fatProdutos, anterior.fatProdutos), pctTotal: pct(atual.fatTotal, anterior.fatTotal), pctDias: pct(diasAtual.diasTrabalhados, diasAnt.diasTrabalhados), pctFatDia: diasAnt.diasTrabalhados > 0 && diasAtual.diasTrabalhados > 0 ? pct(atual.fatTotal / diasAtual.diasTrabalhados, anterior.fatTotal / diasAnt.diasTrabalhados) : null },
+          anoAnterior: { fatBase: r(anoAnterior.fatBase), fatExtra: r(anoAnterior.fatExtra), fatProdutos: r(anoAnterior.fatProdutos), fatTotal: r(anoAnterior.fatTotal), diasTrabalhados: diasAnoAnt.diasTrabalhados, fatPorDia: diasAnoAnt.diasTrabalhados > 0 ? r(anoAnterior.fatTotal / diasAnoAnt.diasTrabalhados) : 0, pctBase: pct(atual.fatBase, anoAnterior.fatBase), pctExtra: pct(atual.fatExtra, anoAnterior.fatExtra), pctProdutos: pct(atual.fatProdutos, anoAnterior.fatProdutos), pctTotal: pct(atual.fatTotal, anoAnterior.fatTotal), pctDias: pct(diasAtual.diasTrabalhados, diasAnoAnt.diasTrabalhados), pctFatDia: diasAnoAnt.diasTrabalhados > 0 && diasAtual.diasTrabalhados > 0 ? pct(atual.fatTotal / diasAtual.diasTrabalhados, anoAnterior.fatTotal / diasAnoAnt.diasTrabalhados) : null },
+          med6: { fatBase: r(med6.fatBase), fatExtra: r(med6.fatExtra), fatProdutos: r(med6.fatProdutos), fatTotal: r(med6.fatTotal), diasTrabalhados: r(med6.diasTrabalhados), fatPorDia: 0, pctBase: pct(atual.fatBase, med6.fatBase), pctExtra: pct(atual.fatExtra, med6.fatExtra), pctProdutos: pct(atual.fatProdutos, med6.fatProdutos), pctTotal: pct(atual.fatTotal, med6.fatTotal), pctDias: null, pctFatDia: null },
+          med12: { fatBase: r(med12.fatBase), fatExtra: r(med12.fatExtra), fatProdutos: r(med12.fatProdutos), fatTotal: r(med12.fatTotal), diasTrabalhados: r(med12.diasTrabalhados), fatPorDia: 0, pctBase: pct(atual.fatBase, med12.fatBase), pctExtra: pct(atual.fatExtra, med12.fatExtra), pctProdutos: pct(atual.fatProdutos, med12.fatProdutos), pctTotal: pct(atual.fatTotal, med12.fatTotal), pctDias: null, pctFatDia: null },
+        },
+        topBarbeiros: topBarbeiros.map(b => ({
+          id: String(b.colaborador_id),
+          nome: b.colaborador_nome,
+          faturamento: r(Number(b.faturamento)),
+          atendimentos: Number(b.atendimentos),
+          pct: totalBarbeiros > 0 ? Math.round((Number(b.faturamento) / totalBarbeiros) * 1000) / 10 : 0,
+        })),
+        topItens: topItens.map(i => ({
+          nome: i.nome,
+          tipo: i.tipo,
+          categoria: i.categoria,
+          grupo: i.tipo === 'ser' && i.categoria === 'base' ? 'Serviço Base' : i.tipo === 'ser' ? 'Serviço Extra' : 'Produto',
+          quantidade: Number(i.quantidade),
+          total: r(Number(i.total)),
+          pct: totalItens > 0 ? Math.round((Number(i.total) / totalItens) * 1000) / 10 : 0,
+        })),
+        composicao: composicao.map(c => ({
+          grupo: c.grupo,
+          total: r(Number(c.total)),
+          quantidade: Number(c.quantidade),
+          pct: atual.fatTotal > 0 ? Math.round((Number(c.total) / atual.fatTotal) * 1000) / 10 : 0,
+        })),
+      };
+      } catch (err) { handleExternalDbError(err); }
+    }),
+
+  // ── Comissões por colaborador ──────────────────────────────────────────────────────────────────────────────────
+  comissoes: protectedProcedure  .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
       periodo: z.string().optional(),
