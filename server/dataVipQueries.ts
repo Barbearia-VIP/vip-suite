@@ -656,10 +656,14 @@ export async function getColaboradores(extIds: number[], ano: number, mes: numbe
 // ─── Colaboradores por range de datas (tempo real, tabela vendas) ───────────────
 
 export async function getColaboradoresByRange(extIds: number[], dataInicio: string, dataFim: string) {
+  // Filtro de unidade: colaborador (vp.usuario) deve pertencer à unidade selecionada
   const unitCond = extIds.length === 0 ? "1=1"
-    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
-    : `uu.unidade IN (${extIds.join(",")})`;
-  const unitCondV2 = unitCond.replace(/uu\.unidade/g, 'uu2.unidade');
+    : extIds.length === 1 ? `colab.unidade = ${extIds[0]}`
+    : `colab.unidade IN (${extIds.join(",")})`;
+  // Para subquery de clientes novos: verifica se cliente já visitou a unidade antes
+  const unitCondV2 = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu2.unidade = ${extIds[0]}`
+    : `uu2.unidade IN (${extIds.join(",")})`;
   const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
 
   return queryExternal<{
@@ -679,11 +683,11 @@ export async function getColaboradoresByRange(extIds: number[], dataInicio: stri
     produtos_valor: number;
   }>(`
     SELECT
-      uu.id as colaborador_id,
-      uu.nome as colaborador_nome,
+      colab.id as colaborador_id,
+      colab.nome as colaborador_nome,
       COALESCE(SUM(vp.valor_total), 0) as faturamento,
-      COUNT(DISTINCT v.id) as atendimentos,
-      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
+      COUNT(DISTINCT vp.venda) as atendimentos,
+      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT vp.venda), 0), 0) as ticket_medio,
       COUNT(DISTINCT DATE(v.data_criacao)) as dias_trabalhados,
       COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT DATE(v.data_criacao)), 0), 0) as faturamento_dia,
       COUNT(CASE WHEN p.tipo = 'ser' THEN 1 END) as servicos,
@@ -703,16 +707,16 @@ export async function getColaboradoresByRange(extIds: number[], dataInicio: stri
       END) as clientes_novos,
       COUNT(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN 1 END) as produtos_qtd,
       COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.valor_total END), 0) as produtos_valor
-    FROM vendas v
-    JOIN usuarios uu ON v.usuario = uu.id
-    JOIN vendas_produtos vp ON vp.venda = v.id
+    FROM vendas_produtos vp
+    JOIN usuarios colab ON colab.id = vp.usuario
+    JOIN vendas v ON v.id = vp.venda
     JOIN produtos p ON p.id = vp.produto
     WHERE ${unitCond}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
       AND v.status != 0
-    GROUP BY uu.id, uu.nome
+    GROUP BY colab.id, colab.nome
     ORDER BY faturamento DESC
   `, [dataInicio, dataInicio, dataFimExcl]);
 }
