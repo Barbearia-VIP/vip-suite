@@ -514,9 +514,9 @@ export async function getFaturamentoMensalDetalhado(extIds: number[], meses: num
     SELECT
       YEAR(v.data_criacao) as ano,
       MONTH(v.data_criacao) as mes,
-      COALESCE(SUM(v.valor_liquido), 0) as faturamento,
+      COALESCE(SUM(vp.valor_total), 0) as faturamento,
       COUNT(DISTINCT v.id) as atendimentos,
-      COALESCE(AVG(v.valor_liquido), 0) as ticket_medio,
+      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
       COUNT(DISTINCT v.cliente) as clientes,
       COUNT(DISTINCT CASE WHEN cl.data_criacao >= DATE_FORMAT(v.data_criacao, '%Y-%m-01') THEN v.cliente END) as clientes_novos,
       COUNT(CASE WHEN p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL OR p.categoria != 'base') AND p.categoria != 'base' THEN 1 END) as extras_qtd,

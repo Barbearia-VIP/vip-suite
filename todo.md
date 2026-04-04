@@ -725,3 +725,6 @@
 - [x] Cards de resumo: Acumulado, Média/Mês, Máximo (com mês), Mínimo (com mês)
 - [x] Tooltip rico ao passar o mouse: todos os dados do mês
 - [x] Linha de média tracejada no gráfico
+
+## Bug - getFaturamentoMensalDetalhado
+- [x] Corrigir erro "Unknown column 'v.valor_liquido'" na função getFaturamentoMensalDetalhado — corrigido para SUM(vp.valor_total)
