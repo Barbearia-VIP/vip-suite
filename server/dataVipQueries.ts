@@ -707,9 +707,9 @@ export async function getColaboradoresByRange(extIds: number[], dataInicio: stri
       END) as clientes_novos,
       COUNT(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN 1 END) as produtos_qtd,
       COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.valor_total END), 0) as produtos_valor
-    FROM vendas v
-    JOIN usuarios colab ON colab.id = v.caixa
-    JOIN vendas_produtos vp ON vp.venda = v.id
+    FROM vendas_produtos vp
+    JOIN usuarios colab ON colab.id = vp.colaborador
+    JOIN vendas v ON v.id = vp.venda
     JOIN produtos p ON p.id = vp.produto
     WHERE ${unitCond}
       AND v.data_criacao >= ?
