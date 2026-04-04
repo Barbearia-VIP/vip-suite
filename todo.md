@@ -667,3 +667,7 @@
 - [x] Corrigir agrupamento por semana (erro ao calcular início da semana)
 - [x] Adicionar 3 linhas de referência no gráfico: Média Atual, Méd. SPLY, Méd. 6m
 - [x] Exibir legenda das 3 linhas abaixo do gráfico (como no sistema de referência)
+
+## Correção Granularidade Semana - Aberturas
+- [x] Diagnosticar e corrigir granularidade "Semana" que não exibe dados no bloco Aberturas
+- [x] Corrigir campo 'dia' retornando como objeto Date (usar DATE_FORMAT em vez de DATE() no SQL)

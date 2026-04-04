@@ -504,7 +504,7 @@ export async function getEvolucaoDiaria(
     extra_valor: number;
   }>(`
     SELECT 
-      DATE(v.data_criacao) as dia,
+      DATE_FORMAT(v.data_criacao, '%Y-%m-%d') as dia,
       COALESCE(SUM(vp.valor_total), 0) as faturamento,
       COUNT(DISTINCT v.id) as atendimentos,
       COUNT(DISTINCT v.cliente) as clientes,
@@ -533,7 +533,7 @@ export async function getEvolucaoDiaria(
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
       AND v.status != 0
-    GROUP BY DATE(v.data_criacao)
+    GROUP BY DATE_FORMAT(v.data_criacao, '%Y-%m-%d')
     ORDER BY dia ASC
   `, [dataInicio, dataFimExcl]);
 }
@@ -551,7 +551,7 @@ export async function getFaturamentoDiario(extIds: number[], dataInicio: string,
     clientes: number;
   }>(`
     SELECT 
-      DATE(v.data_criacao) as dia,
+      DATE_FORMAT(v.data_criacao, '%Y-%m-%d') as dia,
       COALESCE(SUM(vp.valor_total), 0) as faturamento,
       COUNT(DISTINCT v.id) as atendimentos,
       COUNT(DISTINCT v.cliente) as clientes
@@ -563,7 +563,7 @@ export async function getFaturamentoDiario(extIds: number[], dataInicio: string,
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
       AND v.status != 0
-    GROUP BY DATE(v.data_criacao)
+    GROUP BY DATE_FORMAT(v.data_criacao, '%Y-%m-%d')
     ORDER BY dia ASC
   `, [dataInicio, dataFim]);
 }
