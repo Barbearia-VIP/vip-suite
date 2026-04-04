@@ -2028,3 +2028,159 @@ export async function getClientesTop(extIds: number[], dataInicio: string, dataF
     };
   });
 }
+
+/** Lista de clientes Em Risco e Perdidos (Churn & Risco) */
+export async function getClientesChurnRisco(
+  extIds: number[],
+  dataInicio: string,
+  dataFim: string,
+  colaboradorId?: number | null,
+  statusFiltro?: string | null,
+  limit = 200
+) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+  const colabCond = colaboradorId ? `AND v.usuario = ${Number(colaboradorId)}` : "";
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+  const rows = await queryExternal<{
+    cliente_id: number;
+    nome: string;
+    telefone: string | null;
+    visitas: number;
+    valor_total: number;
+    ultima_visita: Date | null;
+    dias_sem_vir: number;
+  }>(`
+    SELECT
+      v.cliente as cliente_id,
+      COALESCE(c.nome, CONCAT('Cliente #', v.cliente)) as nome,
+      c.telefone,
+      COUNT(DISTINCT v.id) as visitas,
+      COALESCE(SUM(vp.valor_total), 0) as valor_total,
+      MAX(v.data_criacao) as ultima_visita,
+      DATEDIFF(NOW(), MAX(v.data_criacao)) as dias_sem_vir
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    LEFT JOIN clientes c ON c.id = v.cliente
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+      AND v.cliente IS NOT NULL
+      ${colabCond}
+    GROUP BY v.cliente, c.nome, c.telefone
+    HAVING dias_sem_vir > 60
+    ORDER BY dias_sem_vir DESC
+    LIMIT ${Number(limit)}
+  `, [dataInicio, dataFimExcl]);
+  return rows.map(r => {
+    const dias = Number(r.dias_sem_vir ?? 0);
+    const status = dias <= 75 ? "em_risco" : "perdido";
+    return {
+      clienteId: Number(r.cliente_id),
+      nome: String(r.nome),
+      telefone: r.telefone ?? null,
+      visitas: Number(r.visitas),
+      valorTotal: Number(r.valor_total),
+      diasSemVir: dias,
+      status,
+    };
+  }).filter(r => !statusFiltro || r.status === statusFiltro);
+}
+
+/** Top N clientes por valor total no período (expandido com paginação e busca) */
+export async function getClientesTopExpandido(
+  extIds: number[],
+  dataInicio: string,
+  dataFim: string,
+  limit = 100,
+  offset = 0,
+  search = "",
+  colaboradorId?: number | null
+) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+  const colabCond = colaboradorId ? `AND v.usuario = ${Number(colaboradorId)}` : "";
+  const searchCond = search ? `AND COALESCE(c.nome, '') LIKE ?` : "";
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+  const params: (string | number)[] = [dataInicio, dataFimExcl];
+  if (search) params.push(`%${search}%`);
+  const rows = await queryExternal<{
+    cliente_id: number;
+    nome: string;
+    telefone: string | null;
+    visitas: number;
+    valor_total: number;
+    ultima_visita: Date | null;
+    dias_sem_vir: number;
+  }>(`
+    SELECT
+      v.cliente as cliente_id,
+      COALESCE(c.nome, CONCAT('Cliente #', v.cliente)) as nome,
+      c.telefone,
+      COUNT(DISTINCT v.id) as visitas,
+      COALESCE(SUM(vp.valor_total), 0) as valor_total,
+      MAX(v.data_criacao) as ultima_visita,
+      DATEDIFF(NOW(), MAX(v.data_criacao)) as dias_sem_vir
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
+    LEFT JOIN clientes c ON c.id = v.cliente
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+      AND v.cliente IS NOT NULL
+      ${colabCond}
+      ${searchCond}
+    GROUP BY v.cliente, c.nome, c.telefone
+    ORDER BY valor_total DESC
+    LIMIT ${Number(limit)} OFFSET ${Number(offset)}
+  `, params);
+  return rows.map(r => {
+    const dias = Number(r.dias_sem_vir ?? 0);
+    let status: string;
+    if (dias <= 30) status = "assiduo";
+    else if (dias <= 45) status = "regular";
+    else if (dias <= 60) status = "espacando";
+    else if (dias <= 75) status = "em_risco";
+    else status = "perdido";
+    return {
+      clienteId: Number(r.cliente_id),
+      nome: String(r.nome),
+      telefone: r.telefone ?? null,
+      visitas: Number(r.visitas),
+      valorTotal: Number(r.valor_total),
+      diasSemVir: dias,
+      status,
+    };
+  });
+}
+
+/** Lista de colaboradores com atendimentos no período (para filtro do painel de clientes) */
+export async function getListaColaboradoresClientes(extIds: number[], dataInicio: string, dataFim: string) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+  const rows = await queryExternal<{ id: number; nome: string; total: number }>(`
+    SELECT u.id, u.nome, COUNT(DISTINCT v.id) as total
+    FROM vendas v
+    JOIN usuarios u ON v.usuario = u.id
+    JOIN usuarios uu ON v.usuario = uu.id
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+      AND v.cliente IS NOT NULL
+    GROUP BY u.id, u.nome
+    ORDER BY total DESC
+  `, [dataInicio, dataFimExcl]);
+  return rows.map(r => ({ id: Number(r.id), nome: String(r.nome), total: Number(r.total) }));
+}

@@ -792,3 +792,13 @@
 - [x] Frontend: barra de distribuição por dias sem vir
 - [x] Frontend: tabela Top 10 clientes por valor
 - [x] Corrigir procedure clientes (query usava colunas visitas/consumo inexistentes na tabela)
+
+## Melhorias Painel de Clientes (3 itens)
+- [x] Backend: query clientesChurnRisco (lista Em Risco e Perdidos com filtros: colaborador, dias sem vir, valor)
+- [x] Backend: query clientesTopExpandido (Top 50/100 com paginação, busca por nome, exportação CSV)
+- [x] Backend: adicionar colaboradorId em todas as procedures de clientes (kpis, status, evolução, frequência, dias, top)
+- [x] Backend: query listarColaboradoresClientes para popular seletor de colaborador
+- [x] Frontend: aba "Churn & Risco" com tabela filtrada por status Em Risco/Perdido, colaborador e dias sem vir
+- [x] Frontend: aba "Top Clientes" com tabela expandida (50/100), paginação, busca e botão exportar CSV
+- [x] Frontend: seletor de colaborador no painel de filtros da ClientesPage
+- [x] Frontend: todos os indicadores respondem ao colaborador selecionado

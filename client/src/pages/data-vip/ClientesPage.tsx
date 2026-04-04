@@ -1,8 +1,9 @@
 /**
  * ClientesPage.tsx — Painel de Clientes completo (Data VIP)
- * KPIs, distribuição por status, evolução mensal, frequência, dias sem vir, Top 10.
+ * KPIs, distribuição por status, evolução mensal, frequência, dias sem vir,
+ * Churn & Risco, Top Clientes expandido, filtro por colaborador.
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
@@ -15,6 +16,7 @@ import {
 import {
   Users, UserPlus, UserCheck, CalendarDays, DollarSign,
   TrendingUp, RefreshCw, ChevronDown, ChevronUp, Star,
+  AlertTriangle, Search, Download, User, X,
 } from "lucide-react";
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
@@ -150,25 +152,62 @@ function CustomTooltip({ active, payload, label }: any) {
   );
 }
 
+// ── Exportar CSV ──────────────────────────────────────────────────────────────
+function exportarCSV(dados: any[], nomeArquivo: string) {
+  if (!dados.length) return;
+  const cols = Object.keys(dados[0]);
+  const linhas = [cols.join(";"), ...dados.map(r => cols.map(c => String(r[c] ?? "")).join(";"))];
+  const blob = new Blob([linhas.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = nomeArquivo; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Abas ──────────────────────────────────────────────────────────────────────
+type Aba = "visao_geral" | "churn_risco" | "top_clientes";
+
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function ClientesPage() {
   const { selectedUnit } = useApp();
   const { org }          = useOrg();
-  const [filtros, setFiltros] = useState<Periodo>(() => calcPeriodo(12));
+  const [filtros, setFiltros]           = useState<Periodo>(() => calcPeriodo(12));
+  const [aba, setAba]                   = useState<Aba>("visao_geral");
+  const [colaboradorId, setColaboradorId] = useState<number | null>(null);
+
+  // Top Clientes
+  const [topSearch, setTopSearch]       = useState("");
+  const [topSearchInput, setTopSearchInput] = useState("");
+  const [topOffset, setTopOffset]       = useState(0);
+  const TOP_LIMIT = 50;
+
+  // Churn & Risco
+  const [churnStatus, setChurnStatus]   = useState<"em_risco" | "perdido" | null>(null);
 
   const dataInicio = toDateStr(filtros.iniMes, filtros.iniAno, false);
   const dataFim    = toDateStr(filtros.fimMes, filtros.fimAno, true);
   const base       = { orgId: org?.id, unitId: selectedUnit?.id };
   const enabled    = !!(org?.id || selectedUnit?.id);
 
-  const qKpis   = trpc.dataVip.clientesKpis.useQuery({ ...base, dataInicio, dataFim }, { enabled });
-  const qStatus = trpc.dataVip.clientesDistribuicaoStatus.useQuery(base, { enabled });
-  const qEvol   = trpc.dataVip.clientesEvolucaoMensal.useQuery({ ...base, dataInicio, dataFim }, { enabled });
-  const qFreq   = trpc.dataVip.clientesDistribuicaoFrequencia.useQuery({ ...base, dataInicio, dataFim }, { enabled });
-  const qDias   = trpc.dataVip.clientesDistribuicaoDiasSemVir.useQuery({ ...base, dataInicio, dataFim }, { enabled });
-  const qTop    = trpc.dataVip.clientesTop.useQuery({ ...base, dataInicio, dataFim, limit: 10 }, { enabled });
+  // ── Queries base ──────────────────────────────────────────────────────────
+  const qColabs  = trpc.dataVip.listarColaboradoresClientes.useQuery({ ...base, dataInicio, dataFim }, { enabled });
+  const qKpis    = trpc.dataVip.clientesKpis.useQuery({ ...base, dataInicio, dataFim }, { enabled });
+  const qStatus  = trpc.dataVip.clientesDistribuicaoStatus.useQuery(base, { enabled });
+  const qEvol    = trpc.dataVip.clientesEvolucaoMensal.useQuery({ ...base, dataInicio, dataFim }, { enabled });
+  const qFreq    = trpc.dataVip.clientesDistribuicaoFrequencia.useQuery({ ...base, dataInicio, dataFim }, { enabled });
+  const qDias    = trpc.dataVip.clientesDistribuicaoDiasSemVir.useQuery({ ...base, dataInicio, dataFim }, { enabled });
 
-  // Status
+  // ── Queries por aba ───────────────────────────────────────────────────────
+  const qChurn   = trpc.dataVip.clientesChurnRisco.useQuery(
+    { ...base, dataInicio, dataFim, colaboradorId, statusFiltro: churnStatus, limit: 200 },
+    { enabled: enabled && aba === "churn_risco" }
+  );
+  const qTopExp  = trpc.dataVip.clientesTopExpandido.useQuery(
+    { ...base, dataInicio, dataFim, limit: TOP_LIMIT, offset: topOffset, search: topSearch, colaboradorId },
+    { enabled: enabled && aba === "top_clientes" }
+  );
+
+  // ── Dados derivados ───────────────────────────────────────────────────────
   const statusDados = useMemo(() => {
     const s = qStatus.data;
     if (!s) return {} as Record<string, number>;
@@ -177,16 +216,13 @@ export default function ClientesPage() {
   const statusTotal = useMemo(() => Object.values(statusDados).reduce((a, b) => a + b, 0), [statusDados]);
   const statusItens = STATUS_ORDEM.map(k => ({ label: STATUS_CFG[k].label, valor: statusDados[k] ?? 0, cor: STATUS_CFG[k].cor }));
 
-  // Evolução
   const evolData = useMemo(() => (qEvol.data ?? []).map(r => {
     const [ano, mes] = r.periodo.split("-").map(Number);
     return { label: `${MESES[mes]}/${String(ano).slice(2)}`, clientesUnicos: r.clientesUnicos, novos: r.novos };
   }), [qEvol.data]);
 
-  // Frequência
   const freqTotal = useMemo(() => (qFreq.data ?? []).reduce((s, r) => s + r.total, 0), [qFreq.data]);
 
-  // Dias sem vir
   const diasDados = useMemo(() => {
     const d = qDias.data; if (!d) return [];
     return [
@@ -201,6 +237,23 @@ export default function ClientesPage() {
 
   const k = qKpis.data;
 
+  // Nome do colaborador selecionado
+  const colabNome = useMemo(() => {
+    if (!colaboradorId) return null;
+    return qColabs.data?.find(c => c.id === colaboradorId)?.nome ?? null;
+  }, [colaboradorId, qColabs.data]);
+
+  const handleBuscarTop = useCallback(() => {
+    setTopSearch(topSearchInput);
+    setTopOffset(0);
+  }, [topSearchInput]);
+
+  const ABA_BTNS: { id: Aba; label: string; icon: React.ReactNode }[] = [
+    { id: "visao_geral",  label: "Visão Geral",  icon: <Users className="w-3.5 h-3.5" /> },
+    { id: "churn_risco",  label: "Churn & Risco", icon: <AlertTriangle className="w-3.5 h-3.5" /> },
+    { id: "top_clientes", label: "Top Clientes",  icon: <Star className="w-3.5 h-3.5" /> },
+  ];
+
   return (
     <div className="p-6 space-y-6">
 
@@ -210,205 +263,388 @@ export default function ClientesPage() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Users className="w-6 h-6 text-primary" /> Painel de Clientes
           </h1>
-          <p className="text-sm text-muted-foreground">
-            {selectedUnit ? selectedUnit.name : "Todas as unidades"} · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}
-          </p>
+          <div className="flex items-center gap-2 flex-wrap mt-1">
+            <p className="text-sm text-muted-foreground">
+              {selectedUnit ? selectedUnit.name : "Todas as unidades"} · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}
+            </p>
+            {colabNome && (
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/15 border border-primary/30 text-xs font-semibold text-primary">
+                <User className="w-3 h-3" /> Visualizando: {colabNome}
+                <button onClick={() => setColaboradorId(null)} className="ml-1 hover:text-foreground transition-colors"><X className="w-3 h-3" /></button>
+              </span>
+            )}
+          </div>
         </div>
-        <PeriodoSelector filtros={filtros} onChange={setFiltros} />
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Seletor de colaborador */}
+          <select
+            value={colaboradorId ?? ""}
+            onChange={e => setColaboradorId(e.target.value ? Number(e.target.value) : null)}
+            className="rounded-lg border border-border bg-card px-3 py-2 text-sm min-w-[180px]"
+          >
+            <option value="">Todos os colaboradores</option>
+            {(qColabs.data ?? []).map(c => (
+              <option key={c.id} value={c.id}>{c.nome} ({c.total})</option>
+            ))}
+          </select>
+          <PeriodoSelector filtros={filtros} onChange={setFiltros} />
+        </div>
       </div>
 
-      {/* ── KPIs ───────────────────────────────────────────────────────────── */}
-      {qKpis.isLoading ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          {Array.from({ length: 7 }).map((_, i) => <Card key={i}><CardContent className="p-4"><Skeleton className="h-12 w-full" /></CardContent></Card>)}
-        </div>
-      ) : k ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          {[
-            { lbl: "TOTAL CLIENTES",       val: fmtNum(k.totalClientes),      sub: null,                                          icon: <Users className="w-4 h-4" />,       cor: "text-blue-400" },
-            { lbl: "NOVOS",                val: fmtNum(k.novos),               sub: `${k.novosPctTotal}% do total`,               icon: <UserPlus className="w-4 h-4" />,     cor: "text-green-400" },
-            { lbl: "NOVOS QUE RETORNARAM", val: fmtNum(k.novosRetornaram),     sub: `${k.novosRetornaramPct}% dos novos`,         icon: <UserCheck className="w-4 h-4" />,    cor: "text-purple-400" },
-            { lbl: "ATENDIMENTOS",         val: fmtNum(k.atendimentos),        sub: null,                                          icon: <CalendarDays className="w-4 h-4" />, cor: "text-yellow-400" },
-            { lbl: "TICKET MÉDIO",         val: fmtMoeda(k.ticketMedio),       sub: null,                                          icon: <TrendingUp className="w-4 h-4" />,   cor: "text-orange-400" },
-            { lbl: "VALOR TOTAL",          val: fmtMoedaCompact(k.valorTotal), sub: null,                                          icon: <DollarSign className="w-4 h-4" />,   cor: "text-primary" },
-            { lbl: "RET. 30D NOVOS",       val: `${k.retencao30dNovos}%`,      sub: null,                                          icon: <RefreshCw className="w-4 h-4" />,    cor: "text-cyan-400" },
-          ].map((kpi, i) => (
-            <Card key={i} className="border-border">
-              <CardContent className="p-4">
-                <div className={`flex items-center gap-1.5 mb-1 ${kpi.cor}`}>{kpi.icon}<span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">{kpi.lbl}</span></div>
-                <p className="text-xl font-bold text-foreground leading-tight">{kpi.val}</p>
-                {kpi.sub && <p className="text-xs text-muted-foreground mt-0.5">{kpi.sub}</p>}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : null}
+      {/* ── Abas ───────────────────────────────────────────────────────────── */}
+      <div className="flex gap-1 border-b border-border pb-0">
+        {ABA_BTNS.map(a => (
+          <button
+            key={a.id}
+            onClick={() => setAba(a.id)}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors border-b-2 -mb-px ${
+              aba === a.id
+                ? "border-primary text-primary bg-primary/5"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30"
+            }`}
+          >
+            {a.icon}{a.label}
+          </button>
+        ))}
+      </div>
 
-      {/* ── Distribuição por status ─────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Distribuição por Status · Foto atual da carteira</CardTitle>
-          <p className="text-xs text-muted-foreground">Situação calculada com base na última visita de cada cliente</p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {qStatus.isLoading ? <Skeleton className="h-16 w-full" /> : (
-            <>
-              <BarraSegmentada itens={statusItens} total={statusTotal} />
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-2">
-                {STATUS_ORDEM.map(k => {
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* ABA: VISÃO GERAL                                                   */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {aba === "visao_geral" && (
+        <>
+          {/* KPIs */}
+          {qKpis.isLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              {Array.from({ length: 7 }).map((_, i) => <Card key={i}><CardContent className="p-4"><Skeleton className="h-12 w-full" /></CardContent></Card>)}
+            </div>
+          ) : k ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+              {[
+                { lbl: "TOTAL CLIENTES",       val: fmtNum(k.totalClientes),      sub: null,                                          icon: <Users className="w-4 h-4" />,       cor: "text-blue-400" },
+                { lbl: "NOVOS",                val: fmtNum(k.novos),               sub: `${k.novosPctTotal}% do total`,               icon: <UserPlus className="w-4 h-4" />,     cor: "text-green-400" },
+                { lbl: "NOVOS QUE RETORNARAM", val: fmtNum(k.novosRetornaram),     sub: `${k.novosRetornaramPct}% dos novos`,         icon: <UserCheck className="w-4 h-4" />,    cor: "text-purple-400" },
+                { lbl: "ATENDIMENTOS",         val: fmtNum(k.atendimentos),        sub: null,                                          icon: <CalendarDays className="w-4 h-4" />, cor: "text-yellow-400" },
+                { lbl: "TICKET MÉDIO",         val: fmtMoeda(k.ticketMedio),       sub: null,                                          icon: <TrendingUp className="w-4 h-4" />,   cor: "text-orange-400" },
+                { lbl: "VALOR TOTAL",          val: fmtMoedaCompact(k.valorTotal), sub: null,                                          icon: <DollarSign className="w-4 h-4" />,   cor: "text-primary" },
+                { lbl: "RET. 30D NOVOS",       val: `${k.retencao30dNovos}%`,      sub: null,                                          icon: <RefreshCw className="w-4 h-4" />,    cor: "text-cyan-400" },
+              ].map((kpi, i) => (
+                <Card key={i} className="border-border">
+                  <CardContent className="p-4">
+                    <div className={`flex items-center gap-1.5 mb-1 ${kpi.cor}`}>{kpi.icon}<span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">{kpi.lbl}</span></div>
+                    <p className="text-xl font-bold text-foreground leading-tight">{kpi.val}</p>
+                    {kpi.sub && <p className="text-xs text-muted-foreground mt-0.5">{kpi.sub}</p>}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Distribuição por status */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Distribuição por Status · Foto atual da carteira</CardTitle>
+              <p className="text-xs text-muted-foreground">Situação calculada com base na última visita de cada cliente</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {qStatus.isLoading ? <Skeleton className="h-16 w-full" /> : (
+                <>
+                  <BarraSegmentada itens={statusItens} total={statusTotal} />
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-2">
+                    {STATUS_ORDEM.map(k => {
+                      const v = statusDados[k] ?? 0;
+                      const pct = statusTotal > 0 ? ((v / statusTotal) * 100).toFixed(1) : "0";
+                      const cfg = STATUS_CFG[k];
+                      return (
+                        <div key={k} className={`rounded-xl border p-3 ${cfg.bg}`}>
+                          <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: cfg.cor }}>{cfg.label}</p>
+                          <p className="text-xs text-muted-foreground mb-2">{cfg.desc}</p>
+                          <p className="text-2xl font-bold text-foreground">{fmtNum(v)}</p>
+                          <p className="text-xs text-muted-foreground">{pct}% do total</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Evolução mensal */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Evolução Mensal · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {qEvol.isLoading ? <Skeleton className="h-64 w-full" /> : (
+                <ResponsiveContainer width="100%" height={280}>
+                  <ComposedChart data={evolData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#888" }} />
+                    <YAxis tick={{ fontSize: 11, fill: "#888" }} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="clientesUnicos" name="Clientes únicos" fill="#d4a017" radius={[3, 3, 0, 0]} />
+                    <Line type="monotone" dataKey="novos" name="Novos" stroke="#22c55e" strokeWidth={2} dot={{ r: 4, fill: "#22c55e" }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+              <div className="flex gap-4 justify-center mt-2">
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="w-3 h-3 rounded-sm bg-[#d4a017] inline-block" /> Clientes únicos</span>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="w-3 h-0.5 bg-green-500 inline-block" /> Novos</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Distribuição por dias sem vir */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Distribuição por Dias Sem Vir · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
+              <p className="text-xs text-muted-foreground">Baseado na última visita de cada cliente no período</p>
+            </CardHeader>
+            <CardContent>
+              {qDias.isLoading ? <Skeleton className="h-12 w-full" /> : <BarraSegmentada itens={diasDados} total={diasTotal} altura="h-8" />}
+            </CardContent>
+          </Card>
+
+          {/* Distribuição por frequência */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Distribuição por Frequência de Visitas · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {qFreq.isLoading ? <Skeleton className="h-12 w-full" /> : (
+                <>
+                  <BarraSegmentada itens={(qFreq.data ?? []).map((r, i) => ({ label: r.faixa, valor: r.total, cor: FREQ_CORES[i % FREQ_CORES.length] }))} total={freqTotal} altura="h-8" />
+                  <div className="mt-4 space-y-1.5">
+                    {(qFreq.data ?? []).map((r, i) => {
+                      const pct = freqTotal > 0 ? (r.total / freqTotal) * 100 : 0;
+                      return (
+                        <div key={i} className="flex items-center gap-3">
+                          <span className="text-xs text-muted-foreground w-28 shrink-0 text-right">{r.faixa}</span>
+                          <div className="flex-1 h-5 bg-muted/30 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all" style={{ width: `${Math.max(pct, 1)}%`, backgroundColor: FREQ_CORES[i % FREQ_CORES.length] }}>
+                              {pct >= 6 && <span className="text-[10px] font-bold text-white">{fmtNum(r.total)}</span>}
+                            </div>
+                          </div>
+                          <span className="text-xs text-muted-foreground w-16 shrink-0">{fmtNum(r.total)} ({pct.toFixed(0)}%)</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Composição por status */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Composição por Status · Foto atual</CardTitle>
+              <p className="text-xs text-muted-foreground">Barras proporcionais ao total da carteira</p>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {qStatus.isLoading ? <Skeleton className="h-40 w-full" /> : (
+                STATUS_ORDEM.map(k => {
                   const v = statusDados[k] ?? 0;
-                  const pct = statusTotal > 0 ? ((v / statusTotal) * 100).toFixed(1) : "0";
+                  const pct = statusTotal > 0 ? (v / statusTotal) * 100 : 0;
                   const cfg = STATUS_CFG[k];
                   return (
-                    <div key={k} className={`rounded-xl border p-3 ${cfg.bg}`}>
-                      <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: cfg.cor }}>{cfg.label}</p>
-                      <p className="text-xs text-muted-foreground mb-2">{cfg.desc}</p>
-                      <p className="text-2xl font-bold text-foreground">{fmtNum(v)}</p>
-                      <p className="text-xs text-muted-foreground">{pct}% do total</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Evolução mensal ─────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Evolução Mensal · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {qEvol.isLoading ? <Skeleton className="h-64 w-full" /> : (
-            <ResponsiveContainer width="100%" height={280}>
-              <ComposedChart data={evolData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#888" }} />
-                <YAxis tick={{ fontSize: 11, fill: "#888" }} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="clientesUnicos" name="Clientes únicos" fill="#d4a017" radius={[3, 3, 0, 0]} />
-                <Line type="monotone" dataKey="novos" name="Novos" stroke="#22c55e" strokeWidth={2} dot={{ r: 4, fill: "#22c55e" }} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          )}
-          <div className="flex gap-4 justify-center mt-2">
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="w-3 h-3 rounded-sm bg-[#d4a017] inline-block" /> Clientes únicos</span>
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="w-3 h-0.5 bg-green-500 inline-block" /> Novos</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Distribuição por dias sem vir ───────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Distribuição por Dias Sem Vir · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
-          <p className="text-xs text-muted-foreground">Baseado na última visita de cada cliente no período</p>
-        </CardHeader>
-        <CardContent>
-          {qDias.isLoading ? <Skeleton className="h-12 w-full" /> : <BarraSegmentada itens={diasDados} total={diasTotal} altura="h-8" />}
-        </CardContent>
-      </Card>
-
-      {/* ── Distribuição por frequência ─────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Distribuição por Frequência de Visitas · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {qFreq.isLoading ? <Skeleton className="h-12 w-full" /> : (
-            <>
-              <BarraSegmentada itens={(qFreq.data ?? []).map((r, i) => ({ label: r.faixa, valor: r.total, cor: FREQ_CORES[i % FREQ_CORES.length] }))} total={freqTotal} altura="h-8" />
-              <div className="mt-4 space-y-1.5">
-                {(qFreq.data ?? []).map((r, i) => {
-                  const pct = freqTotal > 0 ? (r.total / freqTotal) * 100 : 0;
-                  return (
-                    <div key={i} className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground w-28 shrink-0 text-right">{r.faixa}</span>
+                    <div key={k} className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground w-24 shrink-0">{cfg.label}</span>
                       <div className="flex-1 h-5 bg-muted/30 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all" style={{ width: `${Math.max(pct, 1)}%`, backgroundColor: FREQ_CORES[i % FREQ_CORES.length] }}>
-                          {pct >= 6 && <span className="text-[10px] font-bold text-white">{fmtNum(r.total)}</span>}
+                        <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all" style={{ width: `${Math.max(pct, 0.5)}%`, backgroundColor: cfg.cor }}>
+                          {pct >= 5 && <span className="text-[10px] font-bold text-white">{fmtNum(v)}</span>}
                         </div>
                       </div>
-                      <span className="text-xs text-muted-foreground w-16 shrink-0">{fmtNum(r.total)} ({pct.toFixed(0)}%)</span>
+                      <span className="text-xs text-muted-foreground w-20 shrink-0 text-right">{fmtNum(v)} ({pct.toFixed(0)}%)</span>
                     </div>
                   );
-                })}
+                })
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* ABA: CHURN & RISCO                                                 */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {aba === "churn_risco" && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <div className="flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-orange-400" /><CardTitle className="text-base">Clientes em Risco e Perdidos</CardTitle></div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)} · Clientes com mais de 60 dias sem visitar
+                  {colabNome && ` · ${colabNome}`}
+                </p>
               </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Composição por status (barras horizontais) ──────────────────────── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Composição por Status · Foto atual</CardTitle>
-          <p className="text-xs text-muted-foreground">Barras proporcionais ao total da carteira</p>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {qStatus.isLoading ? <Skeleton className="h-40 w-full" /> : (
-            STATUS_ORDEM.map(k => {
-              const v = statusDados[k] ?? 0;
-              const pct = statusTotal > 0 ? (v / statusTotal) * 100 : 0;
-              const cfg = STATUS_CFG[k];
-              return (
-                <div key={k} className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground w-24 shrink-0">{cfg.label}</span>
-                  <div className="flex-1 h-5 bg-muted/30 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all" style={{ width: `${Math.max(pct, 0.5)}%`, backgroundColor: cfg.cor }}>
-                      {pct >= 5 && <span className="text-[10px] font-bold text-white">{fmtNum(v)}</span>}
-                    </div>
-                  </div>
-                  <span className="text-xs text-muted-foreground w-20 shrink-0 text-right">{fmtNum(v)} ({pct.toFixed(0)}%)</span>
-                </div>
-              );
-            })
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Top 10 clientes por valor ───────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center gap-2"><Star className="w-4 h-4 text-primary" /><CardTitle className="text-base">Top 10 Clientes por Valor</CardTitle></div>
-          <p className="text-xs text-muted-foreground">Período: {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)} · Ordenado por valor total</p>
-        </CardHeader>
-        <CardContent>
-          {qTop.isLoading ? (
-            <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    {["#", "Cliente", "Status", "Visitas", "Valor", "Dias s/ vir"].map((h, i) => (
-                      <th key={i} className={`py-2 px-3 text-xs font-semibold text-muted-foreground ${i > 2 ? "text-right" : "text-left"}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(qTop.data ?? []).map((c, i) => (
-                    <tr key={c.clienteId} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                      <td className="py-2.5 px-3 text-muted-foreground font-mono">#{i + 1}</td>
-                      <td className="py-2.5 px-3 font-medium text-foreground">{c.nome}</td>
-                      <td className="py-2.5 px-3"><StatusBadge status={c.status} /></td>
-                      <td className="py-2.5 px-3 text-right text-muted-foreground">{fmtNum(c.visitas)}</td>
-                      <td className="py-2.5 px-3 text-right font-semibold text-foreground">{fmtMoeda(c.valorTotal)}</td>
-                      <td className="py-2.5 px-3 text-right">
-                        <span className={`font-medium ${c.diasSemVir > 75 ? "text-red-400" : c.diasSemVir > 45 ? "text-orange-400" : "text-green-400"}`}>{c.diasSemVir}d</span>
-                      </td>
-                    </tr>
+              <div className="flex items-center gap-2">
+                {/* Filtro de status */}
+                <div className="flex gap-1">
+                  {([null, "em_risco", "perdido"] as const).map(s => (
+                    <button
+                      key={String(s)}
+                      onClick={() => setChurnStatus(s)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                        churnStatus === s
+                          ? s === null ? "bg-muted text-foreground" : s === "em_risco" ? "bg-orange-500 text-white" : "bg-red-500 text-white"
+                          : "border border-border text-muted-foreground hover:bg-muted/50"
+                      }`}
+                    >
+                      {s === null ? "Todos" : s === "em_risco" ? "Em Risco" : "Perdidos"}
+                    </button>
                   ))}
-                  {(qTop.data ?? []).length === 0 && (
-                    <tr><td colSpan={6} className="py-8 text-center text-muted-foreground text-sm">Nenhum dado encontrado para o período selecionado</td></tr>
-                  )}
-                </tbody>
-              </table>
+                </div>
+                <button
+                  onClick={() => exportarCSV(qChurn.data ?? [], `churn-risco-${dataInicio}-${dataFim}.csv`)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted/50 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" /> Exportar CSV
+                </button>
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            {qChurn.isLoading ? (
+              <div className="space-y-2">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      {["#", "Cliente", "Status", "Visitas", "Valor Total", "Dias s/ vir"].map((h, i) => (
+                        <th key={i} className={`py-2 px-3 text-xs font-semibold text-muted-foreground ${i > 2 ? "text-right" : "text-left"}`}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(qChurn.data ?? []).map((c, i) => (
+                      <tr key={c.clienteId} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                        <td className="py-2.5 px-3 text-muted-foreground font-mono text-xs">#{i + 1}</td>
+                        <td className="py-2.5 px-3 font-medium text-foreground">{c.nome}</td>
+                        <td className="py-2.5 px-3"><StatusBadge status={c.status} /></td>
+                        <td className="py-2.5 px-3 text-right text-muted-foreground">{fmtNum(c.visitas)}</td>
+                        <td className="py-2.5 px-3 text-right font-semibold text-foreground">{fmtMoeda(c.valorTotal)}</td>
+                        <td className="py-2.5 px-3 text-right">
+                          <span className={`font-medium ${c.diasSemVir > 75 ? "text-red-400" : "text-orange-400"}`}>{c.diasSemVir}d</span>
+                        </td>
+                      </tr>
+                    ))}
+                    {(qChurn.data ?? []).length === 0 && (
+                      <tr><td colSpan={6} className="py-8 text-center text-muted-foreground text-sm">Nenhum cliente em risco ou perdido no período</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {/* ABA: TOP CLIENTES                                                  */}
+      {/* ═══════════════════════════════════════════════════════════════════ */}
+      {aba === "top_clientes" && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <div className="flex items-center gap-2"><Star className="w-4 h-4 text-primary" /><CardTitle className="text-base">Top Clientes por Valor</CardTitle></div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)} · Ordenado por valor total
+                  {colabNome && ` · ${colabNome}`}
+                </p>
+              </div>
+              <button
+                onClick={() => exportarCSV(qTopExp.data ?? [], `top-clientes-${dataInicio}-${dataFim}.csv`)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted/50 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" /> Exportar CSV
+              </button>
+            </div>
+            {/* Busca */}
+            <div className="flex gap-2 mt-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Buscar por nome..."
+                  value={topSearchInput}
+                  onChange={e => setTopSearchInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleBuscarTop()}
+                  className="w-full pl-8 pr-3 py-2 rounded-lg border border-border bg-background text-sm"
+                />
+              </div>
+              <button onClick={handleBuscarTop} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors">Buscar</button>
+              {topSearch && (
+                <button onClick={() => { setTopSearch(""); setTopSearchInput(""); setTopOffset(0); }} className="px-3 py-2 rounded-lg border border-border text-sm hover:bg-muted/50 transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {qTopExp.isLoading ? (
+              <div className="space-y-2">{Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        {["#", "Cliente", "Status", "Visitas", "Valor Total", "Dias s/ vir"].map((h, i) => (
+                          <th key={i} className={`py-2 px-3 text-xs font-semibold text-muted-foreground ${i > 2 ? "text-right" : "text-left"}`}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(qTopExp.data ?? []).map((c, i) => (
+                        <tr key={c.clienteId} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                          <td className="py-2.5 px-3 text-muted-foreground font-mono text-xs">#{topOffset + i + 1}</td>
+                          <td className="py-2.5 px-3 font-medium text-foreground">{c.nome}</td>
+                          <td className="py-2.5 px-3"><StatusBadge status={c.status} /></td>
+                          <td className="py-2.5 px-3 text-right text-muted-foreground">{fmtNum(c.visitas)}</td>
+                          <td className="py-2.5 px-3 text-right font-semibold text-foreground">{fmtMoeda(c.valorTotal)}</td>
+                          <td className="py-2.5 px-3 text-right">
+                            <span className={`font-medium ${c.diasSemVir > 75 ? "text-red-400" : c.diasSemVir > 45 ? "text-orange-400" : "text-green-400"}`}>{c.diasSemVir}d</span>
+                          </td>
+                        </tr>
+                      ))}
+                      {(qTopExp.data ?? []).length === 0 && (
+                        <tr><td colSpan={6} className="py-8 text-center text-muted-foreground text-sm">Nenhum cliente encontrado</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Paginação */}
+                <div className="flex items-center justify-between mt-4">
+                  <span className="text-xs text-muted-foreground">
+                    Exibindo {topOffset + 1}–{topOffset + (qTopExp.data?.length ?? 0)}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setTopOffset(Math.max(0, topOffset - TOP_LIMIT))}
+                      disabled={topOffset === 0}
+                      className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium disabled:opacity-40 hover:bg-muted/50 transition-colors"
+                    >
+                      ← Anterior
+                    </button>
+                    <button
+                      onClick={() => setTopOffset(topOffset + TOP_LIMIT)}
+                      disabled={(qTopExp.data?.length ?? 0) < TOP_LIMIT}
+                      className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium disabled:opacity-40 hover:bg-muted/50 transition-colors"
+                    >
+                      Próxima →
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
     </div>
   );

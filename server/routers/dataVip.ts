@@ -39,6 +39,9 @@ import {
   getClientesDistribuicaoFrequencia,
   getClientesDistribuicaoDiasSemVir,
   getClientesTop,
+  getClientesChurnRisco,
+  getClientesTopExpandido,
+  getListaColaboradoresClientes,
 } from "../dataVipQueries";
 
 // Inicializa scheduler automático (08:00 BRT)
@@ -1765,8 +1768,54 @@ export const dataVipRouter = router({
         return await getClientesTop(extIds, input.dataInicio, input.dataFim, input.limit);
       } catch (err) { handleExternalDbError(err); }
     }),
-
-  // ── Faturamento mensal com filtros avançados ────────────────────────────────
+  // ── Churn & Risco ───────────────────────────────────────────────────────────────────
+  clientesChurnRisco: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+      colaboradorId: z.number().nullable().optional(),
+      statusFiltro: z.enum(["em_risco", "perdido"]).nullable().optional(),
+      limit: z.number().default(200),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        return await getClientesChurnRisco(extIds, input.dataInicio, input.dataFim, input.colaboradorId, input.statusFiltro, input.limit);
+      } catch (err) { handleExternalDbError(err); }
+    }),
+  clientesTopExpandido: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+      limit: z.number().default(100),
+      offset: z.number().default(0),
+      search: z.string().default(""),
+      colaboradorId: z.number().nullable().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        return await getClientesTopExpandido(extIds, input.dataInicio, input.dataFim, input.limit, input.offset, input.search, input.colaboradorId);
+      } catch (err) { handleExternalDbError(err); }
+    }),
+  listarColaboradoresClientes: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+    }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+        return await getListaColaboradoresClientes(extIds, input.dataInicio, input.dataFim);
+      } catch (err) { handleExternalDbError(err); }
+    }),
+  // ── Faturamento mensal com filtros avançados ────────────────────────────────────────────
   faturamentoMensalFiltrado: protectedProcedure
     .input(z.object({
       orgId: z.number().optional(),
