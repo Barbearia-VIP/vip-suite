@@ -34,7 +34,7 @@ let tunnelReady = false;
 let tunnelPromise: Promise<void> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempts = 0;
-const MAX_RECONNECT_DELAY_MS = 5 * 60 * 1000; // máximo 5 minutos entre tentativas
+const MAX_RECONNECT_DELAY_MS = 30 * 1000; // máximo 30s entre tentativas (era 5 min)
 
 // ─── Criar túnel SSH ─────────────────────────────────────────────────────────
 
@@ -55,9 +55,9 @@ function destroyTunnel() {
   }
 }
 
-function scheduleReconnect(baseDelayMs = 5000) {
+function scheduleReconnect(baseDelayMs = 3000) {
   if (reconnectTimer) return;
-  // Backoff exponencial: 5s, 10s, 20s, 40s, 80s, 160s, 300s (máx)
+  // Backoff exponencial: 3s, 6s, 12s, 24s, 30s (máx)
   reconnectAttempts++;
   const delay = Math.min(baseDelayMs * Math.pow(2, reconnectAttempts - 1), MAX_RECONNECT_DELAY_MS);
   console.log(`[SSH Tunnel] Aguardando ${Math.round(delay / 1000)}s antes de reconectar (tentativa ${reconnectAttempts})...`);
@@ -171,7 +171,7 @@ function createTunnel(): Promise<void> {
     ssh.on("close", () => {
       console.warn("[SSH Tunnel] Conexão SSH fechada — reconectando...");
       destroyTunnel();
-      scheduleReconnect(3000);
+      scheduleReconnect(2000);
     });
 
     ssh.connect({
@@ -179,9 +179,41 @@ function createTunnel(): Promise<void> {
       port: SSH_PORT,
       username: SSH_USER,
       password: SSH_PASS,
-      readyTimeout: 30000,
-      keepaliveInterval: 15000,   // keepalive a cada 15s (era 30s)
-      keepaliveCountMax: 5,       // tolera 5 falhas antes de fechar
+      readyTimeout: 10000,
+      keepaliveInterval: 10000,
+      keepaliveCountMax: 3,
+      // Algoritmos compatíveis com OpenSSH moderno
+      algorithms: {
+        kex: [
+          "curve25519-sha256",
+          "curve25519-sha256@libssh.org",
+          "ecdh-sha2-nistp256",
+          "ecdh-sha2-nistp384",
+          "ecdh-sha2-nistp521",
+          "diffie-hellman-group-exchange-sha256",
+          "diffie-hellman-group14-sha256",
+        ],
+        serverHostKey: [
+          "rsa-sha2-512",
+          "rsa-sha2-256",
+          "ecdsa-sha2-nistp256",
+          "ssh-ed25519",
+        ],
+        cipher: [
+          "aes128-gcm@openssh.com",
+          "aes256-gcm@openssh.com",
+          "aes128-ctr",
+          "aes192-ctr",
+          "aes256-ctr",
+        ],
+        hmac: [
+          "hmac-sha2-256-etm@openssh.com",
+          "hmac-sha2-512-etm@openssh.com",
+          "hmac-sha2-256",
+          "hmac-sha2-512",
+        ],
+        compress: ["none"],
+      },
     });
   });
 
@@ -193,6 +225,11 @@ function createTunnel(): Promise<void> {
 /**
  * Retorna o pool MySQL externo, criando o túnel SSH se necessário.
  */
+/** Retorna true se o túnel SSH está ativo e o pool MySQL disponível */
+export function isTunnelReady(): boolean {
+  return tunnelReady && pool !== null;
+}
+
 export async function getExternalPool(): Promise<Pool> {
   if (!tunnelReady || !pool) {
     await createTunnel();

@@ -138,6 +138,12 @@ function handleExternalDbError(err: unknown): never {
 
 // ─── Router ──────────────────────────────────────────────────────────────────
 export const dataVipRouter = router({
+  // ── Status do banco externo ──────────────────────────────────────────────────
+  dbStatus: protectedProcedure.query(async () => {
+    const { isTunnelReady } = await import("../db-external");
+    return { connected: isTunnelReady() };
+  }),
+
   // ── Dashboard KPIs ──────────────────────────────────────────────────────────
   dashboard: protectedProcedure
     .input(z.object({

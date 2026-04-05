@@ -17,7 +17,7 @@ import {
   BarChart3, AlertCircle, DollarSign, Users, TrendingUp,
   UserPlus, Gift, Scissors, CalendarDays, Activity,
   BarChart2, TrendingDown, Sigma, Minus, Filter, ChevronDown, ChevronUp,
-  User, X,
+  User, X, Wifi, WifiOff,
 } from "lucide-react";
 
 // ── Formatadores ─────────────────────────────────────────────────────────────
@@ -443,6 +443,13 @@ export default function MensalPage() {
     { enabled: !!org?.id }
   );
 
+  // Status do banco externo
+  const qDbStatus = trpc.dataVip.dbStatus.useQuery(undefined, {
+    refetchInterval: 10000,
+    retry: false,
+  });
+  const dbConnected = qDbStatus.data?.connected ?? true;
+
   // Dados formatados para o gráfico
   const chartData = useMemo(() => {
     return (qDetalhado.data ?? []).map(m => {
@@ -489,6 +496,16 @@ export default function MensalPage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-primary" /> Análise Mensal
+            {!dbConnected && (
+              <span className="flex items-center gap-1 text-xs font-normal text-amber-500 bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5">
+                <WifiOff className="w-3 h-3" /> Reconectando banco...
+              </span>
+            )}
+            {dbConnected && qDbStatus.isFetched && (
+              <span className="flex items-center gap-1 text-xs font-normal text-emerald-500 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5">
+                <Wifi className="w-3 h-3" /> Banco conectado
+              </span>
+            )}
           </h1>
           <p className="text-sm text-muted-foreground">
             {selectedUnit ? selectedUnit.name : "Todas as unidades"}

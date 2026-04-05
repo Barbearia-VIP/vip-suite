@@ -18,7 +18,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users, UserCheck, UserX, AlertTriangle, TrendingDown, TrendingUp,
-  Zap, Activity, Target, Scissors, Search, RefreshCw, Info, ChevronRight, Calendar
+  Zap, Activity, Target, Scissors, Search, RefreshCw, Info, ChevronRight, Calendar,
+  Wifi, WifiOff
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -146,6 +147,12 @@ export default function RaioXPage() {
     { enabled: !!org?.id && tab === "acoes" }
   );
   const qDiag = trpc.raioX.diagnostico.useQuery(baseInput, { enabled: !!org?.id && tab === "diagnostico" });
+  // Status do banco externo
+  const qDbStatus = trpc.dataVip.dbStatus.useQuery(undefined, {
+    refetchInterval: 10000,
+    retry: false,
+  });
+  const dbConnected = qDbStatus.data?.connected ?? true;
 
   const v = qVisao.data;
   const isLoading = qVisao.isLoading;
@@ -164,6 +171,16 @@ export default function RaioXPage() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Zap className="w-6 h-6 text-yellow-400" />
             Raio X — Clientes
+            {!dbConnected && (
+              <span className="flex items-center gap-1 text-xs font-normal text-amber-500 bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5">
+                <WifiOff className="w-3 h-3" /> Reconectando banco...
+              </span>
+            )}
+            {dbConnected && qDbStatus.isFetched && (
+              <span className="flex items-center gap-1 text-xs font-normal text-emerald-500 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5">
+                <Wifi className="w-3 h-3" /> Banco conectado
+              </span>
+            )}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {selectedUnit ? selectedUnit.name : "Todas as unidades"} · Base: {v?.sinais.totalBase.toLocaleString() ?? "—"} clientes
