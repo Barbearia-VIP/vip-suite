@@ -678,6 +678,7 @@ export const raioXRouter = router({
         FROM vendas v
         JOIN usuarios uu ON v.usuario = uu.id
         WHERE ${unitCond}
+          AND uu.visivel_agenda != 'nenhuma'
           AND v.data_criacao >= ?
           AND v.data_criacao <= ?
           AND v.comanda_temp = 0

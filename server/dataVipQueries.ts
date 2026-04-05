@@ -952,6 +952,7 @@ export async function getColaboradoresByRange(extIds: number[], dataInicio: stri
     JOIN vendas v ON v.id = vp.venda
     JOIN produtos p ON p.id = vp.produto
     WHERE ${unitCond}
+      AND colab.visivel_agenda != 'nenhuma'
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
@@ -1160,6 +1161,7 @@ export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, 
     JOIN clientes c ON c.id = v.cliente
     JOIN vendas_produtos vp ON vp.venda = v.id
     WHERE ${unitCond}
+      AND uu.visivel_agenda != 'nenhuma'
       AND v.data_criacao >= ?
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
@@ -1381,6 +1383,7 @@ export async function getTopBarbeiros(extIds: number[], dataInicio: string, data
     JOIN vendas v ON v.id = vp.venda
     JOIN produtos p ON p.id = vp.produto
     WHERE ${unitCond}
+      AND colab.visivel_agenda != 'nenhuma'
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
