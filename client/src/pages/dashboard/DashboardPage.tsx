@@ -270,6 +270,26 @@ export default function DashboardPage() {
         }
       />
 
+      {/* ── Banner Modo Consolidado ── */}
+      {!selectedUnit && isMasterOrAdmin && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-primary/5 border border-primary/20">
+          <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+            <Building2 className="w-3.5 h-3.5 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-foreground">
+              Visão consolidada — {units.length} unidades
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Todos os indicadores abaixo somam os dados de toda a rede
+            </p>
+          </div>
+          <Badge className="text-xs shrink-0 bg-primary/10 text-primary border-primary/20">
+            Toda a rede
+          </Badge>
+        </div>
+      )}
+
       {/* ── Seletor de Período ── */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground font-medium">Período:</span>

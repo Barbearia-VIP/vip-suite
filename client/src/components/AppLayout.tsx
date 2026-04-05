@@ -225,7 +225,7 @@ interface AppLayoutProps {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const [location, navigate] = useLocation();
-  const { activeModule, setActiveModule, selectedUnit, setSelectedUnit, availableUnits, setAvailableUnits, sidebarCollapsed, setSidebarCollapsed } = useApp();
+  const { activeModule, setActiveModule, selectedUnit, setSelectedUnit, availableUnits, setAvailableUnits, sidebarCollapsed, setSidebarCollapsed, userRole } = useApp();
   const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -248,13 +248,32 @@ export default function AppLayout({ children }: AppLayoutProps) {
         state: u.state ?? undefined,
       }));
       setAvailableUnits(mapped);
-      // Auto-selecionar a primeira unidade se nenhuma estiver selecionada
+      // Auto-selecionar a primeira unidade apenas para usuários de unidade específica
+      // Admins e masters começam com "Todas as unidades" (selectedUnit = null)
       const stored = localStorage.getItem("vip_selected_unit");
-      if (!stored && mapped.length > 0) {
+      const isMasterOrAdmin = userRole === "master" || userRole === "org_admin";
+      if (!stored && mapped.length > 0 && !isMasterOrAdmin) {
         setSelectedUnit(mapped[0]);
       }
     }
   }, [unitsQuery.data]);
+
+  // Quando o userRole for definido como admin/master, limpar seleção automática
+  // para garantir que admins vejam "Todas as unidades" por padrão
+  // Apenas limpa se o localStorage não tiver sido definido manualmente pelo usuário
+  // (ou seja, se o valor salvo veio de uma auto-seleção anterior)
+  const [adminDefaultApplied, setAdminDefaultApplied] = useState(false);
+  useEffect(() => {
+    if (!adminDefaultApplied && userRole && (userRole === "master" || userRole === "org_admin")) {
+      const stored = localStorage.getItem("vip_selected_unit");
+      const hasManualChoice = localStorage.getItem("vip_unit_manually_chosen");
+      if (stored && !hasManualChoice) {
+        // Limpa auto-seleção antiga para admins
+        setSelectedUnit(null);
+      }
+      setAdminDefaultApplied(true);
+    }
+  }, [userRole, adminDefaultApplied]);
 
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => {
@@ -329,13 +348,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Selecionar Unidade</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setSelectedUnit(null)} className="text-xs">
+                <DropdownMenuItem onClick={() => { setSelectedUnit(null); localStorage.setItem("vip_unit_manually_chosen", "1"); }} className="text-xs">
                   <Building2 className="w-3.5 h-3.5 mr-2" />
                   Todas as Unidades
                   {!selectedUnit && <Badge variant="secondary" className="ml-auto text-xs py-0">Ativo</Badge>}
                 </DropdownMenuItem>
                 {availableUnits.map((unit) => (
-                  <DropdownMenuItem key={unit.id} onClick={() => setSelectedUnit(unit)} className="text-xs">
+                  <DropdownMenuItem key={unit.id} onClick={() => { setSelectedUnit(unit); localStorage.setItem("vip_unit_manually_chosen", "1"); }} className="text-xs">
                     <Building2 className="w-3.5 h-3.5 mr-2" />
                     {unit.name}
                     {selectedUnit?.id === unit.id && <Badge variant="secondary" className="ml-auto text-xs py-0">Ativo</Badge>}
