@@ -138,7 +138,7 @@ export async function exchangeGoogleCode(
 }
 
 // Busca accounts e locations via Google Business Profile API
-async function fetchGoogleBusinessReviews(accessToken: string, savedLocationPath?: string) {
+async function fetchGoogleBusinessReviews(accessToken: string, savedLocationPath?: string): Promise<{ success: boolean; error?: string; reviews: any[]; locationName: string | null; locationTitle?: string | null; totalReviewCount?: number }> {
   // 1. Listar accounts (todos os grupos)
   const accountsRes = await fetch(
     "https://mybusinessaccountmanagement.googleapis.com/v1/accounts",
@@ -152,7 +152,10 @@ async function fetchGoogleBusinessReviews(accessToken: string, savedLocationPath
   if (savedLocationPath && savedLocationPath.includes("accounts/") && savedLocationPath.includes("locations/")) {
     let allReviews: any[] = [];
     let pageToken: string | undefined;
+    let totalReviewCount: number | undefined;
+    let page = 0;
     do {
+      page++;
       const url = new URL(`https://mybusiness.googleapis.com/v4/${savedLocationPath}/reviews`);
       url.searchParams.set("pageSize", "50");
       if (pageToken) url.searchParams.set("pageToken", pageToken);
@@ -161,10 +164,13 @@ async function fetchGoogleBusinessReviews(accessToken: string, savedLocationPath
       let revData: any;
       try { revData = JSON.parse(revText); } catch { return { success: false, error: "Resposta inválida da API Google", reviews: [], locationName: savedLocationPath }; }
       if (revData.error) return { success: false, error: revData.error.message || "Erro ao buscar avaliações", reviews: [], locationName: savedLocationPath };
+      if (revData.totalReviewCount !== undefined) totalReviewCount = revData.totalReviewCount;
       allReviews = allReviews.concat(revData.reviews || []);
+      console.log(`[Google Reviews] Página ${page}: ${revData.reviews?.length || 0} avaliações (total acumulado: ${allReviews.length}/${totalReviewCount ?? '?'})`);
       pageToken = revData.nextPageToken;
     } while (pageToken);
-    return { success: true, reviews: allReviews, locationName: savedLocationPath, locationTitle: null };
+    console.log(`[Google Reviews] Busca concluída: ${allReviews.length} de ${totalReviewCount ?? '?'} avaliações`);
+    return { success: true, reviews: allReviews, locationName: savedLocationPath, locationTitle: null, totalReviewCount };
   }
   // 2. Buscar locations de todos os grupos (exceto conta pessoal)
   // A API v4 requer o path completo: accounts/{accountId}/locations/{locationId}/reviews
@@ -191,7 +197,10 @@ async function fetchGoogleBusinessReviews(accessToken: string, savedLocationPath
   // 3. Buscar avaliações com paginação completa
   let allReviews: any[] = [];
   let pageToken: string | undefined;
+  let totalReviewCount: number | undefined;
+  let page = 0;
   do {
+    page++;
     const url = new URL(`https://mybusiness.googleapis.com/v4/${locationPath}/reviews`);
     url.searchParams.set("pageSize", "50");
     if (pageToken) url.searchParams.set("pageToken", pageToken);
@@ -200,10 +209,13 @@ async function fetchGoogleBusinessReviews(accessToken: string, savedLocationPath
     let revData: any;
     try { revData = JSON.parse(revText); } catch { return { success: false, error: "Resposta inválida da API Google", reviews: [], locationName: locationPath }; }
     if (revData.error) return { success: false, error: revData.error.message || "Erro ao buscar avaliações", reviews: [], locationName: locationPath };
+    if (revData.totalReviewCount !== undefined) totalReviewCount = revData.totalReviewCount;
     allReviews = allReviews.concat(revData.reviews || []);
+    console.log(`[Google Reviews] Página ${page}: ${revData.reviews?.length || 0} avaliações (total acumulado: ${allReviews.length}/${totalReviewCount ?? '?'})`);
     pageToken = revData.nextPageToken;
   } while (pageToken);
-  return { success: true, reviews: allReviews, locationName: locationPath, locationTitle: foundLocation.title };
+  console.log(`[Google Reviews] Busca concluída: ${allReviews.length} de ${totalReviewCount ?? '?'} avaliações`);
+  return { success: true, reviews: allReviews, locationName: locationPath, locationTitle: foundLocation.title, totalReviewCount };
 }
 // ─── Router ──────────────────────────────────────────────────────────────────
 
@@ -897,10 +909,10 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       }
       await db.update(repConexoes).set({
         ultimaSincronizacao: new Date(),
-        totalAvaliacoes: result.reviews.length,
+        totalAvaliacoes: result.totalReviewCount ?? result.reviews.length,
       }).where(eq(repConexoes.id, conexao.id));
       await recalcularResumo(db, input.unitId);
-      return { success: true, importadas, atualizadas, ignoradas, total: result.reviews.length };
+      return { success: true, importadas, atualizadas, ignoradas, total: result.reviews.length, totalGoogle: result.totalReviewCount };
     }),
 
   // ── Resumo para o Dashboard Central ──────────────────────────────────────
