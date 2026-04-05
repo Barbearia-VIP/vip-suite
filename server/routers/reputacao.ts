@@ -915,6 +915,97 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       return { success: true, importadas, atualizadas, ignoradas, total: result.reviews.length, totalGoogle: result.totalReviewCount };
     }),
 
+  // ── Sincronizar TODAS as unidades com Google Business ───────────────────
+  fetchGoogleReviewsAll: protectedProcedure
+    .mutation(async () => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const conexoes = await db.select()
+        .from(repConexoes)
+        .where(and(eq(repConexoes.plataforma, "google"), isNotNull(repConexoes.googleRefreshToken)));
+      if (!conexoes.length) throw new TRPCError({ code: "NOT_FOUND", message: "Nenhuma unidade com integração Google configurada." });
+      const resultados: { unitId: number; nome: string; importadas: number; atualizadas: number; total: number; erro?: string }[] = [];
+      for (const conexao of conexoes) {
+        try {
+          let accessToken = conexao.googleAccessToken;
+          if (conexao.googleRefreshToken) {
+            const { clientId, clientSecret } = getGoogleCredentials(conexao);
+            const tokenExpiry = conexao.googleTokenExpiry ? new Date(conexao.googleTokenExpiry).getTime() : 0;
+            if (!accessToken || Date.now() > tokenExpiry - 60000) {
+              const refreshed = await refreshGoogleToken(conexao.googleRefreshToken, clientId, clientSecret);
+              if (refreshed.access_token) {
+                accessToken = refreshed.access_token;
+                await db.update(repConexoes).set({
+                  googleAccessToken: refreshed.access_token,
+                  googleTokenExpiry: new Date(Date.now() + (refreshed.expires_in || 3600) * 1000),
+                }).where(eq(repConexoes.id, conexao.id));
+              }
+            }
+          }
+          if (!accessToken) {
+            resultados.push({ unitId: conexao.unitId, nome: conexao.nome || `Unidade ${conexao.unitId}`, importadas: 0, atualizadas: 0, total: 0, erro: "Token inválido" });
+            continue;
+          }
+          const result = await fetchGoogleBusinessReviews(accessToken, conexao.googleLocationName || undefined);
+          if (!result.success) {
+            resultados.push({ unitId: conexao.unitId, nome: conexao.nome || `Unidade ${conexao.unitId}`, importadas: 0, atualizadas: 0, total: 0, erro: result.error });
+            continue;
+          }
+          let importadas = 0, atualizadas = 0;
+          for (const review of result.reviews) {
+            const reviewId = review.reviewId || review.name?.split("/").pop() || String(Date.now());
+            const externalId = `google-business-${reviewId}`;
+            const reviewName = review.name || null;
+            const nota = review.starRating === "FIVE" ? 5 : review.starRating === "FOUR" ? 4 : review.starRating === "THREE" ? 3 : review.starRating === "TWO" ? 2 : 1;
+            const sentimento = determineSentimento(nota);
+            const dataAvaliacao = review.createTime ? new Date(review.createTime) : new Date();
+            const respostaExistente = review.reviewReply?.comment || null;
+            const avalData = {
+              unitId: conexao.unitId,
+              plataforma: "google" as const,
+              externalId,
+              autorNome: review.reviewer?.displayName || "Anônimo",
+              autorFoto: review.reviewer?.profilePhotoUrl || null,
+              nota: String(nota),
+              comentario: review.comment || "",
+              sentimento,
+              dataAvaliacao,
+              urlAvaliacao: reviewName,
+              isVerificado: true,
+              ...(respostaExistente ? {
+                resposta: respostaExistente,
+                respostaPublicada: true,
+                respondidoEm: review.reviewReply?.updateTime ? new Date(review.reviewReply.updateTime) : new Date(),
+              } : {}),
+            };
+            const existing = await db.select({ id: repAvaliacoes.id })
+              .from(repAvaliacoes)
+              .where(and(eq(repAvaliacoes.unitId, conexao.unitId), eq(repAvaliacoes.externalId, externalId)))
+              .limit(1);
+            if (existing.length > 0) {
+              await db.update(repAvaliacoes).set(avalData).where(eq(repAvaliacoes.id, existing[0].id));
+              atualizadas++;
+            } else {
+              await db.insert(repAvaliacoes).values(avalData);
+              importadas++;
+            }
+          }
+          await db.update(repConexoes).set({
+            ultimaSincronizacao: new Date(),
+            totalAvaliacoes: result.totalReviewCount ?? result.reviews.length,
+          }).where(eq(repConexoes.id, conexao.id));
+          await recalcularResumo(db, conexao.unitId);
+          resultados.push({ unitId: conexao.unitId, nome: conexao.nome || `Unidade ${conexao.unitId}`, importadas, atualizadas, total: result.reviews.length });
+        } catch (err: any) {
+          resultados.push({ unitId: conexao.unitId, nome: conexao.nome || `Unidade ${conexao.unitId}`, importadas: 0, atualizadas: 0, total: 0, erro: err.message });
+        }
+      }
+      const totalImportadas = resultados.reduce((s, r) => s + r.importadas, 0);
+      const totalAtualizadas = resultados.reduce((s, r) => s + r.atualizadas, 0);
+      const erros = resultados.filter(r => r.erro).length;
+      return { success: true, totalImportadas, totalAtualizadas, unidades: resultados.length, erros, detalhes: resultados };
+    }),
+
   // ── Resumo para o Dashboard Central ──────────────────────────────────────
   getResumo: protectedProcedure
     .input(z.object({ unitId: z.number() }))

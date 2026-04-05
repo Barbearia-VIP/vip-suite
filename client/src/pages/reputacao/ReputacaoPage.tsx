@@ -66,6 +66,15 @@ export default function ReputacaoPage() {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const sincronizarTodasMutation = trpc.reputacao.fetchGoogleReviewsAll.useMutation({
+    onSuccess: (data) => {
+      const erroMsg = data.erros > 0 ? `, ${data.erros} com erro` : "";
+      toast.success(`${data.unidades} unidades sincronizadas! ${data.totalImportadas} novas, ${data.totalAtualizadas} atualizadas${erroMsg}.`, { duration: 6000 });
+      utils.reputacao.getDashboard.invalidate();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const resumo = dashQuery.data?.resumo;
   const recentes = dashQuery.data?.recentes || [];
   const semResposta = dashQuery.data?.semResposta || 0;
@@ -100,9 +109,16 @@ export default function ReputacaoPage() {
             <Button variant="outline" size="sm" asChild>
               <Link href="/reputacao/analise"><BarChart3 className="w-4 h-4 mr-2" />Análise</Link>
             </Button>
-            <Button size="sm" onClick={() => unitId && sincronizarMutation.mutate({ unitId })} disabled={sincronizarMutation.isPending || !unitId}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${sincronizarMutation.isPending ? "animate-spin" : ""}`} />Sincronizar
-            </Button>
+            {!unitId ? (
+              <Button size="sm" onClick={() => sincronizarTodasMutation.mutate()} disabled={sincronizarTodasMutation.isPending}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${sincronizarTodasMutation.isPending ? "animate-spin" : ""}`} />
+                {sincronizarTodasMutation.isPending ? "Sincronizando..." : "Sincronizar todas as unidades"}
+              </Button>
+            ) : (
+              <Button size="sm" onClick={() => sincronizarMutation.mutate({ unitId })} disabled={sincronizarMutation.isPending}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${sincronizarMutation.isPending ? "animate-spin" : ""}`} />Sincronizar
+              </Button>
+            )}
           </div>
         }
       />
