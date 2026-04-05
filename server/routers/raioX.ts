@@ -701,7 +701,7 @@ export const raioXRouter = router({
       const rows = await getCohortClientes(extIds);
       return {
         cohorts: rows.map(r => ({
-          cohort: r.cohort,
+          cohort: r.cohort_mes,
           totalEntrada: Number(r.total_entrada),
           voltaram: Number(r.voltaram),
           taxaRetencao: Number(r.taxa_retencao),

@@ -1253,13 +1253,13 @@ export async function getCohortClientes(extIds: number[]) {
 
   // Cohort por mês de primeira visita
   return queryExternal<{
-    cohort: string;
+    cohort_mes: string;
     total_entrada: number;
     voltaram: number;
     taxa_retencao: number;
   }>(`
     SELECT 
-      DATE_FORMAT(MIN(v.data_criacao), '%Y-%m') as cohort,
+      DATE_FORMAT(MIN(v.data_criacao), '%Y-%m') as cohort_mes,
       COUNT(DISTINCT v.cliente) as total_entrada,
       COUNT(DISTINCT CASE WHEN 
         (SELECT COUNT(*) FROM vendas v2 
@@ -1288,7 +1288,7 @@ export async function getCohortClientes(extIds: number[]) {
       AND v.cliente != 2
       AND v.data_criacao >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
     GROUP BY DATE_FORMAT(MIN(v.data_criacao), '%Y-%m')
-    ORDER BY cohort DESC
+    ORDER BY cohort_mes DESC
     LIMIT 12
   `);
 }
