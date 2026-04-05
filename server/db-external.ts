@@ -33,6 +33,8 @@ let pool: Pool | null = null;
 let tunnelReady = false;
 let tunnelPromise: Promise<void> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_DELAY_MS = 5 * 60 * 1000; // máximo 5 minutos entre tentativas
 
 // ─── Criar túnel SSH ─────────────────────────────────────────────────────────
 
@@ -53,12 +55,16 @@ function destroyTunnel() {
   }
 }
 
-function scheduleReconnect(delayMs = 3000) {
+function scheduleReconnect(baseDelayMs = 5000) {
   if (reconnectTimer) return;
+  // Backoff exponencial: 5s, 10s, 20s, 40s, 80s, 160s, 300s (máx)
+  reconnectAttempts++;
+  const delay = Math.min(baseDelayMs * Math.pow(2, reconnectAttempts - 1), MAX_RECONNECT_DELAY_MS);
+  console.log(`[SSH Tunnel] Aguardando ${Math.round(delay / 1000)}s antes de reconectar (tentativa ${reconnectAttempts})...`);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     createTunnel().catch(console.error);
-  }, delayMs);
+  }, delay);
 }
 
 function createTunnel(): Promise<void> {
@@ -69,6 +75,7 @@ function createTunnel(): Promise<void> {
     const ssh = new SshClient();
 
     ssh.on("ready", () => {
+      reconnectAttempts = 0; // reset backoff ao conectar com sucesso
       console.log("[SSH Tunnel] Conexão SSH estabelecida");
 
       // Criar servidor TCP local que encaminha para o MySQL remoto
