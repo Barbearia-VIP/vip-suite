@@ -199,11 +199,16 @@ export default function DashboardPage() {
     { orgId },
     { enabled: orgId > 0 && isMasterOrAdmin && !selectedUnit, refetchOnWindowFocus: false, refetchInterval: 5 * 60 * 1000 }
   );
+  const rankingRepQuery = trpc.dashboard.rankingReputacao.useQuery(
+    { orgId },
+    { enabled: orgId > 0 && isMasterOrAdmin && !selectedUnit, refetchOnWindowFocus: false, refetchInterval: 5 * 60 * 1000 }
+  );
 
   const kpis = kpisQuery.data;
   const modules = modulesQuery.data;
   const faturamentoData = faturamentoQuery.data ?? [];
   const ranking = rankingQuery.data ?? [];
+  const rankingRep = rankingRepQuery.data ?? [];
   const isLoading = kpisQuery.isLoading || kpisQuery.isFetching;
 
 
@@ -472,23 +477,23 @@ export default function DashboardPage() {
         >
           {kpis?.reputacao.hasData ? (
             <>
-              {kpis.reputacao.totalGoogle > 0 ? (
+              {/* KPIs principais */}
+              <div className="grid grid-cols-2 gap-2">
                 <MiniKPI
                   label="Nota Média Google"
-                  value={`${kpis.reputacao.mediaGoogle.toFixed(1)} ★`}
-                  sub={`${fmtNum(kpis.reputacao.totalGoogle)} avaliações Google`}
+                  value={kpis.reputacao.totalGoogle > 0 ? `${kpis.reputacao.mediaGoogle.toFixed(1)} ★` : `${kpis.reputacao.mediaAvaliacoes.toFixed(1)} ★`}
+                  sub={kpis.reputacao.totalGoogle > 0 ? `${fmtNum(kpis.reputacao.totalGoogle)} Google` : `${fmtNum(kpis.reputacao.totalAvaliacoes)} avaliações`}
                   icon={Star}
                   color="oklch(0.65 0.15 30)"
                 />
-              ) : (
                 <MiniKPI
-                  label="Nota Média Geral"
-                  value={`${kpis.reputacao.mediaAvaliacoes.toFixed(1)} ★`}
-                  sub={`${fmtNum(kpis.reputacao.totalAvaliacoes)} avaliações`}
-                  icon={Star}
-                  color="oklch(0.65 0.15 30)"
+                  label="Avaliações Positivas"
+                  value={fmtPct(kpis.reputacao.positivasPercent)}
+                  sub={`${fmtNum(kpis.reputacao.totalAvaliacoes)} total`}
+                  icon={ThumbsUp}
+                  color="oklch(0.65 0.15 145)"
                 />
-              )}
+              </div>
               {kpis.reputacao.semRespostaGoogle > 0 && (
                 <MiniKPI
                   label="Sem Resposta (Google)"
@@ -498,13 +503,36 @@ export default function DashboardPage() {
                   color="oklch(0.65 0.15 60)"
                 />
               )}
-              <MiniKPI
-                label="Avaliações Positivas"
-                value={fmtPct(kpis.reputacao.positivasPercent)}
-                sub={`${fmtNum(kpis.reputacao.totalAvaliacoes)} avaliações no período`}
-                icon={ThumbsUp}
-                color="oklch(0.65 0.15 145)"
-              />
+              {/* Ranking de reputação por unidade (apenas no modo todas as unidades) */}
+              {!selectedUnit && rankingRep.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs font-medium text-muted-foreground mb-1.5">Ranking por nota Google</p>
+                  <div className="space-y-1">
+                    {rankingRep.slice(0, 5).map((u, i) => (
+                      <div key={u.unitId} className="flex items-center gap-2">
+                        <span className={`text-xs font-bold w-4 shrink-0 ${
+                          i === 0 ? 'text-yellow-500' : i === 1 ? 'text-slate-400' : i === 2 ? 'text-amber-600' : 'text-muted-foreground'
+                        }`}>{i + 1}</span>
+                        <span className="text-xs text-foreground truncate flex-1">{u.name.replace('Barbearia VIP - ', '').replace('Barbearia VIP ', '')}</span>
+                        <span className="text-xs font-semibold text-foreground shrink-0">
+                          {u.totalGoogle > 0 ? `${u.mediaGoogle.toFixed(1)} ★` : `${u.media.toFixed(1)} ★`}
+                        </span>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          ({fmtNum(u.totalGoogle > 0 ? u.totalGoogle : u.total)})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  {rankingRep.length > 5 && (
+                    <button
+                      onClick={() => navigate("/reputacao")}
+                      className="text-xs text-primary mt-1.5 hover:underline"
+                    >
+                      Ver todas as {rankingRep.length} unidades →
+                    </button>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <div className="py-2 text-center">

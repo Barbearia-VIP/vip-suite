@@ -447,4 +447,50 @@ export const dashboardRouter = router({
 
       return ranking.sort((a, b) => b.faturamento - a.faturamento);
     }),
+
+  // ─── RANKING DE REPUTAÇÃO POR UNIDADE ───────────────────────────────────────────────────────────────────────────────────
+  rankingReputacao: protectedProcedure
+    .input(z.object({ orgId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      // Busca nota média, total de avaliações e sem resposta por unidade
+      const rows = await db
+        .select({
+          unitId: repAvaliacoes.unitId,
+          media: sql<string>`COALESCE(AVG(${repAvaliacoes.nota}), 0)`,
+          total: count(repAvaliacoes.id),
+          totalGoogle: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.plataforma} = 'google' THEN 1 ELSE 0 END), 0)`,
+          mediaGoogle: sql<string>`COALESCE(AVG(CASE WHEN ${repAvaliacoes.plataforma} = 'google' THEN ${repAvaliacoes.nota} END), 0)`,
+          semResposta: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.resposta} IS NULL OR ${repAvaliacoes.resposta} = '' THEN 1 ELSE 0 END), 0)`,
+          positivas: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.sentimento} = 'positivo' THEN 1 ELSE 0 END), 0)`,
+        })
+        .from(repAvaliacoes)
+        .innerJoin(units, eq(repAvaliacoes.unitId, units.id))
+        .where(eq(units.orgId, input.orgId))
+        .groupBy(repAvaliacoes.unitId);
+
+      // Busca nomes das unidades
+      const orgUnits = await db.select({ id: units.id, name: units.name })
+        .from(units)
+        .where(eq(units.orgId, input.orgId));
+      const unitMap = new Map(orgUnits.map(u => [u.id, u.name]));
+
+      return rows
+        .filter(r => Number(r.total) > 0)
+        .map(r => ({
+          unitId: r.unitId,
+          name: unitMap.get(r.unitId) ?? `Unidade ${r.unitId}`,
+          media: parseFloat(r.media),
+          total: Number(r.total),
+          totalGoogle: Number(r.totalGoogle),
+          mediaGoogle: parseFloat(r.mediaGoogle),
+          semResposta: Number(r.semResposta),
+          positivasPercent: Number(r.total) > 0
+            ? Math.round((Number(r.positivas) / Number(r.total)) * 100)
+            : 0,
+        }))
+        .sort((a, b) => b.mediaGoogle - a.mediaGoogle || b.media - a.media);
+    }),
 });
