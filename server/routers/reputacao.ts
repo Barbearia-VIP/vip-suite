@@ -1015,8 +1015,53 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const [resumo] = await db.select().from(repResumo).where(eq(repResumo.unitId, input.unitId));
-      return resumo || null;
+
+      // Calcular em tempo real diretamente das avaliações (sem depender do cache)
+      const todas = await db
+        .select({ nota: repAvaliacoes.nota, sentimento: repAvaliacoes.sentimento, plataforma: repAvaliacoes.plataforma, resposta: repAvaliacoes.resposta })
+        .from(repAvaliacoes)
+        .where(eq(repAvaliacoes.unitId, input.unitId));
+
+      if (todas.length === 0) return null;
+
+      const total = todas.length;
+      const notaMedia = todas.reduce((s: number, r: any) => s + parseFloat(r.nota), 0) / total;
+      const respondidas = todas.filter((r: any) => r.resposta).length;
+      const taxaResposta = (respondidas / total) * 100;
+
+      const dist: Record<string, number> = { "5": 0, "4": 0, "3": 0, "2": 0, "1": 0 };
+      const platMap: Record<string, { total: number; count: number }> = {};
+      let pos = 0, neu = 0, neg = 0;
+
+      for (const r of todas) {
+        const key = String(Math.round(parseFloat(r.nota)));
+        if (dist[key] !== undefined) dist[key]++;
+        const p = r.plataforma;
+        if (!platMap[p]) platMap[p] = { total: 0, count: 0 };
+        platMap[p].total += parseFloat(r.nota);
+        platMap[p].count++;
+        if (r.sentimento === "positivo") pos++;
+        else if (r.sentimento === "negativo") neg++;
+        else neu++;
+      }
+
+      const notasPorPlataforma: Record<string, { avg: number; count: number }> = {};
+      for (const [p, v] of Object.entries(platMap)) {
+        notasPorPlataforma[p] = { avg: v.count > 0 ? v.total / v.count : 0, count: v.count };
+      }
+
+      return {
+        unitId: input.unitId,
+        totalAvaliacoes: total,
+        notaMedia: notaMedia.toFixed(2),
+        taxaResposta: taxaResposta.toFixed(2),
+        totalPositivas: pos,
+        totalNeutras: neu,
+        totalNegativas: neg,
+        distribuicaoNotas: dist,
+        notasPorPlataforma,
+        ultimoCalculo: new Date(),
+      };
     }),
 
   // ── Histórico de Auto-Respostas ──────────────────────────────────────────
