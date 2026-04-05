@@ -101,13 +101,13 @@ export default function AnaliseReputacaoPage() {
   const [sentimentoNuvem, setSentimentoNuvem] = useState<"todos" | "positivo" | "neutro" | "negativo">("todos");
 
   const analiseQuery = trpc.reputacao.getAnalise.useQuery({ unitId, periodo: periodo as any }, { enabled: !!unitId });
-  const dashQuery    = trpc.reputacao.getDashboard.useQuery({ unitId }, { enabled: !!unitId });
-  const resumoQuery  = trpc.reputacao.getResumo.useQuery({ unitId }, { enabled: !!unitId });
+  const dashQuery    = trpc.reputacao.getDashboard.useQuery({ unitId, periodo: periodo as any }, { enabled: !!unitId });
+  const resumoQuery  = trpc.reputacao.getResumo.useQuery({ unitId, periodo: periodo as any }, { enabled: !!unitId });
   const palavrasQuery = trpc.reputacao.getPalavrasChave.useQuery(
-    { unitId, periodo: periodoNuvem, sentimento: sentimentoNuvem }, { enabled: !!unitId }
+    { unitId, periodo: periodo as any, sentimento: sentimentoNuvem }, { enabled: !!unitId }
   );
   const tempoRespostaQuery = trpc.reputacao.getTempoResposta.useQuery({ unitId }, { enabled: !!unitId });
-  const alertasQuery = trpc.reputacao.getAlertas.useQuery({ unitId }, { enabled: !!unitId });
+  const alertasQuery = trpc.reputacao.getAlertas.useQuery({ unitId, periodo: periodo as any }, { enabled: !!unitId });
 
   const resumo  = resumoQuery.data;
   const tempo   = tempoRespostaQuery.data;

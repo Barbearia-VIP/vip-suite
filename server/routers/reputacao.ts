@@ -225,38 +225,38 @@ const batchJobs = new Map<string, { total: number; processados: number; erros: n
 export const reputacaoRouter = router({
 
   // ── Dashboard KPIs ────────────────────────────────────────────────────────
-  getDashboard: protectedProcedure
-    .input(z.object({ unitId: z.number() }))
+    getDashboard: protectedProcedure
+    .input(z.object({ unitId: z.number(), periodo: z.enum(["7d", "30d", "90d", "12m", "all"]).optional() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
       const resumo = await db.select().from(repResumo).where(eq(repResumo.unitId, input.unitId)).limit(1);
       const r = resumo[0];
-
       // Últimas 5 avaliações
       const recentes = await db.select().from(repAvaliacoes)
         .where(eq(repAvaliacoes.unitId, input.unitId))
         .orderBy(desc(repAvaliacoes.dataAvaliacao))
         .limit(5);
-
       // Avaliações sem resposta
       const semResposta = await db.select({ id: repAvaliacoes.id })
         .from(repAvaliacoes)
         .where(and(eq(repAvaliacoes.unitId, input.unitId), sql`${repAvaliacoes.resposta} IS NULL`));
-
-      // Evolução histórica completa (desde o primeiro comentário)
+      // Evolução histórica filtrada por período
+      const periodoMap: Record<string, string> = { "7d": "7 DAY", "30d": "30 DAY", "90d": "90 DAY", "12m": "365 DAY" };
+      const periodoSQL = input.periodo && input.periodo !== "all" ? periodoMap[input.periodo] : null;
+      // Agrupamento: por dia para períodos curtos, por mês para períodos longos
+      const groupFormat = input.periodo === "7d" ? "%Y-%m-%d" : "%Y-%m";
+      const periodoFilter = periodoSQL ? sql`AND dataAvaliacao >= DATE_SUB(NOW(), INTERVAL ${sql.raw(periodoSQL)})` : sql``;
       const evolucao = await db.execute(sql`
         SELECT 
-          DATE_FORMAT(dataAvaliacao, '%Y-%m') as mes,
+          DATE_FORMAT(dataAvaliacao, ${groupFormat}) as mes,
           COUNT(*) as total,
           ROUND(AVG(CAST(nota AS DECIMAL(3,1))), 2) as media
         FROM rep_avaliacoes
-        WHERE unitId = ${input.unitId}
+        WHERE unitId = ${input.unitId} ${periodoFilter}
         GROUP BY mes
         ORDER BY mes ASC
       `);
-
       return {
         resumo: r || null,
         recentes,
@@ -264,7 +264,6 @@ export const reputacaoRouter = router({
         evolucao: (evolucao[0] as unknown as any[]) || [],
       };
     }),
-
   // ── Listar avaliações ─────────────────────────────────────────────────────
   getAvaliacoes: protectedProcedure
     .input(z.object({
@@ -1010,18 +1009,22 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       return { success: true, totalImportadas, totalAtualizadas, unidades: resultados.length, erros, detalhes: resultados };
     }),
 
-  // ── Resumo para o Dashboard Central ──────────────────────────────────────
+  // ── Resumo para o Dashboard Central ────────────────────────────────────
   getResumo: protectedProcedure
-    .input(z.object({ unitId: z.number() }))
+    .input(z.object({ unitId: z.number(), periodo: z.enum(["7d", "30d", "90d", "12m", "all"]).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
       // Calcular em tempo real diretamente das avaliações (sem depender do cache)
+      const periodoMap: Record<string, string> = { "7d": "7 DAY", "30d": "30 DAY", "90d": "90 DAY", "12m": "365 DAY" };
+      const periodoSQL = input.periodo && input.periodo !== "all" ? periodoMap[input.periodo] : null;
+      const whereConditions = periodoSQL
+        ? and(eq(repAvaliacoes.unitId, input.unitId), sql`${repAvaliacoes.dataAvaliacao} >= DATE_SUB(NOW(), INTERVAL ${sql.raw(periodoSQL)})`)
+        : eq(repAvaliacoes.unitId, input.unitId);
       const todas = await db
         .select({ nota: repAvaliacoes.nota, sentimento: repAvaliacoes.sentimento, plataforma: repAvaliacoes.plataforma, resposta: repAvaliacoes.resposta })
         .from(repAvaliacoes)
-        .where(eq(repAvaliacoes.unitId, input.unitId));
+        .where(whereConditions);
 
       if (todas.length === 0) return null;
 
@@ -1249,7 +1252,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
 
   // ── Alertas de queda de nota ──────────────────────────────────────────────
   getAlertas: protectedProcedure
-    .input(z.object({ unitId: z.number() }))
+    .input(z.object({ unitId: z.number(), periodo: z.enum(["7d", "30d", "90d", "12m", "all"]).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
