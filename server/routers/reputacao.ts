@@ -1257,42 +1257,76 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const alertas: Array<{ tipo: "critico" | "atencao" | "info"; titulo: string; descricao: string; valor?: string }> = [];
-      const [notaResult] = await db.execute(sql`
-        SELECT
-          AVG(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN CAST(nota AS DECIMAL(3,1)) END) as notaUltimos7,
-          AVG(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 14 DAY) AND dataAvaliacao < DATE_SUB(NOW(), INTERVAL 7 DAY) THEN CAST(nota AS DECIMAL(3,1)) END) as notaAnterior7,
-          COUNT(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 END) as totalUltimos7,
-          COUNT(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 7 DAY) AND sentimento = 'negativo' THEN 1 END) as negativasUltimos7,
-          AVG(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN CAST(nota AS DECIMAL(3,1)) END) as notaUltimos30,
-          COUNT(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND sentimento = 'negativo' THEN 1 END) as negativasHoje,
-          COUNT(CASE WHEN resposta IS NULL AND dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 END) as semResposta30d
-        FROM rep_avaliacoes
-        WHERE unitId = ${input.unitId}
-      `) as any;
+
+      // Mapear período selecionado para intervalos SQL dinâmicos
+      const periodoMap: Record<string, { dias: number; label: string; labelAnterior: string }> = {
+        "7d":  { dias: 7,   label: "nos últimos 7 dias",   labelAnterior: "semana anterior" },
+        "30d": { dias: 30,  label: "nos últimos 30 dias",  labelAnterior: "período anterior" },
+        "90d": { dias: 90,  label: "nos últimos 90 dias",  labelAnterior: "período anterior" },
+        "12m": { dias: 365, label: "nos últimos 12 meses", labelAnterior: "ano anterior" },
+        "all": { dias: 0,   label: "no histórico completo", labelAnterior: "período anterior" },
+      };
+      const p = periodoMap[input.periodo ?? "7d"];
+      const diasPeriodo = p.dias;
+      const diasAnterior = diasPeriodo * 2;
+
+      const [notaResult] = diasPeriodo > 0
+        ? await db.execute(sql`
+            SELECT
+              AVG(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL ${diasPeriodo} DAY) THEN CAST(nota AS DECIMAL(3,1)) END) as notaPeriodo,
+              AVG(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL ${diasAnterior} DAY) AND dataAvaliacao < DATE_SUB(NOW(), INTERVAL ${diasPeriodo} DAY) THEN CAST(nota AS DECIMAL(3,1)) END) as notaAnterior,
+              COUNT(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL ${diasPeriodo} DAY) THEN 1 END) as totalPeriodo,
+              COUNT(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL ${diasPeriodo} DAY) AND sentimento = 'negativo' THEN 1 END) as negativasPeriodo,
+              COUNT(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND sentimento = 'negativo' THEN 1 END) as negativasHoje,
+              COUNT(CASE WHEN resposta IS NULL AND dataAvaliacao >= DATE_SUB(NOW(), INTERVAL ${diasPeriodo} DAY) THEN 1 END) as semRespostaPeriodo
+            FROM rep_avaliacoes
+            WHERE unitId = ${input.unitId}
+          `) as any
+        : await db.execute(sql`
+            SELECT
+              AVG(CAST(nota AS DECIMAL(3,1))) as notaPeriodo,
+              NULL as notaAnterior,
+              COUNT(*) as totalPeriodo,
+              COUNT(CASE WHEN sentimento = 'negativo' THEN 1 END) as negativasPeriodo,
+              COUNT(CASE WHEN dataAvaliacao >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND sentimento = 'negativo' THEN 1 END) as negativasHoje,
+              COUNT(CASE WHEN resposta IS NULL THEN 1 END) as semRespostaPeriodo
+            FROM rep_avaliacoes
+            WHERE unitId = ${input.unitId}
+          `) as any;
+
       const r = ((notaResult as any[]) || [])[0] || {};
-      const notaUltimos7 = r.notaUltimos7 ? parseFloat(r.notaUltimos7) : null;
-      const notaAnterior7 = r.notaAnterior7 ? parseFloat(r.notaAnterior7) : null;
-      const totalUltimos7 = Number(r.totalUltimos7 ?? 0);
-      const negativasUltimos7 = Number(r.negativasUltimos7 ?? 0);
-      const negativasHoje = Number(r.negativasHoje ?? 0);
-      const semResposta30d = Number(r.semResposta30d ?? 0);
-      if (notaUltimos7 !== null && notaAnterior7 !== null) {
-        const queda = notaAnterior7 - notaUltimos7;
-        if (queda >= 0.5) alertas.push({ tipo: "critico", titulo: "Queda crítica na nota", descricao: `A nota média caiu ${queda.toFixed(1)}★ nos últimos 7 dias em relação à semana anterior.`, valor: `${notaUltimos7.toFixed(1)}★ (era ${notaAnterior7.toFixed(1)}★)` });
-        else if (queda >= 0.3) alertas.push({ tipo: "atencao", titulo: "Queda na nota detectada", descricao: `A nota média caiu ${queda.toFixed(1)}★ nos últimos 7 dias em relação à semana anterior.`, valor: `${notaUltimos7.toFixed(1)}★ (era ${notaAnterior7.toFixed(1)}★)` });
+      const notaPeriodo      = r.notaPeriodo   ? parseFloat(r.notaPeriodo)  : null;
+      const notaAnterior     = r.notaAnterior  ? parseFloat(r.notaAnterior) : null;
+      const totalPeriodo     = Number(r.totalPeriodo  ?? 0);
+      const negativasPeriodo = Number(r.negativasPeriodo ?? 0);
+      const negativasHoje    = Number(r.negativasHoje ?? 0);
+      const semRespostaPeriodo = Number(r.semRespostaPeriodo ?? 0);
+
+      // Alerta de queda de nota
+      if (notaPeriodo !== null && notaAnterior !== null) {
+        const queda = notaAnterior - notaPeriodo;
+        if (queda >= 0.5) alertas.push({ tipo: "critico", titulo: "Queda crítica na nota", descricao: `A nota média caiu ${queda.toFixed(1)}★ ${p.label} em relação ao ${p.labelAnterior}.`, valor: `${notaPeriodo.toFixed(1)}★ (era ${notaAnterior.toFixed(1)}★)` });
+        else if (queda >= 0.3) alertas.push({ tipo: "atencao", titulo: "Queda na nota detectada", descricao: `A nota média caiu ${queda.toFixed(1)}★ ${p.label} em relação ao ${p.labelAnterior}.`, valor: `${notaPeriodo.toFixed(1)}★ (era ${notaAnterior.toFixed(1)}★)` });
       }
-      if (negativasUltimos7 >= 3) alertas.push({ tipo: "critico", titulo: "Múltiplas avaliações negativas", descricao: `${negativasUltimos7} avaliações negativas recebidas nos últimos 7 dias.`, valor: `${negativasUltimos7} negativas` });
-      else if (negativasUltimos7 >= 2) alertas.push({ tipo: "atencao", titulo: "Avaliações negativas recentes", descricao: `${negativasUltimos7} avaliações negativas recebidas nos últimos 7 dias.`, valor: `${negativasUltimos7} negativas` });
+
+      // Alerta de avaliações negativas (threshold escala com período)
+      const thresholdCritico = diasPeriodo <= 7 ? 3 : diasPeriodo <= 30 ? 10 : diasPeriodo <= 90 ? 25 : 80;
+      const thresholdAtencao = diasPeriodo <= 7 ? 2 : diasPeriodo <= 30 ? 6  : diasPeriodo <= 90 ? 15 : 50;
+      if (negativasPeriodo >= thresholdCritico) alertas.push({ tipo: "critico", titulo: "Múltiplas avaliações negativas", descricao: `${negativasPeriodo} avaliações negativas ${p.label}.`, valor: `${negativasPeriodo} negativas` });
+      else if (negativasPeriodo >= thresholdAtencao) alertas.push({ tipo: "atencao", titulo: "Avaliações negativas recentes", descricao: `${negativasPeriodo} avaliações negativas ${p.label}.`, valor: `${negativasPeriodo} negativas` });
+
+      // Alerta de negativas hoje (sempre relevante)
       if (negativasHoje >= 1) alertas.push({ tipo: "atencao", titulo: "Avaliação negativa hoje", descricao: `${negativasHoje} avaliação(ões) negativa(s) recebida(s) nas últimas 24 horas.`, valor: `${negativasHoje} hoje` });
-      if (semResposta30d >= 5) alertas.push({ tipo: "atencao", titulo: "Avaliações sem resposta", descricao: `${semResposta30d} avaliações dos últimos 30 dias ainda não foram respondidas.`, valor: `${semResposta30d} pendentes` });
+
+      // Alerta de sem resposta no período
+      const thresholdSemResposta = diasPeriodo <= 7 ? 3 : diasPeriodo <= 30 ? 5 : 10;
+      if (semRespostaPeriodo >= thresholdSemResposta) alertas.push({ tipo: "atencao", titulo: "Avaliações sem resposta", descricao: `${semRespostaPeriodo} avaliações ${p.label} ainda não foram respondidas.`, valor: `${semRespostaPeriodo} pendentes` });
+
       if (alertas.length === 0) {
-        const notaMedia = r.notaUltimos30 ? parseFloat(r.notaUltimos30).toFixed(1) : null;
-        alertas.push({ tipo: "info", titulo: "Reputação estável", descricao: totalUltimos7 > 0 ? `Nenhuma queda detectada. Nota média dos últimos 7 dias: ${notaUltimos7?.toFixed(1) ?? "—"}★` : "Sem avaliações nos últimos 7 dias para análise de tendência.", valor: notaMedia ? `${notaMedia}★` : undefined });
+        alertas.push({ tipo: "info", titulo: "Reputação estável", descricao: totalPeriodo > 0 ? `Nenhuma queda detectada ${p.label}. Nota média: ${notaPeriodo?.toFixed(1) ?? "—"}★` : `Sem avaliações ${p.label} para análise de tendência.`, valor: notaPeriodo ? `${notaPeriodo.toFixed(1)}★` : undefined });
       }
       return alertas;
     }),
-
-  // ── Responder avaliações em lote (background job com polling) ──────────────
   responderEmLote: protectedProcedure
     .input(z.object({
       unitId: z.number(),
