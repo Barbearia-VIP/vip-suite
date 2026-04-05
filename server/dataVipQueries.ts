@@ -1258,37 +1258,36 @@ export async function getCohortClientes(extIds: number[]) {
     voltaram: number;
     taxa_retencao: number;
   }>(`
-    SELECT 
-      DATE_FORMAT(MIN(v.data_criacao), '%Y-%m') as cohort_mes,
-      COUNT(DISTINCT v.cliente) as total_entrada,
-      COUNT(DISTINCT CASE WHEN 
-        (SELECT COUNT(*) FROM vendas v2 
-         JOIN usuarios uu2 ON v2.usuario = uu2.id
-         WHERE v2.cliente = v.cliente 
-           AND (${unitCond.replace(/uu\./g, "uu2.")})
-           AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
-        ) > 1 THEN v.cliente END) as voltaram,
+    SELECT
+      primeira_visita.cohort_mes,
+      COUNT(DISTINCT primeira_visita.cliente) as total_entrada,
+      COUNT(DISTINCT CASE WHEN retorno.cliente IS NOT NULL THEN primeira_visita.cliente END) as voltaram,
       ROUND(
-        COUNT(DISTINCT CASE WHEN 
-          (SELECT COUNT(*) FROM vendas v2 
-           JOIN usuarios uu2 ON v2.usuario = uu2.id
-           WHERE v2.cliente = v.cliente 
-             AND (${unitCond.replace(/uu\./g, "uu2.")})
-             AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
-          ) > 1 THEN v.cliente END) * 100.0 / 
-        NULLIF(COUNT(DISTINCT v.cliente), 0), 1
+        COUNT(DISTINCT CASE WHEN retorno.cliente IS NOT NULL THEN primeira_visita.cliente END) * 100.0 /
+        NULLIF(COUNT(DISTINCT primeira_visita.cliente), 0), 1
       ) as taxa_retencao
-    FROM vendas v
-    JOIN usuarios uu ON v.usuario = uu.id
-    WHERE ${unitCond}
-      AND v.comanda_temp = 0
-      AND v.cancelado_motivo IS NULL
-      AND v.status != 0
-      AND v.cliente IS NOT NULL
-      AND v.cliente != 2
-      AND v.data_criacao >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-    GROUP BY DATE_FORMAT(MIN(v.data_criacao), '%Y-%m')
-    ORDER BY cohort_mes DESC
+    FROM (
+      SELECT v.cliente, DATE_FORMAT(MIN(v.data_criacao), '%Y-%m') as cohort_mes
+      FROM vendas v
+      JOIN usuarios uu ON v.usuario = uu.id
+      WHERE ${unitCond}
+        AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+        AND v.cliente IS NOT NULL AND v.cliente != 2
+        AND v.data_criacao >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+      GROUP BY v.cliente
+    ) primeira_visita
+    LEFT JOIN (
+      SELECT DISTINCT v2.cliente
+      FROM vendas v2
+      JOIN usuarios uu2 ON v2.usuario = uu2.id
+      WHERE (${unitCond.replace(/uu\./g, "uu2.")})
+        AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
+        AND v2.cliente IS NOT NULL AND v2.cliente != 2
+      GROUP BY v2.cliente
+      HAVING COUNT(*) > 1
+    ) retorno ON retorno.cliente = primeira_visita.cliente
+    GROUP BY primeira_visita.cohort_mes
+    ORDER BY primeira_visita.cohort_mes DESC
     LIMIT 12
   `);
 }
