@@ -685,41 +685,42 @@ Gere uma resposta personalizada e única para esta avaliação.`;
   getAnalise: protectedProcedure
     .input(z.object({
       unitId: z.number(),
-      periodo: z.enum(["7d", "30d", "90d", "12m"]).default("30d"),
+      periodo: z.enum(["7d", "30d", "90d", "12m", "all"]).default("all"),
     }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
+      const isAll = input.periodo === "all";
       const dias = input.periodo === "7d" ? 7 : input.periodo === "30d" ? 30 : input.periodo === "90d" ? 90 : 365;
-      const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
-
+      const desde = isAll ? null : new Date(Date.now() - dias * 24 * 60 * 60 * 1000);
+      const whereBase = isAll
+        ? sql`unitId = ${input.unitId}`
+        : sql`unitId = ${input.unitId} AND dataAvaliacao >= ${desde}`;
       const [evolucao, porPlataforma, porNota] = await Promise.all([
         db.execute(sql`
           SELECT 
-            DATE_FORMAT(dataAvaliacao, '%Y-%m-%d') as data,
+            DATE_FORMAT(dataAvaliacao, '%Y-%m') as data,
             COUNT(*) as total,
             AVG(CAST(nota AS DECIMAL(3,1))) as media,
             SUM(CASE WHEN sentimento = 'positivo' THEN 1 ELSE 0 END) as positivas,
             SUM(CASE WHEN sentimento = 'negativo' THEN 1 ELSE 0 END) as negativas
           FROM rep_avaliacoes
-          WHERE unitId = ${input.unitId} AND dataAvaliacao >= ${desde}
-          GROUP BY data ORDER BY data ASC
+          WHERE ${whereBase}
+          GROUP BY DATE_FORMAT(dataAvaliacao, '%Y-%m') ORDER BY data ASC
         `),
         db.execute(sql`
           SELECT plataforma, COUNT(*) as total, AVG(CAST(nota AS DECIMAL(3,1))) as media
           FROM rep_avaliacoes
-          WHERE unitId = ${input.unitId} AND dataAvaliacao >= ${desde}
+          WHERE ${whereBase}
           GROUP BY plataforma
         `),
         db.execute(sql`
           SELECT ROUND(nota) as nota, COUNT(*) as total
           FROM rep_avaliacoes
-          WHERE unitId = ${input.unitId} AND dataAvaliacao >= ${desde}
+          WHERE ${whereBase}
           GROUP BY ROUND(nota) ORDER BY nota DESC
         `),
       ]);
-
       return {
         evolucao: (evolucao[0] as unknown as any[]) || [],
         porPlataforma: (porPlataforma[0] as unknown as any[]) || [],

@@ -96,11 +96,11 @@ function alertBadgeClass(tipo: string) {
 export default function AnaliseReputacaoPage() {
   const { selectedUnit } = useApp();
   const unitId = selectedUnit?.id ?? 0;
-  const [periodo, setPeriodo] = useState<"7d" | "30d" | "90d" | "12m">("30d");
+  const [periodo, setPeriodo] = useState<"7d" | "30d" | "90d" | "12m" | "all">("all");
   const [periodoNuvem, setPeriodoNuvem] = useState<"7d" | "30d" | "90d" | "12m" | "all">("all");
   const [sentimentoNuvem, setSentimentoNuvem] = useState<"todos" | "positivo" | "neutro" | "negativo">("todos");
 
-  const analiseQuery = trpc.reputacao.getAnalise.useQuery({ unitId, periodo }, { enabled: !!unitId });
+  const analiseQuery = trpc.reputacao.getAnalise.useQuery({ unitId, periodo: periodo as any }, { enabled: !!unitId });
   const dashQuery    = trpc.reputacao.getDashboard.useQuery({ unitId }, { enabled: !!unitId });
   const resumoQuery  = trpc.reputacao.getResumo.useQuery({ unitId }, { enabled: !!unitId });
   const palavrasQuery = trpc.reputacao.getPalavrasChave.useQuery(
@@ -176,6 +176,7 @@ export default function AnaliseReputacaoPage() {
             <Select value={periodo} onValueChange={(v: any) => setPeriodo(v)}>
               <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">Histórico Completo</SelectItem>
                 <SelectItem value="7d">Últimos 7 dias</SelectItem>
                 <SelectItem value="30d">Últimos 30 dias</SelectItem>
                 <SelectItem value="90d">Últimos 90 dias</SelectItem>
