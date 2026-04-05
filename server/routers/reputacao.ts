@@ -217,6 +217,9 @@ async function fetchGoogleBusinessReviews(accessToken: string, savedLocationPath
   console.log(`[Google Reviews] Busca concluída: ${allReviews.length} de ${totalReviewCount ?? '?'} avaliações`);
   return { success: true, reviews: allReviews, locationName: locationPath, locationTitle: foundLocation.title, totalReviewCount };
 }
+// ─── Batch jobs em memória ─────────────────────────────────────────────────────
+const batchJobs = new Map<string, { total: number; processados: number; erros: number; concluido: boolean; iniciado: Date }>();
+
 // ─── Router ──────────────────────────────────────────────────────────────────
 
 export const reputacaoRouter = router({
@@ -1238,5 +1241,113 @@ Gere uma resposta personalizada e única para esta avaliação.`;
         alertas.push({ tipo: "info", titulo: "Reputação estável", descricao: totalUltimos7 > 0 ? `Nenhuma queda detectada. Nota média dos últimos 7 dias: ${notaUltimos7?.toFixed(1) ?? "—"}★` : "Sem avaliações nos últimos 7 dias para análise de tendência.", valor: notaMedia ? `${notaMedia}★` : undefined });
       }
       return alertas;
+    }),
+
+  // ── Responder avaliações em lote (background job com polling) ──────────────
+  responderEmLote: protectedProcedure
+    .input(z.object({
+      unitId: z.number(),
+      plataforma: z.string().optional(),
+      sentimento: z.enum(["positivo", "neutro", "negativo"]).optional(),
+      notaMin: z.number().optional(),
+      notaMax: z.number().optional(),
+      busca: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Buscar avaliações sem resposta que atendem aos filtros
+      const conditions: any[] = [
+        eq(repAvaliacoes.unitId, input.unitId),
+        sql`(${repAvaliacoes.resposta} IS NULL OR ${repAvaliacoes.resposta} = '')`,
+      ];
+      if (input.plataforma && input.plataforma !== "todas") {
+        conditions.push(eq(repAvaliacoes.plataforma, input.plataforma as any));
+      }
+      if (input.sentimento) conditions.push(eq(repAvaliacoes.sentimento, input.sentimento));
+      if (input.notaMin !== undefined) conditions.push(gte(repAvaliacoes.nota, String(input.notaMin)));
+      if (input.notaMax !== undefined) conditions.push(lte(repAvaliacoes.nota, String(input.notaMax)));
+      if (input.busca) conditions.push(like(repAvaliacoes.comentario, `%${input.busca}%`));
+
+      const avaliacoesSemResposta = await db
+        .select({ id: repAvaliacoes.id })
+        .from(repAvaliacoes)
+        .where(and(...conditions))
+        .orderBy(desc(repAvaliacoes.dataAvaliacao));
+
+      if (avaliacoesSemResposta.length === 0) {
+        return { jobId: null, total: 0, message: "Nenhuma avaliação sem resposta encontrada com os filtros aplicados." };
+      }
+
+      const jobId = `lote-${input.unitId}-${Date.now()}`;
+      const ids = avaliacoesSemResposta.map(a => a.id);
+
+      batchJobs.set(jobId, { total: ids.length, processados: 0, erros: 0, concluido: false, iniciado: new Date() });
+
+      // Buscar config e prompt da unidade
+      const [config] = await db.select().from(repConfigIA).where(eq(repConfigIA.unitId, input.unitId));
+      const unit = await getUnitById(input.unitId);
+      const nomeEstab = config?.nomeEstabelecimento || unit?.name || "Barbearia VIP";
+      const nomeProprietario = config?.nomeProprietario || "Equipe";
+      const tom = config?.tom || "amigavel";
+      const unitAiPrompt = unit?.aiPrompt;
+      const promptPersonalizado = config?.promptPersonalizado;
+      const systemPrompt = unitAiPrompt
+        ? (promptPersonalizado
+            ? `${unitAiPrompt}\n\nINSTRUÇÕES ADICIONAIS:\n${promptPersonalizado}\n${config?.incluirAssinatura ? `\nAssine como: ${nomeProprietario} — ${nomeEstab}` : ""}`
+            : `${unitAiPrompt}\n${config?.incluirAssinatura ? `\nAssine como: ${nomeProprietario} — ${nomeEstab}` : ""}`)
+        : (promptPersonalizado || `Você é o gerente de reputação da ${nomeEstab}. Responda avaliações de forma amigável e personalizada. Responda SEMPRE em português brasileiro. Máximo 150 palavras.`);
+
+      // Processar em background
+      (async () => {
+        const job = batchJobs.get(jobId)!;
+        for (const avRow of ids) {
+          const avId = avRow as unknown as number;
+          try {
+            const [avaliacao] = await db.select().from(repAvaliacoes)
+              .where(and(eq(repAvaliacoes.id, avId), eq(repAvaliacoes.unitId, input.unitId)));
+            if (!avaliacao) { job.processados++; continue; }
+            const nota = parseFloat(String(avaliacao.nota));
+            const sentimentoAv = nota >= 4 ? "positiva" : nota <= 2 ? "negativa" : "neutra";
+            const userPrompt = `Avaliação ${sentimentoAv} (${nota}/5 estrelas) de ${avaliacao.autorNome || "Cliente"} na plataforma ${avaliacao.plataforma.toUpperCase()}:\n${avaliacao.titulo ? `Título: "${avaliacao.titulo}"` : ""}\n${avaliacao.comentario ? `Comentário: "${avaliacao.comentario}"` : "(sem comentário)"}\nGere uma resposta personalizada e única para esta avaliação.`;
+            const llmResponse = await invokeLLM({
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt },
+              ],
+            });
+            const rawContent = llmResponse?.choices?.[0]?.message?.content;
+            const textoGerado: string = typeof rawContent === "string" ? rawContent : Array.isArray(rawContent) ? rawContent.map((c: any) => c.text || "").join("") : "";
+            if (textoGerado) {
+              await db.update(repAvaliacoes)
+                .set({ resposta: textoGerado })
+                .where(eq(repAvaliacoes.id, avId));
+              await db.insert(repRespostasIA).values({ avaliacaoId: avId, unitId: input.unitId, textoGerado, tom, usouIA: true })
+                .onDuplicateKeyUpdate({ set: { textoGerado, tom } });
+            }
+            job.processados++;
+          } catch {
+            job.erros++;
+            job.processados++;
+          }
+        }
+        job.concluido = true;
+        // Recalcular resumo após concluir
+        try { await recalcularResumo(db, input.unitId); } catch {}
+        // Limpar job da memória após 10 minutos
+        setTimeout(() => batchJobs.delete(jobId), 10 * 60 * 1000);
+      })();
+
+      return { jobId, total: ids.length, message: `Iniciando resposta de ${ids.length} avaliações...` };
+    }),
+
+  // ── Consultar progresso de job em lote ────────────────────────────────────
+  getProgressoLote: protectedProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(({ input }) => {
+      const job = batchJobs.get(input.jobId);
+      if (!job) return { encontrado: false, total: 0, processados: 0, erros: 0, concluido: false };
+      return { encontrado: true, total: job.total, processados: job.processados, erros: job.erros, concluido: job.concluido };
     }),
 });

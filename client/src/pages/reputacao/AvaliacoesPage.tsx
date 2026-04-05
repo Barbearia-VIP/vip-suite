@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import PageHeader from "@/components/PageHeader";
-import { Star, MessageSquare, ThumbsUp, ThumbsDown, Minus, Search, Sparkles, Send, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Star, MessageSquare, ThumbsUp, ThumbsDown, Minus, Search, Sparkles, Send, CheckCircle2, ChevronLeft, ChevronRight, Zap, X, AlertCircle } from "lucide-react";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -28,6 +29,14 @@ function SentimentBadge({ sentimento }: { sentimento: string | null }) {
   return <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-xs"><Minus className="w-3 h-3 mr-1" />Neutro</Badge>;
 }
 
+interface BatchJob {
+  jobId: string;
+  total: number;
+  processados: number;
+  erros: number;
+  concluido: boolean;
+}
+
 export default function AvaliacoesPage() {
   const { selectedUnit } = useApp();
   const utils = trpc.useUtils();
@@ -41,6 +50,11 @@ export default function AvaliacoesPage() {
   const [avaliacaoSelecionada, setAvaliacaoSelecionada] = useState<any>(null);
   const [respostaTexto, setRespostaTexto] = useState("");
   const [tomIA, setTomIA] = useState<"profissional" | "amigavel" | "empatico">("profissional");
+
+  // Estado do job em lote
+  const [batchJob, setBatchJob] = useState<BatchJob | null>(null);
+  const [showBatchBox, setShowBatchBox] = useState(false);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const query = trpc.reputacao.getAvaliacoes.useQuery(
     {
@@ -76,16 +90,114 @@ export default function AvaliacoesPage() {
     onError: (err) => toast.error(err.message),
   });
 
+  const responderEmLoteMutation = trpc.reputacao.responderEmLote.useMutation({
+    onSuccess: (data) => {
+      if (!data.jobId || data.total === 0) {
+        toast.info(data.message || "Nenhuma avaliação sem resposta encontrada.");
+        return;
+      }
+      setBatchJob({ jobId: data.jobId, total: data.total, processados: 0, erros: 0, concluido: false });
+      setShowBatchBox(true);
+      toast.success(`Iniciando resposta de ${data.total} avaliações...`);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  // Polling do progresso
+  const progressoQuery = trpc.reputacao.getProgressoLote.useQuery(
+    { jobId: batchJob?.jobId ?? "" },
+    {
+      enabled: !!batchJob?.jobId && !batchJob?.concluido,
+      refetchInterval: 2000,
+    }
+  );
+
+  useEffect(() => {
+    if (progressoQuery.data?.encontrado) {
+      const d = progressoQuery.data;
+      setBatchJob(prev => prev ? {
+        ...prev,
+        processados: d.processados,
+        erros: d.erros,
+        concluido: d.concluido,
+      } : null);
+      if (d.concluido) {
+        utils.reputacao.getAvaliacoes.invalidate();
+        utils.reputacao.getDashboard.invalidate();
+        toast.success(`Concluído! ${d.processados - d.erros} respostas geradas${d.erros > 0 ? `, ${d.erros} erros` : ""}.`);
+      }
+    }
+  }, [progressoQuery.data]);
+
   const avaliacoes = query.data?.avaliacoes || [];
   const total = query.data?.total || 0;
   const totalPaginas = Math.ceil(total / 20);
+
+  // Contagem de sem resposta nos filtros atuais (para mostrar no botão)
+  const semRespostaFiltro = respondida === "nao" ? total : undefined;
+
+  const handleResponderTodas = () => {
+    if (!unitId) return;
+    responderEmLoteMutation.mutate({
+      unitId,
+      plataforma: plataforma !== "todas" ? plataforma : undefined,
+      sentimento: undefined,
+      notaMin: nota !== "todas" ? parseInt(nota) : undefined,
+      notaMax: nota !== "todas" ? parseInt(nota) : undefined,
+      busca: busca || undefined,
+    });
+  };
+
+  const porcentagem = batchJob ? Math.round((batchJob.processados / batchJob.total) * 100) : 0;
 
   return (
     <div className="space-y-6">
       <PageHeader title="Avaliações" description="Gerencie e responda todas as avaliações" />
 
+      {/* Box de progresso do lote */}
+      {showBatchBox && batchJob && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <Zap className={`w-4 h-4 text-primary ${!batchJob.concluido ? "animate-pulse" : ""}`} />
+                <span className="font-medium text-sm">
+                  {batchJob.concluido ? "Resposta em lote concluída!" : "Gerando respostas com IA..."}
+                </span>
+              </div>
+              {batchJob.concluido && (
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setShowBatchBox(false)}>
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              )}
+            </div>
+
+            <Progress value={porcentagem} className="h-2 mb-2" />
+
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                {batchJob.processados} de {batchJob.total} avaliações processadas
+                {batchJob.erros > 0 && (
+                  <span className="text-amber-600 ml-2">
+                    <AlertCircle className="w-3 h-3 inline mr-0.5" />{batchJob.erros} erros
+                  </span>
+                )}
+              </span>
+              <span className="font-medium text-primary">{porcentagem}%</span>
+            </div>
+
+            {batchJob.concluido && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-green-600">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{batchJob.processados - batchJob.erros} respostas geradas com sucesso</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
-        <div className="p-4">
+        <div className="p-4 space-y-3">
           <div className="flex flex-wrap gap-3">
             <div className="relative flex-1 min-w-48">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -117,6 +229,23 @@ export default function AvaliacoesPage() {
                 <SelectItem value="sim">Respondidas</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Botão Responder todas */}
+          <div className="flex items-center justify-between pt-1 border-t border-border/50">
+            <span className="text-xs text-muted-foreground">
+              {total} avaliação{total !== 1 ? "ões" : ""} encontrada{total !== 1 ? "s" : ""} com os filtros aplicados
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 border-primary/30 text-primary hover:bg-primary/5"
+              onClick={handleResponderTodas}
+              disabled={responderEmLoteMutation.isPending || (!!batchJob && !batchJob.concluido) || !unitId}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              {responderEmLoteMutation.isPending ? "Iniciando..." : "Responder todas sem resposta"}
+            </Button>
           </div>
         </div>
       </Card>
