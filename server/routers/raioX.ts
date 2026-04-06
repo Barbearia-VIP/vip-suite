@@ -468,36 +468,61 @@ export const raioXRouter = router({
           GROUP BY mes ORDER BY mes
         `),
             // ── Risco mensal ─────────────────────────────────────────────────────
-        // Em Risco: clientes recorrentes (>1 visita histórica) cuja última visita
-        // ficou entre 61-90d do fim do mês (LAST_DAY), excluindo one-shots.
-        // Churn: clientes que passaram de Em Risco para Perdido naquele mês
-        // (ultima_venda > 90d do fim do mês e > 60d do fim do mês anterior)
+        // Para cada mês do período, calcula o estado dos clientes da base S
+        // usando a última visita ATE o fim daquele mês (não a global).
+        // Abordagem: para cada (cliente, mês), pega o MAX(data_criacao) <= LAST_DAY(mês)
         queryExternal<{ mes: string; em_risco: number; churn_novos: number; total_ativos_mes: number }>(`
           SELECT
-            DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
-            -- Em Risco ao fim do mês: ultima visita ficou 61-90d antes do ultimo dia do mês
+            meses.mes,
             COUNT(DISTINCT CASE
-              WHEN DATEDIFF(LAST_DAY(STR_TO_DATE(CONCAT(DATE_FORMAT(v.data_criacao,'%Y-%m'),'-01'),'%Y-%m-%d')), uv_rm.ultima_venda) BETWEEN 61 AND 90
+              WHEN DATEDIFF(meses.fim_mes, uv_por_mes.ultima_ate_mes) BETWEEN 61 AND 90
                 AND COALESCE(vh_rm.total_visitas, 0) > 1
-              THEN v.cliente END) as em_risco,
-            -- Churn novos: clientes que ficaram perdidos (>90d) ao fim do mês mas nao estavam perdidos no mês anterior
+              THEN bs.cliente END) as em_risco,
             COUNT(DISTINCT CASE
-              WHEN DATEDIFF(LAST_DAY(STR_TO_DATE(CONCAT(DATE_FORMAT(v.data_criacao,'%Y-%m'),'-01'),'%Y-%m-%d')), uv_rm.ultima_venda) > 90
+              WHEN DATEDIFF(meses.fim_mes, uv_por_mes.ultima_ate_mes) > 90
                 AND COALESCE(vh_rm.total_visitas, 0) > 1
-              THEN v.cliente END) as churn_novos,
-            -- Base ativa do mês: clientes com ultima visita <= 60d do fim do mês
+              THEN bs.cliente END) as churn_novos,
             COUNT(DISTINCT CASE
-              WHEN DATEDIFF(LAST_DAY(STR_TO_DATE(CONCAT(DATE_FORMAT(v.data_criacao,'%Y-%m'),'-01'),'%Y-%m-%d')), uv_rm.ultima_venda) <= 60
-              THEN v.cliente END) as total_ativos_mes
-          FROM vendas v
-          JOIN usuarios uu ON v.usuario = uu.id
-          LEFT JOIN ${ultimaVendaSubquery} uv_rm ON uv_rm.cliente = v.cliente
-          LEFT JOIN ${visitasHistoricasSubquery} vh_rm ON vh_rm.cliente = v.cliente
-          WHERE ${unitCondV}
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
-            AND v.cliente IS NOT NULL AND v.cliente != 2
-            AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
-          GROUP BY mes ORDER BY mes
+              WHEN DATEDIFF(meses.fim_mes, uv_por_mes.ultima_ate_mes) <= 60
+              THEN bs.cliente END) as total_ativos_mes
+          FROM (
+            SELECT DISTINCT
+              DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
+              LAST_DAY(v.data_criacao) as fim_mes
+            FROM vendas v
+            JOIN usuarios uu ON v.usuario = uu.id
+            WHERE ${unitCondV}
+              AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+              AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+          ) meses
+          JOIN ${baseS12mSubquery} bs ON 1=1
+          -- Para cada cliente x mes: MAX(data_criacao) <= fim_mes (ultima visita ate aquele mes)
+          LEFT JOIN (
+            SELECT
+              all_v.cliente,
+              DATE_FORMAT(m2.data_criacao, '%Y-%m') as mes,
+              MAX(DATE(all_v.data_criacao)) as ultima_ate_mes
+            FROM vendas all_v
+            JOIN usuarios uu_av ON all_v.usuario = uu_av.id
+            JOIN (
+              SELECT DISTINCT DATE_FORMAT(v3.data_criacao, '%Y-%m') as mes_ref,
+                     LAST_DAY(v3.data_criacao) as fim_mes,
+                     v3.data_criacao
+              FROM vendas v3
+              JOIN usuarios uu3 ON v3.usuario = uu3.id
+              WHERE uu3.unidade = ${extIds[0] ?? 0}
+                AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL AND v3.status != 0
+                AND DATE(v3.data_criacao) >= '${dataInicio}' AND DATE(v3.data_criacao) <= '${dataFim}'
+            ) m2 ON DATE(all_v.data_criacao) <= m2.fim_mes
+            WHERE uu_av.unidade = ${extIds[0] ?? 0}
+              AND all_v.comanda_temp = 0 AND all_v.cancelado_motivo IS NULL AND all_v.status != 0
+              AND all_v.cliente IS NOT NULL AND all_v.cliente != 2
+              AND DATE(all_v.data_criacao) >= '${dataInicio12m}'
+            GROUP BY all_v.cliente, DATE_FORMAT(m2.data_criacao, '%Y-%m')
+          ) uv_por_mes ON uv_por_mes.cliente = bs.cliente AND uv_por_mes.mes = meses.mes
+          LEFT JOIN ${visitasHistoricasSubquery} vh_rm ON vh_rm.cliente = bs.cliente
+          GROUP BY meses.mes, meses.fim_mes
+          ORDER BY meses.mes
         `),
         // ── Saúde por barbeiro ────────────────────────────────────────────────────────────────────────────────────────────────────────────
         // Em Risco e Perdido excluem one-shots (visitas históricas = 1)
