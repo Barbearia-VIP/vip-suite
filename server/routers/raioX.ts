@@ -826,7 +826,19 @@ export const raioXRouter = router({
 
       const totalBase = Number(totalBaseRows[0]?.total ?? 0);
       const clientes = oneShotRows.map(r => {
-        const ultimaVisitaDate = r.ultima_venda_dt ? new Date(r.ultima_venda_dt + "T00:00:00Z") : null;
+        // ultima_venda_dt pode vir como Date object (mysql2) ou string — normalizar para string YYYY-MM-DD
+        let ultimaVendaStr: string | null = null;
+        if (r.ultima_venda_dt) {
+          const raw = r.ultima_venda_dt as unknown;
+          if (raw instanceof Date) {
+            // Extrair YYYY-MM-DD ignorando timezone do objeto Date
+            ultimaVendaStr = `${raw.getUTCFullYear()}-${String(raw.getUTCMonth()+1).padStart(2,'0')}-${String(raw.getUTCDate()).padStart(2,'0')}`;
+          } else {
+            // String: pegar só os primeiros 10 chars (YYYY-MM-DD)
+            ultimaVendaStr = String(raw).substring(0, 10);
+          }
+        }
+        const ultimaVisitaDate = ultimaVendaStr ? new Date(ultimaVendaStr + "T00:00:00Z") : null;
         const dias = ultimaVisitaDate
           ? Math.floor((dataFimDate.getTime() - ultimaVisitaDate.getTime()) / 86400000)
           : 999;
