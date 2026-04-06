@@ -117,6 +117,7 @@ export const raioXRouter = router({
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
       const dataInicio12m = new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0];
+      const dataInicio24m = new Date(Date.now() - 730 * 86400000).toISOString().split("T")[0];
 
       // Condição de unidade via JOIN com vendas (para filtrar pelo período)
       const unitCondV = extIds.length === 0 ? "1=1"
@@ -162,7 +163,7 @@ export const raioXRouter = router({
         ativosNaJanelaRows,
         resgatadosRows,
       ] = await Promise.all([
-        // Status dos clientes que visitaram no período
+        // Base P (Corte 24m): clientes com visita nos últimos 24 meses — totalBase, ativos, em_risco, perdidos, one_shots
         queryExternal<{
           total: number; ativos: number; em_risco: number; perdidos: number; one_shots: number;
           one_shot_risco: number; one_shot_perdido: number;
@@ -172,23 +173,40 @@ export const raioXRouter = router({
             SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN 1 ELSE 0 END) as ativos,
             SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as em_risco,
             SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 90 THEN 1 ELSE 0 END) as perdidos,
-            SUM(CASE WHEN vpc.total_visitas = 1 THEN 1 ELSE 0 END) as one_shots,
-            SUM(CASE WHEN vpc.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as one_shot_risco,
-            SUM(CASE WHEN vpc.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) > 90 THEN 1 ELSE 0 END) as one_shot_perdido
+            SUM(CASE WHEN vpc24.total_visitas = 1 THEN 1 ELSE 0 END) as one_shots,
+            SUM(CASE WHEN vpc24.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as one_shot_risco,
+            SUM(CASE WHEN vpc24.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) > 90 THEN 1 ELSE 0 END) as one_shot_perdido
           FROM clientes c
-          JOIN ${visitasPeriodoSubquery} vpc ON vpc.cliente = c.id
+          JOIN (
+            SELECT v.cliente, COUNT(*) as total_visitas
+            FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+            WHERE ${unitCondV}
+              AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+              AND v.cliente IS NOT NULL AND v.cliente != 2
+              AND DATE(v.data_criacao) >= '${dataInicio24m}'
+            GROUP BY v.cliente
+          ) vpc24 ON vpc24.cliente = c.id
           WHERE c.status = 1 AND c.ultima_visita IS NOT NULL
+            AND ${unitCondSimple} AND c.ultima_visita >= '${dataInicio24m}'
         `),
-        // Perfil de visitas (clientes do período)
+        // Perfil de visitas (Base P · 24m — visitas históricas de cada cliente)
         queryExternal<{ one_shot: number; ocasional: number; regular: number; fiel: number; recorrente: number }>(`
           SELECT 
-            SUM(CASE WHEN vpc.total_visitas = 1 THEN 1 ELSE 0 END) as one_shot,
-            SUM(CASE WHEN vpc.total_visitas BETWEEN 2 AND 3 THEN 1 ELSE 0 END) as ocasional,
-            SUM(CASE WHEN vpc.total_visitas BETWEEN 4 AND 6 THEN 1 ELSE 0 END) as regular,
-            SUM(CASE WHEN vpc.total_visitas BETWEEN 7 AND 12 THEN 1 ELSE 0 END) as fiel,
-            SUM(CASE WHEN vpc.total_visitas > 12 THEN 1 ELSE 0 END) as recorrente
+            SUM(CASE WHEN vpc24.total_visitas = 1 THEN 1 ELSE 0 END) as one_shot,
+            SUM(CASE WHEN vpc24.total_visitas BETWEEN 2 AND 3 THEN 1 ELSE 0 END) as ocasional,
+            SUM(CASE WHEN vpc24.total_visitas BETWEEN 4 AND 6 THEN 1 ELSE 0 END) as regular,
+            SUM(CASE WHEN vpc24.total_visitas BETWEEN 7 AND 12 THEN 1 ELSE 0 END) as fiel,
+            SUM(CASE WHEN vpc24.total_visitas > 12 THEN 1 ELSE 0 END) as recorrente
           FROM clientes c
-          JOIN ${visitasPeriodoSubquery} vpc ON vpc.cliente = c.id
+          JOIN (
+            SELECT v.cliente, COUNT(*) as total_visitas
+            FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+            WHERE ${unitCondV}
+              AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+              AND v.cliente IS NOT NULL AND v.cliente != 2
+              AND DATE(v.data_criacao) >= '${dataInicio24m}'
+            GROUP BY v.cliente
+          ) vpc24 ON vpc24.cliente = c.id
           WHERE c.status = 1
         `),
         // Status 12 meses (clientes que visitaram nos últimos 12m)
