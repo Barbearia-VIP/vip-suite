@@ -510,11 +510,11 @@ export const raioXRouter = router({
                      v3.data_criacao
               FROM vendas v3
               JOIN usuarios uu3 ON v3.usuario = uu3.id
-              WHERE uu3.unidade = ${extIds[0] ?? 0}
+              WHERE ${unitCondV.replace(/\buu\./g, 'uu3.')}
                 AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL AND v3.status != 0
                 AND DATE(v3.data_criacao) >= '${dataInicio}' AND DATE(v3.data_criacao) <= '${dataFim}'
             ) m2 ON DATE(all_v.data_criacao) <= m2.fim_mes
-            WHERE uu_av.unidade = ${extIds[0] ?? 0}
+            WHERE ${unitCondV.replace(/\buu\./g, 'uu_av.')}
               AND all_v.comanda_temp = 0 AND all_v.cancelado_motivo IS NULL AND all_v.status != 0
               AND all_v.cliente IS NOT NULL AND all_v.cliente != 2
               AND DATE(all_v.data_criacao) >= '${dataInicio12m}'
