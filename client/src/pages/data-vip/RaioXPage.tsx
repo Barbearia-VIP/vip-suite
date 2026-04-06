@@ -390,7 +390,7 @@ export default function RaioXPage() {
               {/* ── Saúde da base ── */}
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Saúde da Base · 12m</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                   {/* Em Risco */}
                   <Card className="bg-card/60 border-border/50">
                     <CardContent className="pt-4 pb-4">
@@ -413,6 +413,36 @@ export default function RaioXPage() {
                           <p className="text-2xl font-bold mt-1 text-orange-400">{v.saude.emRisco.toLocaleString()}</p>
                         </div>
                         <AlertTriangle className="w-5 h-5 mt-1 text-orange-400" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {/* Em Risco Total (totalizador: Em Risco + One-shot risco) */}
+                  <Card className="bg-orange-500/10 border-orange-500/30">
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="text-xs text-orange-400/80 uppercase tracking-wide flex items-center font-medium">
+                            Em risco total
+                            <InfoPopover
+                              title="Em Risco Total"
+                              descricao="Soma de Em Risco (recorrentes 61-90d) + One-shot risco (1 visita, 46-90d). Representa todos os clientes em zona de alerta, independente do perfil."
+                              periodoFiltrado={v.contexto?.periodoFiltrado}
+                              ref={v.contexto?.ref}
+                              baseUsada={v.contexto?.baseUsada}
+                              baseTotal={v.sinais.totalBase}
+                              regra={`Em Risco: ${v.saude.emRisco} + One-shot risco: ${v.saude.oneShotRisco}`}
+                              usadaEm="Totalizador para comparação com sistemas que não separam one-shots"
+                              nota="Use este número ao comparar com o VIP Data, que não separa one-shots do Em Risco geral."
+                            />
+                          </p>
+                          <p className="text-2xl font-bold mt-1 text-orange-300">
+                            {(v.saude.emRisco + v.saude.oneShotRisco).toLocaleString()}
+                          </p>
+                          <p className="text-[10px] text-orange-400/60 mt-0.5">
+                            {v.saude.emRisco} recorr. + {v.saude.oneShotRisco} one-shot
+                          </p>
+                        </div>
+                        <AlertTriangle className="w-5 h-5 mt-1 text-orange-300" />
                       </div>
                     </CardContent>
                   </Card>
