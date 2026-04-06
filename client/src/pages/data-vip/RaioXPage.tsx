@@ -2,7 +2,7 @@
  * RaioXPage.tsx — Raio X Clientes completo
  * Abas: Visão Geral | One-Shot | Cadência | Churn | Cohort | Barbeiros | Ações | Diagnóstico
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, type MouseEvent } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   Users, UserCheck, UserX, AlertTriangle, TrendingDown, TrendingUp,
   Zap, Activity, Target, Scissors, Search, RefreshCw, Info, ChevronRight, Calendar,
-  Wifi, WifiOff
+  Wifi, WifiOff, Download
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -171,7 +171,8 @@ export default function RaioXPage() {
   const { org } = useOrg();
   const [tab, setTab] = useState("visao-geral");
   const [search, setSearch] = useState("");
-  const [oneShotFiltro, setOneShotFiltro] = useState<"todos" | "aguardando" | "em_risco" | "perdido">("todos");
+  const [oneShotFiltro, setOneShotFiltro] = useState<"aguardando" | "em_risco" | "perdido" | "todos">("aguardando");
+
   const [acoesTipo, setAcoesTipo] = useState<"todos" | "one_shot_risco" | "perdidos_recentes" | "em_risco">("todos");
 
   // Seletor de período
@@ -230,6 +231,34 @@ export default function RaioXPage() {
 
   const v = qVisao.data;
   const isLoading = qVisao.isLoading;
+
+  // Exportar CSV dos one-shots de um grupo específico
+  const exportOneShotCSV = (grupo: "aguardando" | "em_risco" | "perdido", e: MouseEvent) => {
+    e.stopPropagation();
+    const todos = qOneShot.data?.clientes ?? [];
+    // Buscar todos os clientes do grupo independente do filtro atual
+    const filtrados = todos.filter(c => c.status === grupo);
+    if (filtrados.length === 0) return;
+    const labels: Record<string, string> = { aguardando: "Aguardando_Retorno", em_risco: "Em_Risco", perdido: "Provavelmente_Perdido" };
+    const header = ["Nome", "Telefone", "1ª Visita", "Última Visita", "Dias", "Total Gasto (R$)", "Status"].join(";");
+    const rows = filtrados.map(c => [
+      `"${(c.clienteNome || "").replace(/"/g, "'")}"`,
+      c.telefone || "",
+      c.primeiraVenda ? new Date(c.primeiraVenda + "T12:00:00").toLocaleDateString("pt-BR") : "",
+      c.ultimaVenda ? new Date(c.ultimaVenda + "T12:00:00").toLocaleDateString("pt-BR") : "",
+      c.dias,
+      Number(c.totalGasto).toFixed(2).replace(".", ","),
+      grupo === "aguardando" ? "Aguardando" : grupo === "em_risco" ? "Em Risco" : "Perdido",
+    ].join(";")).join("\n");
+    const csv = "\uFEFF" + header + "\n" + rows;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `OneShot_${labels[grupo]}_${dataFim}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const scoreBase = v ? Math.round(
     (v.sinais.ativos / Math.max(v.sinais.totalBase, 1)) * 100
@@ -1116,9 +1145,18 @@ export default function RaioXPage() {
                             <div className="w-full h-1 rounded-full bg-muted/30 mb-3">
                               <div className="h-1 rounded-full bg-blue-400 transition-all" style={{ width: `${pct}%` }} />
                             </div>
-                            <button className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
-                              <Users className="w-3 h-3" /> Ver lista de clientes →
-                            </button>
+                            <div className="flex items-center justify-between">
+                              <button className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                                onClick={() => setOneShotFiltro("aguardando")}>
+                                <Users className="w-3 h-3" /> Ver lista →
+                              </button>
+                              <button
+                                className="text-xs text-blue-400/70 hover:text-blue-300 flex items-center gap-1 border border-blue-500/30 rounded px-2 py-0.5 hover:bg-blue-500/10 transition-colors"
+                                onClick={(e) => exportOneShotCSV("aguardando", e)}
+                                title="Exportar CSV">
+                                <Download className="w-3 h-3" /> CSV
+                              </button>
+                            </div>
                           </CardContent>
                         </Card>
                       );
@@ -1146,9 +1184,18 @@ export default function RaioXPage() {
                             <div className="w-full h-1 rounded-full bg-muted/30 mb-3">
                               <div className="h-1 rounded-full bg-orange-400 transition-all" style={{ width: `${pct}%` }} />
                             </div>
-                            <button className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
-                              <Users className="w-3 h-3" /> Ver lista de clientes →
-                            </button>
+                            <div className="flex items-center justify-between">
+                              <button className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1"
+                                onClick={() => setOneShotFiltro("em_risco")}>
+                                <Users className="w-3 h-3" /> Ver lista →
+                              </button>
+                              <button
+                                className="text-xs text-orange-400/70 hover:text-orange-300 flex items-center gap-1 border border-orange-500/30 rounded px-2 py-0.5 hover:bg-orange-500/10 transition-colors"
+                                onClick={(e) => exportOneShotCSV("em_risco", e)}
+                                title="Exportar CSV">
+                                <Download className="w-3 h-3" /> CSV
+                              </button>
+                            </div>
                           </CardContent>
                         </Card>
                       );
@@ -1176,9 +1223,18 @@ export default function RaioXPage() {
                             <div className="w-full h-1 rounded-full bg-muted/30 mb-3">
                               <div className="h-1 rounded-full bg-pink-500 transition-all" style={{ width: `${pct}%` }} />
                             </div>
-                            <button className="text-xs text-pink-400 hover:text-pink-300 flex items-center gap-1">
-                              <Users className="w-3 h-3" /> Ver lista de clientes →
-                            </button>
+                            <div className="flex items-center justify-between">
+                              <button className="text-xs text-pink-400 hover:text-pink-300 flex items-center gap-1"
+                                onClick={() => setOneShotFiltro("perdido")}>
+                                <Users className="w-3 h-3" /> Ver lista →
+                              </button>
+                              <button
+                                className="text-xs text-pink-400/70 hover:text-pink-300 flex items-center gap-1 border border-pink-500/30 rounded px-2 py-0.5 hover:bg-pink-500/10 transition-colors"
+                                onClick={(e) => exportOneShotCSV("perdido", e)}
+                                title="Exportar CSV">
+                                <Download className="w-3 h-3" /> CSV
+                              </button>
+                            </div>
                           </CardContent>
                         </Card>
                       );
@@ -1192,16 +1248,22 @@ export default function RaioXPage() {
                     <span className="text-sm font-semibold">
                       {oneShotFiltro === "aguardando" ? "Aguardando Retorno" :
                        oneShotFiltro === "em_risco" ? "Em Risco de Perda" :
-                       oneShotFiltro === "perdido" ? "Provavelmente Perdidos" : "Todos os One-Shots"}
+                       oneShotFiltro === "perdido" ? "Provavelmente Perdidos" : "One-Shots"}
                     </span>
                     <div className="flex gap-1 ml-2">
-                      {(["todos", "aguardando", "em_risco", "perdido"] as const).map(s => (
+                      {(["aguardando", "em_risco", "perdido"] as const).map(s => (
                         <Button key={s} variant={oneShotFiltro === s ? "default" : "outline"} size="sm"
                           onClick={() => setOneShotFiltro(s)} className="text-xs h-7">
-                          {s === "todos" ? "Todos" : s === "aguardando" ? "Aguardando" : s === "em_risco" ? "Em Risco" : "Perdidos"}
+                          {s === "aguardando" ? "Aguardando" : s === "em_risco" ? "Em Risco" : "Perdidos"}
                         </Button>
                       ))}
                     </div>
+                    {(oneShotFiltro === "aguardando" || oneShotFiltro === "em_risco" || oneShotFiltro === "perdido") && (
+                      <Button variant="outline" size="sm" className="text-xs h-7 gap-1"
+                        onClick={(e) => exportOneShotCSV(oneShotFiltro as "aguardando" | "em_risco" | "perdido", e)}>
+                        <Download className="w-3 h-3" /> Exportar CSV
+                      </Button>
+                    )}
                     <div className="relative ml-auto">
                       <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-muted-foreground" />
                       <Input placeholder="Buscar cliente..." className="pl-8 h-8 text-xs w-48"
