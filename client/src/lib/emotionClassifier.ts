@@ -2,18 +2,22 @@
  * Classificador de emoções para o VIP Cam.
  * Regras calibradas para o modelo @vladmandic/face-api:
  *
- * NÍVEL 1 — Thresholds reduzidos para capturar insatisfação real:
+ * NÍVEL 1 — Thresholds calibrados:
  * - Insatisfeito: angry >= 0.35 OU disgusted >= 0.35 OU (sad >= 0.45 E happy < 0.20)
- * - Satisfeito: happy >= 0.35
+ * - Satisfeito: happy >= 0.20  ← reduzido de 0.35 para capturar sorrisos leves e expressões relaxadas
  * - Neutro: qualquer outra coisa (padrão)
+ *
+ * Justificativa: o modelo face-api retorna happy ~0.15-0.30 para expressões relaxadas/neutras-positivas
+ * (cliente confortável, satisfeito mas sem sorriso amplo). Com threshold 0.35, esses clientes viravam
+ * Neutro. Com 0.20, capturamos a satisfação real sem exigir sorriso exagerado.
  *
  * NÍVEL 2 — Regra de prioridade histórica por proporção:
  * - Insatisfeito: capturas insatisfeitas >= 30% do total
- * - Satisfeito: capturas satisfeitas >= 40% do total (e insatisfeitas < 30%)
+ * - Satisfeito: capturas satisfeitas >= 25% do total (e insatisfeitas < 30%)  ← reduzido de 40%
  * - Neutro: qualquer outra coisa
  *
- * Antes: "um sorriso apaga todo o histórico negativo" (regra otimista demais).
- * Agora: a experiência real ao longo do tempo determina o status final.
+ * Com threshold happy=0.20, mais capturas serão satisfeitas → exigir apenas 25% para status final
+ * evita que clientes com poucas capturas fiquem presos em Neutro.
  */
 
 export type SatisfactionLevel = 'satisfied' | 'neutral' | 'unsatisfied';
@@ -50,8 +54,8 @@ export function classifyExpression(scores: ExpressionScores): {
     return { satisfactionLevel: 'unsatisfied', dominantExpression };
   }
 
-  // Regra de satisfação
-  if (scores.happy >= 0.35) {
+  // Regra de satisfação — threshold reduzido para capturar sorrisos leves e expressões relaxadas
+  if (scores.happy >= 0.20) {
     return { satisfactionLevel: 'satisfied', dominantExpression };
   }
 
@@ -163,8 +167,8 @@ export function calcFinalSatisfactionLevel(
   // Insatisfeito prevalece se >= 30% das capturas forem negativas
   if (pctUnsatisfied >= 0.30) return 'unsatisfied';
 
-  // Satisfeito se >= 40% das capturas forem positivas (e insatisfeitos < 30%)
-  if (pctSatisfied >= 0.40) return 'satisfied';
+  // Satisfeito se >= 25% das capturas forem positivas (e insatisfeitos < 30%)
+  if (pctSatisfied >= 0.25) return 'satisfied';
 
   // Neutro em todos os outros casos
   return 'neutral';
@@ -204,9 +208,9 @@ export const EMOTION_THRESHOLDS = {
   /** happy deve ser menor que este valor para sad ser considerado insatisfeito */
   SAD_HAPPY_MAX: 0.20,
   /** happy >= este valor → satisfeito */
-  HAPPY: 0.35,
+  HAPPY: 0.20,
   /** % mínima de capturas insatisfeitas para status final = insatisfeito */
   PCT_UNSATISFIED: 0.30,
   /** % mínima de capturas satisfeitas para status final = satisfeito */
-  PCT_SATISFIED: 0.40,
+  PCT_SATISFIED: 0.25,
 } as const;

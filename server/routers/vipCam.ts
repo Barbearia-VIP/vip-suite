@@ -69,8 +69,8 @@ function calcFinalSatisfactionLevel(
   // Insatisfeito prevalece se >= 30% das capturas forem negativas
   if (pctUnsatisfied >= 0.30) return 'unsatisfied';
 
-  // Satisfeito se >= 40% das capturas forem positivas (e insatisfeitos < 30%)
-  if (pctSatisfied >= 0.40) return 'satisfied';
+  // Satisfeito se >= 25% das capturas forem positivas (e insatisfeitos < 30%)
+  if (pctSatisfied >= 0.25) return 'satisfied';
 
   // Neutro em todos os outros casos
   return 'neutral';
@@ -887,7 +887,7 @@ export const vipCamRouter = router({
       const timelineResult = await db!.execute(sql`
         UPDATE cam_sentiment_timeline
         SET satisfactionLevel = CASE
-          WHEN expression = 'happy'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.35 THEN 'satisfied'
+          WHEN expression = 'happy'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.20 THEN 'satisfied'
           WHEN expression = 'angry'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.35 THEN 'unsatisfied'
           WHEN expression = 'disgusted' AND CAST(confidence AS DECIMAL(10,4)) >= 0.35 THEN 'unsatisfied'
           WHEN expression = 'sad'       AND CAST(confidence AS DECIMAL(10,4)) >= 0.45 THEN 'unsatisfied'
@@ -968,7 +968,7 @@ export const vipCamRouter = router({
           userName: ctx.user!.name ?? 'Usuário',
           acao: 'recalc',
           entidade: 'vip_cam_satisfaction',
-          descricao: `Reclassificação histórica completa (Nível 2 — proporcional): ${timelineTotal} capturas processadas (${timelineUpdated} alteradas), ${clientesUpdated} clientes recalculados`,
+          descricao: `Reclassificação histórica completa (Nível 2 — proporcional, happy≥0.20, 25%/30%): ${timelineTotal} capturas processadas (${timelineUpdated} alteradas), ${clientesUpdated} clientes recalculados`,
         });
       } catch { /* não bloquear por falha de auditoria */ }
 
