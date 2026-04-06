@@ -888,126 +888,183 @@ export const raioXRouter = router({
       };
     }),
 
-  // ── Cadência de visitas ───────────────────────────────────────────────────────
+  // ── Cadência de visitas (lógica ratio individual) ────────────────────────────
   cadencia: protectedProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
-      const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
-      const unitCondV = extIds.length === 0 ? "1=1"
-        : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
-        : `uu.unidade IN (${extIds.join(",")})`;
+      // Base 12m: clientes com visita nos 12 meses anteriores a dataFim
+      const dataInicio12m = (() => {
+        const d = new Date(dataFim + "T12:00:00Z");
+        d.setFullYear(d.getFullYear() - 1);
+        return d.toISOString().split("T")[0];
+      })();
 
-      // Base S 12m rolling: clientes com visita nos últimos 12 meses a partir de HOJE
-      // Consistente com a Visão Geral
-      const baseS12mSubquery = `(
-        SELECT DISTINCT v.cliente
-        FROM vendas v
-        JOIN usuarios uu ON v.usuario = uu.id
-        WHERE ${unitCondV}
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
-          AND v.cliente IS NOT NULL AND v.cliente != 2
-          AND DATE(v.data_criacao) >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-          AND DATE(v.data_criacao) <= CURDATE()
-          AND uu.visivel_agenda != 'nenhuma'
-      )`;
-
-      // Faixas de visitas no período selecionado (para clientes da Base S 12m)
-      const cadenciaRows = await queryExternal<{ faixa: string; total: number }>(`
-        SELECT 
-          CASE 
-            WHEN visitas = 1 THEN '1 visita'
-            WHEN visitas BETWEEN 2 AND 3 THEN '2-3 visitas'
-            WHEN visitas BETWEEN 4 AND 6 THEN '4-6 visitas'
-            WHEN visitas BETWEEN 7 AND 12 THEN '7-12 visitas'
-            ELSE '13+ visitas'
-          END as faixa,
-          COUNT(*) as total
-        FROM (
-          SELECT v.cliente, COUNT(*) as visitas
-          FROM vendas v
-          JOIN usuarios uu ON v.usuario = uu.id
-          JOIN ${baseS12mSubquery} bs ON bs.cliente = v.cliente
-          WHERE ${unitCondV}
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
-            AND v.cliente IS NOT NULL AND v.cliente != 2
-            AND DATE(v.data_criacao) >= ? AND DATE(v.data_criacao) <= ?
-          GROUP BY v.cliente
-        ) sub
-        GROUP BY faixa
-        ORDER BY MIN(visitas)
-      `, [dataInicio, dataFim]);
-      const totalCadencia = cadenciaRows.reduce((s, r) => s + Number(r.total), 0);
-
-      // Distribuição por dias de ausência — Base S 12m rolling
-      // Classifica cada cliente da base S 12m pela recência atual
-      const distribuicao = { mto_frequente: 0, regular: 0, espacado: 0, em_risco: 0, perdido: 0 };
-      const distRows = await queryExternal<{ faixa: string; total: number }>(`
-        SELECT 
-          CASE 
-            WHEN DATEDIFF(NOW(), c.ultima_visita) <= 20 THEN 'mto_frequente'
-            WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 21 AND 45 THEN 'regular'
-            WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 46 AND 60 THEN 'espacado'
-            WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 'em_risco'
-            ELSE 'perdido'
-          END as faixa,
-          COUNT(DISTINCT c.id) as total
-        FROM clientes c
-        JOIN ${baseS12mSubquery} bs ON bs.cliente = c.id
-        WHERE c.status = 1 AND c.ultima_visita IS NOT NULL
-        GROUP BY faixa
-      `);
-      for (const r of distRows) {
-        if (r.faixa in distribuicao) distribuicao[r.faixa as keyof typeof distribuicao] = Number(r.total);
+      if (extIds.length === 0) {
+        return {
+          total: 0, totalComCadencia: 0, primeiraVez: 0, mediaCadencia: 0,
+          grupos: { assiduo: 0, regular: 0, espacando: 0, em_risco: 0, perdido: 0 },
+          evolucao: [], analises: [],
+        };
       }
 
-      // Top clientes por frequência no período (da Base S 12m)
-      const topClientesRows = await queryExternal<{
-        id: number; nome: string; telefone: string;
-        total_visitas: number; dias_medios: number;
-      }>(`
-        SELECT c.id, c.nome, c.telefone,
-               vc.cnt as total_visitas,
-               COALESCE(ROUND(DATEDIFF(MAX(v2.data_criacao), MIN(v2.data_criacao)) / NULLIF(vc.cnt - 1, 0)), 0) as dias_medios
-        FROM clientes c
-        JOIN ${baseS12mSubquery} bs ON bs.cliente = c.id
+      // SQL base para calcular grupos por ratio
+      // ratio = DATEDIFF(refDate, ultima_venda_historica) / cadencia_habitual_individual
+      // Assíduo ≤0.8 | Regular 0.8-1.2 | Espaçando 1.2-1.8 | Em Risco 1.8-2.5 | Perdido >2.5
+      const buildRatioSQL = (refDate: string, ref12m: string) => {
+        const unitIn = extIds.length === 1 ? `uu.unidade = ${extIds[0]}` : `uu.unidade IN (${extIds.join(",")})`;
+        return {
+          sql: `
+            SELECT
+              SUM(CASE WHEN ratio <= 0.8 THEN 1 ELSE 0 END) as assiduo,
+              SUM(CASE WHEN ratio > 0.8 AND ratio <= 1.2 THEN 1 ELSE 0 END) as regular,
+              SUM(CASE WHEN ratio > 1.2 AND ratio <= 1.8 THEN 1 ELSE 0 END) as espacando,
+              SUM(CASE WHEN ratio > 1.8 AND ratio <= 2.5 THEN 1 ELSE 0 END) as em_risco,
+              SUM(CASE WHEN ratio > 2.5 THEN 1 ELSE 0 END) as perdido,
+              ROUND(AVG(cadencia_habitual)) as media_cadencia,
+              COUNT(*) as total
+            FROM (
+              SELECT iv.cliente, iv.cadencia_habitual,
+                DATEDIFF(?, uvc.ultima_venda) / iv.cadencia_habitual as ratio
+              FROM (
+                SELECT v.cliente,
+                  DATEDIFF(MAX(DATE(v.data_criacao)), MIN(DATE(v.data_criacao))) / NULLIF(COUNT(*) - 1, 0) as cadencia_habitual
+                FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+                WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
+                  AND v.cliente IS NOT NULL AND v.cliente!=2
+                  AND DATE(v.data_criacao) <= ?
+                GROUP BY v.cliente HAVING COUNT(*) >= 2
+              ) iv
+              JOIN (
+                SELECT v.cliente, MAX(DATE(v.data_criacao)) as ultima_venda
+                FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+                WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
+                  AND v.cliente IS NOT NULL AND v.cliente!=2
+                  AND DATE(v.data_criacao) <= ?
+                GROUP BY v.cliente
+              ) uvc ON uvc.cliente = iv.cliente
+              JOIN (
+                SELECT DISTINCT v.cliente
+                FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+                WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
+                  AND v.cliente IS NOT NULL AND v.cliente!=2
+                  AND DATE(v.data_criacao) >= ? AND DATE(v.data_criacao) <= ?
+              ) bs ON bs.cliente = iv.cliente
+              JOIN clientes c ON c.id = iv.cliente
+              WHERE c.status=1 AND iv.cadencia_habitual IS NOT NULL AND iv.cadencia_habitual > 0
+            ) ratios
+          `,
+          params: [refDate, refDate, refDate, ref12m, refDate],
+        };
+      };
+
+      // Grupos do período atual
+      const { sql: sqlAtual, params: paramsAtual } = buildRatioSQL(dataFim, dataInicio12m);
+      const gruposRows = await queryExternal<{
+        assiduo: number; regular: number; espacando: number; em_risco: number; perdido: number;
+        media_cadencia: number; total: number;
+      }>(sqlAtual, paramsAtual);
+      const g = gruposRows[0] || { assiduo: 0, regular: 0, espacando: 0, em_risco: 0, perdido: 0, media_cadencia: 0, total: 0 };
+
+      // 1ª Vez (one-shots na base 12m)
+      const unitIn = extIds.length === 1 ? `uu.unidade = ${extIds[0]}` : `uu.unidade IN (${extIds.join(",")})`;
+      const primeiraVezRows = await queryExternal<{ total: number }>(`
+        SELECT COUNT(*) as total
+        FROM (
+          SELECT v.cliente, COUNT(*) as tv
+          FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+          WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
+            AND v.cliente IS NOT NULL AND v.cliente!=2
+          GROUP BY v.cliente HAVING tv = 1
+        ) vh
         JOIN (
-          SELECT v.cliente, COUNT(*) as cnt
-          FROM vendas v
-          JOIN usuarios uu ON v.usuario = uu.id
-          WHERE ${unitCondV}
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
-            AND v.cliente IS NOT NULL AND v.cliente != 2
+          SELECT DISTINCT v.cliente
+          FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+          WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
+            AND v.cliente IS NOT NULL AND v.cliente!=2
             AND DATE(v.data_criacao) >= ? AND DATE(v.data_criacao) <= ?
-          GROUP BY v.cliente HAVING cnt >= 2
-        ) vc ON vc.cliente = c.id
-        JOIN vendas v2 ON v2.cliente = c.id
-          AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
-          AND DATE(v2.data_criacao) >= ? AND DATE(v2.data_criacao) <= ?
-        WHERE c.status = 1
-        GROUP BY c.id, c.nome, c.telefone, vc.cnt
-        ORDER BY vc.cnt DESC LIMIT 15
-      `, [dataInicio, dataFim, dataInicio, dataFim]);
+        ) bs ON bs.cliente = vh.cliente
+        JOIN clientes c ON c.id = vh.cliente WHERE c.status=1
+      `, [dataInicio12m, dataFim]);
+      const primeiraVez = Number(primeiraVezRows[0]?.total ?? 0);
+
+      // Evolução mensal dos últimos 12 meses
+      const evolucao: Array<{
+        mes: string; assiduo: number; regular: number; espacando: number;
+        em_risco: number; perdido: number; total: number;
+      }> = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(dataFim + "T12:00:00Z");
+        d.setMonth(d.getMonth() - i);
+        const ano = d.getUTCFullYear();
+        const mes = d.getUTCMonth() + 1;
+        const lastDay = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+        const refDate = `${ano}-${String(mes).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
+        const ref12m = new Date(Date.UTC(ano - 1, mes - 1, lastDay)).toISOString().split("T")[0];
+        const { sql, params } = buildRatioSQL(refDate, ref12m);
+        const rows = await queryExternal<{ assiduo: number; regular: number; espacando: number; em_risco: number; perdido: number; total: number }>(sql, params);
+        const r = rows[0] || { assiduo: 0, regular: 0, espacando: 0, em_risco: 0, perdido: 0, total: 0 };
+        evolucao.push({
+          mes: `${String(mes).padStart(2,"0")}/${String(ano).slice(2)}`,
+          assiduo: Number(r.assiduo),
+          regular: Number(r.regular),
+          espacando: Number(r.espacando),
+          em_risco: Number(r.em_risco),
+          perdido: Number(r.perdido),
+          total: Number(r.total),
+        });
+      }
+
+      // Análises automáticas
+      const totalComCadencia = Number(g.total);
+      const analises: Array<{ tipo: "positivo" | "negativo" | "neutro" | "alerta"; texto: string }> = [];
+      if (evolucao.length >= 2) {
+        const primeiro = evolucao[0];
+        const ultimo = evolucao[evolucao.length - 1];
+        const pctEmRiscoAntes = primeiro.total > 0 ? Math.round(primeiro.em_risco / primeiro.total * 100) : 0;
+        const pctEmRiscoAgora = ultimo.total > 0 ? Math.round(ultimo.em_risco / ultimo.total * 100) : 0;
+        const pctPerdidoAntes = primeiro.total > 0 ? Math.round(primeiro.perdido / primeiro.total * 100) : 0;
+        const pctPerdidoAgora = ultimo.total > 0 ? Math.round(ultimo.perdido / ultimo.total * 100) : 0;
+        const diffRisco = pctEmRiscoAgora - pctEmRiscoAntes;
+        const diffPerdido = pctPerdidoAgora - pctPerdidoAntes;
+        if (diffRisco < 0) analises.push({ tipo: "positivo", texto: `% Em Risco caiu de ${pctEmRiscoAntes}% para ${pctEmRiscoAgora}% (${diffRisco}pp). Melhora na retenção.` });
+        else if (diffRisco > 0) analises.push({ tipo: "negativo", texto: `% Em Risco subiu de ${pctEmRiscoAntes}% para ${pctEmRiscoAgora}% (+${diffRisco}pp). Atenção na retenção.` });
+        if (diffPerdido < 0) analises.push({ tipo: "positivo", texto: `% Perdido caiu de ${pctPerdidoAntes}% para ${pctPerdidoAgora}% (${diffPerdido}pp). Boa recuperação.` });
+        else if (diffPerdido > 0) analises.push({ tipo: "negativo", texto: `% Perdido subiu de ${pctPerdidoAntes}% para ${pctPerdidoAgora}% (+${diffPerdido}pp). Avaliar estratégia de retenção.` });
+        // Pior e melhor mês
+        const sorted = [...evolucao].filter(e => e.total > 0);
+        if (sorted.length > 0) {
+          const piorMes = sorted.reduce((a, b) => (b.em_risco / b.total) > (a.em_risco / a.total) ? b : a);
+          const melhorMes = sorted.reduce((a, b) => (b.assiduo / b.total) > (a.assiduo / a.total) ? b : a);
+          analises.push({ tipo: "neutro", texto: `Pior mês: ${piorMes.mes} (${Math.round(piorMes.em_risco/piorMes.total*100)}% em risco). Melhor: ${melhorMes.mes} (${Math.round(melhorMes.assiduo/melhorMes.total*100)}% assíduo).` });
+        }
+        if (totalComCadencia > 0 && Number(g.perdido) > Number(g.assiduo)) {
+          analises.push({ tipo: "alerta", texto: `Mais Perdido (${g.perdido}) que Assíduo (${g.assiduo}). Atenção na retenção.` });
+        }
+      }
 
       return {
-        total: totalCadencia,
-        mediaGeral: 45,
-        distribuicao,
-        faixas: cadenciaRows.map(r => ({
-          faixa: r.faixa,
-          total: Number(r.total),
-          percentual: totalCadencia > 0 ? Math.round((Number(r.total) / totalCadencia) * 1000) / 10 : 0,
-        })),
-        clientes: topClientesRows.map(r => ({
-          clienteId: String(r.id),
-          clienteNome: r.nome,
-          telefone: r.telefone,
-          totalVisitas: Number(r.total_visitas),
-          diasMedios: Number(r.dias_medios),
-        })),
+        total: totalComCadencia + primeiraVez,
+        totalComCadencia,
+        primeiraVez,
+        mediaCadencia: Number(g.media_cadencia) || 0,
+        grupos: {
+          assiduo: Number(g.assiduo),
+          regular: Number(g.regular),
+          espacando: Number(g.espacando),
+          em_risco: Number(g.em_risco),
+          perdido: Number(g.perdido),
+        },
+        evolucao,
+        analises,
+        // legado (compatibilidade com frontend antigo)
+        mediaGeral: Number(g.media_cadencia) || 0,
+        distribuicao: { mto_frequente: Number(g.assiduo), regular: Number(g.regular), espacado: Number(g.espacando), em_risco: Number(g.em_risco), perdido: Number(g.perdido) },
+        faixas: [],
+        clientes: [],
       };
     }),
     // ── Churn (visão geral) ───────────────────────────────────────────────────────

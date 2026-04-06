@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ComposedChart, Line, ReferenceLine,
 } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1321,59 +1321,113 @@ export default function RaioXPage() {
         {/* ── CADÊNCIA ─────────────────────────────────────────────────────────── */}
         <TabsContent value="cadencia" className="space-y-4 mt-4">
           {qCadencia.isLoading ? <Skeleton className="h-40" /> : qCadencia.data ? (
-            <>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <KpiCard label="Clientes com cadência" value={qCadencia.data.total.toLocaleString()} icon={Activity} sub=">1 visita" />
-                <KpiCard label="Intervalo médio" value={`${qCadencia.data.mediaGeral}d`} icon={RefreshCw} sub="entre visitas" />
-                <KpiCard label="Frequentes" value={qCadencia.data.distribuicao.mto_frequente.toLocaleString()} icon={TrendingUp} color="text-green-400" sub="≤20 dias" />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">Distribuição por Cadência</CardTitle></CardHeader>
-                  <CardContent>
-                    {[
-                      { label: "Perdido (>90d)", count: qCadencia.data.distribuicao.perdido, color: "bg-red-500" },
-                      { label: "Em risco (61-90d)", count: qCadencia.data.distribuicao.em_risco, color: "bg-yellow-500" },
-                      { label: "Espaçado (46-60d)", count: qCadencia.data.distribuicao.espacado, color: "bg-orange-500" },
-                      { label: "Regular (21-45d)", count: qCadencia.data.distribuicao.regular, color: "bg-blue-500" },
-                      { label: "Mto frequente (≤20d)", count: qCadencia.data.distribuicao.mto_frequente, color: "bg-green-500" },
-                    ].map(item => (
-                      <div key={item.label} className="flex items-center gap-2 py-1.5">
-                        <span className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
-                        <span className="text-sm flex-1">{item.label}</span>
-                        <span className="font-semibold text-sm">{item.count.toLocaleString()}</span>
-                        <span className="text-xs text-muted-foreground w-8 text-right">
-                          {qCadencia.data.total > 0 ? Math.round(item.count / qCadencia.data.total * 100) : 0}%
-                        </span>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">Top Clientes por Frequência</CardTitle></CardHeader>
-                  <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead><tr className="border-b border-border/50 text-muted-foreground">
-                          <th className="text-left p-2">Cliente</th>
-                          <th className="text-right p-2">Visitas</th>
-                          <th className="text-right p-2">Intervalo</th>
-                        </tr></thead>
-                        <tbody>
-                          {qCadencia.data.clientes.slice(0, 15).map(c => (
-                            <tr key={c.clienteId} className="border-b border-border/20 hover:bg-muted/20">
-                              <td className="p-2">{c.clienteNome || "—"}</td>
-                              <td className="p-2 text-right">{c.totalVisitas}</td>
-                              <td className="p-2 text-right">{c.diasMedios}d</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+            (() => {
+              const cd = qCadencia.data;
+              const totalBase = (cd.totalComCadencia ?? 0) + (cd.primeiraVez ?? 0);
+              const grupos = cd.grupos ?? { assiduo: 0, regular: 0, espacando: 0, em_risco: 0, perdido: 0 };
+              const totalCad = cd.totalComCadencia ?? 0;
+              const pct = (n: number) => totalCad > 0 ? Math.round(n / totalCad * 100) : 0;
+              return (
+              <>
+                {/* Linha de referência */}
+                <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                  <span className="font-medium text-foreground/80">REF: {dataFim}</span>
+                  <span>• Base 12m: {totalBase.toLocaleString()} clientes</span>
+                  <span>• Com cadência: {totalCad.toLocaleString()}</span>
+                  <span>• 1ª Vez: {(cd.primeiraVez ?? 0).toLocaleString()}</span>
+                  <span>• Média: {cd.mediaCadencia ?? cd.mediaGeral ?? 0}d</span>
+                  <span className="ml-auto text-xs">Thresholds: Assíduo ≤0.8 · Regular ≤1.2 · Espaçando ≤1.8 · Em Risco ≤2.5 · Perdido &gt;2.5</span>
+                </div>
+
+                {/* 6 KPIs */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  {[
+                    { label: "Assíduo", val: grupos.assiduo, sub: `${pct(grupos.assiduo)}% de ${totalCad.toLocaleString()}`, color: "text-emerald-400", icon: TrendingUp },
+                    { label: "Regular", val: grupos.regular, sub: `${pct(grupos.regular)}% de ${totalCad.toLocaleString()}`, color: "text-blue-400", icon: Activity },
+                    { label: "Espaçando", val: grupos.espacando, sub: `${pct(grupos.espacando)}% de ${totalCad.toLocaleString()}`, color: "text-yellow-400", icon: RefreshCw },
+                    { label: "1ª Vez", val: cd.primeiraVez ?? 0, sub: `${totalBase > 0 ? Math.round((cd.primeiraVez ?? 0) / totalBase * 100) : 0}% de ${totalBase.toLocaleString()}`, color: "text-purple-400", icon: UserCheck },
+                    { label: "Em Risco", val: grupos.em_risco, sub: `${pct(grupos.em_risco)}% de ${totalCad.toLocaleString()}`, color: "text-orange-400", icon: AlertTriangle },
+                    { label: "Perdido", val: grupos.perdido, sub: `${pct(grupos.perdido)}% de ${totalCad.toLocaleString()}`, color: "text-red-400", icon: UserX },
+                  ].map(k => (
+                    <Card key={k.label} className="bg-card/60 border-border/50">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-muted-foreground">{k.label}</span>
+                          <k.icon className={`w-3.5 h-3.5 ${k.color}`} />
+                        </div>
+                        <p className={`text-2xl font-bold ${k.color}`}>{k.val.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{k.sub}</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Gráfico de evolução por status */}
+                {cd.evolucao && cd.evolucao.length > 0 && (
+                  <Card className="bg-card/60 border-border/50">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-blue-400" />
+                        Evolução por status
+                        <span className="text-xs font-normal text-muted-foreground">{cd.evolucao.length} períodos · composição %</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <AreaChart data={cd.evolucao.map(e => ({
+                          ...e,
+                          assiduoPct: e.total > 0 ? Math.round(e.assiduo / e.total * 100) : 0,
+                          regularPct: e.total > 0 ? Math.round(e.regular / e.total * 100) : 0,
+                          espacandoPct: e.total > 0 ? Math.round(e.espacando / e.total * 100) : 0,
+                          emRiscoPct: e.total > 0 ? Math.round(e.em_risco / e.total * 100) : 0,
+                          perdidoPct: e.total > 0 ? Math.round(e.perdido / e.total * 100) : 0,
+                        }))} stackOffset="expand" margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                          <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#888" }} />
+                          <YAxis tickFormatter={v => `${Math.round(v * 100)}%`} tick={{ fontSize: 10, fill: "#888" }} />
+                          <Tooltip
+                            formatter={(val: number, name: string) => [`${Math.round(val * 100)}%`, name]}
+                            contentStyle={{ background: "#1a1a1a", border: "1px solid #333", fontSize: 11 }}
+                          />
+                          <Area type="monotone" dataKey="perdidoPct" name="Perdido" stackId="1" stroke="#ef4444" fill="#ef4444" fillOpacity={0.85} />
+                          <Area type="monotone" dataKey="emRiscoPct" name="Em Risco" stackId="1" stroke="#f97316" fill="#f97316" fillOpacity={0.7} />
+                          <Area type="monotone" dataKey="espacandoPct" name="Espaçando" stackId="1" stroke="#eab308" fill="#eab308" fillOpacity={0.6} />
+                          <Area type="monotone" dataKey="regularPct" name="Regular" stackId="1" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} />
+                          <Area type="monotone" dataKey="assiduoPct" name="Assíduo" stackId="1" stroke="#10b981" fill="#10b981" fillOpacity={0.7} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Análises automáticas */}
+                {cd.analises && cd.analises.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Activity className="w-4 h-4 text-blue-400" />
+                      <span className="text-sm font-semibold">Análises automáticas</span>
+                      <span className="text-xs text-muted-foreground">{cd.analises.length} insights</span>
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </>
+                    <div className="space-y-2">
+                      {cd.analises.map((a, i) => (
+                        <div key={i} className={`flex items-start gap-2 text-xs p-3 rounded-lg border ${
+                          a.tipo === "positivo" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300" :
+                          a.tipo === "negativo" ? "bg-red-500/10 border-red-500/30 text-red-300" :
+                          a.tipo === "alerta" ? "bg-orange-500/10 border-orange-500/30 text-orange-300" :
+                          "bg-muted/30 border-border/50 text-muted-foreground"
+                        }`}>
+                          <span className="mt-0.5">
+                            {a.tipo === "positivo" ? "↓" : a.tipo === "negativo" ? "↑" : a.tipo === "alerta" ? "⚠" : "•"}
+                          </span>
+                          <span>{a.texto}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+              );
+            })()
           ) : null}
         </TabsContent>
 
