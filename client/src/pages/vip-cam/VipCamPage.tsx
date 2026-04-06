@@ -1,17 +1,55 @@
 /**
  * VIP Cam — Dashboard principal com KPIs do dia e gráficos de tendência.
+ * Layout moderno no padrão da aba Reputação.
  */
 import { Link } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { useApp } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid, Legend } from 'recharts';
-import { Camera, Users, Smile, TrendingUp, Clock, Settings, Play } from 'lucide-react';
+import {
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Legend,
+  BarChart, Bar,
+} from 'recharts';
+import {
+  Camera, Users, Smile, TrendingUp, Settings, Play,
+  Frown, Meh, ThumbsUp, ThumbsDown, Minus, Clock,
+  BarChart3, AlertCircle,
+} from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 
-const COLORS = { satisfied: '#22c55e', neutral: '#f59e0b', unsatisfied: '#ef4444' };
+const COLORS = {
+  satisfied: '#22c55e',
+  neutral: '#f59e0b',
+  unsatisfied: '#ef4444',
+};
+
+function SatisfactionBadge({ level }: { level: string }) {
+  if (level === 'satisfied')
+    return <Badge className="bg-green-500/10 text-green-600 border-green-500/20 text-xs"><ThumbsUp className="w-3 h-3 mr-1" />Satisfeito</Badge>;
+  if (level === 'unsatisfied')
+    return <Badge className="bg-red-500/10 text-red-600 border-red-500/20 text-xs"><ThumbsDown className="w-3 h-3 mr-1" />Insatisfeito</Badge>;
+  return <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-xs"><Minus className="w-3 h-3 mr-1" />Neutro</Badge>;
+}
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-card border border-border rounded-lg p-3 shadow-lg text-xs space-y-1">
+      <p className="font-semibold text-foreground mb-1">{label}</p>
+      {payload.map((p: any) => (
+        <div key={p.name} className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full" style={{ background: p.color }} />
+          <span className="text-muted-foreground">{p.name}:</span>
+          <span className="font-medium">{p.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 export default function VipCamPage() {
   const { selectedUnit } = useApp();
@@ -35,27 +73,26 @@ export default function VipCamPage() {
     endDate: today,
   });
 
-  if (isLoading) {
-    return (
-      <div className="p-6 space-y-6">
-        <PageHeader title="VIP Cam" description="Análise de satisfação por reconhecimento facial" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-28" />)}
-        </div>
-      </div>
-    );
-  }
+  const { data: clientesData } = trpc.vipCam.getClientes.useQuery({
+    unitId,
+    limit: 5,
+    page: 1,
+  });
 
   const today_data = dashboard?.today;
   const satisfactionRate = today_data?.satisfactionRate ?? 0;
+  const totalDeteccoes = today_data?.totalDeteccoes ?? 0;
+  const satisfeitos = today_data?.satisfeitos ?? 0;
+  const neutros = today_data?.neutros ?? 0;
+  const insatisfeitos = today_data?.insatisfeitos ?? 0;
 
   const pieData = [
-    { name: 'Satisfeitos', value: today_data?.satisfeitos ?? 0, color: COLORS.satisfied },
-    { name: 'Neutros', value: today_data?.neutros ?? 0, color: COLORS.neutral },
-    { name: 'Insatisfeitos', value: today_data?.insatisfeitos ?? 0, color: COLORS.unsatisfied },
+    { name: 'Satisfeitos', value: satisfeitos, color: COLORS.satisfied },
+    { name: 'Neutros', value: neutros, color: COLORS.neutral },
+    { name: 'Insatisfeitos', value: insatisfeitos, color: COLORS.unsatisfied },
   ].filter(d => d.value > 0);
 
-  const barData = (metricas?.daily ?? []).map(d => ({
+  const areaData = (metricas?.daily ?? []).map(d => ({
     data: new Date(d.data as unknown as string).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
     Satisfeitos: d.satisfeitos ?? 0,
     Neutros: d.neutros ?? 0,
@@ -64,187 +101,285 @@ export default function VipCamPage() {
 
   const hourlyData = (dashboard?.hourlyToday ?? []).map(h => ({
     hora: `${h.hora}h`,
-    total: h.totalDeteccoes ?? 0,
-    satisfeitos: h.satisfeitos ?? 0,
+    Total: h.totalDeteccoes ?? 0,
+    Satisfeitos: h.satisfeitos ?? 0,
   }));
 
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <PageHeader
-          title="VIP Cam"
-          description="Análise de satisfação por reconhecimento facial"
-        />
-        <div className="flex gap-2">
-          <Button size="sm" asChild>
-            <Link href="/vip-cam/ao-vivo">
-              <Play className="h-4 w-4 mr-1" />Câmera ao Vivo
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/vip-cam/configuracoes">
-              <Settings className="h-4 w-4 mr-1" />Configurações
-            </Link>
-          </Button>
+  const kpis = [
+    {
+      label: 'Detecções Hoje',
+      value: totalDeteccoes,
+      icon: Camera,
+      color: 'text-blue-500',
+      bg: 'bg-blue-500/10',
+      sub: 'reconhecimentos faciais',
+    },
+    {
+      label: 'Taxa de Satisfação',
+      value: `${satisfactionRate}%`,
+      icon: satisfactionRate >= 70 ? Smile : satisfactionRate >= 40 ? Meh : Frown,
+      color: satisfactionRate >= 70 ? 'text-green-500' : satisfactionRate >= 40 ? 'text-amber-500' : 'text-red-500',
+      bg: satisfactionRate >= 70 ? 'bg-green-500/10' : satisfactionRate >= 40 ? 'bg-amber-500/10' : 'bg-red-500/10',
+      sub: 'clientes satisfeitos hoje',
+    },
+    {
+      label: 'Clientes Únicos',
+      value: dashboard?.totalClientes ?? 0,
+      icon: Users,
+      color: 'text-purple-500',
+      bg: 'bg-purple-500/10',
+      sub: 'na base de dados',
+    },
+    {
+      label: 'Novos Hoje',
+      value: today_data?.novosClientes ?? 0,
+      icon: TrendingUp,
+      color: 'text-amber-500',
+      bg: 'bg-amber-500/10',
+      sub: 'primeira visita registrada',
+    },
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="VIP Cam" description="Análise de satisfação por reconhecimento facial" />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)}
+        </div>
+        <div className="grid lg:grid-cols-3 gap-6">
+          <Skeleton className="lg:col-span-2 h-72" />
+          <Skeleton className="h-72" />
         </div>
       </div>
+    );
+  }
 
-      {/* KPIs do dia */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <Camera className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{today_data?.totalDeteccoes ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Detecções hoje</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <PageHeader
+        title="VIP Cam"
+        description="Análise de satisfação por reconhecimento facial"
+        actions={
+          <div className="flex gap-2">
+            <Button size="sm" asChild>
+              <Link href="/vip-cam/ao-vivo">
+                <Play className="h-4 w-4 mr-1.5" />Câmera ao Vivo
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/vip-cam/configuracoes">
+                <Settings className="h-4 w-4 mr-1.5" />Configurações
+              </Link>
+            </Button>
+          </div>
+        }
+      />
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                <Smile className="h-5 w-5 text-green-600" />
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpis.map((k) => (
+          <Card key={k.label}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-muted-foreground">{k.label}</span>
+                <div className={`p-1.5 rounded-lg ${k.bg}`}>
+                  <k.icon className={`w-4 h-4 ${k.color}`} />
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold" style={{ color: satisfactionRate >= 70 ? '#22c55e' : satisfactionRate >= 40 ? '#f59e0b' : '#ef4444' }}>
-                  {satisfactionRate}%
-                </p>
-                <p className="text-xs text-muted-foreground">Satisfação hoje</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                <Users className="h-5 w-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{dashboard?.totalClientes ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Clientes únicos</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{today_data?.novosClientes ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Novos hoje</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="text-2xl font-bold">{k.value}</div>
+              <div className="text-xs text-muted-foreground mt-1">{k.sub}</div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {/* Gráficos */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Distribuição de Satisfação — Hoje</CardTitle>
+      {/* Distribuição + Tendência 7 dias */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Tendência 7 dias — col-span-2 */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-primary" />
+              Tendência — Últimos 7 Dias
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            {pieData.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
-                <Camera className="h-10 w-10 opacity-30 mb-2" />
-                <p className="text-sm">Sem dados hoje</p>
-                <Button size="sm" className="mt-3" asChild>
+            {areaData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm gap-2">
+                <BarChart3 className="w-8 h-8 opacity-30" />
+                <p>Sem dados nos últimos 7 dias</p>
+                <Button size="sm" variant="outline" asChild>
                   <Link href="/vip-cam/ao-vivo">Iniciar câmera</Link>
                 </Button>
               </div>
             ) : (
-              <div className="flex items-center gap-4">
-                <ResponsiveContainer width="50%" height={160}>
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={areaData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gradSat" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={COLORS.satisfied} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={COLORS.satisfied} stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gradNeu" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={COLORS.neutral} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={COLORS.neutral} stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gradUns" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={COLORS.unsatisfied} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={COLORS.unsatisfied} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                  <XAxis dataKey="data" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+                  <Area type="monotone" dataKey="Satisfeitos" stroke={COLORS.satisfied} strokeWidth={2} fill="url(#gradSat)" dot={{ r: 3, fill: COLORS.satisfied }} />
+                  <Area type="monotone" dataKey="Neutros" stroke={COLORS.neutral} strokeWidth={2} fill="url(#gradNeu)" dot={{ r: 3, fill: COLORS.neutral }} />
+                  <Area type="monotone" dataKey="Insatisfeitos" stroke={COLORS.unsatisfied} strokeWidth={2} fill="url(#gradUns)" dot={{ r: 3, fill: COLORS.unsatisfied }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Distribuição de Satisfação — Hoje */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Distribuição — Hoje</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {pieData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm gap-2">
+                <Camera className="w-8 h-8 opacity-30" />
+                <p>Sem dados hoje</p>
+                <Button size="sm" variant="outline" asChild>
+                  <Link href="/vip-cam/ao-vivo">Iniciar câmera</Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <ResponsiveContainer width="100%" height={140}>
                   <PieChart>
-                    <Pie data={pieData} dataKey="value" cx="50%" cy="50%" outerRadius={60}>
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={38}
+                      outerRadius={60}
+                      paddingAngle={3}
+                    >
                       {pieData.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
+                        <Cell key={i} fill={entry.color} strokeWidth={0} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip content={<CustomTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="space-y-2">
-                  {pieData.map(d => (
-                    <div key={d.name} className="flex items-center gap-2 text-sm">
-                      <div className="h-3 w-3 rounded-full" style={{ backgroundColor: d.color }} />
-                      <span className="text-muted-foreground">{d.name}</span>
-                      <span className="font-semibold ml-auto">{d.value}</span>
-                    </div>
-                  ))}
+                  {[
+                    { label: 'Satisfeitos', value: satisfeitos, color: COLORS.satisfied, icon: ThumbsUp, textColor: 'text-green-600' },
+                    { label: 'Neutros', value: neutros, color: COLORS.neutral, icon: Minus, textColor: 'text-amber-600' },
+                    { label: 'Insatisfeitos', value: insatisfeitos, color: COLORS.unsatisfied, icon: ThumbsDown, textColor: 'text-red-600' },
+                  ].map((s) => {
+                    const total = totalDeteccoes || 1;
+                    const pct = Math.round((s.value / total) * 100);
+                    return (
+                      <div key={s.label}>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-1.5">
+                            <s.icon className={`w-3.5 h-3.5 ${s.textColor}`} />
+                            <span className="text-sm">{s.label}</span>
+                          </div>
+                          <span className="text-sm font-medium">{s.value} ({pct}%)</span>
+                        </div>
+                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: s.color }} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
+      </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Clock className="h-4 w-4" />
+      {/* Detecções por Hora + Clientes Recentes */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Detecções por hora */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock className="w-4 h-4 text-primary" />
               Detecções por Hora — Hoje
             </CardTitle>
           </CardHeader>
           <CardContent>
             {hourlyData.length === 0 ? (
-              <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
+              <div className="flex items-center justify-center h-40 text-muted-foreground text-sm gap-2">
+                <AlertCircle className="w-5 h-5 opacity-40" />
                 Sem dados horários hoje
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={hourlyData}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                  <XAxis dataKey="hora" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <Bar dataKey="total" fill="#6366f1" radius={[3, 3, 0, 0]} name="Total" />
-                  <Bar dataKey="satisfeitos" fill="#22c55e" radius={[3, 3, 0, 0]} name="Satisfeitos" />
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={hourlyData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                  <XAxis dataKey="hora" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="Total" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Satisfeitos" fill={COLORS.satisfied} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
           </CardContent>
         </Card>
-      </div>
 
-      {/* Tendência 7 dias */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Tendência — Últimos 7 Dias</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {barData.length === 0 ? (
-            <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
-              Sem dados nos últimos 7 dias
+        {/* Clientes recentes */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="w-4 h-4 text-primary" />
+              Clientes Recentes
+            </CardTitle>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/vip-cam/clientes">Ver todos →</Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {!clientesData?.clientes?.length ? (
+              <div className="flex flex-col items-center justify-center h-32 text-muted-foreground text-sm gap-2">
+                <Users className="w-7 h-7 opacity-30" />
+                <p>Nenhum cliente registrado</p>
+              </div>
+            ) : (
+              clientesData.clientes.slice(0, 5).map((c: any) => (
+                <div key={c.id} className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 text-sm font-semibold">
+                    {c.nomeCliente ? c.nomeCliente.charAt(0).toUpperCase() : '?'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{c.nomeCliente || 'Cliente desconhecido'}</p>
+                    <p className="text-xs text-muted-foreground">{c.totalVisitas ?? 0} visita{(c.totalVisitas ?? 0) !== 1 ? 's' : ''}</p>
+                  </div>
+                  <SatisfactionBadge level={c.satisfactionLevel ?? 'neutral'} />
+                </div>
+              ))
+            )}
+            <div className="pt-2 border-t">
+              <Button variant="outline" size="sm" className="w-full" asChild>
+                <Link href="/vip-cam/clientes">Ver base completa</Link>
+              </Button>
             </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={barData}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis dataKey="data" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="Satisfeitos" stackId="a" fill={COLORS.satisfied} />
-                <Bar dataKey="Neutros" stackId="a" fill={COLORS.neutral} />
-                <Bar dataKey="Insatisfeitos" stackId="a" fill={COLORS.unsatisfied} radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
