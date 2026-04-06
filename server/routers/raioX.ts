@@ -212,15 +212,24 @@ export const raioXRouter = router({
         }>(`
           SELECT
             COUNT(DISTINCT bs.cliente) as total_base_s,
-            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN bs.cliente END) as ativos,
-            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN bs.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 44 THEN bs.cliente END) as ativos,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 45 AND 60 THEN bs.cliente END) as em_risco,
             COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 90 THEN bs.cliente END) as perdidos,
-            COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 120 THEN bs.cliente END) as one_shot_urgente,
-            COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN bs.cliente END) as one_shot_risco,
-            COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) > 90 THEN bs.cliente END) as one_shot_perdido
+            COUNT(DISTINCT CASE WHEN vp.total_periodo = 1 AND DATEDIFF(NOW(), c.ultima_visita) >= 45 THEN bs.cliente END) as one_shot_urgente,
+            COUNT(DISTINCT CASE WHEN vp.total_periodo = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 45 AND 60 THEN bs.cliente END) as one_shot_risco,
+            COUNT(DISTINCT CASE WHEN vp.total_periodo = 1 AND DATEDIFF(NOW(), c.ultima_visita) > 90 THEN bs.cliente END) as one_shot_perdido
           FROM ${baseS12mSubquery} bs
           JOIN clientes c ON c.id = bs.cliente
-          LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bs.cliente
+          LEFT JOIN (
+            SELECT v.cliente, COUNT(*) as total_periodo
+            FROM vendas v
+            JOIN usuarios uu ON v.usuario = uu.id
+            WHERE ${unitCondV}
+              AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+              AND v.cliente IS NOT NULL AND v.cliente != 2
+              AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+            GROUP BY v.cliente
+          ) vp ON vp.cliente = bs.cliente
           WHERE c.status = 1 AND c.ultima_visita IS NOT NULL
         `),
         // ── Por Perfil: Base S 12m, classificada por visitas históricas ─────────
@@ -294,22 +303,25 @@ export const raioXRouter = router({
             AND DATE(c.data_criacao) >= '${dataInicio}' AND DATE(c.data_criacao) <= '${dataFim}'
         `),
         // ── Resgatados no período ────────────────────────────────────────────────
+        // Clientes que: existiam antes do período, tinham parado de vir (>90d antes do início),
+        // e voltaram a visitar no período selecionado
         queryExternal<{ total: number }>(`
           SELECT COUNT(DISTINCT cp.cliente) as total
           FROM ${clientesPeriodoSubquery} cp
           JOIN clientes c ON c.id = cp.cliente
+          JOIN (
+            SELECT v2.cliente, MAX(DATE(v2.data_criacao)) as ultima_antes
+            FROM vendas v2
+            JOIN usuarios uu2 ON v2.usuario = uu2.id
+            WHERE uu2.unidade IN (${extIds.length > 0 ? extIds.join(",") : "0"})
+              AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
+              AND v2.cliente IS NOT NULL AND v2.cliente != 2
+              AND DATE(v2.data_criacao) < '${dataInicio}'
+            GROUP BY v2.cliente
+          ) ult ON ult.cliente = cp.cliente
           WHERE c.status = 1
             AND DATE(c.data_criacao) < '${dataInicio}'
-            AND EXISTS (
-              SELECT 1 FROM vendas v2
-              JOIN usuarios uu2 ON v2.usuario = uu2.id
-              WHERE v2.cliente = cp.cliente
-                AND ${unitCondV.replace(/uu\./g, 'uu2.')}
-                AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
-                AND DATE(v2.data_criacao) < '${dataInicio}'
-                AND DATEDIFF('${dataInicio}', v2.data_criacao) > 90
-              ORDER BY v2.data_criacao DESC LIMIT 1
-            )
+            AND DATEDIFF('${dataInicio}', ult.ultima_antes) > 90
         `),
         // ── Cadência Individual: Base P 24m com >=3 visitas históricas ──────────
         // Classificação por ritmo de visita (dias desde última visita vs intervalo médio)
@@ -355,7 +367,7 @@ export const raioXRouter = router({
         queryExternal<{ mes: string; em_risco: number; total_mes: number }>(`
           SELECT
             DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
-            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN v.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 45 AND 60 THEN v.cliente END) as em_risco,
             COUNT(DISTINCT v.cliente) as total_mes
           FROM vendas v
           JOIN usuarios uu ON v.usuario = uu.id
@@ -371,8 +383,8 @@ export const raioXRouter = router({
           SELECT
             uu.nome as colaborador_nome,
             COUNT(DISTINCT v.cliente) as total,
-            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN v.cliente END) as saudavel,
-            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN v.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 44 THEN v.cliente END) as saudavel,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 45 AND 60 THEN v.cliente END) as em_risco,
             COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 90 THEN v.cliente END) as perdido
           FROM vendas v
           JOIN usuarios uu ON v.usuario = uu.id
