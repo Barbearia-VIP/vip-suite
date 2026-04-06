@@ -2043,7 +2043,8 @@ export async function getClientesChurnRisco(
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
-  const colabCond = colaboradorId ? `AND v.usuario = ${Number(colaboradorId)}` : "";
+  // Usa vp.colaborador (barbeiro que executou o serviço) em vez de v.usuario (caixa)
+  const colabCond = colaboradorId ? `AND vp.colaborador = ${Number(colaboradorId)}` : "";
   const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
   const rows = await queryExternal<{
     cliente_id: number;
@@ -2106,7 +2107,8 @@ export async function getClientesTopExpandido(
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
-  const colabCond = colaboradorId ? `AND v.usuario = ${Number(colaboradorId)}` : "";
+  // Usa vp.colaborador (barbeiro que executou o serviço) em vez de v.usuario (caixa)
+  const colabCond = colaboradorId ? `AND vp.colaborador = ${Number(colaboradorId)}` : "";
   const searchCond = search ? `AND COALESCE(c.nome, '') LIKE ?` : "";
   const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
   const params: (string | number)[] = [dataInicio, dataFimExcl];
@@ -2165,23 +2167,25 @@ export async function getClientesTopExpandido(
 }
 
 /** Lista de colaboradores com atendimentos no período (para filtro do painel de clientes) */
+/** Usa vp.colaborador (barbeiro que executou o serviço) em vez de v.usuario (caixa) */
 export async function getListaColaboradoresClientes(extIds: number[], dataInicio: string, dataFim: string) {
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
   const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
   const rows = await queryExternal<{ id: number; nome: string; total: number }>(`
-    SELECT u.id, u.nome, COUNT(DISTINCT v.id) as total
+    SELECT colab.id, colab.nome, COUNT(DISTINCT v.id) as total
     FROM vendas v
-    JOIN usuarios u ON v.usuario = u.id
+    JOIN vendas_produtos vp ON vp.venda = v.id
     JOIN usuarios uu ON v.usuario = uu.id
+    JOIN usuarios colab ON vp.colaborador = colab.id
     WHERE ${unitCond}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
       AND v.status != 0
       AND v.cliente IS NOT NULL
-    GROUP BY u.id, u.nome
+    GROUP BY colab.id, colab.nome
     ORDER BY total DESC
   `, [dataInicio, dataFimExcl]);
   return rows.map(r => ({ id: Number(r.id), nome: String(r.nome), total: Number(r.total) }));
