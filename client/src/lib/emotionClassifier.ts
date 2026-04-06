@@ -131,14 +131,11 @@ export function findMatchingClient(
 }
 
 /**
- * Aplica a regra de prioridade por PROPORÇÃO com desempate (Nível 2).
- *
- * Lógica:
- *   1. Se insatisfeitos >= 25% do total → unsatisfied
- *   2. Se satisfeitos >= 15% do total (e insatisfeitos < 25%) → satisfied
- *   3. Desempate: se insatisfeitos = 0 e satisfeitos >= 1 → satisfied
- *      (cliente sem nenhuma captura negativa deve ser Satisfeito, não Neutro)
- *   4. Caso contrário → neutral
+ * Regra de status final:
+ *   1. Se houver PELO MENOS 1 captura satisfeita → satisfied
+ *      (uma reação positiva real prevalece sobre capturas neutras)
+ *   2. Se insatisfeitos >= 25% do total (e nenhuma satisfeita) → unsatisfied
+ *   3. Caso contrário → neutral
  */
 export function calcFinalSatisfactionLevel(
   timeline: Array<{ satisfactionLevel: SatisfactionLevel }>
@@ -149,17 +146,12 @@ export function calcFinalSatisfactionLevel(
   const satisfied = timeline.filter(t => t.satisfactionLevel === 'satisfied').length;
   const unsatisfied = timeline.filter(t => t.satisfactionLevel === 'unsatisfied').length;
 
+  // Pelo menos 1 captura satisfeita → Satisfeito (reação positiva real prevalece)
+  if (satisfied >= 1) return 'satisfied';
+
+  // Sem nenhuma satisfeita: insatisfeito se >= 25% das capturas forem negativas
   const pctUnsatisfied = unsatisfied / total;
-  const pctSatisfied = satisfied / total;
-
-  // Insatisfeito prevalece se >= 25% das capturas forem negativas
   if (pctUnsatisfied >= 0.25) return 'unsatisfied';
-
-  // Satisfeito se >= 15% das capturas forem positivas
-  if (pctSatisfied >= 0.15) return 'satisfied';
-
-  // Desempate: sem nenhuma captura negativa e pelo menos 1 positiva → satisfeito
-  if (unsatisfied === 0 && satisfied >= 1) return 'satisfied';
 
   // Neutro em todos os outros casos
   return 'neutral';

@@ -66,14 +66,11 @@ function calcFinalSatisfactionLevel(
   const pctUnsatisfied = unsatisfied / total;
   const pctSatisfied = satisfied / total;
 
-  // Insatisfeito prevalece se >= 25% das capturas forem negativas
+  // Pelo menos 1 captura satisfeita → Satisfeito (reação positiva real prevalece)
+  if (satisfied >= 1) return 'satisfied';
+
+  // Sem nenhuma satisfeita: insatisfeito se >= 25% das capturas forem negativas
   if (pctUnsatisfied >= 0.25) return 'unsatisfied';
-
-  // Satisfeito se >= 15% das capturas forem positivas (e insatisfeitos < 25%)
-  if (pctSatisfied >= 0.15) return 'satisfied';
-
-  // Desempate: sem nenhuma captura negativa e pelo menos 1 positiva → satisfeito
-  if (unsatisfied === 0 && satisfied >= 1) return 'satisfied';
 
   // Neutro em todos os outros casos
   return 'neutral';
