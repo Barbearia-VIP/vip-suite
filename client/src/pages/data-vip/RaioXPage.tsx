@@ -1520,9 +1520,12 @@ export default function RaioXPage() {
 
               {/* Lista de clientes expansível */}
               <div className="rounded-lg border border-border/50 bg-card/60 overflow-hidden">
-                <button
-                  className="w-full flex items-center justify-between px-4 py-3 text-sm hover:bg-muted/20 transition-colors"
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className="w-full flex items-center justify-between px-4 py-3 text-sm hover:bg-muted/20 transition-colors cursor-pointer"
                   onClick={() => setChurnListaAberta(v => !v)}
+                  onKeyDown={(e) => e.key === 'Enter' && setChurnListaAberta(v => !v)}
                 >
                   <div className="flex items-center gap-2">
                     <span className="font-medium">Lista de clientes</span>
@@ -1539,7 +1542,7 @@ export default function RaioXPage() {
                     </button>
                     {churnListaAberta ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </div>
-                </button>
+                </div>
                 {churnListaAberta && (
                   <div className="border-t border-border/50">
                     {/* Tabs de tipo */}
