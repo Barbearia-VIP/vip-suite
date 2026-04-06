@@ -993,20 +993,6 @@ export default function DataVipDashboard() {
         }
       </div>
 
-      {/* Acesso rápido */}
-      <div>
-        <h2 className="text-sm font-medium text-muted-foreground mb-3">Acesso Rápido</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-          {quickLinks.map(l => (
-            <Link key={l.href} href={l.href}>
-              <div className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border hover:bg-muted/50 cursor-pointer transition-colors text-center">
-                <l.icon className={`w-5 h-5 ${l.color}`} />
-                <span className="text-xs font-medium leading-tight">{l.label}</span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
