@@ -2393,12 +2393,12 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
-  const unitCond2 = extIds.length === 0 ? "1=1"
+  const unitCondV2 = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu2.unidade = ${extIds[0]}`
     : `uu2.unidade IN (${extIds.join(",")})`;
   const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
 
-  // Base ativa: clientes únicos no período
+  // Base ativa: clientes únicos que visitaram no período selecionado
   const rowsBase = await queryExternal<{ total: number; ticket_medio: number }>(`
     SELECT COUNT(DISTINCT v.cliente) as total,
            COALESCE(SUM(v.valor_total) / COUNT(DISTINCT v.id), 0) as ticket_medio
@@ -2411,11 +2411,11 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
       AND v.status != 0
       AND v.cliente IS NOT NULL
   `, [dataInicio, dataFimExcl]);
-
   const baseAtiva = Number(rowsBase[0]?.total ?? 0);
   const ticketMedio = Number(rowsBase[0]?.ticket_medio ?? 0);
 
-  // Perdidos: clientes da base ativa que não voltaram nos últimos janelaDias
+  // Perdidos: clientes da base ativa cuja última visita foi há mais de janelaDias antes do FIM do período
+  // Lógica correta: DATEDIFF(dataFim, ultima_visita) > janelaDias
   const rowsPerdidos = await queryExternal<{ total: number }>(`
     SELECT COUNT(*) as total
     FROM (
@@ -2429,38 +2429,38 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
         AND v.status != 0
         AND v.cliente IS NOT NULL
       GROUP BY v.cliente
-      HAVING DATEDIFF(NOW(), MAX(v.data_criacao)) > ?
+      HAVING DATEDIFF(?, MAX(v.data_criacao)) > ?
     ) sub
-  `, [dataInicio, dataFimExcl, janelaDias]);
-
+  `, [dataInicio, dataFimExcl, dataFimExcl, janelaDias]);
   const perdidos = Number(rowsPerdidos[0]?.total ?? 0);
 
   // Resgatados: clientes que voltaram no período após ausência > janelaDias
   const rowsResgatados = await queryExternal<{ total: number; tempo_medio: number }>(`
-    SELECT COUNT(*) as total,
-           COALESCE(AVG(dias_ausencia), 0) as tempo_medio
+    SELECT COUNT(DISTINCT sub.cliente) as total,
+           COALESCE(AVG(sub.dias_ausencia), 0) as tempo_medio
     FROM (
       SELECT v.cliente,
-             DATEDIFF(MIN(v.data_criacao), MAX(v2.data_criacao)) as dias_ausencia
+             DATEDIFF(v.data_criacao, prev.ultima_antes) as dias_ausencia
       FROM vendas v
       JOIN usuarios uu ON v.usuario = uu.id
-      JOIN vendas v2 ON v2.cliente = v.cliente
-      JOIN usuarios uu2 ON v2.usuario = uu2.id
+      JOIN (
+        SELECT v2.cliente, MAX(v2.data_criacao) as ultima_antes
+        FROM vendas v2
+        JOIN usuarios uu2 ON v2.usuario = uu2.id
+        WHERE ${unitCondV2}
+          AND v2.data_criacao < ?
+          AND v2.comanda_temp = 0
+          AND v2.status != 0
+        GROUP BY v2.cliente
+      ) prev ON prev.cliente = v.cliente
       WHERE ${unitCond}
         AND v.data_criacao >= ?
         AND v.data_criacao < ?
         AND v.comanda_temp = 0
         AND v.status != 0
-        AND v.cliente IS NOT NULL
-        AND ${unitCond2}
-        AND v2.data_criacao < ?
-        AND v2.comanda_temp = 0
-        AND v2.status != 0
-      GROUP BY v.cliente
-      HAVING DATEDIFF(MIN(v.data_criacao), MAX(v2.data_criacao)) > ?
+        AND DATEDIFF(v.data_criacao, prev.ultima_antes) > ?
     ) sub
-  `, [dataInicio, dataFimExcl, dataInicio, janelaDias]);
-
+  `, [dataInicio, dataInicio, dataFimExcl, janelaDias]);
   const resgatados = Number(rowsResgatados[0]?.total ?? 0);
   const tempoMedioResgate = Number(rowsResgatados[0]?.tempo_medio ?? 0);
 
@@ -2538,9 +2538,9 @@ export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, 
           AND v.status != 0
           AND v.cliente IS NOT NULL
         GROUP BY v.cliente
-        HAVING DATEDIFF(NOW(), MAX(v.data_criacao)) > ?
+        HAVING DATEDIFF(?, MAX(v.data_criacao)) > ?
       ) sub
-    `, [colabId, dataInicio, dataFimExcl, janelaDias]);
+    `, [colabId, dataInicio, dataFimExcl, dataFimExcl, janelaDias]);
 
     // Exclusivos: clientes atendidos SOMENTE por este barbeiro no período
     const rowsExcl = await queryExternal<{ total: number }>(`
