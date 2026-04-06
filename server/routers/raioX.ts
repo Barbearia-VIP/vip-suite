@@ -9,8 +9,8 @@
  *   (NÃO tem coluna visitas — calcular via JOIN com vendas)
  *
  * Definições:
- * - Ativo (≤45d): última visita ≤ 45 dias
- * - Em risco (46-90d): última visita entre 46 e 90 dias
+ * - Ativo (≤60d): última visita ≤ 60 dias
+ * - Em risco (61-90d): última visita entre 61 e 90 dias
  * - Perdido (>90d): última visita > 90 dias
  * - One-Shot: total de vendas = 1
  */
@@ -84,7 +84,7 @@ async function resolveExternalIds(
 
 // ─── Helpers de classificação ────────────────────────────────────────────────
 function classificarStatus(dias: number): "ativo" | "em_risco" | "perdido" {
-  if (dias <= 45) return "ativo";
+  if (dias <= 60) return "ativo";
   if (dias <= 90) return "em_risco";
   return "perdido";
 }
@@ -219,15 +219,15 @@ export const raioXRouter = router({
           one_shot_perdido: number;
         }>(`
           -- Saúde da Base 12m:
-          -- Ativos: ≤45d desde última visita
-          -- Em risco: 46-90d
+          -- Ativos: ≤60d desde última visita
+          -- Em risco: 61-90d
           -- Perdidos: >90d (inclui one-shots perdidos)
           -- One-shot risco: 1 visita histórica + 46-90d sem retornar
           -- One-shot perdido: 1 visita histórica + >90d sem retornar
           SELECT
             COUNT(DISTINCT bs.cliente) as total_base_s,
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) <= 45 THEN bs.cliente END) as ativos,
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 46 AND 90 THEN bs.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) <= 60 THEN bs.cliente END) as ativos,
+            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 61 AND 90 THEN bs.cliente END) as em_risco,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) > 90 THEN bs.cliente END) as perdidos,
             COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF('${dataFim}', bs.ultima_venda) >= 46 THEN bs.cliente END) as one_shot_urgente,
             COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 46 AND 90 THEN bs.cliente END) as one_shot_risco,
@@ -268,12 +268,12 @@ export const raioXRouter = router({
           WHERE c.status = 1 AND vh.total_visitas >= 3
         `),
         // ── Status 12m: Base S 12m por faixas de dias (usando ultima_venda) ───────────────────────
-        // ≤45d saudavel, 46-90d em risco, >90d perdido
+        // ≤60d saudavel, 61-90d em risco, >90d perdido
         queryExternal<{ perdido: number; em_risco: number; saudavel: number; total: number }>(`
           SELECT
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) > 90 THEN bs.cliente END) as perdido,
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 46 AND 90 THEN bs.cliente END) as em_risco,
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) <= 45 THEN bs.cliente END) as saudavel,
+            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 61 AND 90 THEN bs.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) <= 60 THEN bs.cliente END) as saudavel,
             COUNT(DISTINCT bs.cliente) as total
           FROM ${baseS12mSubquery} bs
           JOIN clientes c ON c.id = bs.cliente
@@ -283,7 +283,7 @@ export const raioXRouter = router({
         queryExternal<{ total: number; aguardando: number; em_risco: number; perdido: number }>(`
           SELECT
             COUNT(DISTINCT bs.cliente) as total,
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) <= 45 THEN bs.cliente END) as aguardando,
+            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) <= 60 THEN bs.cliente END) as aguardando,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 46 AND 90 THEN bs.cliente END) as em_risco,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) > 90 THEN bs.cliente END) as perdido
           FROM ${baseS12mSubquery} bs
@@ -429,7 +429,7 @@ export const raioXRouter = router({
         queryExternal<{ mes: string; em_risco: number; total_mes: number }>(`
           SELECT
             DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv3.ultima_venda) BETWEEN 46 AND 90 THEN v.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv3.ultima_venda) BETWEEN 61 AND 90 THEN v.cliente END) as em_risco,
             COUNT(DISTINCT v.cliente) as total_mes
           FROM vendas v
           JOIN usuarios uu ON v.usuario = uu.id
@@ -445,8 +445,8 @@ export const raioXRouter = router({
           SELECT
             uu.nome as colaborador_nome,
             COUNT(DISTINCT v.cliente) as total,
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv4.ultima_venda) <= 45 THEN v.cliente END) as saudavel,
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv4.ultima_venda) BETWEEN 46 AND 90 THEN v.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv4.ultima_venda) <= 60 THEN v.cliente END) as saudavel,
+            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv4.ultima_venda) BETWEEN 61 AND 90 THEN v.cliente END) as em_risco,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv4.ultima_venda) > 90 THEN v.cliente END) as perdido
           FROM vendas v
           JOIN usuarios uu ON v.usuario = uu.id
@@ -595,7 +595,7 @@ export const raioXRouter = router({
           ref: dataFim,
           baseUsada: `${dataInicio12m} – ${dataFim}`,
           emRisco: {
-            regra: "46d <= dias_sem_vir <= 90d",
+            regra: "61d <= dias_sem_vir <= 90d",
             usadaEm: "Em Risco - Score de saude (dim. risco) - Distribuicoes",
           },
           perdidos: {
@@ -629,14 +629,14 @@ export const raioXRouter = router({
               descricao: "Classificacao baseada apenas em recencia (dias desde ultima visita).",
               universo: `${dataInicio12m} – ${dataFim}`,
               total: Number(s12.total),
-              regras: "Saudavel: <=45d | Em Risco: 46-90d | Perdido: >90d",
+              regras: "Saudavel: <=60d | Em Risco: 61-90d | Perdido: >90d",
               nota: "\"Perdido\" aqui e por recencia, nao definitivo. Configure em Config -> Secao 5.",
             },
             oneShot: {
               descricao: "One-shot = cliente com exatamente 1 visita historica. Sem cadencia calculavel - monitorados por recencia.",
               universo: `${dataInicio12m} – ${dataFim}`,
               total: Number(os.total),
-              regras: "Aguardando: visitas=1 E dias_sem_vir <= 45d | Em risco: visitas=1 E 46d <= dias <= 90d | Perdido: visitas=1 E dias_sem_vir > 90d",
+              regras: "Aguardando: visitas=1 E dias_sem_vir <= 60d | Em risco: visitas=1 E 46d <= dias <= 90d | Perdido: visitas=1 E dias_sem_vir > 90d",
               nota: "Em risco e Perdido tambem somam nos KPIs gerais.",
             },
           },
@@ -882,8 +882,8 @@ export const raioXRouter = router({
         }>(`
           SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 45 THEN 1 ELSE 0 END) as ativos,
-            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 46 AND 90 THEN 1 ELSE 0 END) as em_risco,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN 1 ELSE 0 END) as ativos,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as em_risco,
             SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 90 THEN 1 ELSE 0 END) as perdidos,
             0 as one_shots,
             AVG(c.consumo) as ticket_medio
@@ -1262,11 +1262,11 @@ export const raioXRouter = router({
       } else if (tipo === "perdidos_recentes") {
         extraCond = " AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 91 AND 180";
         } else if (tipo === "em_risco") {
-        extraCond = " AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 46 AND 90";
+        extraCond = " AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90";
       } else if (tipo === "sem_telefone") {
         extraCond = " AND (c.telefone IS NULL OR c.telefone = '')";
       } else {
-        extraCond = " AND ((vpc.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 31 AND 90) OR DATEDIFF(NOW(), c.ultima_visita) BETWEEN 46 AND 180)";
+        extraCond = " AND ((vpc.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 31 AND 90) OR DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 180)";
       }
 
       const rows = await queryExternal<{

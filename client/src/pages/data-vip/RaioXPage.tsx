@@ -344,7 +344,7 @@ export default function RaioXPage() {
                 </div>
                 <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                   <div className="bg-card/60 border border-border/50 rounded-lg p-3">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Ativos (≤45d)</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Ativos (≤60d)</p>
                     <p className="text-2xl font-bold text-green-400 mt-1">{v.sinais.ativos.toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">{v.sinais.pctAtivos}% da base</p>
                   </div>
@@ -400,7 +400,7 @@ export default function RaioXPage() {
                             Em risco
                             <InfoPopover
                               title="Em risco"
-                              descricao="Última visita entre 46 e 90 dias antes da REF. Zona de alerta — ainda recuperáveis."
+                              descricao="Última visita entre 61 e 90 dias antes da REF. Zona de alerta — ainda recuperáveis."
                               periodoFiltrado={v.contexto?.periodoFiltrado}
                               ref={v.contexto?.ref}
                               baseUsada={v.contexto?.baseUsada}
@@ -950,7 +950,7 @@ export default function RaioXPage() {
                   <CardContent>
                     {[
                       { label: "Perdido (>90d)", count: qCadencia.data.distribuicao.perdido, color: "bg-red-500" },
-                      { label: "Em risco (46-90d)", count: qCadencia.data.distribuicao.em_risco, color: "bg-yellow-500" },
+                      { label: "Em risco (61-90d)", count: qCadencia.data.distribuicao.em_risco, color: "bg-yellow-500" },
                       { label: "Espaçado (46-60d)", count: qCadencia.data.distribuicao.espacado, color: "bg-orange-500" },
                       { label: "Regular (21-45d)", count: qCadencia.data.distribuicao.regular, color: "bg-blue-500" },
                       { label: "Mto frequente (≤20d)", count: qCadencia.data.distribuicao.mto_frequente, color: "bg-green-500" },
@@ -1016,7 +1016,7 @@ export default function RaioXPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <KpiCard label="Taxa de Churn" value={`${qChurn.data.resumo.taxaChurn}%`} icon={TrendingDown} color="text-red-400" />
                 <KpiCard label="Perdidos" value={qChurn.data.resumo.perdidos.toLocaleString()} icon={UserX} color="text-red-400" sub=">90 dias" />
-                <KpiCard label="Em risco" value={qChurn.data.resumo.emRisco.toLocaleString()} icon={AlertTriangle} color="text-yellow-400" sub="46-90 dias" />
+                <KpiCard label="Em risco" value={qChurn.data.resumo.emRisco.toLocaleString()} icon={AlertTriangle} color="text-yellow-400" sub="61-90 dias" />
                 <KpiCard label="Receita em risco" value={fmtMoeda(qChurn.data.resumo.receitaPerdida)} icon={TrendingDown} color="text-orange-400" />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

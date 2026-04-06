@@ -865,3 +865,14 @@
 - [x] Validado: universo 1.896 (ref: 2.576). Divergencia estrutural documentada no InfoPopover.
 - [x] Backend: aplicar configuração final na query de Cadência Individual (universo 24m, >=2 hist, cadência hist completa)
 - [x] Frontend: atualizar labels dos 6 status e InfoPopover com lógica documentada
+
+## Correção Sinais da Base (Abr/2026)
+- [ ] Investigar divergência: Ativos mostrando "60D" em vez de "45d", Perdidos divergindo
+- [ ] Corrigir query de Ativos para usar <=45d (não <=60d)
+- [ ] Corrigir labels no frontend (Ativos ≤45d, não 60d)
+- [ ] Validar números contra referência
+
+## Ajuste Limiar Ativos 60d (Abr/2026)
+- [ ] Validar que limiar <=60d para Ativos produz 767 (ref) vs 557 atual
+- [ ] Backend: ajustar limiar Ativos de <=45d para <=60d em raioX.ts (sinais, status12m, saude barbeiro)
+- [ ] Frontend: atualizar label "Ativos (<=45d)" para "Ativos (<=60d)" e InfoPopovers
