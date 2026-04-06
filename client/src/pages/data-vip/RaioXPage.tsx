@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import {
   Users, UserCheck, UserX, AlertTriangle, TrendingDown, TrendingUp,
   Zap, Activity, Target, Scissors, Search, RefreshCw, Info, ChevronRight, Calendar,
-  Wifi, WifiOff, Download
+  Wifi, WifiOff, Download, RotateCcw, ChevronDown, ChevronUp
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -259,6 +259,34 @@ export default function RaioXPage() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const exportChurnCSV = (tipo: "perdidos" | "emRisco" | "resgatados", e: MouseEvent) => {
+    e.stopPropagation();
+    const data = qChurn.data;
+    if (!data) return;
+    const lista = tipo === "perdidos" ? data.perdidos : tipo === "emRisco" ? data.emRisco : data.resgatados;
+    if (!lista || lista.length === 0) return;
+    const labels: Record<string, string> = { perdidos: "Perdidos", emRisco: "Em_Risco_45_90d", resgatados: "Resgatados" };
+    const header = ["Nome", "Telefone", "Última Visita", "Dias", "Total Visitas"].join(";");
+    const rows = lista.map(c => [
+      `"${(c.clienteNome || "").replace(/"/g, "'")}"`,
+      c.telefone || "",
+      c.ultimaVenda ? new Date(c.ultimaVenda instanceof Date ? c.ultimaVenda : c.ultimaVenda + "T12:00:00").toLocaleDateString("pt-BR") : "",
+      c.dias,
+      c.totalVisitas,
+    ].join(";")).join("\n");
+    const csv = "\uFEFF" + header + "\n" + rows;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Churn_${labels[tipo]}_${dataFim}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const [churnListaAberta, setChurnListaAberta] = useState(false);
+  const [churnListaTipo, setChurnListaTipo] = useState<"perdidos" | "emRisco" | "resgatados">("perdidos");
 
   const scoreBase = v ? Math.round(
     (v.sinais.ativos / Math.max(v.sinais.totalBase, 1)) * 100
@@ -1450,52 +1478,127 @@ export default function RaioXPage() {
           {churnViewMode === "geral" && (
             <>{qChurn.isLoading ? <Skeleton className="h-40" /> : qChurn.data ? (
             <>
+              {/* 4 KPIs principais */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <KpiCard label="Taxa de Churn" value={`${qChurn.data.resumo.taxaChurn}%`} icon={TrendingDown} color="text-red-400" />
-                <KpiCard label="Perdidos" value={qChurn.data.resumo.perdidos.toLocaleString()} icon={UserX} color="text-red-400" sub=">90 dias" />
-                <KpiCard label="Em risco" value={qChurn.data.resumo.emRisco.toLocaleString()} icon={AlertTriangle} color="text-yellow-400" sub="61-90 dias" />
-                <KpiCard label="Receita em risco" value={fmtMoeda(qChurn.data.resumo.receitaPerdida)} icon={TrendingDown} color="text-orange-400" />
+                {/* Churn Geral */}
+                <div className="rounded-lg border border-border/50 bg-card/60 p-4">
+                  <p className="text-xs text-muted-foreground mb-1">Churn geral</p>
+                  <p className="text-3xl font-bold text-red-400">{qChurn.data.kpis.churnGeralPct}%</p>
+                  <p className="text-xs text-muted-foreground mt-1">{qChurn.data.kpis.churnGeral.toLocaleString()} perdidos de {qChurn.data.resumo.total.toLocaleString()}</p>
+                </div>
+                {/* Churn Fidelizados */}
+                <div className="rounded-lg border border-border/50 bg-card/60 p-4">
+                  <p className="text-xs text-muted-foreground mb-1">Churn fidelizados</p>
+                  <p className="text-3xl font-bold text-orange-400">{qChurn.data.kpis.churnFidelizadosPct}%</p>
+                  <p className="text-xs text-muted-foreground mt-1">{qChurn.data.kpis.churnFidelizados.toLocaleString()} de {qChurn.data.kpis.baseFidelizados.toLocaleString()} (≥3 vis.)</p>
+                </div>
+                {/* Churn One-Shot */}
+                <div className="rounded-lg border border-border/50 bg-card/60 p-4">
+                  <p className="text-xs text-muted-foreground mb-1">Churn one-shot</p>
+                  <p className="text-3xl font-bold text-yellow-400">{qChurn.data.kpis.churnOneShotPct}%</p>
+                  <p className="text-xs text-muted-foreground mt-1">{qChurn.data.kpis.churnOneShot.toLocaleString()} de {qChurn.data.kpis.baseOneShot.toLocaleString()} (1 vis.)</p>
+                </div>
+                {/* Resgatados */}
+                <div className="rounded-lg border border-border/50 bg-card/60 p-4">
+                  <p className="text-xs text-muted-foreground mb-1">Resgatados</p>
+                  <p className="text-3xl font-bold text-green-400">{qChurn.data.kpis.resgatados.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground mt-1">voltaram após ≥90d sem vir</p>
+                </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">Última visita por mês</CardTitle></CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={180}>
-                      <BarChart data={qChurn.data.churnMensal} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                        <XAxis dataKey="mes" tickFormatter={fmtMes} tick={{ fontSize: 10, fill: "#888" }} />
-                        <YAxis tick={{ fontSize: 10, fill: "#888" }} />
-                        <Tooltip formatter={(val: number) => [val, "Clientes"]} labelFormatter={fmtMes} contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
-                        <Bar dataKey="total" fill={CORES.vermelho} radius={[3, 3, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">Perdidos Recentes</CardTitle></CardHeader>
-                  <CardContent className="p-0">
+
+              {/* Alerta: clientes em risco 45-90d */}
+              {qChurn.data.kpis.emRisco45_90 > 0 && (
+                <div className="flex items-center gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-4 py-2.5 text-sm">
+                  <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0" />
+                  <span className="text-yellow-300 font-medium">{qChurn.data.kpis.emRisco45_90.toLocaleString()} clientes em risco (45–90d sem vir)</span>
+                  <button
+                    className="ml-auto text-xs text-yellow-400 underline hover:no-underline"
+                    onClick={() => { setChurnListaTipo("emRisco"); setChurnListaAberta(true); }}
+                  >Ver lista</button>
+                </div>
+              )}
+
+              {/* Lista de clientes expansível */}
+              <div className="rounded-lg border border-border/50 bg-card/60 overflow-hidden">
+                <button
+                  className="w-full flex items-center justify-between px-4 py-3 text-sm hover:bg-muted/20 transition-colors"
+                  onClick={() => setChurnListaAberta(v => !v)}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Lista de clientes</span>
+                    <span className="text-xs text-muted-foreground">
+                      Perdidos ({qChurn.data.kpis.churnGeral.toLocaleString()}) · Em risco ({qChurn.data.kpis.emRisco45_90.toLocaleString()}) · Resgatados ({qChurn.data.kpis.resgatados.toLocaleString()})
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-border/50 rounded px-2 py-1"
+                      onClick={(e) => exportChurnCSV(churnListaTipo, e)}
+                    >
+                      <Download className="w-3 h-3" /> CSV
+                    </button>
+                    {churnListaAberta ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </div>
+                </button>
+                {churnListaAberta && (
+                  <div className="border-t border-border/50">
+                    {/* Tabs de tipo */}
+                    <div className="flex gap-1 p-3 pb-0">
+                      {(["perdidos", "emRisco", "resgatados"] as const).map(tipo => (
+                        <button
+                          key={tipo}
+                          onClick={() => setChurnListaTipo(tipo)}
+                          className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                            churnListaTipo === tipo
+                              ? tipo === "perdidos" ? "bg-red-500/20 border-red-500/50 text-red-300"
+                              : tipo === "emRisco" ? "bg-yellow-500/20 border-yellow-500/50 text-yellow-300"
+                              : "bg-green-500/20 border-green-500/50 text-green-300"
+                              : "border-border/50 text-muted-foreground hover:bg-muted/20"
+                          }`}
+                        >
+                          {tipo === "perdidos" ? `Perdidos (${qChurn.data.kpis.churnGeral.toLocaleString()})` : tipo === "emRisco" ? `Em risco (${qChurn.data.kpis.emRisco45_90.toLocaleString()})` : `Resgatados (${qChurn.data.kpis.resgatados.toLocaleString()})`}
+                        </button>
+                      ))}
+                    </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead><tr className="border-b border-border/50 text-muted-foreground">
-                          <th className="text-left p-2">Cliente</th>
+                          <th className="text-left p-2 pl-4">Cliente</th>
                           <th className="text-left p-2">Telefone</th>
                           <th className="text-right p-2">Última Visita</th>
                           <th className="text-right p-2">Dias</th>
+                          <th className="text-right p-2 pr-4">Visitas</th>
                         </tr></thead>
                         <tbody>
-                          {qChurn.data.perdidosRecentes.slice(0, 20).map(c => (
+                          {(churnListaTipo === "perdidos" ? qChurn.data.perdidos : churnListaTipo === "emRisco" ? qChurn.data.emRisco : qChurn.data.resgatados)
+                            .slice(0, 100).map(c => (
                             <tr key={c.clienteId} className="border-b border-border/20 hover:bg-muted/20">
-                              <td className="p-2">{c.clienteNome || "—"}</td>
+                              <td className="p-2 pl-4 font-medium">{c.clienteNome || "—"}</td>
                               <td className="p-2 text-muted-foreground">{c.telefone || "—"}</td>
                               <td className="p-2 text-right">{fmtDate(c.ultimaVenda)}</td>
-                              <td className="p-2 text-right text-red-400">{c.dias}d</td>
+                              <td className={`p-2 text-right font-medium ${
+                                churnListaTipo === "perdidos" ? "text-red-400" : churnListaTipo === "emRisco" ? "text-yellow-400" : "text-green-400"
+                              }`}>{c.dias}d</td>
+                              <td className="p-2 text-right pr-4 text-muted-foreground">{c.totalVisitas}x</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                )}
+              </div>
+
+              {/* Como interpretar */}
+              <div className="rounded-lg border border-border/50 bg-card/40 p-4 text-xs space-y-2">
+                <div className="flex items-start gap-2">
+                  <Info className="w-4 h-4 text-yellow-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1.5">
+                    <p><strong>Como interpretar:</strong> Churn acima de <strong>20%</strong> indica necessidade urgente de ações de retenção. Churn de fidelizados acima de <strong>15%</strong> é crítico.</p>
+                    <p><strong>Base de cálculo:</strong> Clientes que visitaram no período selecionado. Perdidos = sem retorno em mais de 90 dias a partir de <strong>{dataFim}</strong>.</p>
+                    <p><strong>Resgatados:</strong> Clientes que voltaram no período após ≥90 dias sem visita — sinal positivo de recuperação.</p>
+                  </div>
+                </div>
               </div>
             </>
           ) : null}</>
