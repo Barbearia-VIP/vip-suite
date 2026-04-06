@@ -20,6 +20,7 @@ import {
   BarChart3, AlertCircle,
 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import { useState, useMemo } from 'react';
 
 const COLORS = {
   satisfied: '#22c55e',
@@ -51,10 +52,43 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
+type PeriodOption = 7 | 30 | 90;
+
+// Agrupa dados diários em semanas para períodos longos
+function groupByWeek(daily: any[]): any[] {
+  const weeks: Record<string, any> = {};
+  daily.forEach(d => {
+    const date = new Date(d.data as unknown as string);
+    // Início da semana (segunda-feira)
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(date);
+    monday.setDate(diff);
+    const key = monday.toISOString().slice(0, 10);
+    if (!weeks[key]) {
+      weeks[key] = { data: key, Satisfeitos: 0, Neutros: 0, Insatisfeitos: 0 };
+    }
+    weeks[key].Satisfeitos += d.satisfeitos ?? 0;
+    weeks[key].Neutros += d.neutros ?? 0;
+    weeks[key].Insatisfeitos += d.insatisfeitos ?? 0;
+  });
+  return Object.values(weeks).map(w => ({
+    ...w,
+    data: new Date(w.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+  }));
+}
+
 export default function VipCamPage() {
   const { selectedUnit } = useApp();
   const unitId = selectedUnit?.id;
   const today = new Date().toISOString().slice(0, 10);
+  const [trendPeriod, setTrendPeriod] = useState<PeriodOption>(7);
+
+  const trendStartDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - (trendPeriod - 1));
+    return d.toISOString().slice(0, 10);
+  }, [trendPeriod]);
 
   const sevenDaysAgo = (() => {
     const d = new Date();
@@ -69,7 +103,7 @@ export default function VipCamPage() {
 
   const { data: metricas } = trpc.vipCam.getMetricas.useQuery({
     unitId,
-    startDate: sevenDaysAgo,
+    startDate: trendStartDate,
     endDate: today,
   });
 
@@ -92,12 +126,17 @@ export default function VipCamPage() {
     { name: 'Insatisfeitos', value: insatisfeitos, color: COLORS.unsatisfied },
   ].filter(d => d.value > 0);
 
-  const areaData = (metricas?.daily ?? []).map(d => ({
+  const areaDataRaw = (metricas?.daily ?? []).map(d => ({
     data: new Date(d.data as unknown as string).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
     Satisfeitos: d.satisfeitos ?? 0,
     Neutros: d.neutros ?? 0,
     Insatisfeitos: d.insatisfeitos ?? 0,
   }));
+
+  // Para 30+ dias, agrupa por semana para não sobrecarregar o gráfico
+  const areaData = trendPeriod === 7
+    ? areaDataRaw
+    : groupByWeek(metricas?.daily ?? []);
 
   const hourlyData = (dashboard?.hourlyToday ?? []).map(h => ({
     hora: `${h.hora}h`,
@@ -200,10 +239,28 @@ export default function VipCamPage() {
         {/* Tendência 7 dias — col-span-2 */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-primary" />
-              Tendência — Últimos 7 Dias
-            </CardTitle>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-primary" />
+                Tendência — Últimos {trendPeriod} Dias
+                {trendPeriod > 7 && <span className="text-xs font-normal text-muted-foreground">(agrupado por semana)</span>}
+              </CardTitle>
+              <div className="flex gap-1">
+                {([7, 30, 90] as PeriodOption[]).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setTrendPeriod(p)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                      trendPeriod === p
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    {p}d
+                  </button>
+                ))}
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {areaData.length === 0 ? (
