@@ -1062,21 +1062,19 @@ export const raioXRouter = router({
 
       const rows = await getChurnPorBarbeiro(extIds, dataInicio, dataFim);
       const barbeiros = rows.map(r => ({
-        colaboradorId: String(r.colaborador_id),
-        colaboradorNome: r.colaborador_nome,
-        totalClientes: Number(r.total_clientes),
-        ativos: Number(r.ativos),
-        emRisco: Number(r.em_risco),
-        perdidos: Number(r.perdidos),
-        oneShots: Number(r.one_shots),
-        taxaRetencao: Number(r.total_clientes) > 0
-          ? Math.round((Number(r.ativos) / Number(r.total_clientes)) * 100)
+        colaboradorId: String(r.colaboradorId),
+        colaboradorNome: r.colaboradorNome,
+        totalClientes: r.baseAtiva,
+        ativos: r.baseAtiva - r.perdidos,
+        emRisco: 0,
+        perdidos: r.perdidos,
+        oneShots: 0,
+        taxaRetencao: r.baseAtiva > 0
+          ? Math.round(((r.baseAtiva - r.perdidos) / r.baseAtiva) * 100)
           : 0,
-        taxaChurn: Number(r.total_clientes) > 0
-          ? Math.round((Number(r.perdidos) / Number(r.total_clientes)) * 100)
-          : 0,
-        mediaVisitas: Math.round(Number(r.media_visitas) * 10) / 10,
-        ticketMedio: Math.round(Number(r.media_gasto) * 100) / 100,
+        taxaChurn: Math.round(r.churnPct),
+        mediaVisitas: 0,
+        ticketMedio: 0,
       }));
       return { barbeiros };
     }),
