@@ -771,71 +771,195 @@ export default function RaioXPage() {
 
         {/* ── BARBEIROS ────────────────────────────────────────────────────────── */}
         <TabsContent value="barbeiros" className="space-y-4 mt-4">
-          {qBarbeiros.isLoading ? <Skeleton className="h-40" /> : qBarbeiros.data ? (
+          {qBarbeiros.isLoading ? <Skeleton className="h-60" /> : qBarbeiros.data && qBarbeiros.data.barbeiros.length > 0 ? (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">Atendimentos por Barbeiro</CardTitle></CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={qBarbeiros.data.barbeiros.slice(0, 10)} layout="vertical" margin={{ left: 0, right: 20, top: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#333" horizontal={false} />
-                        <XAxis type="number" tick={{ fontSize: 10, fill: "#888" }} />
-                        <YAxis type="category" dataKey="colaboradorNome" width={100} tick={{ fontSize: 10, fill: "#aaa" }} />
-                        <Tooltip contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
-                        <Bar dataKey="totalAtendimentos" fill={CORES.azul} radius={[0, 3, 3, 0]} name="Atendimentos" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">Faturamento por Barbeiro</CardTitle></CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={qBarbeiros.data.barbeiros.slice(0, 10)} layout="vertical" margin={{ left: 0, right: 20, top: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#333" horizontal={false} />
-                        <XAxis type="number" tick={{ fontSize: 10, fill: "#888" }} tickFormatter={val => `R$${(val/1000).toFixed(0)}k`} />
-                        <YAxis type="category" dataKey="colaboradorNome" width={100} tick={{ fontSize: 10, fill: "#aaa" }} />
-                        <Tooltip formatter={(val: number) => [fmtMoeda(val), "Faturamento"]} contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
-                        <Bar dataKey="faturamento" fill={CORES.verde} radius={[0, 3, 3, 0]} name="Faturamento" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              </div>
+              {/* ── Saúde da Base por Barbeiro ── */}
               <Card className="bg-card/60 border-border/50">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Users className="w-4 h-4 text-muted-foreground" />
+                        Saúde da Base por Barbeiro
+                      </CardTitle>
+                      {(() => {
+                        const melhor = [...qBarbeiros.data.barbeiros].sort((a, b) => b.saudePct - a.saudePct)[0];
+                        return melhor ? (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            🏆 Mais saudável: <span className="text-yellow-400 font-medium">{melhor.colaboradorNome}</span>
+                            {" "}({melhor.saudePct}% Assíduo+Regular)
+                          </p>
+                        ) : null;
+                      })()}
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      Período: {qBarbeiros.data.periodo.dataInicio} → {qBarbeiros.data.periodo.dataFim}
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {qBarbeiros.data.barbeiros.map(b => (
+                    <div key={b.colaboradorId} className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium flex items-center gap-1.5">
+                          <Scissors className="w-3.5 h-3.5 text-muted-foreground" />
+                          {b.colaboradorNome}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {b.saudePct}% Assíduo+Regular · {b.totalClientes} cl.
+                        </span>
+                      </div>
+                      {/* Barra segmentada */}
+                      <div className="flex h-6 rounded overflow-hidden w-full text-[10px] font-semibold">
+                        {b.pctAssiduo > 0 && (
+                          <div
+                            className="flex items-center justify-center bg-emerald-500 text-white overflow-hidden"
+                            style={{ width: `${b.pctAssiduo}%` }}
+                            title={`Assíduo (≤30d): ${b.assiduo} (${b.pctAssiduo}%)`}
+                          >
+                            {b.pctAssiduo >= 5 ? `${b.pctAssiduo}%` : ""}
+                          </div>
+                        )}
+                        {b.pctRegular > 0 && (
+                          <div
+                            className="flex items-center justify-center bg-blue-500 text-white overflow-hidden"
+                            style={{ width: `${b.pctRegular}%` }}
+                            title={`Regular (31-60d): ${b.regular} (${b.pctRegular}%)`}
+                          >
+                            {b.pctRegular >= 5 ? `${b.pctRegular}%` : ""}
+                          </div>
+                        )}
+                        {b.pctEspacando > 0 && (
+                          <div
+                            className="flex items-center justify-center bg-yellow-500 text-black overflow-hidden"
+                            style={{ width: `${b.pctEspacando}%` }}
+                            title={`Espaçando (61-90d): ${b.espacando} (${b.pctEspacando}%)`}
+                          >
+                            {b.pctEspacando >= 5 ? `${b.pctEspacando}%` : ""}
+                          </div>
+                        )}
+                        {b.pctPrimeiraVez > 0 && (
+                          <div
+                            className="flex items-center justify-center bg-purple-500 text-white overflow-hidden"
+                            style={{ width: `${b.pctPrimeiraVez}%` }}
+                            title={`1ª Vez: ${b.primeiraVez} (${b.pctPrimeiraVez}%)`}
+                          >
+                            {b.pctPrimeiraVez >= 5 ? `${b.pctPrimeiraVez}%` : ""}
+                          </div>
+                        )}
+                        {b.pctEmRisco > 0 && (
+                          <div
+                            className="flex items-center justify-center bg-orange-500 text-white overflow-hidden"
+                            style={{ width: `${b.pctEmRisco}%` }}
+                            title={`Em Risco (91-120d): ${b.emRisco} (${b.pctEmRisco}%)`}
+                          >
+                            {b.pctEmRisco >= 5 ? `${b.pctEmRisco}%` : ""}
+                          </div>
+                        )}
+                        {b.pctPerdido > 0 && (
+                          <div
+                            className="flex items-center justify-center bg-red-500 text-white overflow-hidden"
+                            style={{ width: `${b.pctPerdido}%` }}
+                            title={`Perdido (>120d): ${b.perdido} (${b.pctPerdido}%)`}
+                          >
+                            {b.pctPerdido >= 5 ? `${b.pctPerdido}%` : ""}
+                          </div>
+                        )}
+                      </div>
+                      {/* Legenda */}
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
+                        {b.pctAssiduo > 0 && <span><span className="inline-block w-2 h-2 rounded-sm bg-emerald-500 mr-1" />Assíduo {b.pctAssiduo}%</span>}
+                        {b.pctRegular > 0 && <span><span className="inline-block w-2 h-2 rounded-sm bg-blue-500 mr-1" />Regular {b.pctRegular}%</span>}
+                        {b.pctEspacando > 0 && <span><span className="inline-block w-2 h-2 rounded-sm bg-yellow-500 mr-1" />Espaçando {b.pctEspacando}%</span>}
+                        {b.pctPrimeiraVez > 0 && <span><span className="inline-block w-2 h-2 rounded-sm bg-purple-500 mr-1" />1ª Vez {b.pctPrimeiraVez}%</span>}
+                        {b.pctEmRisco > 0 && <span><span className="inline-block w-2 h-2 rounded-sm bg-orange-500 mr-1" />Em Risco {b.pctEmRisco}%</span>}
+                        {b.pctPerdido > 0 && <span><span className="inline-block w-2 h-2 rounded-sm bg-red-500 mr-1" />Perdido {b.pctPerdido}%</span>}
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* ── Ranking Comparativo ── */}
+              <Card className="bg-card/60 border-border/50">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                    Ranking Comparativo
+                  </CardTitle>
+                </CardHeader>
                 <CardContent className="p-0">
-                  <table className="w-full text-sm">
-                    <thead><tr className="border-b border-border/50 text-xs text-muted-foreground">
-                      <th className="text-left p-3">Barbeiro</th>
-                      <th className="text-right p-3">Atendimentos</th>
-                      <th className="text-right p-3">Clientes únicos</th>
-                      <th className="text-right p-3">Novos clientes</th>
-                      <th className="text-right p-3">Faturamento</th>
-                      <th className="text-right p-3">Ticket médio</th>
-                    </tr></thead>
-                    <tbody>
-                      {qBarbeiros.data.barbeiros.map(b => (
-                        <tr key={b.colaboradorId} className="border-b border-border/30 hover:bg-muted/20">
-                          <td className="p-3 font-medium flex items-center gap-2">
-                            <Scissors className="w-3.5 h-3.5 text-muted-foreground" />{b.colaboradorNome}
-                          </td>
-                          <td className="p-3 text-right">{b.totalAtendimentos.toLocaleString()}</td>
-                          <td className="p-3 text-right">{b.clientesUnicos.toLocaleString()}</td>
-                          <td className="p-3 text-right text-blue-400">{b.novosClientes}</td>
-                          <td className="p-3 text-right">{fmtMoeda(b.faturamento)}</td>
-                          <td className="p-3 text-right">{fmtMoeda(b.ticketMedio)}</td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border/50 text-xs text-muted-foreground">
+                          <th className="text-left p-3">Barbeiro</th>
+                          <th className="text-right p-3">Clientes</th>
+                          <th className="text-right p-3">Novos</th>
+                          <th className="text-right p-3">Excl.</th>
+                          <th className="text-right p-3">%Excl.</th>
+                          <th className="text-right p-3">Ticket</th>
+                          <th className="text-right p-3">Valor</th>
+                          <th className="text-right p-3">Ret. 30d</th>
+                          <th className="text-right p-3">%Fiéis</th>
+                          <th className="text-right p-3">%Saúde</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {[...qBarbeiros.data.barbeiros]
+                          .sort((a, b) => b.totalClientes - a.totalClientes)
+                          .map((b, idx) => {
+                            const melhorSaude = Math.max(...qBarbeiros.data!.barbeiros.map(x => x.saudePct));
+                            const melhorTicket = Math.max(...qBarbeiros.data!.barbeiros.map(x => x.ticketMedio));
+                            const melhorFat = Math.max(...qBarbeiros.data!.barbeiros.map(x => x.faturamento));
+                            const melhorRet = Math.max(...qBarbeiros.data!.barbeiros.map(x => x.retencao30d));
+                            const melhorFieis = Math.max(...qBarbeiros.data!.barbeiros.map(x => x.pctFieis));
+                            return (
+                              <tr key={b.colaboradorId} className="border-b border-border/30 hover:bg-muted/20">
+                                <td className="p-3 font-medium">
+                                  <span className="text-muted-foreground mr-2">{idx + 1}.</span>
+                                  {b.colaboradorNome}
+                                </td>
+                                <td className="p-3 text-right">{b.totalClientes.toLocaleString()}</td>
+                                <td className="p-3 text-right text-blue-400">{b.novos}</td>
+                                <td className="p-3 text-right">{b.exclusivos}</td>
+                                <td className="p-3 text-right text-muted-foreground">{b.pctExclusivos}%</td>
+                                <td className={`p-3 text-right ${b.ticketMedio === melhorTicket ? "text-yellow-400 font-semibold" : ""}`}>
+                                  {fmtMoeda(b.ticketMedio)}
+                                  {b.ticketMedio === melhorTicket && <span className="ml-1 text-[10px]">🏆</span>}
+                                </td>
+                                <td className={`p-3 text-right ${b.faturamento === melhorFat ? "text-yellow-400 font-semibold" : ""}`}>
+                                  {fmtMoeda(b.faturamento)}
+                                  {b.faturamento === melhorFat && <span className="ml-1 text-[10px]">🏆</span>}
+                                </td>
+                                <td className={`p-3 text-right ${b.retencao30d === melhorRet ? "text-yellow-400 font-semibold" : ""}`}>
+                                  {b.retencao30d}%
+                                  {b.retencao30d === melhorRet && <span className="ml-1 text-[10px]">🏆</span>}
+                                </td>
+                                <td className={`p-3 text-right ${b.pctFieis === melhorFieis ? "text-yellow-400 font-semibold" : ""}`}>
+                                  {b.pctFieis}%
+                                  {b.pctFieis === melhorFieis && <span className="ml-1 text-[10px]">🏆</span>}
+                                </td>
+                                <td className={`p-3 text-right font-semibold ${b.saudePct === melhorSaude ? "text-emerald-400" : b.saudePct >= 30 ? "text-blue-400" : b.saudePct >= 20 ? "text-yellow-400" : "text-red-400"}`}>
+                                  {b.saudePct}%
+                                  {b.saudePct === melhorSaude && <span className="ml-1 text-[10px]">🏆</span>}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
                 </CardContent>
               </Card>
             </>
+          ) : qBarbeiros.data ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Scissors className="w-8 h-8 mx-auto mb-2 opacity-40" />
+              <p>Nenhum barbeiro encontrado para o período selecionado.</p>
+            </div>
           ) : null}
         </TabsContent>
-
-        {/* ── AÇÕES ────────────────────────────────────────────────────────────── */}
         <TabsContent value="acoes" className="space-y-4 mt-4">
           {qAcoes.isLoading ? <Skeleton className="h-40" /> : qAcoes.data ? (
             <>

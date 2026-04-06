@@ -732,64 +732,122 @@ export const raioXRouter = router({
     }),
 
   // ── Barbeiros ────────────────────────────────────────────────────────────────
+  // Saúde da base por barbeiro: distribuição de clientes por status (Assíduo, Regular,
+  // Espaçando, 1ª Vez, Em Risco, Perdido) + ranking comparativo com métricas de desempenho.
   barbeiros: protectedProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
-
       const unitCond = extIds.length === 0 ? "1=1"
         : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
         : `uu.unidade IN (${extIds.join(",")})`;
-
-      const dataInicio = input.dataInicio || new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
+      const dataInicio = input.dataInicio || new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
 
-      const rows = await queryExternal<{
+      // Query principal: saúde da base por barbeiro
+      // Para cada barbeiro, pega os clientes que atendeu no período e classifica por status atual
+      const saudeRows = await queryExternal<{
         colaborador_id: number;
         colaborador_nome: string;
-        totalAtendimentos: number;
-        clientesUnicos: number;
+        total_clientes: number;
+        assiduo: number;
+        regular: number;
+        espacando: number;
+        em_risco: number;
+        perdido: number;
+        primeira_vez: number;
+        novos: number;
+        exclusivos: number;
         faturamento: number;
-        ticketMedio: number;
+        ticket_medio: number;
+        retencao_30d: number;
+        total_atendimentos: number;
       }>(`
-        SELECT 
+        SELECT
           uu.id as colaborador_id,
           uu.nome as colaborador_nome,
-          COUNT(v.id) as totalAtendimentos,
-          COUNT(DISTINCT v.cliente) as clientesUnicos,
+          COUNT(DISTINCT v.cliente) as total_clientes,
+          SUM(CASE WHEN hist.total_visitas_hist = 1 THEN 1 ELSE 0 END) as primeira_vez,
+          SUM(CASE WHEN hist.total_visitas_hist > 1 AND DATEDIFF(NOW(), c.ultima_visita) <= 30 THEN 1 ELSE 0 END) as assiduo,
+          SUM(CASE WHEN hist.total_visitas_hist > 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 31 AND 60 THEN 1 ELSE 0 END) as regular,
+          SUM(CASE WHEN hist.total_visitas_hist > 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as espacando,
+          SUM(CASE WHEN hist.total_visitas_hist > 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 91 AND 120 THEN 1 ELSE 0 END) as em_risco,
+          SUM(CASE WHEN hist.total_visitas_hist > 1 AND DATEDIFF(NOW(), c.ultima_visita) > 120 THEN 1 ELSE 0 END) as perdido,
+          SUM(CASE WHEN c.ultima_visita_colaborador = uu.id THEN 1 ELSE 0 END) as exclusivos,
+          SUM(CASE WHEN hist.primeira_visita_geral >= '${dataInicio}' THEN 1 ELSE 0 END) as novos,
           SUM(v.valor_total) as faturamento,
-          AVG(v.valor_total) as ticketMedio
+          AVG(v.valor_total) as ticket_medio,
+          COUNT(v.id) as total_atendimentos,
+          SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 30 THEN 1 ELSE 0 END) as retencao_30d
         FROM vendas v
         JOIN usuarios uu ON v.usuario = uu.id
+        JOIN clientes c ON c.id = v.cliente
+        JOIN (
+          SELECT
+            v2.cliente,
+            COUNT(*) as total_visitas_hist,
+            MIN(v2.data_criacao) as primeira_visita_geral
+          FROM vendas v2
+          WHERE v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
+            AND v2.cliente IS NOT NULL AND v2.cliente != 2
+          GROUP BY v2.cliente
+        ) hist ON hist.cliente = v.cliente
         WHERE ${unitCond}
           AND uu.visivel_agenda != 'nenhuma'
-          AND v.data_criacao >= ?
-          AND v.data_criacao <= ?
+          AND DATE(v.data_criacao) >= '${dataInicio}'
+          AND DATE(v.data_criacao) <= '${dataFim}'
           AND v.comanda_temp = 0
           AND v.cancelado_motivo IS NULL
           AND v.status != 0
           AND v.cliente IS NOT NULL
           AND v.cliente != 2
+          AND c.status = 1
         GROUP BY uu.id, uu.nome
-        ORDER BY totalAtendimentos DESC
-      `, [dataInicio, dataFim + " 23:59:59"]);
+        ORDER BY (assiduo + regular) DESC
+      `);
 
       return {
-        barbeiros: rows.map(r => ({
-          colaboradorId: String(r.colaborador_id),
-          colaboradorNome: r.colaborador_nome,
-          totalAtendimentos: Number(r.totalAtendimentos),
-          clientesUnicos: Number(r.clientesUnicos),
-          faturamento: Number(r.faturamento || 0),
-          ticketMedio: Math.round(Number(r.ticketMedio || 0)),
-          novosClientes: 0,
-        })),
+        barbeiros: saudeRows.map(r => {
+          const total = Number(r.total_clientes) || 1;
+          const assiduo = Number(r.assiduo);
+          const regular = Number(r.regular);
+          const espacando = Number(r.espacando);
+          const emRisco = Number(r.em_risco);
+          const perdido = Number(r.perdido);
+          const primeiraVez = Number(r.primeira_vez);
+          const saudePct = Math.round(((assiduo + regular) / total) * 100);
+          return {
+            colaboradorId: String(r.colaborador_id),
+            colaboradorNome: r.colaborador_nome,
+            totalClientes: total,
+            assiduo,
+            regular,
+            espacando,
+            emRisco,
+            perdido,
+            primeiraVez,
+            novos: Number(r.novos),
+            exclusivos: Number(r.exclusivos),
+            faturamento: Number(r.faturamento || 0),
+            ticketMedio: Math.round(Number(r.ticket_medio || 0)),
+            totalAtendimentos: Number(r.total_atendimentos),
+            retencao30d: Number(r.retencao_30d),
+            saudePct,
+            pctAssiduo: Math.round((assiduo / total) * 100),
+            pctRegular: Math.round((regular / total) * 100),
+            pctEspacando: Math.round((espacando / total) * 100),
+            pctEmRisco: Math.round((emRisco / total) * 100),
+            pctPerdido: Math.round((perdido / total) * 100),
+            pctPrimeiraVez: Math.round((primeiraVez / total) * 100),
+            pctExclusivos: total > 0 ? Math.round((Number(r.exclusivos) / total) * 100) : 0,
+            pctFieis: total > 0 ? Math.round(((assiduo + regular) / total) * 100) : 0,
+          };
+        }),
         periodo: { dataInicio, dataFim },
       };
     }),
-
   // ── Diagnóstico ──────────────────────────────────────────────────────────────
   diagnostico: protectedProcedure
     .input(baseInput)
