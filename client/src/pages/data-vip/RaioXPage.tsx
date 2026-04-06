@@ -350,14 +350,16 @@ export default function RaioXPage() {
                   <Card className="bg-card/60 border-border/50">
                     <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Por Cadência · 12m</CardTitle></CardHeader>
                     <CardContent className="space-y-1 pt-1">
-                      <p className="text-xs text-muted-foreground">universo: {v.sinais.totalBase.toLocaleString()} clientes</p>
+                      <p className="text-xs text-muted-foreground">universo: {(v.distribuicoes.porCadencia?.total ?? 0).toLocaleString()} clientes (≥3 visitas)</p>
                       {[
-                        { label: "Perdido", val: v.distribuicoes.status12m.perdido, color: "bg-red-500" },
-                        { label: "Regular", val: v.distribuicoes.status12m.saudavel, color: "bg-blue-500" },
-                        { label: "Em risco", val: v.distribuicoes.status12m.emRisco, color: "bg-orange-500" },
+                        { label: "Perdido", val: v.distribuicoes.porCadencia?.perdido ?? 0, color: "bg-red-500" },
+                        { label: "Regular", val: v.distribuicoes.porCadencia?.regular ?? 0, color: "bg-blue-500" },
+                        { label: "Em risco", val: v.distribuicoes.porCadencia?.emRisco ?? 0, color: "bg-orange-500" },
+                        { label: "Espaçando", val: v.distribuicoes.porCadencia?.espacando ?? 0, color: "bg-yellow-500" },
+                        { label: "Mto frequente", val: v.distribuicoes.porCadencia?.mtoFrequente ?? 0, color: "bg-green-500" },
                       ].map(item => (
                         <DotBadge key={item.label} color={item.color} label={item.label} count={item.val}
-                          pct={v.sinais.totalBase > 0 ? Math.round(item.val / v.sinais.totalBase * 100) : 0} />
+                          pct={(v.distribuicoes.porCadencia?.total ?? 0) > 0 ? Math.round(item.val / (v.distribuicoes.porCadencia?.total ?? 1) * 100) : 0} />
                       ))}
                     </CardContent>
                   </Card>
