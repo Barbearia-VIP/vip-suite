@@ -859,3 +859,9 @@
 - [x] Reescrever cálculo de dias_sem_vir para usar DATEDIFF(dataFim, ultima_venda) em vez de DATEDIFF(NOW(), c.ultima_visita)
 - [x] Ajustar todas as queries dependentes: Por Cadência, Status 12m, One-Shot, Cadência Individual, Risco Mensal, Saúde por Barbeiro
 - [x] Validado: universo subiu de 1.659 para 1.748 (ref: 1.738, dif. +10). One-shots acertaram exatamente (44 e 232). Mantido DATEDIFF(dataFim, ultima_venda) como logica correta.
+
+## Cadência Individual — Lógica de Ratio (Abr/2026)
+- [x] Investigado: 6 configurações testadas. Configuração final: universo base P 24m + >=2 visitas históricas + cadência habitual histórica completa
+- [x] Validado: universo 1.896 (ref: 2.576). Divergencia estrutural documentada no InfoPopover.
+- [x] Backend: aplicar configuração final na query de Cadência Individual (universo 24m, >=2 hist, cadência hist completa)
+- [x] Frontend: atualizar labels dos 6 status e InfoPopover com lógica documentada

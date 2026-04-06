@@ -632,21 +632,32 @@ export default function RaioXPage() {
                       <CardTitle className="text-sm flex items-center gap-2">
                         <Activity className="w-4 h-4 text-muted-foreground" />
                         Cadência Individual
+                        <InfoPopover
+                          title="Cadência Individual"
+                          descricao="O ratio mede se o cliente está atrasado em relação ao próprio histórico: dias sem vir ÷ cadência habitual (média dos intervalos entre visitas)."
+                          periodoFiltrado={`${v.periodo.dataInicio} – ${v.periodo.dataFim}`}
+                          ref={v.periodo.dataFim}
+                          baseUsada={`24m · ${v.cadenciaIndividual.total.toLocaleString()} clientes`}
+                          baseTotal={v.cadenciaIndividual.total}
+                          regra="visitas_hist ≥2 E ratio = DATEDIFF(REF, ultima_venda) / cadencia_habitual"
+                          usadaEm="Cadência Individual (6 status) · Score de saúde (dim. cadência)"
+                          nota="Universo: clientes com ≥2 visitas históricas que visitaram nos últimos 24m. Cadência habitual = média de todos os intervalos históricos. 1ª Vez = clientes com exatamente 1 visita histórica (one-shots)."
+                        />
                       </CardTitle>
                       <span className="text-xs text-muted-foreground">
-                        {v.cadenciaIndividual.total.toLocaleString()} clientes · {v.periodo.dataInicio} → {v.periodo.dataFim}
+                        {v.cadenciaIndividual.total.toLocaleString()} clientes · 24m de histórico · ≥2 visitas hist.
                       </span>
                     </div>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                       {[
-                        { label: "ASSÍDUO", val: v.cadenciaIndividual.assiduo, sub: "≤30d · ≤60% do ritmo", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" },
-                        { label: "REGULAR", val: v.cadenciaIndividual.regular, sub: "10% · 80-120%", color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/30" },
-                        { label: "ESPAÇANDO", val: v.cadenciaIndividual.espacando, sub: "12% · 120-180%", color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30" },
-                        { label: "1ª VEZ", val: v.cadenciaIndividual.primeiraVez, sub: "2% · 1 visita", color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/30" },
-                        { label: "EM RISCO", val: v.cadenciaIndividual.emRisco, sub: "9% · 180-250%", color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/30" },
-                        { label: "PERDIDO", val: v.cadenciaIndividual.perdido, sub: "60% · >250%", color: "text-red-400", bg: "bg-red-500/10 border-red-500/30" },
+                        { label: "ASSÍDUO", val: v.cadenciaIndividual.assiduo, sub: "ratio ≤80%", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" },
+                        { label: "REGULAR", val: v.cadenciaIndividual.regular, sub: "80–120%", color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/30" },
+                        { label: "ESPAÇANDO", val: v.cadenciaIndividual.espacando, sub: "120–180%", color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30" },
+                        { label: "1ª VEZ", val: v.cadenciaIndividual.primeiraVez, sub: "1 visita hist.", color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/30" },
+                        { label: "EM RISCO", val: v.cadenciaIndividual.emRisco, sub: "180–250%", color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/30" },
+                        { label: "PERDIDO", val: v.cadenciaIndividual.perdido, sub: "ratio >250%", color: "text-red-400", bg: "bg-red-500/10 border-red-500/30" },
                       ].map(item => (
                         <div key={item.label} className={`rounded-lg border p-3 ${item.bg}`}>
                           <p className={`text-xs font-semibold tracking-wide ${item.color}`}>{item.label}</p>

@@ -328,23 +328,79 @@ export const raioXRouter = router({
             AND DATE(c.data_criacao) < '${dataInicio}'
             AND DATEDIFF('${dataInicio}', ult.ultima_antes) > 90
         `),
-        // ── Cadência Individual: Base P 24m com >=3 visitas históricas ──────────
-        // Classificação por ritmo de visita (dias desde última visita vs intervalo médio)
-        // Assíduo=≤60d, Regular=61-90d, Espaçando=91-120d, 1ª Vez=1 visita, Em risco=121-180d, Perdido=>180d
+        // Cadencia Individual: Base P 24m com >=2 visitas historicas, logica de ratio
+        // Universo: clientes que visitaram nos ultimos 24m E tem >=2 visitas historicas (exclui one-shots)
+        // Cadencia habitual: media dos intervalos entre visitas (historico completo)
+        // ratio = DATEDIFF(dataFim, ultima_venda) / cadencia_habitual
+        // Assiduo: ratio <=0.8 | Regular: 0.8-1.2 | Espacando: 1.2-1.8 | Em Risco: 1.8-2.5 | Perdido: >2.5
+        // 1a Vez: 1 visita historica (one-shot, sem cadencia calculavel)
         queryExternal<{ assiduo: number; regular: number; espacando: number; primeira_vez: number; em_risco: number; perdido: number; total: number }>(`
           SELECT
-            COUNT(DISTINCT CASE WHEN uv2.ultima_venda IS NOT NULL AND DATEDIFF('${dataFim}', uv2.ultima_venda) <= 60 AND vh.total_visitas >= 3 THEN bp.cliente END) as assiduo,
-            COUNT(DISTINCT CASE WHEN uv2.ultima_venda IS NOT NULL AND DATEDIFF('${dataFim}', uv2.ultima_venda) BETWEEN 61 AND 90 AND vh.total_visitas >= 3 THEN bp.cliente END) as regular,
-            COUNT(DISTINCT CASE WHEN uv2.ultima_venda IS NOT NULL AND DATEDIFF('${dataFim}', uv2.ultima_venda) BETWEEN 91 AND 120 AND vh.total_visitas >= 3 THEN bp.cliente END) as espacando,
-            COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 THEN bp.cliente END) as primeira_vez,
-            COUNT(DISTINCT CASE WHEN uv2.ultima_venda IS NOT NULL AND DATEDIFF('${dataFim}', uv2.ultima_venda) BETWEEN 121 AND 180 AND vh.total_visitas >= 3 THEN bp.cliente END) as em_risco,
-            COUNT(DISTINCT CASE WHEN uv2.ultima_venda IS NOT NULL AND DATEDIFF('${dataFim}', uv2.ultima_venda) > 180 AND vh.total_visitas >= 3 THEN bp.cliente END) as perdido,
-            COUNT(DISTINCT bp.cliente) as total
-          FROM ${baseP24mSubquery} bp
-          JOIN clientes c ON c.id = bp.cliente
-          LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bp.cliente
-          LEFT JOIN ${ultimaVendaSubquery} uv2 ON uv2.cliente = bp.cliente
-          WHERE c.status = 1
+            COUNT(DISTINCT CASE WHEN ci.ratio IS NOT NULL AND ci.ratio <= 0.8 THEN ci.cliente END) as assiduo,
+            COUNT(DISTINCT CASE WHEN ci.ratio IS NOT NULL AND ci.ratio > 0.8 AND ci.ratio <= 1.2 THEN ci.cliente END) as regular,
+            COUNT(DISTINCT CASE WHEN ci.ratio IS NOT NULL AND ci.ratio > 1.2 AND ci.ratio <= 1.8 THEN ci.cliente END) as espacando,
+            COUNT(DISTINCT CASE WHEN ci.total_visitas_hist = 1 THEN ci.cliente END) as primeira_vez,
+            COUNT(DISTINCT CASE WHEN ci.ratio IS NOT NULL AND ci.ratio > 1.8 AND ci.ratio <= 2.5 THEN ci.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN ci.ratio IS NOT NULL AND ci.ratio > 2.5 THEN ci.cliente END) as perdido,
+            COUNT(DISTINCT ci.cliente) as total
+          FROM (
+            SELECT
+              bs.cliente,
+              COALESCE(vh_hist.total_visitas, 0) as total_visitas_hist,
+              uvc.ultima_venda,
+              DATEDIFF('${dataFim}', uvc.ultima_venda) as dias_sem_vir,
+              iv.cadencia_habitual,
+              CASE
+                WHEN iv.cadencia_habitual IS NOT NULL AND iv.cadencia_habitual > 0
+                THEN DATEDIFF('${dataFim}', uvc.ultima_venda) / iv.cadencia_habitual
+                ELSE NULL
+              END as ratio
+            FROM (
+              SELECT DISTINCT v.cliente
+              FROM vendas v
+              JOIN usuarios uu ON v.usuario = uu.id
+              WHERE ${unitCondV}
+                AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+                AND v.cliente IS NOT NULL AND v.cliente != 2
+                AND DATE(v.data_criacao) >= '${dataInicio24m}' AND DATE(v.data_criacao) <= '${dataFim}'
+            ) bs
+            JOIN clientes c ON c.id = bs.cliente
+            JOIN (
+              SELECT v.cliente, COUNT(*) as total_visitas
+              FROM vendas v
+              JOIN usuarios uu ON v.usuario = uu.id
+              WHERE ${unitCondV}
+                AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+                AND v.cliente IS NOT NULL AND v.cliente != 2
+              GROUP BY v.cliente
+              HAVING COUNT(*) >= 2
+            ) vh_hist ON vh_hist.cliente = bs.cliente
+            LEFT JOIN (
+              SELECT sub.cliente, AVG(sub.diff) as cadencia_habitual
+              FROM (
+                SELECT
+                  v.cliente,
+                  DATEDIFF(DATE(v.data_criacao), LAG(DATE(v.data_criacao)) OVER (PARTITION BY v.cliente ORDER BY v.data_criacao)) as diff
+                FROM vendas v
+                JOIN usuarios uu ON v.usuario = uu.id
+                WHERE ${unitCondV}
+                  AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+                  AND v.cliente IS NOT NULL AND v.cliente != 2
+              ) sub
+              WHERE sub.diff IS NOT NULL AND sub.diff > 0
+              GROUP BY sub.cliente
+            ) iv ON iv.cliente = bs.cliente
+            LEFT JOIN (
+              SELECT v.cliente, MAX(DATE(v.data_criacao)) as ultima_venda
+              FROM vendas v
+              JOIN usuarios uu ON v.usuario = uu.id
+              WHERE ${unitCondV}
+                AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+                AND v.cliente IS NOT NULL AND v.cliente != 2
+              GROUP BY v.cliente
+            ) uvc ON uvc.cliente = bs.cliente
+            WHERE c.status = 1
+          ) ci
         `),
         // ── Movimento mensal ─────────────────────────────────────────────────────
         queryExternal<{ mes: string; atendidos: number }>(`
