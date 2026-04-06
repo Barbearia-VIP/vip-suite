@@ -115,9 +115,10 @@ export const raioXRouter = router({
       );
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
-      // Rolling windows (always from TODAY, not period-dependent)
-      const dataInicio12m = new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0];
-      const dataInicio24m = new Date(Date.now() - 730 * 86400000).toISOString().split("T")[0];
+      // Janelas de 12m e 24m calculadas a partir do dataFim (alinhado com o sistema de referencia)
+      const dataFimDate = new Date(dataFim + "T00:00:00Z");
+      const dataInicio12m = new Date(dataFimDate.getTime() - 365 * 86400000).toISOString().split("T")[0];
+      const dataInicio24m = new Date(dataFimDate.getTime() - 730 * 86400000).toISOString().split("T")[0];
 
       const unitCondV = extIds.length === 0 ? "1=1"
         : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
@@ -220,15 +221,15 @@ export const raioXRouter = router({
         }>(`
           -- Saúde da Base 12m:
           -- Ativos: ≤60d desde última visita
-          -- Em risco: 61-90d
-          -- Perdidos: >90d (inclui one-shots perdidos)
+          -- Em risco: 61-90d (excluindo one-shots — tratados separadamente)
+          -- Perdidos: >90d (excluindo one-shots — tratados separadamente)
           -- One-shot risco: 1 visita histórica + 46-90d sem retornar
           -- One-shot perdido: 1 visita histórica + >90d sem retornar
           SELECT
             COUNT(DISTINCT bs.cliente) as total_base_s,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) <= 60 THEN bs.cliente END) as ativos,
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 61 AND 90 THEN bs.cliente END) as em_risco,
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) > 90 THEN bs.cliente END) as perdidos,
+            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 61 AND 90 AND COALESCE(vh.total_visitas, 0) > 1 THEN bs.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) > 90 AND COALESCE(vh.total_visitas, 0) > 1 THEN bs.cliente END) as perdidos,
             COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF('${dataFim}', bs.ultima_venda) >= 46 THEN bs.cliente END) as one_shot_urgente,
             COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 46 AND 90 THEN bs.cliente END) as one_shot_risco,
             COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF('${dataFim}', bs.ultima_venda) > 90 THEN bs.cliente END) as one_shot_perdido
@@ -268,15 +269,16 @@ export const raioXRouter = router({
           WHERE c.status = 1 AND vh.total_visitas >= 3
         `),
         // ── Status 12m: Base S 12m por faixas de dias (usando ultima_venda) ───────────────────────
-        // ≤60d saudavel, 61-90d em risco, >90d perdido
+        // ≤60d saudavel, 61-90d em risco (excl. one-shots), >90d perdido (excl. one-shots)
         queryExternal<{ perdido: number; em_risco: number; saudavel: number; total: number }>(`
           SELECT
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) > 90 THEN bs.cliente END) as perdido,
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 61 AND 90 THEN bs.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) > 90 AND COALESCE(vh.total_visitas, 0) > 1 THEN bs.cliente END) as perdido,
+            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 61 AND 90 AND COALESCE(vh.total_visitas, 0) > 1 THEN bs.cliente END) as em_risco,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) <= 60 THEN bs.cliente END) as saudavel,
             COUNT(DISTINCT bs.cliente) as total
           FROM ${baseS12mSubquery} bs
           JOIN clientes c ON c.id = bs.cliente
+          LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bs.cliente
           WHERE c.status = 1
         `),
         // ── One-Shot: Base S 12m com 1 visita histórica (usando ultima_venda) ──────────────────────────────────
@@ -440,17 +442,19 @@ export const raioXRouter = router({
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
           GROUP BY mes ORDER BY mes
         `),
-        // ── Saúde por barbeiro ──────────────────────────────────────────────────────────────────────────────────────
+        // ── Saúde por barbeiro ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+        // Em Risco e Perdido excluem one-shots (visitas históricas = 1)
         queryExternal<{ colaborador_nome: string; total: number; saudavel: number; em_risco: number; perdido: number }>(`
           SELECT
             uu.nome as colaborador_nome,
             COUNT(DISTINCT v.cliente) as total,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv4.ultima_venda) <= 60 THEN v.cliente END) as saudavel,
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv4.ultima_venda) BETWEEN 61 AND 90 THEN v.cliente END) as em_risco,
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv4.ultima_venda) > 90 THEN v.cliente END) as perdido
+            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv4.ultima_venda) BETWEEN 61 AND 90 AND COALESCE(vh4.total_visitas, 0) > 1 THEN v.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv4.ultima_venda) > 90 AND COALESCE(vh4.total_visitas, 0) > 1 THEN v.cliente END) as perdido
           FROM vendas v
           JOIN usuarios uu ON v.usuario = uu.id
           LEFT JOIN ${ultimaVendaSubquery} uv4 ON uv4.cliente = v.cliente
+          LEFT JOIN ${visitasHistoricasSubquery} vh4 ON vh4.cliente = v.cliente
           WHERE ${unitCondV}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
             AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -595,11 +599,11 @@ export const raioXRouter = router({
           ref: dataFim,
           baseUsada: `${dataInicio12m} – ${dataFim}`,
           emRisco: {
-            regra: "61d <= dias_sem_vir <= 90d",
+            regra: "61d <= dias_sem_vir <= 90d E visitas > 1 (one-shots tratados separadamente)",
             usadaEm: "Em Risco - Score de saude (dim. risco) - Distribuicoes",
           },
           perdidos: {
-            regra: "dias_sem_vir > 90d",
+            regra: "dias_sem_vir > 90d E visitas > 1 (one-shots tratados separadamente)",
             usadaEm: "Perdidos - Score de saude (dim. perdidos) - Distribuicoes",
           },
           oneShotRisco: {
@@ -629,8 +633,8 @@ export const raioXRouter = router({
               descricao: "Classificacao baseada apenas em recencia (dias desde ultima visita).",
               universo: `${dataInicio12m} – ${dataFim}`,
               total: Number(s12.total),
-              regras: "Saudavel: <=60d | Em Risco: 61-90d | Perdido: >90d",
-              nota: "\"Perdido\" aqui e por recencia, nao definitivo. Configure em Config -> Secao 5.",
+              regras: "Saudavel: <=60d | Em Risco: 61-90d (excl. one-shots) | Perdido: >90d (excl. one-shots)",
+              nota: "One-shots (1 visita) sao contabilizados separadamente. Configure em Config -> Secao 5.",
             },
             oneShot: {
               descricao: "One-shot = cliente com exatamente 1 visita historica. Sem cadencia calculavel - monitorados por recencia.",

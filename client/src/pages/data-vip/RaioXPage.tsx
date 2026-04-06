@@ -425,14 +425,14 @@ export default function RaioXPage() {
                             Perdidos
                             <InfoPopover
                               title="Perdidos"
-                              descricao="Última visita há mais de 90 dias. Ultrapassaram o limiar de churn."
+                              descricao="Última visita há mais de 90 dias. Excluem one-shots (1 visita) — tratados separadamente."
                               periodoFiltrado={v.contexto?.periodoFiltrado}
                               ref={v.contexto?.ref}
                               baseUsada={v.contexto?.baseUsada}
                               baseTotal={v.sinais.totalBase}
                               regra={v.contexto?.perdidos?.regra}
                               usadaEm={v.contexto?.perdidos?.usadaEm}
-                              nota={"Perdido e por recencia - resgate possivel mas custoso."}
+                              nota={"Perdido por recência — resgate possível mas custoso. One-shots perdidos aparecem no card abaixo."}
                             />
                           </p>
                           <p className="text-2xl font-bold mt-1 text-red-400">{v.saude.perdidos.toLocaleString()}</p>
