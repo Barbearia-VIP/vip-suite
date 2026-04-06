@@ -215,7 +215,14 @@ export default function RaioXPage() {
   const qChurn = trpc.raioX.churn.useQuery(baseInput, { enabled: !!org?.id && tab === "churn" });
   const [churnViewMode, setChurnViewMode] = useState<"geral" | "barbeiros">("geral");
   const qChurnBarbeiros = trpc.raioX.churnPorBarbeiro.useQuery(baseInput, { enabled: !!org?.id && tab === "churn" });
-  const qCohort = trpc.raioX.cohort.useQuery(baseInput, { enabled: !!org?.id && tab === "cohort" });
+  const [cohortColaboradorId, setCohortColaboradorId] = useState<number | undefined>(undefined);
+  const cohortInput = useMemo(() => ({
+    ...baseInput,
+    colaboradorId: cohortColaboradorId,
+  }), [baseInput, cohortColaboradorId]);
+  const qCohort = trpc.raioX.cohort.useQuery(cohortInput, { enabled: !!org?.id && tab === "cohort" });
+  // Query sem filtro de colaborador para popular o seletor (usa dados já carregados)
+  const qCohortBase = trpc.raioX.cohort.useQuery(baseInput, { enabled: !!org?.id && tab === "cohort" });
   const qBarbeiros = trpc.raioX.barbeiros.useQuery(baseInput, { enabled: !!org?.id && tab === "barbeiros" });
   const qAcoes = trpc.raioX.acoes.useQuery(
     { ...baseInput, tipo: acoesTipo, page: 1, pageSize: 100 },
@@ -1794,10 +1801,43 @@ export default function RaioXPage() {
 
         {/* ── COHORT ───────────────────────────────────────────────────────────── */}
         <TabsContent value="cohort" className="space-y-4 mt-4">
-          {/* Cabeçalho informativo */}
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="text-yellow-400">📅</span>
-            <span>Período: {fmtDate(dataInicio)} – {fmtDate(dataFim)} · Cohort = clientes agrupados pelo mês da 1ª visita</span>
+          {/* Cabeçalho informativo + Filtro de colaborador */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="text-yellow-400">📅</span>
+              <span>Período: {fmtDate(dataInicio)} – {fmtDate(dataFim)} · Cohort = clientes agrupados pelo mês da 1ª visita</span>
+            </div>
+            {/* Seletor de colaborador */}
+            {qCohortBase.data?.cohortPorBarbeiro && qCohortBase.data.cohortPorBarbeiro.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Filtrar por:</span>
+                <Select
+                  value={cohortColaboradorId !== undefined ? String(cohortColaboradorId) : "all"}
+                  onValueChange={(v) => setCohortColaboradorId(v === "all" ? undefined : Number(v))}
+                >
+                  <SelectTrigger className="w-48 h-8 text-xs">
+                    <SelectValue placeholder="Todos os barbeiros" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os barbeiros</SelectItem>
+                    {(qCohortBase.data.cohortPorBarbeiro as Array<{barbeiroId: number; barbeiroNome: string; novos: number}>)
+                      .map(b => (
+                        <SelectItem key={b.barbeiroId} value={String(b.barbeiroId)}>
+                          {b.barbeiroNome} ({b.novos})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {cohortColaboradorId !== undefined && (
+                  <button
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setCohortColaboradorId(undefined)}
+                  >
+                    ✕ Limpar
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {qCohort.isLoading ? (

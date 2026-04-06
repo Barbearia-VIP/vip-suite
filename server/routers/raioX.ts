@@ -1428,7 +1428,7 @@ export const raioXRouter = router({
 
   // ── Cohort ───────────────────────────────────────────────────────────────────
   cohort: protectedProcedure
-    .input(baseInput)
+    .input(baseInput.extend({ colaboradorId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
@@ -1457,7 +1457,7 @@ export const raioXRouter = router({
           sub.ticketPrimeira, sub.barbeiro_id, sub.barbeiro_nome
         FROM (
           SELECT v.cliente, MIN(DATE(v.data_criacao)) as primeiraVisita,
-            (SELECT v2.total FROM vendas v2 JOIN usuarios uu2 ON v2.usuario = uu2.id
+            (SELECT v2.valor_total FROM vendas v2 JOIN usuarios uu2 ON v2.usuario = uu2.id
              WHERE ${unitIn2} AND v2.cliente = v.cliente AND v2.comanda_temp=0
                AND v2.cancelado_motivo IS NULL AND v2.status!=0
              ORDER BY v2.data_criacao ASC LIMIT 1) as ticketPrimeira,
@@ -1476,11 +1476,15 @@ export const raioXRouter = router({
         ) sub
       `);
 
-      if (novosRows.length === 0) {
-        return { cohortMensal: [], analiseNovos: null, distribuicao: null };
+      // Filtro de colaborador em Node.js (sem query extra ao banco)
+      const novosRowsFiltrados = input.colaboradorId
+        ? novosRows.filter(r => r.barbeiro_id === input.colaboradorId)
+        : novosRows;
+      if (novosRowsFiltrados.length === 0) {
+        return { cohortMensal: [], analiseNovos: null, distribuicao: null, cohortHistorico: [], cohortPorBarbeiro: [] };
       }
 
-      const clienteIds = novosRows.map(r => r.cliente_id);
+      const clienteIds = novosRowsFiltrados.map(r => r.cliente_id);
       const idList = clienteIds.join(",");
 
       // ── 2) Todas as visitas posteriores desses clientes ──
@@ -1489,7 +1493,7 @@ export const raioXRouter = router({
         data_visita: string | Date;
         total: number;
       }>(`
-        SELECT v.cliente as cliente_id, DATE(v.data_criacao) as data_visita, v.total
+        SELECT v.cliente as cliente_id, DATE(v.data_criacao) as data_visita, v.valor_total as total
         FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
         WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
           AND v.cliente IN (${idList})
@@ -1517,7 +1521,7 @@ export const raioXRouter = router({
         barbeiroId: number | null; barbeiroNome: string | null;
       }>>();
 
-      for (const n of novosRows) {
+      for (const n of novosRowsFiltrados) {
         const pv = n.primeiraVisita instanceof Date
           ? `${n.primeiraVisita.getUTCFullYear()}-${String(n.primeiraVisita.getUTCMonth()+1).padStart(2,"0")}-${String(n.primeiraVisita.getUTCDate()).padStart(2,"0")}`
           : String(n.primeiraVisita).slice(0, 10);
@@ -1561,7 +1565,7 @@ export const raioXRouter = router({
         });
 
       // ── 5) Análise geral de novos ──
-      const todosNovos = novosRows.length;
+      const todosNovos = novosRowsFiltrados.length;
       const allClientes = Array.from(clientesMes.values()).flat();
       const totalRet30 = allClientes.filter(c => c.ret30).length;
       const totalRet60 = allClientes.filter(c => c.ret60).length;
