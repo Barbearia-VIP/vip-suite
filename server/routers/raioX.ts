@@ -1203,16 +1203,63 @@ export const raioXRouter = router({
         ? clientesBase.reduce((s, c) => s + Number(c.ticket), 0) / total
         : 0;
 
-      // Churn mensal (baseado em ultima_visita dos perdidos)
-      const churnMensalMap: Record<string, number> = {};
-      for (const c of perdidosList) {
-        const uv = c.ultima_visita instanceof Date ? c.ultima_visita : new Date(c.ultima_visita as unknown as string);
-        const mes = `${uv.getFullYear()}-${String(uv.getMonth() + 1).padStart(2, "0")}`;
-        churnMensalMap[mes] = (churnMensalMap[mes] || 0) + 1;
+      // ── Evolução mensal: para cada um dos últimos 12 meses, calcular snapshot ──
+      // Para cada mês M: base = visitaram nos 620d antes do último dia de M
+      //                  perdidos = sem visita nos 45d antes do último dia de M
+      //                  fidelizados = ≥3 visitas históricas
+      const evolucaoMensal: { mes: string; churnPct: number; fidPct: number; total: number; perdidos: number; fidelizados: number; perdidosFid: number }[] = [];
+
+      // Gerar os 12 meses anteriores a dataFim
+      const dataFimDate = new Date(dataFim + "T12:00:00Z");
+      for (let i = 11; i >= 0; i--) {
+        const refDate = new Date(dataFimDate);
+        refDate.setUTCMonth(refDate.getUTCMonth() - i);
+        // Último dia do mês de referência
+        const lastDay = new Date(Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth() + 1, 0));
+        const refStr = lastDay.toISOString().split("T")[0];
+        const base620Str = new Date(lastDay.getTime() - 620 * 86400000).toISOString().split("T")[0];
+        const mesLabel = `${lastDay.getUTCFullYear()}-${String(lastDay.getUTCMonth() + 1).padStart(2, "0")}`;
+
+        try {
+          const [snap] = await queryExternal<{
+            total: number; perdidos: number; fidelizados: number; perdidosFid: number;
+          }>(`
+            SELECT
+              COUNT(*) as total,
+              SUM(CASE WHEN DATEDIFF('${refStr}', c.ultima_visita) > 45 THEN 1 ELSE 0 END) as perdidos,
+              SUM(CASE WHEN COALESCE(tvh.tv,0) >= 3 THEN 1 ELSE 0 END) as fidelizados,
+              SUM(CASE WHEN COALESCE(tvh.tv,0) >= 3 AND DATEDIFF('${refStr}', c.ultima_visita) > 45 THEN 1 ELSE 0 END) as perdidosFid
+            FROM (
+              SELECT DISTINCT v.cliente FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+              WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
+                AND v.cliente IS NOT NULL AND v.cliente!=2
+                AND DATE(v.data_criacao) >= '${base620Str}' AND DATE(v.data_criacao) <= '${refStr}'
+            ) bp
+            JOIN clientes c ON c.id = bp.cliente
+            LEFT JOIN (
+              SELECT v2.cliente, COUNT(*) as tv FROM vendas v2 JOIN usuarios uu2 ON v2.usuario = uu2.id
+              WHERE ${unitIn2} AND v2.comanda_temp=0 AND v2.cancelado_motivo IS NULL AND v2.status!=0
+                AND v2.cliente IS NOT NULL AND v2.cliente!=2
+              GROUP BY v2.cliente
+            ) tvh ON tvh.cliente = c.id
+            WHERE c.status = 1
+          `);
+          const t = Number(snap?.total ?? 0);
+          const p = Number(snap?.perdidos ?? 0);
+          const f = Number(snap?.fidelizados ?? 0);
+          const pf = Number(snap?.perdidosFid ?? 0);
+          evolucaoMensal.push({
+            mes: mesLabel,
+            churnPct: t > 0 ? Math.round(p / t * 1000) / 10 : 0,
+            fidPct: f > 0 ? Math.round(pf / f * 1000) / 10 : 0,
+            total: t, perdidos: p, fidelizados: f, perdidosFid: pf,
+          });
+        } catch {
+          evolucaoMensal.push({ mes: mesLabel, churnPct: 0, fidPct: 0, total: 0, perdidos: 0, fidelizados: 0, perdidosFid: 0 });
+        }
       }
-      const churnMensal = Object.entries(churnMensalMap)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([mes, total]) => ({ mes, total }));
+
+      const churnMensal = evolucaoMensal;
 
       return {
         resumo: {

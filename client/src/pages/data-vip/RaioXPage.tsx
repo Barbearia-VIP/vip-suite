@@ -1506,6 +1506,82 @@ export default function RaioXPage() {
                 </div>
               </div>
 
+              {/* Gráfico de Evolução Mensal */}
+              {qChurn.data.churnMensal && qChurn.data.churnMensal.length > 0 && (
+                <div className="rounded-lg border border-border/50 bg-card/60 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-sm font-medium">Evolução mensal</p>
+                      <p className="text-xs text-muted-foreground">{qChurn.data.churnMensal.length} meses · taxa de churn e fidelizados</p>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-red-400 rounded"></span>Churn geral</span>
+                      <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-orange-400 rounded"></span>Fidelizados</span>
+                    </div>
+                  </div>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <AreaChart
+                      data={(qChurn.data.churnMensal as Array<{mes: string; churnPct: number; fidPct: number}>).map(m => ({
+                        mesLabel: new Date(m.mes + "-15T12:00:00Z").toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+                        churnPct: m.churnPct,
+                        fidPct: m.fidPct,
+                      }))}
+                      margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient id="gradChurnG" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f87171" stopOpacity={0.25} />
+                          <stop offset="95%" stopColor="#f87171" stopOpacity={0.02} />
+                        </linearGradient>
+                        <linearGradient id="gradFidG" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#fb923c" stopOpacity={0.25} />
+                          <stop offset="95%" stopColor="#fb923c" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="mesLabel" tick={{ fontSize: 10, fill: "#888" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: "#888" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} domain={[0, 100]} />
+                      <Tooltip
+                        contentStyle={{ background: "#1a1a2e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", fontSize: "12px" }}
+                        formatter={(value: number, name: string) => [`${value.toFixed(1)}%`, name === "churnPct" ? "Churn geral" : "Churn fidelizados"]}
+                        labelFormatter={(label) => `Mês: ${label}`}
+                      />
+                      <Area type="monotone" dataKey="churnPct" stroke="#f87171" strokeWidth={2} fill="url(#gradChurnG)" dot={{ r: 3, fill: "#f87171" }} activeDot={{ r: 5 }} />
+                      <Area type="monotone" dataKey="fidPct" stroke="#fb923c" strokeWidth={2} fill="url(#gradFidG)" dot={{ r: 3, fill: "#fb923c" }} activeDot={{ r: 5 }} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                  {/* Análises automáticas */}
+                  {(() => {
+                    const series = qChurn.data.churnMensal as Array<{mes: string; churnPct: number; fidPct: number}>;
+                    if (series.length < 2) return null;
+                    const first = series[0]; const last = series[series.length - 1];
+                    const diffChurn = last.churnPct - first.churnPct;
+                    const diffFid = last.fidPct - first.fidPct;
+                    const insights: { type: "good" | "bad" | "info"; text: string }[] = [];
+                    if (diffChurn < -2) insights.push({ type: "good", text: `Churn geral caiu ${Math.abs(diffChurn).toFixed(1)}pp no período. Melhora na retenção.` });
+                    else if (diffChurn > 2) insights.push({ type: "bad", text: `Churn geral subiu ${diffChurn.toFixed(1)}pp no período. Atenção na retenção.` });
+                    if (diffFid < -2) insights.push({ type: "good", text: `Churn de fidelizados caiu ${Math.abs(diffFid).toFixed(1)}pp. Boa recuperação.` });
+                    else if (diffFid > 2) insights.push({ type: "bad", text: `Churn de fidelizados subiu ${diffFid.toFixed(1)}pp. Crítico — fidelizados em risco.` });
+                    const melhorMes = series.reduce((a, b) => a.churnPct < b.churnPct ? a : b);
+                    const piorMes = series.reduce((a, b) => a.churnPct > b.churnPct ? a : b);
+                    insights.push({ type: "info", text: `Melhor mês: ${melhorMes.mes} (${melhorMes.churnPct}% churn). Pior: ${piorMes.mes} (${piorMes.churnPct}% churn).` });
+                    if (last.churnPct > last.fidPct + 10) insights.push({ type: "bad", text: `Churn geral (${last.churnPct}%) muito acima do de fidelizados (${last.fidPct}%). Muitos one-shots sendo perdidos.` });
+                    return insights.length > 0 ? (
+                      <div className="mt-3 space-y-1.5">
+                        {insights.map((ins, i) => (
+                          <div key={i} className={`flex items-start gap-2 text-xs px-3 py-2 rounded ${
+                            ins.type === "good" ? "bg-green-500/10 text-green-300" : ins.type === "bad" ? "bg-red-500/10 text-red-300" : "bg-muted/20 text-muted-foreground"
+                          }`}>
+                            <span>{ins.type === "good" ? "↘" : ins.type === "bad" ? "↗" : "·"}</span>
+                            <span>{ins.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )}
+
               {/* Alerta: clientes em risco 45-90d */}
               {qChurn.data.kpis.emRisco45_90 > 0 && (
                 <div className="flex items-center gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/5 px-4 py-2.5 text-sm">
