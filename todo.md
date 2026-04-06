@@ -853,3 +853,9 @@
 - [x] Frontend: InfoPopover em "Por Cadência" com regras por dias sem vir (recorrentes, REF dataFim)
 - [x] Frontend: InfoPopover em "Status 12m" com regras ≤45d/46-90d/>90d e nota sobre "Perdido por recência"
 - [x] Frontend: InfoPopover em "One-Shot" com regras Aguardando ≤45d, Em risco 46-90d, Perdido >90d
+
+## Ajuste Base de Cálculo — MAX(vendas.data_criacao) (Abr/2026)
+- [x] Reescrever subquery baseS12m para usar MAX(vendas.data_criacao) por cliente/unidade em vez de clientes.ultima_visita
+- [x] Reescrever cálculo de dias_sem_vir para usar DATEDIFF(dataFim, ultima_venda) em vez de DATEDIFF(NOW(), c.ultima_visita)
+- [x] Ajustar todas as queries dependentes: Por Cadência, Status 12m, One-Shot, Cadência Individual, Risco Mensal, Saúde por Barbeiro
+- [x] Validado: universo subiu de 1.659 para 1.748 (ref: 1.738, dif. +10). One-shots acertaram exatamente (44 e 232). Mantido DATEDIFF(dataFim, ultima_venda) como logica correta.
