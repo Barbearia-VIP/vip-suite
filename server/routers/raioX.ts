@@ -1328,10 +1328,10 @@ export const raioXRouter = router({
         JOIN usuarios uuh ON vh.usuario = uuh.id
         WHERE ${unitIn.replace(/uu\./g, 'uuh.')} AND vh.comanda_temp=0 AND vh.cancelado_motivo IS NULL AND vh.status!=0
           AND vh.cliente IS NOT NULL AND vh.cliente!=2
+          AND c.status = 1
         GROUP BY c.id, c.ultima_visita
         HAVING MAX(DATE(vh.data_criacao)) >= '${base620Str}'
           AND MAX(DATE(vh.data_criacao)) <= '${dataFim}'
-          AND c.status = 1
       `);
 
       if (clientesBase.length === 0) return { barbeiros: [] };
