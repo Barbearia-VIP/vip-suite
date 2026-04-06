@@ -199,6 +199,7 @@ export default function ClientesPage() {
 
   const [clienteDetalhesId, setClienteDetalhesId] = useState<number | null>(null);
   const [showFreqAnalise, setShowFreqAnalise] = useState(false);
+  const [showDiasAnalise, setShowDiasAnalise] = useState(false);
   const [whatsappModal, setWhatsappModal] = useState(false);
   const [whatsappMsg, setWhatsappMsg] = useState("");
 
@@ -329,6 +330,44 @@ export default function ClientesPage() {
     ];
   }, [qDias.data]);
   const diasTotal = diasDados.reduce((s, r) => s + r.valor, 0);
+
+  // Análise automática de dias sem vir
+  const diasAnalise = useMemo(() => {
+    const d = qDias.data;
+    if (!d || diasTotal === 0) return [];
+    const ate30 = d.ate20d + d.d21a30;
+    const pctAte30 = Math.round((ate30 / diasTotal) * 100);
+    const pctMais75 = Math.round((d.mais75d / diasTotal) * 100);
+    const pctRisco = Math.round((d.d46a75 / diasTotal) * 100);
+
+    const linhas: { emoji: string; texto: string }[] = [];
+
+    if (pctAte30 < 50) {
+      linhas.push({ emoji: "\ud83d\udea8", texto: `Apenas ${pctAte30}% dos clientes vieram nos últimos 30 dias (${fmtNum(ate30)} de ${fmtNum(diasTotal)}) — base com retenção baixa. A maioria está espaçando demais as visitas.` });
+    } else {
+      linhas.push({ emoji: "\u2705", texto: `${pctAte30}% dos clientes vieram nos últimos 30 dias (${fmtNum(ate30)} de ${fmtNum(diasTotal)}) — boa taxa de retenção ativa.` });
+    }
+
+    if (d.mais75d > 0) {
+      linhas.push({ emoji: "\ud83d\udea8", texto: `${fmtNum(d.mais75d)} clientes (${pctMais75}%) estão há mais de 75 dias sem vir — isso equivale a mais de 2 meses sem retorno. Considere campanha de resgate urgente.` });
+    }
+
+    if (d.d46a75 > 0) {
+      linhas.push({ emoji: "\ud83d\udca1", texto: `${fmtNum(d.d46a75)} clientes (${pctRisco}%) estão na faixa 46-75 dias (≈1.5 a 2.5 meses sem vir) — foque em resgatar estes antes que virem perdidos.` });
+    }
+
+    if (d.d31a45 > 0) {
+      const pct = Math.round((d.d31a45 / diasTotal) * 100);
+      linhas.push({ emoji: "\u26a0\ufe0f", texto: `${fmtNum(d.d31a45)} clientes (${pct}%) estão na faixa 31-45 dias — atenção, estão próximos de entrar em risco.` });
+    }
+
+    if (d.ate20d > 0) {
+      const pct = Math.round((d.ate20d / diasTotal) * 100);
+      linhas.push({ emoji: "\u2705", texto: `${fmtNum(d.ate20d)} clientes (${pct}%) vieram há menos de 20 dias — base mais ativa e fiel da carteira.` });
+    }
+
+    return linhas;
+  }, [qDias.data, diasTotal]);
 
   const k = qKpis.data;
 
@@ -493,11 +532,53 @@ export default function ClientesPage() {
           {/* Distribuição por dias sem vir */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Distribuição por Dias Sem Vir · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
-              <p className="text-xs text-muted-foreground">Baseado na última visita de cada cliente no período</p>
+              <CardTitle className="text-base">Distribuição por dias sem vir · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
             </CardHeader>
-            <CardContent>
-              {qDias.isLoading ? <Skeleton className="h-12 w-full" /> : <BarraSegmentada itens={diasDados} total={diasTotal} altura="h-8" />}
+            <CardContent className="space-y-3">
+              {qDias.isLoading ? <Skeleton className="h-10 w-full" /> : (
+                <>
+                  {/* Barra única segmentada */}
+                  <BarraSegmentada itens={diasDados} total={diasTotal} altura="h-10" />
+
+                  {/* Legenda compacta em linha */}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1">
+                    {diasDados.map((item, i) => {
+                      const pct = diasTotal > 0 ? Math.round((item.valor / diasTotal) * 100) : 0;
+                      return (
+                        <span key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.cor }} />
+                          {item.label}: {fmtNum(item.valor)} ({pct}%)
+                        </span>
+                      );
+                    })}
+                  </div>
+
+                  {/* Botão Mostrar/Ocultar análise */}
+                  <button
+                    onClick={() => setShowDiasAnalise(v => !v)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1"
+                  >
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    {showDiasAnalise ? "Ocultar análise" : "Mostrar análise"}
+                    {showDiasAnalise ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+
+                  {/* Painel de análise automática */}
+                  {showDiasAnalise && (
+                    <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-2">
+                      <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                        Análise automática
+                        <span className="text-muted-foreground text-xs font-normal">(gerada com base nos dados do período)</span>
+                      </p>
+                      {diasAnalise.map((linha, i) => (
+                        <p key={i} className="text-sm text-muted-foreground leading-relaxed">
+                          <span className="mr-1.5">{linha.emoji}</span>{linha.texto}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </CardContent>
           </Card>
 
