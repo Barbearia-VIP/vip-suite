@@ -600,15 +600,27 @@ export const raioXRouter = router({
       const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
-
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
-
       const unitCondV = extIds.length === 0 ? "1=1"
         : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
         : `uu.unidade IN (${extIds.join(",")})`;
 
-      // Faixas de visitas no período
+      // Base S 12m rolling: clientes com visita nos últimos 12 meses a partir de HOJE
+      // Consistente com a Visão Geral
+      const baseS12mSubquery = `(
+        SELECT DISTINCT v.cliente
+        FROM vendas v
+        JOIN usuarios uu ON v.usuario = uu.id
+        WHERE ${unitCondV}
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.cliente IS NOT NULL AND v.cliente != 2
+          AND DATE(v.data_criacao) >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+          AND DATE(v.data_criacao) <= CURDATE()
+          AND uu.visivel_agenda != 'nenhuma'
+      )`;
+
+      // Faixas de visitas no período selecionado (para clientes da Base S 12m)
       const cadenciaRows = await queryExternal<{ faixa: string; total: number }>(`
         SELECT 
           CASE 
@@ -623,6 +635,7 @@ export const raioXRouter = router({
           SELECT v.cliente, COUNT(*) as visitas
           FROM vendas v
           JOIN usuarios uu ON v.usuario = uu.id
+          JOIN ${baseS12mSubquery} bs ON bs.cliente = v.cliente
           WHERE ${unitCondV}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
             AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -632,10 +645,10 @@ export const raioXRouter = router({
         GROUP BY faixa
         ORDER BY MIN(visitas)
       `, [dataInicio, dataFim]);
-
       const totalCadencia = cadenciaRows.reduce((s, r) => s + Number(r.total), 0);
 
-      // Distribuição por dias de ausência (clientes do período)
+      // Distribuição por dias de ausência — Base S 12m rolling
+      // Classifica cada cliente da base S 12m pela recência atual
       const distribuicao = { mto_frequente: 0, regular: 0, espacado: 0, em_risco: 0, perdido: 0 };
       const distRows = await queryExternal<{ faixa: string; total: number }>(`
         SELECT 
@@ -648,23 +661,15 @@ export const raioXRouter = router({
           END as faixa,
           COUNT(DISTINCT c.id) as total
         FROM clientes c
-        JOIN (
-          SELECT DISTINCT v.cliente
-          FROM vendas v
-          JOIN usuarios uu ON v.usuario = uu.id
-          WHERE ${unitCondV}
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
-            AND v.cliente IS NOT NULL AND v.cliente != 2
-            AND DATE(v.data_criacao) >= ? AND DATE(v.data_criacao) <= ?
-        ) cp ON cp.cliente = c.id
+        JOIN ${baseS12mSubquery} bs ON bs.cliente = c.id
         WHERE c.status = 1 AND c.ultima_visita IS NOT NULL
         GROUP BY faixa
-      `, [dataInicio, dataFim]);
+      `);
       for (const r of distRows) {
         if (r.faixa in distribuicao) distribuicao[r.faixa as keyof typeof distribuicao] = Number(r.total);
       }
 
-      // Top clientes por frequência no período
+      // Top clientes por frequência no período (da Base S 12m)
       const topClientesRows = await queryExternal<{
         id: number; nome: string; telefone: string;
         total_visitas: number; dias_medios: number;
@@ -673,6 +678,7 @@ export const raioXRouter = router({
                vc.cnt as total_visitas,
                COALESCE(ROUND(DATEDIFF(MAX(v2.data_criacao), MIN(v2.data_criacao)) / NULLIF(vc.cnt - 1, 0)), 0) as dias_medios
         FROM clientes c
+        JOIN ${baseS12mSubquery} bs ON bs.cliente = c.id
         JOIN (
           SELECT v.cliente, COUNT(*) as cnt
           FROM vendas v
@@ -709,8 +715,7 @@ export const raioXRouter = router({
         })),
       };
     }),
-
-  // ── Churn (visão geral) ───────────────────────────────────────────────────────
+    // ── Churn (visão geral) ───────────────────────────────────────────────────────
   churn: protectedProcedure
     .input(baseInput.extend({
       periodo: z.enum(["30d", "60d", "90d", "6m", "12m"]).optional(),
