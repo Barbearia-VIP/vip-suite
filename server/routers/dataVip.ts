@@ -1964,10 +1964,11 @@ export const dataVipRouter = router({
       dataInicio: z.string(),
       dataFim: z.string(),
       janelaDias: z.number().default(60),
+      colaboradorId: z.number().nullable().optional(),
     }))
     .query(async ({ input, ctx }) => {
       const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
-      return getChurnSaudeBase(extIds, input.dataInicio, input.dataFim, input.janelaDias);
+      return getChurnSaudeBase(extIds, input.dataInicio, input.dataFim, input.janelaDias, input.colaboradorId);
     }),
 
   // ── Churn por Barbeiro ───────────────────────────────────────────────────────────────────────────
@@ -1978,9 +1979,10 @@ export const dataVipRouter = router({
       dataInicio: z.string(),
       dataFim: z.string(),
       janelaDias: z.number().default(60),
+      colaboradorId: z.number().nullable().optional(),
     }))
     .query(async ({ input, ctx }) => {
       const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
-      return getChurnPorBarbeiro(extIds, input.dataInicio, input.dataFim, input.janelaDias);
+      return getChurnPorBarbeiro(extIds, input.dataInicio, input.dataFim, input.janelaDias, input.colaboradorId);
     }),
 });

@@ -2389,7 +2389,7 @@ export async function getClienteDetalhes(extIds: number[], clienteId: number) {
  * - Tempo médio resgate: média de dias de ausência dos resgatados
  * - Valor perdido estimado: perdidos * ticket médio da unidade no período
  */
-export async function getChurnSaudeBase(extIds: number[], dataInicio: string, dataFim: string, janelaDias: number = 60) {
+export async function getChurnSaudeBase(extIds: number[], dataInicio: string, dataFim: string, janelaDias: number = 60, colaboradorId?: number | null) {
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
@@ -2397,6 +2397,10 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
     : extIds.length === 1 ? `uu2.unidade = ${extIds[0]}`
     : `uu2.unidade IN (${extIds.join(",")})`;
   const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+
+  // Filtro de colaborador: quando selecionado, filtra via JOIN com vendas_produtos
+  const colabJoin = colaboradorId ? `JOIN vendas_produtos vp_colab ON vp_colab.venda = v.id AND vp_colab.colaborador = ${colaboradorId}` : "";
+  const colabJoinV2 = colaboradorId ? `JOIN vendas_produtos vp_colab2 ON vp_colab2.venda = v2.id AND vp_colab2.colaborador = ${colaboradorId}` : "";
 
   // Janela de "base de entrada": janelaDias * 1.833 ≈ 110d para janela 60d
   // Lógica validada: clientes que vieram nos 110d antes do INÍCIO mas não voltaram no período = Perdidos ≈ 249
@@ -2410,6 +2414,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
            COALESCE(SUM(v.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio
     FROM vendas v
     JOIN usuarios uu ON v.usuario = uu.id
+    ${colabJoin}
     WHERE ${unitCond}
       AND DATEDIFF(?, DATE(v.data_criacao)) <= ?
       AND DATE(v.data_criacao) <= ?
@@ -2429,6 +2434,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
       SELECT DISTINCT v.cliente
       FROM vendas v
       JOIN usuarios uu ON v.usuario = uu.id
+      ${colabJoin}
       WHERE ${unitCond}
         AND DATE(v.data_criacao) >= ?
         AND DATE(v.data_criacao) < ?
@@ -2441,6 +2447,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
       SELECT 1
       FROM vendas v2
       JOIN usuarios uu2 ON v2.usuario = uu2.id
+      ${colabJoinV2}
       WHERE ${unitCondV2}
         AND v2.cliente = base.cliente
         AND DATE(v2.data_criacao) >= ?
@@ -2464,12 +2471,15 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
   const unitCondV4 = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu4.unidade = ${extIds[0]}`
     : `uu4.unidade IN (${extIds.join(",")})`;
+  const colabJoinV3 = colaboradorId ? `JOIN vendas_produtos vp_colab3 ON vp_colab3.venda = v3.id AND vp_colab3.colaborador = ${colaboradorId}` : "";
+  const colabJoinV4 = colaboradorId ? `JOIN vendas_produtos vp_colab4 ON vp_colab4.venda = v4.id AND vp_colab4.colaborador = ${colaboradorId}` : "";
   const rowsResgatados = await queryExternal<{ total: number }>(`
     SELECT COUNT(DISTINCT base.cliente) as total
     FROM (
       SELECT DISTINCT v.cliente
       FROM vendas v
       JOIN usuarios uu ON v.usuario = uu.id
+      ${colabJoin}
       WHERE ${unitCond}
         AND DATE(v.data_criacao) >= ?
         AND DATE(v.data_criacao) <= ?
@@ -2481,6 +2491,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
     WHERE NOT EXISTS (
       SELECT 1 FROM vendas v2
       JOIN usuarios uu2 ON v2.usuario = uu2.id
+      ${colabJoinV2}
       WHERE ${unitCondV2}
         AND v2.cliente = base.cliente
         AND DATE(v2.data_criacao) >= ?
@@ -2491,6 +2502,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
     AND EXISTS (
       SELECT 1 FROM vendas v3
       JOIN usuarios uu3 ON v3.usuario = uu3.id
+      ${colabJoinV3}
       WHERE ${unitCondV3}
         AND v3.cliente = base.cliente
         AND DATE(v3.data_criacao) < ?
@@ -2500,6 +2512,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
     AND EXISTS (
       SELECT 1 FROM vendas v4
       JOIN usuarios uu4 ON v4.usuario = uu4.id
+      ${colabJoinV4}
       WHERE ${unitCondV4}
         AND v4.cliente = base.cliente
         AND DATE(v4.data_criacao) >= ?
@@ -2533,7 +2546,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
  * - Exclusivos: % de clientes que só foram atendidos por ele no período
  * - Compartilhados: % de clientes que também foram atendidos por outros
  */
-export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, dataFim: string, janelaDias: number = 60) {
+export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, dataFim: string, janelaDias: number = 60, colaboradorId?: number | null) {
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
@@ -2543,6 +2556,8 @@ export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, 
   const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
   const janelaEntrada = Math.round(janelaDias * 1.833);
   const dataInicioJanela = new Date(new Date(dataInicio + "T12:00:00Z").getTime() - janelaEntrada * 86400000).toISOString().slice(0, 10);
+  // Filtro de colaborador: quando selecionado, mostra apenas aquele barbeiro
+  const colabFilterCond = colaboradorId ? `AND vp.colaborador = ${colaboradorId}` : "";
 
   // Base ativa por barbeiro: clientes que vieram nos janelaDias antes do FIM
   const rowsBase = await queryExternal<{
@@ -2565,6 +2580,7 @@ export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, 
       AND v.cliente IS NOT NULL
       AND v.cliente != 2
       AND vp.colaborador IS NOT NULL
+      ${colabFilterCond}
     GROUP BY vp.colaborador, c.nome
     ORDER BY base_ativa DESC
   `, [dataFim, janelaDias, dataFim]);

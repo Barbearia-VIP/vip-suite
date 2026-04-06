@@ -240,11 +240,11 @@ export default function ClientesPage() {
     { enabled: enabled && clienteDetalhesId !== null }
   );
   const qChurnSaude = trpc.dataVip.churnSaudeBase.useQuery(
-    { ...base, dataInicio, dataFim, janelaDias },
+    { ...base, dataInicio, dataFim, janelaDias, colaboradorId },
     { enabled: enabled && aba === "churn_risco" }
   );
   const qChurnBarbeiro = trpc.dataVip.churnPorBarbeiro.useQuery(
-    { ...base, dataInicio, dataFim, janelaDias },
+    { ...base, dataInicio, dataFim, janelaDias, colaboradorId },
     { enabled: enabled && aba === "churn_risco" }
   );
 
