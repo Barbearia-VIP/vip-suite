@@ -437,13 +437,34 @@ export const raioXRouter = router({
           GROUP BY mes ORDER BY mes
         `),
         // ── Entradas mensais ─────────────────────────────────────────────────────
-        queryExternal<{ mes: string; novos: number }>(`
+        queryExternal<{ mes: string; novos: number; resgatados: number }>(`
           SELECT
-            DATE_FORMAT(c.data_criacao, '%Y-%m') as mes,
-            COUNT(*) as novos
-          FROM clientes c
-          WHERE ${unitCondSimple} AND c.status = 1
-            AND DATE(c.data_criacao) >= '${dataInicio}' AND DATE(c.data_criacao) <= '${dataFim}'
+            DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
+            COUNT(DISTINCT CASE
+              WHEN DATE(c.data_criacao) >= '${dataInicio}'
+              THEN v.cliente END) as novos,
+            COUNT(DISTINCT CASE
+              WHEN DATE(c.data_criacao) < '${dataInicio}'
+                AND DATEDIFF(DATE(v.data_criacao), ult_antes_em.ultima_antes) > 90
+              THEN v.cliente END) as resgatados
+          FROM vendas v
+          JOIN usuarios uu ON v.usuario = uu.id
+          JOIN clientes c ON c.id = v.cliente
+          LEFT JOIN (
+            SELECT v2.cliente, MAX(DATE(v2.data_criacao)) as ultima_antes
+            FROM vendas v2
+            JOIN usuarios uu2 ON v2.usuario = uu2.id
+            WHERE ${unitCondV.replace(/\buu\./g, 'uu2.')}
+              AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
+              AND v2.cliente IS NOT NULL AND v2.cliente != 2
+              AND DATE(v2.data_criacao) < '${dataInicio}'
+            GROUP BY v2.cliente
+          ) ult_antes_em ON ult_antes_em.cliente = v.cliente
+          WHERE ${unitCondV}
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.cliente IS NOT NULL AND v.cliente != 2
+            AND c.status = 1
+            AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
           GROUP BY mes ORDER BY mes
         `),
         // ── Risco mensal ─────────────────────────────────────────────────────────
@@ -588,7 +609,7 @@ export const raioXRouter = router({
         entradasMensais: entradasMensaisRows.map(r => ({
           mes: r.mes,
           novos: Number(r.novos),
-          resgatados: 0,
+          resgatados: Number(r.resgatados),
         })),
         riscoMensal: riscoMensalRows.map(r => ({
           mes: r.mes,

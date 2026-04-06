@@ -813,34 +813,68 @@ export default function RaioXPage() {
               })()}
 
               {/* ── Entradas na base ── */}
-              {v.entradasMensais && v.entradasMensais.length > 0 && (
+              {v.entradasMensais && v.entradasMensais.length > 0 && (() => {
+                const totalNovos = v.entradasMensais.reduce((s, r) => s + r.novos, 0);
+                const totalResgatados = v.entradasMensais.reduce((s, r) => s + r.resgatados, 0);
+                const anoAtual = new Date().getFullYear();
+                const anoNovos = v.entradasMensais.filter(r => r.mes.startsWith(String(anoAtual))).reduce((s, r) => s + r.novos, 0);
+                const ultimos6mNovos = v.entradasMensais.slice(-6).reduce((s, r) => s + r.novos, 0);
+                return (
                 <Card className="bg-card/60 border-border/50">
                   <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <div>
-                        <CardTitle className="text-sm">Entradas na base</CardTitle>
-                        <p className="text-xs text-muted-foreground mt-0.5">Novos clientes por mês</p>
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-sm">Entradas na base</CardTitle>
+                          <span className="text-xs text-muted-foreground">· <span className="text-foreground font-medium">{totalNovos.toLocaleString()}</span> novos + <span className="text-blue-400 font-medium">{totalResgatados.toLocaleString()}</span> resgatados</span>
+                          <InfoPopover
+                            title="Entradas na Base — Mensal"
+                            descricao="Verde: Clientes novos (1ª visita histórica no período). Azul: Clientes resgatados (estavam perdidos >90d e voltaram no período)."
+                            periodoFiltrado={v.contexto?.periodoFiltrado}
+                            ref={v.contexto?.ref}
+                            baseUsada={v.contexto?.baseUsada}
+                            baseTotal={v.sinais.totalBase}
+                            regra="Novos: data_criacao do cliente dentro do período | Resgatados: cliente existia antes do período + última visita anterior estava >90d antes do início do período"
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          12m: <span className="text-foreground">{totalNovos.toLocaleString()}</span> novos
+                          {" · "}
+                          6m: <span className="text-foreground">{ultimos6mNovos.toLocaleString()}</span>
+                          {" · "}
+                          Ano: <span className="text-foreground">{anoNovos.toLocaleString()}</span>
+                          {" · "}
+                          Resgatados: <span className="text-blue-400">{totalResgatados.toLocaleString()}</span>
+                        </p>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={180}>
+                    <ResponsiveContainer width="100%" height={200}>
                       <BarChart data={v.entradasMensais} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                         <XAxis dataKey="mes" tickFormatter={fmtMes} tick={{ fontSize: 11, fill: "#888" }} />
                         <YAxis tick={{ fontSize: 11, fill: "#888" }} />
-                        <Tooltip formatter={(val: number, name: string) => [val, name === "novos" ? "Novos" : "Resgatados"]} labelFormatter={fmtMes} contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
-                        <Bar dataKey="novos" fill={CORES.verde} radius={[3, 3, 0, 0]} name="Novos" stackId="a" />
-                        <Bar dataKey="resgatados" fill={CORES.azul} radius={[3, 3, 0, 0]} name="Resgatados" stackId="a" />
+                        <Tooltip
+                          formatter={(val: number, name: string) => [
+                            val.toLocaleString(),
+                            name === "novos" ? "Novos" : "Resgatados"
+                          ]}
+                          labelFormatter={fmtMes}
+                          contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }}
+                        />
+                        <Bar dataKey="novos" fill={CORES.verde} radius={[3, 3, 0, 0]} name="novos" />
+                        <Bar dataKey="resgatados" fill={CORES.azul} radius={[3, 3, 0, 0]} name="resgatados" />
                       </BarChart>
                     </ResponsiveContainer>
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-500 inline-block" />Novos</span>
-                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-blue-500 inline-block" />Resgatados</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-500 inline-block" />Novos (1ª visita)</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-blue-500 inline-block" />Resgatados (voltaram após +90d)</span>
                     </div>
                   </CardContent>
                 </Card>
-              )}
+                );
+              })()}
 
               {/* ── Risco & Retenção ── */}
               {v.riscoMensal && v.riscoMensal.length > 0 && (
