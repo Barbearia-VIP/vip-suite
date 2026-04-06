@@ -830,3 +830,8 @@
 - [ ] Frontend: badge "Contatado" na tabela Churn & Risco para clientes já contatados
 - [ ] Frontend: checkbox de seleção múltipla na tabela Churn & Risco
 - [ ] Frontend: botão "Contatar selecionados" com modal de envio em massa
+
+## Ajuste Limiar Em Risco (Abr/2026)
+- [x] Investigar limiares: testado 46-60d (134 em risco) e 46-90d (263 em risco) vs ref 425 — mantido 46-90d como mais próximo da referência
+- [x] Ativos ajustados para ≤45d (era ≤60d) — label atualizado no frontend
+- [x] Labels Churn e Cadência atualizados para refletir limiares corretos (46-90d, >90d)
