@@ -2401,7 +2401,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
   // Base ativa: clientes únicos no período
   const rowsBase = await queryExternal<{ total: number; ticket_medio: number }>(`
     SELECT COUNT(DISTINCT v.cliente) as total,
-           COALESCE(SUM(v.total) / COUNT(DISTINCT v.id), 0) as ticket_medio
+           COALESCE(SUM(v.valor_total) / COUNT(DISTINCT v.id), 0) as ticket_medio
     FROM vendas v
     JOIN usuarios uu ON v.usuario = uu.id
     WHERE ${unitCond}
@@ -2502,7 +2502,7 @@ export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, 
     FROM vendas_produtos vp
     JOIN vendas v ON vp.venda = v.id
     JOIN usuarios uu ON v.usuario = uu.id
-    LEFT JOIN colaboradores c ON vp.colaborador = c.id
+    LEFT JOIN usuarios c ON vp.colaborador = c.id
     WHERE ${unitCond}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
