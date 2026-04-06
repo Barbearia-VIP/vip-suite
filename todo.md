@@ -843,3 +843,13 @@
 - [x] Frontend: botão InfoPopover em "Perdidos" com regra dias_sem_vir > 90d
 - [x] Frontend: botão InfoPopover em "One-shot risco" com regra visitas=1 E 46d ≤ dias_sem_vir ≤ 90d
 - [x] Frontend: botão InfoPopover em "One-shot perdido" com regra visitas=1 E dias_sem_vir > 90d
+
+## InfoPopover — Distribuições da Base (Abr/2026)
+- [x] Backend: retornar contexto para Por Perfil (universo, regras Fiel/Recorrente/Regular/Ocasional/One-shot)
+- [x] Backend: retornar contexto para Por Cadência (universo recorrentes ≥2 visitas, regras por dias sem vir)
+- [x] Backend: retornar contexto para Status 12m (universo base S, regras ≤45d/46-90d/>90d)
+- [x] Backend: retornar contexto para One-Shot (universo 1ª visita única, regras Aguardando/Em risco/Perdido)
+- [x] Frontend: InfoPopover em "Por Perfil" com regras Fiel ≥12v ≤45d, Recorrente ≥6v ≤60d, Regular ≥3v ≤90d
+- [x] Frontend: InfoPopover em "Por Cadência" com regras por dias sem vir (recorrentes, REF dataFim)
+- [x] Frontend: InfoPopover em "Status 12m" com regras ≤45d/46-90d/>90d e nota sobre "Perdido por recência"
+- [x] Frontend: InfoPopover em "One-Shot" com regras Aguardando ≤45d, Em risco 46-90d, Perdido >90d

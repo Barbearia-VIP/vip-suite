@@ -530,20 +530,50 @@ export const raioXRouter = router({
           ref: dataFim,
           baseUsada: `${dataInicio12m} – ${dataFim}`,
           emRisco: {
-            regra: "46d ≤ dias_sem_vir ≤ 90d",
-            usadaEm: "Em Risco · Score de saúde (dim. risco) · Distribuições",
+            regra: "46d <= dias_sem_vir <= 90d",
+            usadaEm: "Em Risco - Score de saude (dim. risco) - Distribuicoes",
           },
           perdidos: {
             regra: "dias_sem_vir > 90d",
-            usadaEm: "Perdidos · Score de saúde (dim. perdidos) · Distribuições",
+            usadaEm: "Perdidos - Score de saude (dim. perdidos) - Distribuicoes",
           },
           oneShotRisco: {
-            regra: "visitas=1 E 46d ≤ dias_sem_vir ≤ 90d",
-            usadaEm: "One-shots (em risco + perdido) · Distribuições",
+            regra: "visitas=1 E 46d <= dias_sem_vir <= 90d",
+            usadaEm: "One-shots (em risco + perdido) - Distribuicoes",
           },
           oneShotPerdido: {
             regra: "visitas=1 E dias_sem_vir > 90d",
-            usadaEm: "One-shots (em risco + perdido) · Distribuições",
+            usadaEm: "One-shots (em risco + perdido) - Distribuicoes",
+          },
+          distribuicoes: {
+            porPerfil: {
+              descricao: "Volume historico + recencia na REF",
+              universo: `${dataInicio12m} – ${dataFim}`,
+              total: Number(pr.total),
+              regras: "Fiel: >=12v E <=45d | Recorrente: >=6v E <=60d | Regular: >=3v E <=90d",
+              nota: "Config -> Secao 3 para editar thresholds.",
+            },
+            porCadencia: {
+              descricao: "Dias sem vir - recorrentes - REF: " + dataFim,
+              universo: `${dataInicio12m} – ${dataFim}`,
+              total: Number(pc.total),
+              regras: "Perdido: >90d | Regular: 31-60d | Em risco: 61-90d | Espacando: 91-180d | Mto frequente: <=30d",
+              nota: "Analise detalhada na aba Cadencia. Labels editaveis em Config -> Secao 4.",
+            },
+            status12m: {
+              descricao: "Classificacao baseada apenas em recencia (dias desde ultima visita).",
+              universo: `${dataInicio12m} – ${dataFim}`,
+              total: Number(s12.total),
+              regras: "Saudavel: <=45d | Em Risco: 46-90d | Perdido: >90d",
+              nota: "\"Perdido\" aqui e por recencia, nao definitivo. Configure em Config -> Secao 5.",
+            },
+            oneShot: {
+              descricao: "One-shot = cliente com exatamente 1 visita historica. Sem cadencia calculavel - monitorados por recencia.",
+              universo: `${dataInicio12m} – ${dataFim}`,
+              total: Number(os.total),
+              regras: "Aguardando: visitas=1 E dias_sem_vir <= 45d | Em risco: visitas=1 E 46d <= dias <= 90d | Perdido: visitas=1 E dias_sem_vir > 90d",
+              nota: "Em risco e Perdido tambem somam nos KPIs gerais.",
+            },
           },
         },
       };

@@ -500,7 +500,22 @@ export default function RaioXPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                   {/* Por Perfil */}
                   <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Por Perfil · 12m</CardTitle></CardHeader>
+                    <CardHeader className="pb-1">
+                      <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
+                        Por Perfil
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold">12</span>
+                        <InfoPopover
+                          title="Por Perfil"
+                          descricao={v.contexto?.distribuicoes?.porPerfil?.descricao ?? "Volume historico + recencia na REF"}
+                          periodoFiltrado={v.contexto?.periodoFiltrado}
+                          ref={v.contexto?.ref}
+                          baseUsada={v.contexto?.distribuicoes?.porPerfil?.universo}
+                          baseTotal={v.contexto?.distribuicoes?.porPerfil?.total}
+                          regra={v.contexto?.distribuicoes?.porPerfil?.regras}
+                          nota={v.contexto?.distribuicoes?.porPerfil?.nota}
+                        />
+                      </CardTitle>
+                    </CardHeader>
                     <CardContent className="space-y-1 pt-1">
                       <p className="text-xs text-muted-foreground">universo: {(v.sinais.totalBase).toLocaleString()} clientes</p>
                       {[
@@ -517,7 +532,22 @@ export default function RaioXPage() {
                   </Card>
                   {/* Por Cadência */}
                   <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Por Cadência · 12m</CardTitle></CardHeader>
+                    <CardHeader className="pb-1">
+                      <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
+                        Por Cadência
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold">12</span>
+                        <InfoPopover
+                          title="Cadencia Fixa"
+                          descricao={v.contexto?.distribuicoes?.porCadencia?.descricao ?? "Dias sem vir - recorrentes"}
+                          periodoFiltrado={v.contexto?.periodoFiltrado}
+                          ref={v.contexto?.ref}
+                          baseUsada={v.contexto?.distribuicoes?.porCadencia?.universo}
+                          baseTotal={v.contexto?.distribuicoes?.porCadencia?.total}
+                          regra={v.contexto?.distribuicoes?.porCadencia?.regras}
+                          nota={v.contexto?.distribuicoes?.porCadencia?.nota}
+                        />
+                      </CardTitle>
+                    </CardHeader>
                     <CardContent className="space-y-1 pt-1">
                       <p className="text-xs text-muted-foreground">universo: {(v.distribuicoes.porCadencia?.total ?? 0).toLocaleString()} clientes (≥3 visitas)</p>
                       {[
@@ -534,7 +564,22 @@ export default function RaioXPage() {
                   </Card>
                   {/* Status 12m */}
                   <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Status 12m</CardTitle></CardHeader>
+                    <CardHeader className="pb-1">
+                      <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
+                        Status 12m
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold">12</span>
+                        <InfoPopover
+                          title="Status 12m - Saude por Recencia"
+                          descricao={v.contexto?.distribuicoes?.status12m?.descricao ?? "Classificacao baseada apenas em recencia"}
+                          periodoFiltrado={v.contexto?.periodoFiltrado}
+                          ref={v.contexto?.ref}
+                          baseUsada={v.contexto?.distribuicoes?.status12m?.universo}
+                          baseTotal={v.contexto?.distribuicoes?.status12m?.total}
+                          regra={v.contexto?.distribuicoes?.status12m?.regras}
+                          nota={v.contexto?.distribuicoes?.status12m?.nota}
+                        />
+                      </CardTitle>
+                    </CardHeader>
                     <CardContent className="space-y-1 pt-1">
                       <p className="text-xs text-muted-foreground">universo: {v.sinais.totalBase.toLocaleString()} clientes</p>
                       {[
@@ -549,7 +594,21 @@ export default function RaioXPage() {
                   </Card>
                   {/* One-Shot */}
                   <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">One-Shot</CardTitle></CardHeader>
+                    <CardHeader className="pb-1">
+                      <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
+                        One-Shot
+                        <InfoPopover
+                          title="One-Shot - 1a visita unica"
+                          descricao={v.contexto?.distribuicoes?.oneShot?.descricao ?? "One-shot = cliente com exatamente 1 visita historica"}
+                          periodoFiltrado={v.contexto?.periodoFiltrado}
+                          ref={v.contexto?.ref}
+                          baseUsada={v.contexto?.distribuicoes?.oneShot?.universo}
+                          baseTotal={v.contexto?.distribuicoes?.oneShot?.total}
+                          regra={v.contexto?.distribuicoes?.oneShot?.regras}
+                          nota={v.contexto?.distribuicoes?.oneShot?.nota}
+                        />
+                      </CardTitle>
+                    </CardHeader>
                     <CardContent className="space-y-1 pt-1">
                       <p className="text-xs text-muted-foreground">universo: {v.distribuicoes.oneShot.total.toLocaleString()} com 1ª visita única</p>
                       {[
