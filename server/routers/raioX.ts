@@ -1303,31 +1303,87 @@ export const raioXRouter = router({
       const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
+      if (extIds.length === 0) return { barbeiros: [] };
 
-      const diasPeriodo = input.periodo === "30d" ? 30
-        : input.periodo === "60d" ? 60
-        : input.periodo === "6m" ? 180
-        : input.periodo === "12m" ? 365
-        : 90;
-
-      const dataInicio = input.dataInicio || new Date(Date.now() - diasPeriodo * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
+      const base620Str = new Date(new Date(dataFim + "T12:00:00Z").getTime() - 620 * 86400000).toISOString().split("T")[0];
+      const resgate90Str = new Date(new Date(dataFim + "T12:00:00Z").getTime() - 90 * 86400000).toISOString().split("T")[0];
 
-      const rows = await getChurnPorBarbeiro(extIds, dataInicio, dataFim);
+      const unitIn = extIds.length === 1 ? `uu.unidade = ${extIds[0]}` : `uu.unidade IN (${extIds.join(",")})`;
+      const unitIn2 = extIds.length === 1 ? `uu2.unidade = ${extIds[0]}` : `uu2.unidade IN (${extIds.join(",")})`;
+      const unitIn3 = extIds.length === 1 ? `uu3.unidade = ${extIds[0]}` : `uu3.unidade IN (${extIds.join(",")})`;
+
+      // Base por barbeiro: clientes que visitaram nos 620d antes de dataFim
+      // Atribuição: último barbeiro que atendeu o cliente
+      const rows = await queryExternal<{
+        colaborador_id: number;
+        colaborador_nome: string;
+        total: number;
+        perdidos: number;
+        fidelizados: number;
+        perdidos_fid: number;
+        em_risco: number;
+        resgatados: number;
+      }>(`
+        SELECT
+          ult.colaborador_id,
+          ult.colaborador_nome,
+          COUNT(*) as total,
+          SUM(CASE WHEN DATEDIFF('${dataFim}', c.ultima_visita) > 45 THEN 1 ELSE 0 END) as perdidos,
+          SUM(CASE WHEN COALESCE(tvh.tv,0) >= 3 THEN 1 ELSE 0 END) as fidelizados,
+          SUM(CASE WHEN COALESCE(tvh.tv,0) >= 3 AND DATEDIFF('${dataFim}', c.ultima_visita) > 45 THEN 1 ELSE 0 END) as perdidos_fid,
+          SUM(CASE WHEN DATEDIFF('${dataFim}', c.ultima_visita) BETWEEN 45 AND 90 THEN 1 ELSE 0 END) as em_risco,
+          SUM(CASE WHEN rg.cliente IS NOT NULL THEN 1 ELSE 0 END) as resgatados
+        FROM (
+          SELECT DISTINCT v.cliente FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+          WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
+            AND v.cliente IS NOT NULL AND v.cliente!=2
+            AND DATE(v.data_criacao) >= '${base620Str}' AND DATE(v.data_criacao) <= '${dataFim}'
+        ) bp
+        JOIN clientes c ON c.id = bp.cliente
+        JOIN (
+          -- Último barbeiro que atendeu cada cliente
+          SELECT v2.cliente,
+            (SELECT uu2.id FROM vendas v2b JOIN usuarios uu2 ON v2b.usuario = uu2.id
+             WHERE ${unitIn2} AND v2b.cliente = v2.cliente AND v2b.comanda_temp=0 AND v2b.cancelado_motivo IS NULL AND v2b.status!=0
+             ORDER BY v2b.data_criacao DESC LIMIT 1) as colaborador_id,
+            (SELECT uu2.nome FROM vendas v2b JOIN usuarios uu2 ON v2b.usuario = uu2.id
+             WHERE ${unitIn2} AND v2b.cliente = v2.cliente AND v2b.comanda_temp=0 AND v2b.cancelado_motivo IS NULL AND v2b.status!=0
+             ORDER BY v2b.data_criacao DESC LIMIT 1) as colaborador_nome
+          FROM vendas v2 JOIN usuarios uu2 ON v2.usuario = uu2.id
+          WHERE ${unitIn2} AND v2.comanda_temp=0 AND v2.cancelado_motivo IS NULL AND v2.status!=0
+            AND v2.cliente IS NOT NULL AND v2.cliente!=2
+          GROUP BY v2.cliente
+        ) ult ON ult.cliente = bp.cliente
+        LEFT JOIN (
+          SELECT v3.cliente, COUNT(*) as tv FROM vendas v3 JOIN usuarios uu3 ON v3.usuario = uu3.id
+          WHERE ${unitIn3} AND v3.comanda_temp=0 AND v3.cancelado_motivo IS NULL AND v3.status!=0
+            AND v3.cliente IS NOT NULL AND v3.cliente!=2
+          GROUP BY v3.cliente
+        ) tvh ON tvh.cliente = bp.cliente
+        LEFT JOIN (
+          -- Resgatados: voltaram no período após 90d sem vir
+          SELECT DISTINCT v4.cliente FROM vendas v4 JOIN usuarios uu4 ON v4.usuario = uu4.id
+          WHERE uu4.unidade IN (${extIds.join(",")}) AND v4.comanda_temp=0 AND v4.cancelado_motivo IS NULL AND v4.status!=0
+            AND v4.cliente IS NOT NULL AND v4.cliente!=2
+            AND DATE(v4.data_criacao) >= '${resgate90Str}' AND DATE(v4.data_criacao) <= '${dataFim}'
+        ) rg ON rg.cliente = bp.cliente
+        WHERE c.status = 1 AND ult.colaborador_id IS NOT NULL
+        GROUP BY ult.colaborador_id, ult.colaborador_nome
+        ORDER BY perdidos DESC
+      `);
+
       const barbeiros = rows.map(r => ({
-        colaboradorId: String(r.colaboradorId),
-        colaboradorNome: r.colaboradorNome,
-        totalClientes: r.baseAtiva,
-        ativos: r.baseAtiva - r.perdidos,
-        emRisco: 0,
-        perdidos: r.perdidos,
-        oneShots: 0,
-        taxaRetencao: r.baseAtiva > 0
-          ? Math.round(((r.baseAtiva - r.perdidos) / r.baseAtiva) * 100)
-          : 0,
-        taxaChurn: Math.round(r.churnPct),
-        mediaVisitas: 0,
-        ticketMedio: 0,
+        colaboradorId: String(r.colaborador_id),
+        colaboradorNome: r.colaborador_nome || "Sem nome",
+        total: Number(r.total),
+        perdidos: Number(r.perdidos),
+        fidelizados: Number(r.fidelizados),
+        perdidosFid: Number(r.perdidos_fid),
+        emRisco: Number(r.em_risco),
+        resgatados: Number(r.resgatados),
+        churnPct: Number(r.total) > 0 ? Math.round(Number(r.perdidos) / Number(r.total) * 1000) / 10 : 0,
+        churnFidPct: Number(r.fidelizados) > 0 ? Math.round(Number(r.perdidos_fid) / Number(r.fidelizados) * 1000) / 10 : 0,
       }));
       return { barbeiros };
     }),

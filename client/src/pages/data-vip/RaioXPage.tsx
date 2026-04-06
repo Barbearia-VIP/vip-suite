@@ -1685,59 +1685,109 @@ export default function RaioXPage() {
 
           {churnViewMode === "barbeiros" && (
             <>{qChurnBarbeiros.isLoading ? <Skeleton className="h-60" /> : qChurnBarbeiros.data ? (
-            <Card className="bg-card/60 border-border/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Scissors className="w-4 h-4 text-yellow-400" />
-                  Retenção por Barbeiro
-                </CardTitle>
-                <p className="text-xs text-muted-foreground">Clientes atendidos no período · status atual baseado na última visita de todos os tempos · use períodos mais antigos (ex: 12 meses) para ver churn real</p>
-              </CardHeader>
-              <CardContent className="p-0">
+            <div className="space-y-3">
+              {/* Cabeçalho da seção */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-2">
+                    <Scissors className="w-4 h-4 text-yellow-400" />
+                    Churn por Barbeiro
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {qChurnBarbeiros.data.barbeiros.length} barbeiros · base 620d · perdido = sem visita em +45d · fidelizados = ≥3 visitas
+                  </p>
+                </div>
+                <button
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-border/50 rounded px-2 py-1"
+                  onClick={() => {
+                    const bbs = qChurnBarbeiros.data?.barbeiros ?? [];
+                    if (!bbs.length) return;
+                    const header = "Barbeiro,Base,Perdidos,Churn %,Fidelizados,Perd.Fid,Churn Fid %,Em Risco,Resgatados";
+                    const rows2 = bbs.map(b =>
+                      `"${b.colaboradorNome}",${b.total},${b.perdidos},${b.churnPct},${b.fidelizados},${b.perdidosFid},${b.churnFidPct},${b.emRisco},${b.resgatados}`
+                    );
+                    const blob = new Blob([header + "\n" + rows2.join("\n")], { type: "text/csv;charset=utf-8" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url;
+                    a.download = `ChurnPorBarbeiro_${dataFim}.csv`; a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  <Download className="w-3 h-3" /> CSV
+                </button>
+              </div>
+              {/* Tabela */}
+              <div className="rounded-lg border border-border/50 bg-card/60 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-border/50 text-xs text-muted-foreground">
-                        <th className="text-left p-3">Barbeiro</th>
-                        <th className="text-right p-3">Clientes</th>
-                        <th className="text-right p-3">Ativos</th>
-                        <th className="text-right p-3">Em Risco</th>
+                      <tr className="border-b border-border/50 text-xs text-muted-foreground bg-muted/10">
+                        <th className="text-left p-3 pl-4">Barbeiro</th>
+                        <th className="text-right p-3">Base</th>
                         <th className="text-right p-3">Perdidos</th>
-                        <th className="text-right p-3">One-Shot</th>
-                        <th className="text-right p-3">Retenção</th>
-                        <th className="text-right p-3">Churn</th>
-                        <th className="text-right p-3">Méd. Visitas</th>
-                        <th className="text-right p-3">Ticket Médio</th>
+                        <th className="text-right p-3">Churn %</th>
+                        <th className="text-right p-3">Fidelizados</th>
+                        <th className="text-right p-3">Perd. Fid.</th>
+                        <th className="text-right p-3">Churn Fid %</th>
+                        <th className="text-right p-3">Em Risco</th>
+                        <th className="text-right p-3 pr-4">Resgatados</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {qChurnBarbeiros.data.barbeiros.map(b => (
-                        <tr key={b.colaboradorId} className="border-b border-border/20 hover:bg-muted/20">
-                          <td className="p-3 font-medium">{b.colaboradorNome}</td>
-                          <td className="p-3 text-right">{b.totalClientes.toLocaleString()}</td>
-                          <td className="p-3 text-right text-green-400">{b.ativos.toLocaleString()}</td>
-                          <td className="p-3 text-right text-yellow-400">{b.emRisco.toLocaleString()}</td>
-                          <td className="p-3 text-right text-red-400">{b.perdidos.toLocaleString()}</td>
-                          <td className="p-3 text-right text-purple-400">{b.oneShots.toLocaleString()}</td>
-                          <td className="p-3 text-right">
-                            <span className={`font-semibold ${
-                              b.taxaRetencao >= 60 ? "text-green-400" : b.taxaRetencao >= 40 ? "text-yellow-400" : "text-red-400"
-                            }`}>{b.taxaRetencao}%</span>
-                          </td>
-                          <td className="p-3 text-right">
-                            <span className={`font-semibold ${
-                              b.taxaChurn <= 20 ? "text-green-400" : b.taxaChurn <= 40 ? "text-yellow-400" : "text-red-400"
-                            }`}>{b.taxaChurn}%</span>
-                          </td>
-                          <td className="p-3 text-right text-muted-foreground">{b.mediaVisitas}x</td>
-                          <td className="p-3 text-right text-muted-foreground">{fmtMoeda(b.ticketMedio)}</td>
-                        </tr>
-                      ))}
+                      {qChurnBarbeiros.data.barbeiros.map((b, idx) => {
+                        const maxChurn = Math.max(...qChurnBarbeiros.data!.barbeiros.map(x => x.churnPct));
+                        const barW = maxChurn > 0 ? Math.round((b.churnPct / maxChurn) * 100) : 0;
+                        return (
+                          <tr key={b.colaboradorId} className={`border-b border-border/20 hover:bg-muted/20 ${idx === 0 ? "bg-red-500/5" : ""}`}>
+                            <td className="p-3 pl-4">
+                              <div className="font-medium text-sm">{b.colaboradorNome}</div>
+                              {/* Barra de churn */}
+                              <div className="mt-1 h-1 bg-muted/30 rounded-full w-24">
+                                <div
+                                  className={`h-1 rounded-full ${
+                                    b.churnPct <= 30 ? "bg-green-500" : b.churnPct <= 50 ? "bg-yellow-500" : "bg-red-500"
+                                  }`}
+                                  style={{ width: `${barW}%` }}
+                                />
+                              </div>
+                            </td>
+                            <td className="p-3 text-right text-muted-foreground">{b.total.toLocaleString()}</td>
+                            <td className="p-3 text-right text-red-400 font-medium">{b.perdidos.toLocaleString()}</td>
+                            <td className="p-3 text-right">
+                              <span className={`font-bold ${
+                                b.churnPct <= 30 ? "text-green-400" : b.churnPct <= 50 ? "text-yellow-400" : "text-red-400"
+                              }`}>{b.churnPct}%</span>
+                            </td>
+                            <td className="p-3 text-right text-muted-foreground">{b.fidelizados.toLocaleString()}</td>
+                            <td className="p-3 text-right text-orange-400">{b.perdidosFid.toLocaleString()}</td>
+                            <td className="p-3 text-right">
+                              <span className={`font-semibold ${
+                                b.churnFidPct <= 30 ? "text-green-400" : b.churnFidPct <= 50 ? "text-yellow-400" : "text-red-400"
+                              }`}>{b.churnFidPct}%</span>
+                            </td>
+                            <td className="p-3 text-right text-yellow-400">{b.emRisco.toLocaleString()}</td>
+                            <td className="p-3 text-right pr-4 text-green-400">{b.resgatados.toLocaleString()}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
+                    <tfoot>
+                      <tr className="border-t border-border/50 bg-muted/10 text-xs text-muted-foreground">
+                        <td className="p-3 pl-4 font-medium">Total</td>
+                        <td className="p-3 text-right font-medium">{qChurnBarbeiros.data.barbeiros.reduce((s, b) => s + b.total, 0).toLocaleString()}</td>
+                        <td className="p-3 text-right text-red-400 font-medium">{qChurnBarbeiros.data.barbeiros.reduce((s, b) => s + b.perdidos, 0).toLocaleString()}</td>
+                        <td className="p-3 text-right"></td>
+                        <td className="p-3 text-right">{qChurnBarbeiros.data.barbeiros.reduce((s, b) => s + b.fidelizados, 0).toLocaleString()}</td>
+                        <td className="p-3 text-right text-orange-400">{qChurnBarbeiros.data.barbeiros.reduce((s, b) => s + b.perdidosFid, 0).toLocaleString()}</td>
+                        <td className="p-3 text-right"></td>
+                        <td className="p-3 text-right text-yellow-400">{qChurnBarbeiros.data.barbeiros.reduce((s, b) => s + b.emRisco, 0).toLocaleString()}</td>
+                        <td className="p-3 text-right pr-4 text-green-400">{qChurnBarbeiros.data.barbeiros.reduce((s, b) => s + b.resgatados, 0).toLocaleString()}</td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ) : null}</>
           )}
         </TabsContent>
