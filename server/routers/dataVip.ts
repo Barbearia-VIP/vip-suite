@@ -1713,11 +1713,13 @@ export const dataVipRouter = router({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
       colaboradorId: z.number().nullable().optional(),
+      dataInicio: z.string().optional(),
+      dataFim: z.string().optional(),
     }))
     .query(async ({ ctx, input }) => {
       try {
         const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
-        return await getClientesDistribuicaoStatus(extIds, input.colaboradorId);
+        return await getClientesDistribuicaoStatus(extIds, input.colaboradorId, input.dataInicio, input.dataFim);
       } catch (err) { handleExternalDbError(err); }
     }),
 

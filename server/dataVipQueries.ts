@@ -1767,23 +1767,29 @@ export async function getClientesKpis(extIds: number[], dataInicio: string, data
 }
 
 /** Distribuição por status (Assíduo, Regular, Espaçando, 1ª Vez, Em Risco, Perdido)
- * Baseado na cadência de visitas do cliente:
- * - Assíduo: visita com frequência < 80% da cadência esperada (≤ 30d)
- * - Regular: 80-120% da cadência (31-45d)
- * - Espaçando: 120-180% da cadência (46-60d)
- * - Em Risco: 2x+ a cadência, 31-75d sem vir
- * - Perdido: 2x+ a cadência, > 75d sem vir
- * - 1ª Vez: apenas 1 visita, última há ≤ 30d
- * Simplificação: usamos dias desde última visita na unidade
+ * Lógica baseada em cadência de visitas no período selecionado:
+ * - Universo: clientes que visitaram pelo menos 1x no período
+ * - Cadência individual = (dias entre primeira e última visita no período) / (visitas - 1)
+ *   Para clientes com 1 visita, cadência = 30d (padrão)
+ * - Dias sem vir = DATEDIFF(NOW(), última visita no período)
+ * - Assíduo: dias_sem_vir <= 0.8 * cadência
+ * - Regular: dias_sem_vir BETWEEN 0.8 e 1.2 * cadência
+ * - Espaçando: dias_sem_vir BETWEEN 1.2 e 1.8 * cadência
+ * - Em Risco: dias_sem_vir BETWEEN 1.8 e 2.5 * cadência (min 31d, max 75d para 1 vis)
+ * - Perdido: dias_sem_vir > 2.5 * cadência (ou >75d para 1 vis)
+ * - 1ª Vez: 1 visita E dias_sem_vir <= 30
  */
-export async function getClientesDistribuicaoStatus(extIds: number[], colaboradorId?: number | null) {
-  const unitCond = extIds.length === 0 ? "1=1"
-    : extIds.length === 1 ? `c.ultima_visita_unidade = ${extIds[0]}`
-    : `c.ultima_visita_unidade IN (${extIds.join(",")})`;
+export async function getClientesDistribuicaoStatus(extIds: number[], colaboradorId?: number | null, dataInicio?: string, dataFim?: string) {
   const unitCondV = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
-  const colabJoinV = colaboradorId ? `JOIN vendas_produtos vp_c ON vp_c.venda = v.id AND vp_c.colaborador = ${Number(colaboradorId)}` : "";
+  const colabJoin = colaboradorId ? `JOIN vendas_produtos vp_c ON vp_c.venda = v.id AND vp_c.colaborador = ${Number(colaboradorId)}` : "";
+
+  // Se não passar período, usa os últimos 12 meses como padrão
+  const ini = dataInicio ?? new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
+  const fimExcl = dataFim
+    ? new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
 
   const rows = await queryExternal<{
     status_label: string;
@@ -1791,31 +1797,38 @@ export async function getClientesDistribuicaoStatus(extIds: number[], colaborado
   }>(`
     SELECT
       CASE
-        WHEN total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) <= 30 THEN '1a_vez'
-        WHEN DATEDIFF(NOW(), c.ultima_visita) <= 30 THEN 'assiduo'
-        WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 31 AND 45 THEN 'regular'
-        WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 46 AND 60 THEN 'espacando'
-        WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 75 THEN 'em_risco'
+        WHEN total_visitas = 1 AND dias_sem_vir <= 30 THEN '1a_vez'
+        WHEN dias_sem_vir <= cadencia * 0.8 THEN 'assiduo'
+        WHEN dias_sem_vir <= cadencia * 1.2 THEN 'regular'
+        WHEN dias_sem_vir <= cadencia * 1.8 THEN 'espacando'
+        WHEN dias_sem_vir <= cadencia * 2.5 THEN 'em_risco'
         ELSE 'perdido'
       END as status_label,
       COUNT(*) as total
-    FROM clientes c
-    JOIN (
-      SELECT v.cliente, COUNT(DISTINCT v.id) as total_visitas
+    FROM (
+      SELECT
+        v.cliente,
+        COUNT(DISTINCT v.id) as total_visitas,
+        DATEDIFF(NOW(), MAX(v.data_criacao)) as dias_sem_vir,
+        -- Cadência: intervalo médio entre visitas no período. Para 1 visita, usa 30d como padrão
+        CASE
+          WHEN COUNT(DISTINCT v.id) >= 2
+            THEN DATEDIFF(MAX(v.data_criacao), MIN(v.data_criacao)) / (COUNT(DISTINCT v.id) - 1)
+          ELSE 30
+        END as cadencia
       FROM vendas v
       JOIN usuarios uu ON v.usuario = uu.id
-      ${colabJoinV}
+      ${colabJoin}
       WHERE ${unitCondV}
+        AND v.data_criacao >= ?
+        AND v.data_criacao < ?
         AND v.comanda_temp = 0
         AND v.status != 0
         AND v.cliente IS NOT NULL
       GROUP BY v.cliente
-    ) vc ON vc.cliente = c.id
-    WHERE ${unitCond}
-      AND c.status = 1
-      AND c.ultima_visita IS NOT NULL
+    ) sub
     GROUP BY status_label
-  `);
+  `, [ini, fimExcl]);
 
   const map: Record<string, number> = {};
   for (const r of rows) map[r.status_label] = Number(r.total);
