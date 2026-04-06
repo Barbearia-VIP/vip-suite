@@ -113,16 +113,20 @@ export const raioXRouter = router({
       const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
-
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
       const dataInicio12m = new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0];
       const dataInicio24m = new Date(Date.now() - 730 * 86400000).toISOString().split("T")[0];
 
-      // Condição de unidade via JOIN com vendas (para filtrar pelo período)
       const unitCondV = extIds.length === 0 ? "1=1"
         : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
         : `uu.unidade IN (${extIds.join(",")})`;
+      const unitCondVb = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `uu2.unidade = ${extIds[0]}`
+        : `uu2.unidade IN (${extIds.join(",")})`;
+      const unitCondSimple = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
+        : `ultima_visita_unidade IN (${extIds.join(",")})`;
 
       // Subquery: clientes que visitaram no período selecionado
       const clientesPeriodoSubquery = `(
@@ -134,7 +138,6 @@ export const raioXRouter = router({
           AND v.cliente IS NOT NULL AND v.cliente != 2
           AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
       )`;
-
       // Subquery: visitas totais de cada cliente NO PERÍODO
       const visitasPeriodoSubquery = `(
         SELECT v.cliente, COUNT(*) as total_visitas
@@ -147,10 +150,6 @@ export const raioXRouter = router({
         GROUP BY v.cliente
       )`;
 
-      const unitCondSimple = extIds.length === 0 ? "1=1"
-        : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
-        : `ultima_visita_unidade IN (${extIds.join(",")})`;
-
       const [
         statusRows,
         perfilRows,
@@ -158,12 +157,20 @@ export const raioXRouter = router({
         oneShotDistRows,
         novosRows,
         novosRecorrentesRows,
-        novosMensalRows,
-        perdidosRecentesRows,
         ativosNaJanelaRows,
         resgatadosRows,
+        // Cadência individual: clientes do período classificados por dias sem visitar
+        cadenciaIndividualRows,
+        // Movimento mensal: atendidos, em risco, resgatados por mês
+        movimentoMensalRows,
+        // Entradas mensais: novos + resgatados por mês
+        entradasMensaisRows,
+        // Risco mensal: em risco + churn% por mês
+        riscoMensalRows,
+        // Saúde por barbeiro (top 8, ordenado por % risco+perdido)
+        saudeBarbeirosRows,
       ] = await Promise.all([
-        // Base P (Corte 24m): clientes com visita nos últimos 24 meses — totalBase, ativos, em_risco, perdidos, one_shots
+        // Base P (Corte 24m): clientes com visita nos últimos 24 meses
         queryExternal<{
           total: number; ativos: number; em_risco: number; perdidos: number; one_shots: number;
           one_shot_risco: number; one_shot_perdido: number;
@@ -189,7 +196,7 @@ export const raioXRouter = router({
           WHERE c.status = 1 AND c.ultima_visita IS NOT NULL
             AND ${unitCondSimple} AND c.ultima_visita >= '${dataInicio24m}'
         `),
-        // Perfil de visitas (Base P · 24m — visitas históricas de cada cliente)
+        // Perfil de visitas (Base P · 24m)
         queryExternal<{ one_shot: number; ocasional: number; regular: number; fiel: number; recorrente: number }>(`
           SELECT 
             SUM(CASE WHEN vpc24.total_visitas = 1 THEN 1 ELSE 0 END) as one_shot,
@@ -209,7 +216,7 @@ export const raioXRouter = router({
           ) vpc24 ON vpc24.cliente = c.id
           WHERE c.status = 1
         `),
-        // Status 12 meses (clientes que visitaram nos últimos 12m)
+        // Status 12 meses
         queryExternal<{ perdido: number; em_risco: number; saudavel: number }>(`
           SELECT 
             SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 90 THEN 1 ELSE 0 END) as perdido,
@@ -219,7 +226,7 @@ export const raioXRouter = router({
           WHERE ${unitCondSimple} AND c.status = 1 AND c.ultima_visita IS NOT NULL
             AND c.ultima_visita >= ?
         `, [dataInicio12m]),
-        // One-shot no período (apenas 1 visita no período)
+        // One-shot no período
         queryExternal<{ total: number; aguardando: number; em_risco: number; perdido: number }>(`
           SELECT 
             COUNT(*) as total,
@@ -243,28 +250,6 @@ export const raioXRouter = router({
             AND DATE(c.data_criacao) >= ? AND DATE(c.data_criacao) <= ?
             AND (SELECT COUNT(*) FROM vendas v WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0) > 1
         `, [dataInicio, dataFim]),
-        // Novos por mês (período selecionado)
-        queryExternal<{ mes: string; total: number }>(`
-          SELECT DATE_FORMAT(data_criacao, '%Y-%m') as mes, COUNT(*) as total
-          FROM clientes
-          WHERE ${unitCondSimple} AND status = 1
-            AND data_criacao >= ?
-          GROUP BY mes ORDER BY mes
-        `, [dataInicio12m]),
-        // Perdidos recentes que visitaram no período (91-180 dias sem voltar)
-        queryExternal<{
-          id: number; nome: string; telefone: string;
-          ultima_visita: Date; consumo: number; dias: number; total_visitas: number;
-        }>(`
-          SELECT c.id, c.nome, c.telefone, c.ultima_visita, c.consumo,
-                 DATEDIFF(NOW(), c.ultima_visita) as dias,
-                 COALESCE(vpc.total_visitas, 0) as total_visitas
-          FROM clientes c
-          JOIN ${visitasPeriodoSubquery} vpc ON vpc.cliente = c.id
-          WHERE c.status = 1 AND c.ultima_visita IS NOT NULL
-            AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 91 AND 180
-          ORDER BY dias ASC LIMIT 50
-        `),
         // Ativos na janela do período
         queryExternal<{ total: number }>(`
           SELECT COUNT(DISTINCT cliente) as total
@@ -282,6 +267,83 @@ export const raioXRouter = router({
                  WHERE v3.cliente = c.id AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL AND v3.status != 0
                  AND v3.data_criacao < ?)) > 90
         `, [dataInicio, dataInicio, dataInicio]),
+        // Cadência Individual: clientes do período classificados por dias sem visitar
+        queryExternal<{ assiduo: number; regular: number; espacando: number; primeira_vez: number; em_risco: number; perdido: number; total: number }>(`
+          SELECT
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 30 AND vpc.total_visitas > 1 THEN 1 ELSE 0 END) as assiduo,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 31 AND 60 AND vpc.total_visitas > 1 THEN 1 ELSE 0 END) as regular,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 AND vpc.total_visitas > 1 THEN 1 ELSE 0 END) as espacando,
+            SUM(CASE WHEN vpc.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN 1 ELSE 0 END) as primeira_vez,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 91 AND 180 THEN 1 ELSE 0 END) as em_risco,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 180 THEN 1 ELSE 0 END) as perdido,
+            COUNT(*) as total
+          FROM clientes c
+          JOIN ${visitasPeriodoSubquery} vpc ON vpc.cliente = c.id
+          WHERE c.status = 1 AND c.ultima_visita IS NOT NULL
+        `),
+        // Movimento mensal: atendidos, em_risco, resgatados por mês no período
+        queryExternal<{ mes: string; atendidos: number; em_risco: number; resgatados: number }>(`
+          SELECT
+            DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
+            COUNT(DISTINCT v.cliente) as atendidos,
+            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as em_risco,
+            0 as resgatados
+          FROM vendas v
+          JOIN usuarios uu ON v.usuario = uu.id
+          JOIN clientes c ON c.id = v.cliente
+          WHERE ${unitCondV}
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.cliente IS NOT NULL AND v.cliente != 2
+            AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+          GROUP BY mes ORDER BY mes
+        `),
+        // Entradas mensais: novos + resgatados por mês
+        queryExternal<{ mes: string; novos: number; resgatados: number }>(`
+          SELECT
+            DATE_FORMAT(c.data_criacao, '%Y-%m') as mes,
+            COUNT(*) as novos,
+            0 as resgatados
+          FROM clientes c
+          WHERE ${unitCondSimple} AND c.status = 1
+            AND DATE(c.data_criacao) >= '${dataInicio}' AND DATE(c.data_criacao) <= '${dataFim}'
+          GROUP BY mes ORDER BY mes
+        `),
+        // Risco mensal: em risco por mês + churn%
+        queryExternal<{ mes: string; em_risco: number; total_mes: number }>(`
+          SELECT
+            DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN v.cliente END) as em_risco,
+            COUNT(DISTINCT v.cliente) as total_mes
+          FROM vendas v
+          JOIN usuarios uu ON v.usuario = uu.id
+          JOIN clientes c ON c.id = v.cliente
+          WHERE ${unitCondV}
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.cliente IS NOT NULL AND v.cliente != 2
+            AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+          GROUP BY mes ORDER BY mes
+        `),
+        // Saúde por barbeiro (top 8 piores, ordenado por % risco+perdido desc)
+        queryExternal<{ colaborador_nome: string; total: number; saudavel: number; em_risco: number; perdido: number }>(`
+          SELECT
+            uu.nome as colaborador_nome,
+            COUNT(DISTINCT v.cliente) as total,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN v.cliente END) as saudavel,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN v.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 90 THEN v.cliente END) as perdido
+          FROM vendas v
+          JOIN usuarios uu ON v.usuario = uu.id
+          JOIN clientes c ON c.id = v.cliente
+          WHERE ${unitCondV}
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.cliente IS NOT NULL AND v.cliente != 2
+            AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+            AND (uu.visivel_agenda IS NULL OR uu.visivel_agenda != 'nenhuma')
+          GROUP BY uu.id, uu.nome
+          HAVING total >= 5
+          ORDER BY (em_risco + perdido) / total DESC
+          LIMIT 8
+        `),
       ]);
 
       const sr = statusRows[0] || { total: 0, ativos: 0, em_risco: 0, perdidos: 0, one_shots: 0, one_shot_risco: 0, one_shot_perdido: 0 };
@@ -296,13 +358,13 @@ export const raioXRouter = router({
       const ativosNaJanela = Number(ativosNaJanelaRows[0]?.total ?? 0);
       const resgatados = Number(resgatadosRows[0]?.total ?? 0);
       const oneShotUrgente = oneShotRisco;
-
       const pr = perfilRows[0] || { one_shot: 0, ocasional: 0, regular: 0, fiel: 0, recorrente: 0 };
       const s12 = status12mRows[0] || { perdido: 0, em_risco: 0, saudavel: 0 };
       const osd = oneShotDistRows[0] || { total: 0, aguardando: 0, em_risco: 0, perdido: 0 };
       const novosRecorrentes = Number(novosRecorrentesRows[0]?.total ?? 0);
       const novosOneShotTotal = novos - novosRecorrentes;
       const saudeAquisicao = novos > 0 ? Math.round((novosRecorrentes / novos) * 100) : 0;
+      const ci = cadenciaIndividualRows[0] || { assiduo: 0, regular: 0, espacando: 0, primeira_vez: 0, em_risco: 0, perdido: 0, total: 0 };
 
       return {
         sinais: {
@@ -358,17 +420,49 @@ export const raioXRouter = router({
           recorrentes: novosRecorrentes,
           oneShotTotal: novosOneShotTotal,
           saudeAquisicao,
-          mensal: novosMensalRows.map(r => ({ mes: r.mes, total: Number(r.total) })),
         },
-        perdidosRecentes: perdidosRecentesRows.map(pr => ({
-          clienteId: String(pr.id),
-          clienteNome: pr.nome,
-          telefone: pr.telefone,
-          ultimaVenda: pr.ultima_visita,
-          totalVisitas: Number(pr.total_visitas),
-          totalGasto: Number(pr.consumo),
-          dias: Number(pr.dias),
+        cadenciaIndividual: {
+          assiduo: Number(ci.assiduo),
+          regular: Number(ci.regular),
+          espacando: Number(ci.espacando),
+          primeiraVez: Number(ci.primeira_vez),
+          emRisco: Number(ci.em_risco),
+          perdido: Number(ci.perdido),
+          total: Number(ci.total),
+        },
+        movimentoMensal: movimentoMensalRows.map(r => ({
+          mes: r.mes,
+          atendidos: Number(r.atendidos),
+          emRisco: Number(r.em_risco),
+          resgatados: Number(r.resgatados),
         })),
+        entradasMensais: entradasMensaisRows.map(r => ({
+          mes: r.mes,
+          novos: Number(r.novos),
+          resgatados: Number(r.resgatados),
+        })),
+        riscoMensal: riscoMensalRows.map(r => ({
+          mes: r.mes,
+          emRisco: Number(r.em_risco),
+          totalMes: Number(r.total_mes),
+          churnPct: Number(r.total_mes) > 0 ? Math.round((Number(r.em_risco) / Number(r.total_mes)) * 100) : 0,
+        })),
+        saudeBarbeiros: saudeBarbeirosRows.map(b => {
+          const total = Number(b.total);
+          const saudavel = Number(b.saudavel);
+          const emRiscoB = Number(b.em_risco);
+          const perdidoB = Number(b.perdido);
+          return {
+            nome: b.colaborador_nome,
+            total,
+            saudavel,
+            emRisco: emRiscoB,
+            perdido: perdidoB,
+            pctSaudavel: total > 0 ? Math.round((saudavel / total) * 100) : 0,
+            pctEmRisco: total > 0 ? Math.round((emRiscoB / total) * 100) : 0,
+            pctPerdido: total > 0 ? Math.round((perdidoB / total) * 100) : 0,
+          };
+        }),
         periodo: { dataInicio, dataFim },
       };
     }),

@@ -258,162 +258,190 @@ export default function RaioXPage() {
         {/* ── VISÃO GERAL ─────────────────────────────────────────────────────── */}
         <TabsContent value="visao-geral" className="space-y-5 mt-4">
           {isLoading ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-20" />)}
+            <div className="space-y-4">
+              <Skeleton className="h-24" /><Skeleton className="h-32" /><Skeleton className="h-40" />
             </div>
           ) : v ? (
             <>
-              {/* Sinais da base */}
-              <Card className="bg-card/60 border-border/50">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                    <Activity className="w-4 h-4" /> Sinais da base
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-                    <div>
-                      <p className="text-xs text-muted-foreground">ATIVOS (60d)</p>
-                      <p className="text-2xl font-bold text-green-400">{v.sinais.ativos.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">{v.sinais.pctAtivos}% da base</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> PERDIDOS
-                      </p>
-                      <p className="text-2xl font-bold text-red-400">{v.sinais.perdidos.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">{v.sinais.pctPerdidos}% da base</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" /> EM RISCO
-                      </p>
-                      <p className="text-2xl font-bold text-yellow-400">{v.sinais.emRisco.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">{v.sinais.pctEmRisco}% da base</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> NOVOS
-                      </p>
-                      <p className="text-2xl font-bold text-blue-400">{v.sinais.novos.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">{v.sinais.pctNovos}% dos atendidos</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">ONE-SHOT URGENTE</p>
-                      <p className="text-2xl font-bold text-orange-400">{v.sinais.oneShotUrgente.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">{v.sinais.pctOneShotUrgente}% dos one-shots</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">RESGATADOS</p>
-                      <p className="text-2xl font-bold text-purple-400">{v.sinais.resgatados.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">{v.sinais.pctResgatados}% da base</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Atividade do período */}
+              {/* ── Sinais da base ── */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Atividade do Período</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <KpiCard label="Clientes únicos" value={v.atividade.clientesUnicos.toLocaleString()} icon={Users} />
-                  <KpiCard label="Novos clientes" value={v.atividade.novosClientes.toLocaleString()} icon={TrendingUp} color="text-blue-400" />
-                  <KpiCard label="Ativos na janela" value={v.atividade.ativosNaJanela.toLocaleString()} icon={UserCheck} color="text-green-400" />
-                  <KpiCard label="Resgatados" value={v.atividade.resgatados.toLocaleString()} icon={RefreshCw} color="text-purple-400" />
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sinais da base</h3>
+                  <span className="text-xs text-muted-foreground">{v.periodo.dataInicio} → {v.periodo.dataFim}</span>
+                </div>
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                  <div className="bg-card/60 border border-border/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Ativos (60d)</p>
+                    <p className="text-2xl font-bold text-green-400 mt-1">{v.sinais.ativos.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">{v.sinais.pctAtivos}% da base</p>
+                  </div>
+                  <div className="bg-card/60 border border-border/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />Perdidos</p>
+                    <p className="text-2xl font-bold text-red-400 mt-1">{v.sinais.perdidos.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">{v.sinais.pctPerdidos}% da base</p>
+                  </div>
+                  <div className="bg-card/60 border border-border/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-500 inline-block" />Em Risco</p>
+                    <p className="text-2xl font-bold text-orange-400 mt-1">{v.sinais.emRisco.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">{v.sinais.pctEmRisco}% da base</p>
+                  </div>
+                  <div className="bg-card/60 border border-border/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Novos</p>
+                    <p className="text-2xl font-bold text-blue-400 mt-1">{v.sinais.novos.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">{v.sinais.pctNovos}% dos atendidos</p>
+                  </div>
+                  <div className="bg-card/60 border border-border/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-yellow-500 inline-block" />One-Shot Urgente</p>
+                    <p className="text-2xl font-bold text-yellow-400 mt-1">{v.sinais.oneShotUrgente.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">{v.sinais.pctOneShotUrgente}% dos one-shots</p>
+                  </div>
+                  <div className="bg-card/60 border border-border/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Resgatados</p>
+                    <p className="text-2xl font-bold text-emerald-400 mt-1">{v.sinais.resgatados.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">{v.sinais.pctResgatados}% da base</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Saúde da base */}
+              {/* ── Atividade do período ── */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Saúde da Base</p>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Atividade do Período</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <KpiCard label="Em risco" value={v.saude.emRisco.toLocaleString()} icon={AlertTriangle} color="text-yellow-400" />
+                  <KpiCard label="Clientes únicos" value={v.atividade.clientesUnicos.toLocaleString()} icon={Users} color="text-foreground" />
+                  <KpiCard label="Novos clientes" value={v.atividade.novosClientes.toLocaleString()} icon={UserCheck} color="text-blue-400" />
+                  <KpiCard label="Ativos na janela" value={v.atividade.ativosNaJanela.toLocaleString()} icon={Activity} color="text-green-400" />
+                  <KpiCard label="Resgatados" value={v.atividade.resgatados.toLocaleString()} icon={TrendingUp} color="text-emerald-400" />
+                </div>
+              </div>
+
+              {/* ── Saúde da base ── */}
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Saúde da Base · 12m</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <KpiCard label="Em risco" value={v.saude.emRisco.toLocaleString()} icon={AlertTriangle} color="text-orange-400" />
                   <KpiCard label="Perdidos" value={v.saude.perdidos.toLocaleString()} icon={UserX} color="text-red-400" />
-                  <KpiCard label="One-shot risco" value={v.saude.oneShotRisco.toLocaleString()} icon={Target} color="text-orange-400" />
+                  <KpiCard label="One-shot risco" value={v.saude.oneShotRisco.toLocaleString()} icon={Zap} color="text-yellow-400" />
                   <KpiCard label="One-shot perdido" value={v.saude.oneShotPerdido.toLocaleString()} icon={TrendingDown} color="text-red-400" />
                 </div>
               </div>
 
-              {/* Distribuições */}
+              {/* ── Distribuições ── */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Distribuições da Base</p>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Distribuições da Base</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                   {/* Por Perfil */}
                   <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-1 pt-3 px-4">
-                      <CardTitle className="text-xs font-medium text-muted-foreground">Por Perfil</CardTitle>
-                      <p className="text-xs text-muted-foreground">universo: {v.sinais.totalBase.toLocaleString()} clientes</p>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-3">
+                    <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Por Perfil · 12m</CardTitle></CardHeader>
+                    <CardContent className="space-y-1 pt-1">
+                      <p className="text-xs text-muted-foreground">universo: {(v.sinais.totalBase).toLocaleString()} clientes</p>
                       {[
-                        { label: "Ocasional", count: v.distribuicoes.porPerfil.ocasional, color: "bg-gray-400", pct: Math.round(v.distribuicoes.porPerfil.ocasional / Math.max(v.sinais.totalBase, 1) * 100) },
-                        { label: "Fiel", count: v.distribuicoes.porPerfil.fiel, color: "bg-green-500", pct: Math.round(v.distribuicoes.porPerfil.fiel / Math.max(v.sinais.totalBase, 1) * 100) },
-                        { label: "One-shot", count: v.distribuicoes.porPerfil.one_shot, color: "bg-purple-500", pct: Math.round(v.distribuicoes.porPerfil.one_shot / Math.max(v.sinais.totalBase, 1) * 100) },
-                        { label: "Regular", count: v.distribuicoes.porPerfil.regular, color: "bg-cyan-500", pct: Math.round(v.distribuicoes.porPerfil.regular / Math.max(v.sinais.totalBase, 1) * 100) },
-                        { label: "Recorrente", count: v.distribuicoes.porPerfil.recorrente, color: "bg-blue-500", pct: Math.round(v.distribuicoes.porPerfil.recorrente / Math.max(v.sinais.totalBase, 1) * 100) },
-                      ].map(item => <DotBadge key={item.label} {...item} />)}
+                        { label: "Ocasional", val: v.distribuicoes.porPerfil.ocasional, color: "bg-gray-400" },
+                        { label: "Fiel", val: v.distribuicoes.porPerfil.fiel, color: "bg-green-500" },
+                        { label: "One-shot", val: v.distribuicoes.porPerfil.one_shot, color: "bg-purple-500" },
+                        { label: "Regular", val: v.distribuicoes.porPerfil.regular, color: "bg-blue-500" },
+                        { label: "Recorrente", val: v.distribuicoes.porPerfil.recorrente, color: "bg-emerald-500" },
+                      ].map(item => (
+                        <DotBadge key={item.label} color={item.color} label={item.label} count={item.val}
+                          pct={v.sinais.totalBase > 0 ? Math.round(item.val / v.sinais.totalBase * 100) : 0} />
+                      ))}
                     </CardContent>
                   </Card>
-
                   {/* Por Cadência */}
                   <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-1 pt-3 px-4">
-                      <CardTitle className="text-xs font-medium text-muted-foreground">Por Cadência</CardTitle>
-                      <p className="text-xs text-muted-foreground">Dias sem vir · REF: hoje</p>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-3">
+                    <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Por Cadência · 12m</CardTitle></CardHeader>
+                    <CardContent className="space-y-1 pt-1">
+                      <p className="text-xs text-muted-foreground">universo: {v.sinais.totalBase.toLocaleString()} clientes</p>
                       {[
-                        { label: "Perdido", count: v.saude.perdidos, color: "bg-red-500", pct: Math.round(v.saude.perdidos / Math.max(v.sinais.totalBase, 1) * 100) },
-                        { label: "Em risco", count: v.saude.emRisco, color: "bg-yellow-500", pct: Math.round(v.saude.emRisco / Math.max(v.sinais.totalBase, 1) * 100) },
-                        { label: "Ativo", count: v.sinais.ativos, color: "bg-green-500", pct: v.sinais.pctAtivos },
-                      ].map(item => <DotBadge key={item.label} {...item} />)}
+                        { label: "Perdido", val: v.distribuicoes.status12m.perdido, color: "bg-red-500" },
+                        { label: "Regular", val: v.distribuicoes.status12m.saudavel, color: "bg-blue-500" },
+                        { label: "Em risco", val: v.distribuicoes.status12m.emRisco, color: "bg-orange-500" },
+                      ].map(item => (
+                        <DotBadge key={item.label} color={item.color} label={item.label} count={item.val}
+                          pct={v.sinais.totalBase > 0 ? Math.round(item.val / v.sinais.totalBase * 100) : 0} />
+                      ))}
                     </CardContent>
                   </Card>
-
                   {/* Status 12m */}
                   <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-1 pt-3 px-4">
-                      <CardTitle className="text-xs font-medium text-muted-foreground">Status 12m</CardTitle>
-                      <p className="text-xs text-muted-foreground">≤45d · 46-90d · 90d+</p>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-3">
+                    <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">Status 12m</CardTitle></CardHeader>
+                    <CardContent className="space-y-1 pt-1">
+                      <p className="text-xs text-muted-foreground">universo: {v.sinais.totalBase.toLocaleString()} clientes</p>
                       {[
-                        { label: "Perdido", count: v.distribuicoes.status12m.perdido, color: "bg-red-500", pct: Math.round(v.distribuicoes.status12m.perdido / Math.max(v.sinais.totalBase, 1) * 100) },
-                        { label: "Em risco", count: v.distribuicoes.status12m.emRisco, color: "bg-yellow-500", pct: Math.round(v.distribuicoes.status12m.emRisco / Math.max(v.sinais.totalBase, 1) * 100) },
-                        { label: "Saudável", count: v.distribuicoes.status12m.saudavel, color: "bg-green-500", pct: Math.round(v.distribuicoes.status12m.saudavel / Math.max(v.sinais.totalBase, 1) * 100) },
-                      ].map(item => <DotBadge key={item.label} {...item} />)}
+                        { label: "Perdido", val: v.distribuicoes.status12m.perdido, color: "bg-red-500" },
+                        { label: "Saudável", val: v.distribuicoes.status12m.saudavel, color: "bg-green-500" },
+                        { label: "Em risco", val: v.distribuicoes.status12m.emRisco, color: "bg-orange-500" },
+                      ].map(item => (
+                        <DotBadge key={item.label} color={item.color} label={item.label} count={item.val}
+                          pct={v.sinais.totalBase > 0 ? Math.round(item.val / v.sinais.totalBase * 100) : 0} />
+                      ))}
                     </CardContent>
                   </Card>
-
                   {/* One-Shot */}
                   <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-1 pt-3 px-4">
-                      <CardTitle className="text-xs font-medium text-muted-foreground">One-Shot</CardTitle>
+                    <CardHeader className="pb-1"><CardTitle className="text-xs text-muted-foreground">One-Shot</CardTitle></CardHeader>
+                    <CardContent className="space-y-1 pt-1">
                       <p className="text-xs text-muted-foreground">universo: {v.distribuicoes.oneShot.total.toLocaleString()} com 1ª visita única</p>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-3">
                       {[
-                        { label: "Aguardando", count: v.distribuicoes.oneShot.aguardando, color: "bg-blue-500", pct: Math.round(v.distribuicoes.oneShot.aguardando / Math.max(v.distribuicoes.oneShot.total, 1) * 100) },
-                        { label: "Em risco", count: v.distribuicoes.oneShot.emRisco, color: "bg-yellow-500", pct: Math.round(v.distribuicoes.oneShot.emRisco / Math.max(v.distribuicoes.oneShot.total, 1) * 100) },
-                        { label: "Perdido", count: v.distribuicoes.oneShot.perdido, color: "bg-red-500", pct: Math.round(v.distribuicoes.oneShot.perdido / Math.max(v.distribuicoes.oneShot.total, 1) * 100) },
-                      ].map(item => <DotBadge key={item.label} {...item} />)}
+                        { label: "Aguardando", val: v.distribuicoes.oneShot.aguardando, color: "bg-blue-500" },
+                        { label: "Em risco", val: v.distribuicoes.oneShot.emRisco, color: "bg-orange-500" },
+                        { label: "Perdido", val: v.distribuicoes.oneShot.perdido, color: "bg-red-500" },
+                      ].map(item => (
+                        <DotBadge key={item.label} color={item.color} label={item.label} count={item.val}
+                          pct={v.distribuicoes.oneShot.total > 0 ? Math.round(item.val / v.distribuicoes.oneShot.total * 100) : 0} />
+                      ))}
                     </CardContent>
                   </Card>
                 </div>
               </div>
 
-              {/* Novos clientes */}
+              {/* ── Cadência Individual ── */}
+              {v.cadenciaIndividual && (
+                <Card className="bg-card/60 border-border/50">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-muted-foreground" />
+                        Cadência Individual
+                      </CardTitle>
+                      <span className="text-xs text-muted-foreground">
+                        {v.cadenciaIndividual.total.toLocaleString()} clientes · {v.periodo.dataInicio} → {v.periodo.dataFim}
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                      {[
+                        { label: "ASSÍDUO", val: v.cadenciaIndividual.assiduo, sub: "≤30d · ≤60% do ritmo", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" },
+                        { label: "REGULAR", val: v.cadenciaIndividual.regular, sub: "10% · 80-120%", color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/30" },
+                        { label: "ESPAÇANDO", val: v.cadenciaIndividual.espacando, sub: "12% · 120-180%", color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/30" },
+                        { label: "1ª VEZ", val: v.cadenciaIndividual.primeiraVez, sub: "2% · 1 visita", color: "text-purple-400", bg: "bg-purple-500/10 border-purple-500/30" },
+                        { label: "EM RISCO", val: v.cadenciaIndividual.emRisco, sub: "9% · 180-250%", color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/30" },
+                        { label: "PERDIDO", val: v.cadenciaIndividual.perdido, sub: "60% · >250%", color: "text-red-400", bg: "bg-red-500/10 border-red-500/30" },
+                      ].map(item => (
+                        <div key={item.label} className={`rounded-lg border p-3 ${item.bg}`}>
+                          <p className={`text-xs font-semibold tracking-wide ${item.color}`}>{item.label}</p>
+                          <p className={`text-2xl font-bold mt-1 ${item.color}`}>{item.val.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{item.sub}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* ── Clientes Novos no período ── */}
               <Card className="bg-card/60 border-border/50">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium">Clientes Novos no Período</CardTitle>
-                    <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => setTab("churn")}>
-                      Ver retenção <ChevronRight className="w-3 h-3 ml-1" />
-                    </Button>
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <UserCheck className="w-4 h-4 text-muted-foreground" />
+                      Clientes Novos no período
+                    </CardTitle>
+                    <span className="text-xs text-muted-foreground">1ª visita histórica em {v.periodo.dataInicio} → {v.periodo.dataFim}</span>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div>
                       <p className="text-xs text-muted-foreground">TOTAL NOVOS</p>
                       <p className="text-2xl font-bold text-blue-400">{v.novosClientes.total.toLocaleString()}</p>
@@ -422,16 +450,12 @@ export default function RaioXPage() {
                     <div>
                       <p className="text-xs text-muted-foreground">RECORRENTES</p>
                       <p className="text-2xl font-bold">{v.novosClientes.recorrentes.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {v.novosClientes.total > 0 ? Math.round(v.novosClientes.recorrentes / v.novosClientes.total * 100) : 0}% voltaram
-                      </p>
+                      <p className="text-xs text-muted-foreground">{v.novosClientes.total > 0 ? Math.round(v.novosClientes.recorrentes / v.novosClientes.total * 100) : 0}% voltaram</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">ONE-SHOT</p>
-                      <p className="text-2xl font-bold text-orange-400">{v.novosClientes.oneShotTotal.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {v.novosClientes.total > 0 ? Math.round(v.novosClientes.oneShotTotal / v.novosClientes.total * 100) : 0}% só 1 visita
-                      </p>
+                      <p className="text-2xl font-bold text-yellow-400">{v.novosClientes.oneShotTotal.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">{v.novosClientes.total > 0 ? Math.round(v.novosClientes.oneShotTotal / v.novosClientes.total * 100) : 0}% só 1 visita</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">SAÚDE AQUISIÇÃO</p>
@@ -443,26 +467,168 @@ export default function RaioXPage() {
                       </p>
                     </div>
                   </div>
-                  {v.novosClientes.mensal.length > 0 && (
-                    <ResponsiveContainer width="100%" height={160}>
-                      <BarChart data={v.novosClientes.mensal} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                </CardContent>
+              </Card>
+
+              {/* ── Movimento da Base ── */}
+              {v.movimentoMensal && v.movimentoMensal.length > 0 && (
+                <Card className="bg-card/60 border-border/50">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-sm">Movimento da base</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">Clique em qualquer barra para ver os clientes daquele mês</p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={v.movimentoMensal} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                         <XAxis dataKey="mes" tickFormatter={fmtMes} tick={{ fontSize: 11, fill: "#888" }} />
                         <YAxis tick={{ fontSize: 11, fill: "#888" }} />
-                        <Tooltip formatter={(val: number) => [val, "Novos"]} labelFormatter={fmtMes} contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
-                        <Bar dataKey="total" fill={CORES.verde} radius={[3, 3, 0, 0]} />
+                        <Tooltip formatter={(val: number, name: string) => [val, name === "atendidos" ? "Atendidos" : name === "emRisco" ? "Em risco" : "Resgatados"]} labelFormatter={fmtMes} contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
+                        <Bar dataKey="atendidos" fill="#ca8a04" radius={[3, 3, 0, 0]} name="Atendidos" />
                       </BarChart>
                     </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-yellow-600 inline-block" />Atendidos</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-orange-500 inline-block" />Em risco</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-500 inline-block" />Resgatados</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* ── Entradas na base ── */}
+              {v.entradasMensais && v.entradasMensais.length > 0 && (
+                <Card className="bg-card/60 border-border/50">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-sm">Entradas na base</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">Novos clientes por mês</p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={v.entradasMensais} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                        <XAxis dataKey="mes" tickFormatter={fmtMes} tick={{ fontSize: 11, fill: "#888" }} />
+                        <YAxis tick={{ fontSize: 11, fill: "#888" }} />
+                        <Tooltip formatter={(val: number, name: string) => [val, name === "novos" ? "Novos" : "Resgatados"]} labelFormatter={fmtMes} contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
+                        <Bar dataKey="novos" fill={CORES.verde} radius={[3, 3, 0, 0]} name="Novos" stackId="a" />
+                        <Bar dataKey="resgatados" fill={CORES.azul} radius={[3, 3, 0, 0]} name="Resgatados" stackId="a" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-500 inline-block" />Novos</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-blue-500 inline-block" />Resgatados</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* ── Risco & Retenção ── */}
+              {v.riscoMensal && v.riscoMensal.length > 0 && (
+                <Card className="bg-card/60 border-border/50">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-sm">Risco & Retenção</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">Em risco por mês + Churn %</p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={v.riscoMensal} margin={{ top: 5, right: 30, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                        <XAxis dataKey="mes" tickFormatter={fmtMes} tick={{ fontSize: 11, fill: "#888" }} />
+                        <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "#888" }} />
+                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "#888" }} tickFormatter={v => `${v}%`} />
+                        <Tooltip formatter={(val: number, name: string) => [name === "churnPct" ? `${val}%` : val, name === "emRisco" ? "Em risco" : "Churn %"]} labelFormatter={fmtMes} contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
+                        <Bar yAxisId="left" dataKey="emRisco" fill={CORES.laranja} radius={[3, 3, 0, 0]} name="emRisco" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-orange-500 inline-block" />Em risco</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* ── Saúde por Barbeiro ── */}
+              {v.saudeBarbeiros && v.saudeBarbeiros.length > 0 && (
+                <Card className="bg-card/60 border-border/50">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-sm flex items-center gap-2">
+                          <Scissors className="w-4 h-4 text-muted-foreground" />
+                          Saúde por Barbeiro
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {v.sinais.totalBase.toLocaleString()} clientes · Ordenado por % risco+perdido
+                        </p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {(() => {
+                      const media = v.saudeBarbeiros.length > 0
+                        ? Math.round(v.saudeBarbeiros.reduce((acc, b) => acc + b.pctEmRisco + b.pctPerdido, 0) / v.saudeBarbeiros.length)
+                        : 0;
+                      return v.saudeBarbeiros.map(b => (
+                        <div key={b.nome} className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">{b.nome}</span>
+                            <div className="flex items-center gap-2">
+                              {(b.pctEmRisco + b.pctPerdido) > media && (
+                                <span className="text-xs text-red-400 flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3" /> acima da média
+                                </span>
+                              )}
+                              <span className="text-xs text-muted-foreground">{b.total} clientes</span>
+                            </div>
+                          </div>
+                          <div className="flex h-5 rounded overflow-hidden w-full text-[10px] font-semibold">
+                            {b.pctSaudavel > 0 && (
+                              <div className="flex items-center justify-center bg-emerald-500 text-white overflow-hidden" style={{ width: `${b.pctSaudavel}%` }} title={`Saudável: ${b.saudavel} (${b.pctSaudavel}%)`}>
+                                {b.pctSaudavel >= 8 ? `${b.pctSaudavel}%` : ""}
+                              </div>
+                            )}
+                            {b.pctEmRisco > 0 && (
+                              <div className="flex items-center justify-center bg-orange-500 text-white overflow-hidden" style={{ width: `${b.pctEmRisco}%` }} title={`Em risco: ${b.emRisco} (${b.pctEmRisco}%)`}>
+                                {b.pctEmRisco >= 8 ? `${b.pctEmRisco}%` : ""}
+                              </div>
+                            )}
+                            {b.pctPerdido > 0 && (
+                              <div className="flex items-center justify-center bg-red-500 text-white overflow-hidden" style={{ width: `${b.pctPerdido}%` }} title={`Perdido: ${b.perdido} (${b.pctPerdido}%)`}>
+                                {b.pctPerdido >= 8 ? `${b.pctPerdido}%` : ""}
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            {b.pctSaudavel > 0 && <span>{b.pctSaudavel}% saudável ({b.saudavel}) · </span>}
+                            {b.pctEmRisco > 0 && <span>{b.pctEmRisco}% espaçando ({b.emRisco}) · </span>}
+                            {b.pctPerdido > 0 && <span>{b.pctPerdido}% risco ({b.perdido})</span>}
+                          </p>
+                        </div>
+                      ));
+                    })()}
+                  </CardContent>
+                </Card>
+              )}
             </>
           ) : (
-            <div className="text-center py-12 text-muted-foreground">Nenhum dado disponível para esta unidade.</div>
+            <div className="text-center py-12 text-muted-foreground">
+              <Activity className="w-8 h-8 mx-auto mb-2 opacity-40" />
+              <p>Nenhum dado encontrado para o período selecionado.</p>
+            </div>
           )}
         </TabsContent>
-
-        {/* ── ONE-SHOT ─────────────────────────────────────────────────────────── */}
         <TabsContent value="one-shot" className="space-y-4 mt-4">
           {qOneShot.isLoading ? <Skeleton className="h-40" /> : qOneShot.data ? (
             <>
