@@ -66,11 +66,14 @@ function calcFinalSatisfactionLevel(
   const pctUnsatisfied = unsatisfied / total;
   const pctSatisfied = satisfied / total;
 
-  // Insatisfeito prevalece se >= 30% das capturas forem negativas
-  if (pctUnsatisfied >= 0.30) return 'unsatisfied';
+  // Insatisfeito prevalece se >= 25% das capturas forem negativas
+  if (pctUnsatisfied >= 0.25) return 'unsatisfied';
 
-  // Satisfeito se >= 25% das capturas forem positivas (e insatisfeitos < 30%)
-  if (pctSatisfied >= 0.25) return 'satisfied';
+  // Satisfeito se >= 15% das capturas forem positivas (e insatisfeitos < 25%)
+  if (pctSatisfied >= 0.15) return 'satisfied';
+
+  // Desempate: sem nenhuma captura negativa e pelo menos 1 positiva → satisfeito
+  if (unsatisfied === 0 && satisfied >= 1) return 'satisfied';
 
   // Neutro em todos os outros casos
   return 'neutral';
@@ -887,10 +890,10 @@ export const vipCamRouter = router({
       const timelineResult = await db!.execute(sql`
         UPDATE cam_sentiment_timeline
         SET satisfactionLevel = CASE
-          WHEN expression = 'happy'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.20 THEN 'satisfied'
-          WHEN expression = 'angry'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.35 THEN 'unsatisfied'
-          WHEN expression = 'disgusted' AND CAST(confidence AS DECIMAL(10,4)) >= 0.35 THEN 'unsatisfied'
-          WHEN expression = 'sad'       AND CAST(confidence AS DECIMAL(10,4)) >= 0.45 THEN 'unsatisfied'
+          WHEN expression = 'happy'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.15 THEN 'satisfied'
+          WHEN expression = 'angry'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.30 THEN 'unsatisfied'
+          WHEN expression = 'disgusted' AND CAST(confidence AS DECIMAL(10,4)) >= 0.30 THEN 'unsatisfied'
+          WHEN expression = 'sad'       AND CAST(confidence AS DECIMAL(10,4)) >= 0.40 THEN 'unsatisfied'
           ELSE 'neutral'
         END
         WHERE unitId = ${input.unitId}
