@@ -741,6 +741,11 @@ export const raioXRouter = router({
     }),
 
   // ── One-Shot ─────────────────────────────────────────────────────────────────────────────────
+  // Lógica alinhada com sistema de referência:
+  // - Universo: Base S 12m com exatamente 1 visita histórica
+  // - Grupos por recência (dias desde última visita até dataFim):
+  //   Aguardando ≤45d | Em Risco 46-90d | Provavelmente Perdido +91d
+  // - KPIs: Total, % da base, Em risco+perdido, Aguardando
   oneShot: protectedProcedure
     .input(baseInput.extend({
       status: z.enum(["todos", "aguardando", "em_risco", "perdido"]).optional(),
@@ -752,52 +757,105 @@ export const raioXRouter = router({
       const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
+      const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
+      const dataFimDate = new Date(dataFim + "T00:00:00Z");
+      const dataInicio12m = new Date(dataFimDate.getTime() - 365 * 86400000).toISOString().split("T")[0];
+      const unitCondV = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+        : `uu.unidade IN (${extIds.join(",")})`;
+      const unitCondSimple = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
+        : `ultima_visita_unidade IN (${extIds.join(",")})`;
 
-      const unitCond = extIds.length === 0 ? "1=1"
-        : extIds.length === 1 ? `c.ultima_visita_unidade = ${extIds[0]}`
-        : `c.ultima_visita_unidade IN (${extIds.join(",")})`;
+      // Universo Base S 12m: última venda nos 12m antes de dataFim
+      const ultimaVendaSubquery = `(
+        SELECT v.cliente, MAX(DATE(v.data_criacao)) as ultima_venda
+        FROM vendas v
+        JOIN usuarios uu ON v.usuario = uu.id
+        WHERE ${unitCondV}
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.cliente IS NOT NULL AND v.cliente != 2
+        GROUP BY v.cliente
+      )`;
+      const baseS12mSubquery = `(
+        SELECT uv.cliente, uv.ultima_venda
+        FROM ${ultimaVendaSubquery} uv
+        WHERE uv.ultima_venda >= '${dataInicio12m}' AND uv.ultima_venda <= '${dataFim}'
+      )`;
+      const visitasHistoricasSubquery = `(
+        SELECT v.cliente, COUNT(*) as total_visitas
+        FROM vendas v
+        JOIN usuarios uu ON v.usuario = uu.id
+        WHERE ${unitCondV}
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.cliente IS NOT NULL AND v.cliente != 2
+        GROUP BY v.cliente
+      )`;
 
-      const rows = await queryExternal<{
-        id: number; nome: string; telefone: string;
-        data_criacao: Date; ultima_visita: Date; total_gasto: number;
-      }>(`
-        SELECT c.id, c.nome, c.telefone, c.data_criacao, c.ultima_visita,
-          COALESCE((SELECT SUM(v.valor_total) FROM vendas v
-               WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0), 0) as total_gasto
-        FROM clientes c
-        WHERE ${unitCond} AND c.status = 1 AND c.ultima_visita IS NOT NULL
-          AND (SELECT COUNT(*) FROM vendas v
-               WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0) = 1
-        ORDER BY c.ultima_visita DESC
-        LIMIT 2000
-      `);
+      const [totalBaseRows, oneShotRows] = await Promise.all([
+        // Total da base S 12m (para calcular % da base)
+        queryExternal<{ total: number }>(`
+          SELECT COUNT(DISTINCT bs.cliente) as total
+          FROM ${baseS12mSubquery} bs
+          JOIN clientes c ON c.id = bs.cliente
+          WHERE c.status = 1
+        `),
+        // One-shots: Base S 12m com 1 visita histórica
+        queryExternal<{
+          id: number; nome: string; telefone: string;
+          data_criacao: string; ultima_venda_dt: string; total_gasto: number;
+        }>(`
+          SELECT c.id, c.nome, c.telefone,
+                 DATE(c.data_criacao) as data_criacao,
+                 bs.ultima_venda as ultima_venda_dt,
+                 COALESCE((
+                   SELECT SUM(v2.valor_total) FROM vendas v2
+                   JOIN usuarios uu2 ON v2.usuario = uu2.id
+                   WHERE uu2.unidade IN (${extIds.length > 0 ? extIds.join(",") : "0"})
+                     AND v2.cliente = c.id AND v2.comanda_temp = 0
+                     AND v2.cancelado_motivo IS NULL AND v2.status != 0
+                 ), 0) as total_gasto
+          FROM ${baseS12mSubquery} bs
+          JOIN clientes c ON c.id = bs.cliente
+          JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bs.cliente
+          WHERE c.status = 1 AND vh.total_visitas = 1
+          ORDER BY bs.ultima_venda DESC
+          LIMIT 2000
+        `),
+      ]);
 
-      const clientes = rows.map(r => {
-        const dias = r.ultima_visita
-          ? Math.floor((Date.now() - new Date(r.ultima_visita).getTime()) / 86400000)
+      const totalBase = Number(totalBaseRows[0]?.total ?? 0);
+      const clientes = oneShotRows.map(r => {
+        const ultimaVisitaDate = r.ultima_venda_dt ? new Date(r.ultima_venda_dt + "T00:00:00Z") : null;
+        const dias = ultimaVisitaDate
+          ? Math.floor((dataFimDate.getTime() - ultimaVisitaDate.getTime()) / 86400000)
           : 999;
+        // Grupos: Aguardando ≤45d | Em Risco 46-90d | Perdido +91d
+        const grupo: "aguardando" | "em_risco" | "perdido" =
+          dias <= 45 ? "aguardando" : dias <= 90 ? "em_risco" : "perdido";
         return {
           clienteId: String(r.id),
           clienteNome: r.nome,
           telefone: r.telefone,
           primeiraVenda: r.data_criacao,
-          ultimaVenda: r.ultima_visita,
+          ultimaVenda: r.ultima_venda_dt,
           totalVisitas: 1,
           totalGasto: Number(r.total_gasto),
           dias,
-          status: classificarStatus(dias),
+          status: grupo,
         };
       });
 
-      const aguardando = clientes.filter(c => c.dias <= 30).length;
+      const aguardando = clientes.filter(c => c.status === "aguardando").length;
       const emRisco = clientes.filter(c => c.status === "em_risco").length;
       const perdido = clientes.filter(c => c.status === "perdido").length;
+      const total = clientes.length;
+      const pctDaBase = totalBase > 0 ? Math.round((total / totalBase) * 100) : 0;
+
       // Filtrar por status e search
       let filtered = clientes;
       if (input.status && input.status !== "todos") {
-        if (input.status === "aguardando") filtered = filtered.filter(c => c.dias <= 30);
-        else if (input.status === "em_risco") filtered = filtered.filter(c => c.status === "em_risco");
-        else if (input.status === "perdido") filtered = filtered.filter(c => c.status === "perdido");
+        filtered = filtered.filter(c => c.status === input.status);
       }
       if (input.search) {
         const s = input.search.toLowerCase();
@@ -805,10 +863,14 @@ export const raioXRouter = router({
       }
       return {
         resumo: {
-          total: clientes.length,
+          total,
+          pctDaBase,
+          emRiscoPerdido: emRisco + perdido,
           aguardando,
           emRisco,
           perdido,
+          totalBase,
+          dataRef: dataFim,
         },
         clientes: filtered,
       };

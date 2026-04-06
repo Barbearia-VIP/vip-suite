@@ -1022,66 +1022,204 @@ export default function RaioXPage() {
         </TabsContent>
         <TabsContent value="one-shot" className="space-y-4 mt-4">
           {qOneShot.isLoading ? <Skeleton className="h-40" /> : qOneShot.data ? (
-            <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <KpiCard label="Total One-Shot" value={qOneShot.data.resumo.total.toLocaleString()} icon={Target} />
-                <KpiCard label="Aguardando" value={qOneShot.data.resumo.aguardando.toLocaleString()} icon={Activity} color="text-blue-400" sub="≤30 dias" />
-                <KpiCard label="Em risco" value={qOneShot.data.resumo.emRisco.toLocaleString()} icon={AlertTriangle} color="text-yellow-400" sub="31-60 dias" />
-                <KpiCard label="Perdido" value={qOneShot.data.resumo.perdido.toLocaleString()} icon={UserX} color="text-red-400" sub=">60 dias" />
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                {(["todos", "aguardando", "em_risco", "perdido"] as const).map(s => (
-                  <Button key={s} variant={oneShotFiltro === s ? "default" : "outline"} size="sm"
-                    onClick={() => setOneShotFiltro(s)} className="text-xs capitalize">
-                    {s === "todos" ? "Todos" : s === "aguardando" ? "Aguardando" : s === "em_risco" ? "Em risco" : "Perdido"}
-                  </Button>
-                ))}
-                <div className="relative ml-auto">
-                  <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-muted-foreground" />
-                  <Input placeholder="Buscar cliente..." className="pl-8 h-8 text-xs w-48"
-                    value={search} onChange={e => setSearch(e.target.value)} />
+            (() => {
+              const os = qOneShot.data.resumo;
+              const total = os.total;
+              const pctPerdidos = total > 0 ? Math.round((os.emRiscoPerdido / total) * 100) : 0;
+              return (
+              <>
+                {/* Linha de referência */}
+                <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                  <span className="font-medium text-foreground">REF: {os.dataRef}</span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 font-semibold">
+                    {total} universo one-shots
+                  </span>
+                  <span>Aguardando ≤45d · Risco 46–90d · Perdido +91d</span>
+                  <span className="ml-auto">{os.totalBase.toLocaleString()} na base principal</span>
                 </div>
-              </div>
-              <Card className="bg-card/60 border-border/50">
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead><tr className="border-b border-border/50 text-xs text-muted-foreground">
-                        <th className="text-left p-3">Cliente</th>
-                        <th className="text-left p-3">Telefone</th>
-                        <th className="text-left p-3">1ª Visita</th>
-                        <th className="text-left p-3">Última Visita</th>
-                        <th className="text-right p-3">Dias</th>
-                        <th className="text-right p-3">Gasto</th>
-                        <th className="text-left p-3">Status</th>
-                      </tr></thead>
-                      <tbody>
-                        {qOneShot.data.clientes.map(c => (
-                          <tr key={c.clienteId} className="border-b border-border/30 hover:bg-muted/20">
-                            <td className="p-3 font-medium">{c.clienteNome || "—"}</td>
-                            <td className="p-3 text-muted-foreground">{c.telefone || "—"}</td>
-                            <td className="p-3 text-muted-foreground">{fmtDate(c.primeiraVenda)}</td>
-                            <td className="p-3 text-muted-foreground">{fmtDate(c.ultimaVenda)}</td>
-                            <td className="p-3 text-right">{c.dias}d</td>
-                            <td className="p-3 text-right">{fmtMoeda(c.totalGasto)}</td>
-                            <td className="p-3">
-                              <Badge variant="outline" className={
-                                c.status === "ativo" ? "border-blue-500/50 text-blue-400" :
-                                c.status === "em_risco" ? "border-yellow-500/50 text-yellow-400" :
-                                "border-red-500/50 text-red-400"
-                              }>{c.status === "ativo" ? "Aguardando" : c.status === "em_risco" ? "Em risco" : "Perdido"}</Badge>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {qOneShot.data.clientes.length === 0 && (
-                      <div className="text-center py-8 text-muted-foreground text-sm">Nenhum cliente encontrado.</div>
-                    )}
+
+                {/* KPIs principais */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Card className="bg-card/60 border-border/50 p-4">
+                    <p className="text-xs text-muted-foreground mb-1">Total one-shots</p>
+                    <p className="text-2xl font-bold">{total.toLocaleString()}</p>
+                  </Card>
+                  <Card className="bg-card/60 border-border/50 p-4">
+                    <p className="text-xs text-muted-foreground mb-1">% da base</p>
+                    <p className="text-2xl font-bold">{os.pctDaBase}%</p>
+                  </Card>
+                  <Card className="bg-card/60 border-border/50 p-4">
+                    <p className="text-xs text-muted-foreground mb-1">Em risco + perdido</p>
+                    <p className="text-2xl font-bold text-orange-400">{os.emRiscoPerdido.toLocaleString()}</p>
+                  </Card>
+                  <Card className="bg-card/60 border-border/50 p-4">
+                    <p className="text-xs text-muted-foreground mb-1">Aguardando</p>
+                    <p className="text-2xl font-bold text-blue-400">{os.aguardando.toLocaleString()}</p>
+                  </Card>
+                </div>
+
+                {/* Alertas automáticos */}
+                {os.aguardando > 0 && (
+                  <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-sm text-blue-300">
+                    <span className="mt-0.5 text-blue-400">⏰</span>
+                    <span>{os.aguardando} clientes aguardando — contato proativo agora converte com baixo esforço.</span>
                   </div>
-                </CardContent>
-              </Card>
-            </>
+                )}
+                {os.emRisco > 0 && (
+                  <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-sm text-yellow-300">
+                    <span className="mt-0.5">⚠️</span>
+                    <span>{os.emRisco} em risco — ofereça incentivo (desconto, cortesia) para garantir 2ª visita.</span>
+                  </div>
+                )}
+                {pctPerdidos > 60 && (
+                  <div className="flex items-start gap-2 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-300">
+                    <span className="mt-0.5">↘️</span>
+                    <span>{pctPerdidos}% já passaram do prazo. Verifique se a experiência da 1ª visita está boa.</span>
+                  </div>
+                )}
+
+                {/* Funil de conversão */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-sm font-semibold">Funil de conversão</span>
+                    <span className="text-xs text-muted-foreground">Clique em qualquer card para ver os clientes</span>
+                  </div>
+                  {/* Barra proporcional */}
+                  {total > 0 && (
+                    <div className="flex h-1.5 rounded-full overflow-hidden mb-4 gap-px">
+                      <div className="bg-blue-500 transition-all" style={{ width: `${Math.round(os.aguardando/total*100)}%` }} />
+                      <div className="bg-orange-400 transition-all" style={{ width: `${Math.round(os.emRisco/total*100)}%` }} />
+                      <div className="bg-red-500 transition-all" style={{ width: `${Math.round(os.perdido/total*100)}%` }} />
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {/* Aguardando */}
+                    <Card
+                      className="bg-card/60 border-blue-500/30 cursor-pointer hover:border-blue-400/60 transition-colors"
+                      onClick={() => setOneShotFiltro(oneShotFiltro === "aguardando" ? "todos" : "aguardando")}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-blue-400 uppercase tracking-wide">● AGUARDANDO RETORNO</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-2">≤45 dias</p>
+                        <p className="text-3xl font-bold mb-1">{os.aguardando.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {total > 0 ? Math.round(os.aguardando/total*100) : 0}% dos one-shots · Dentro do prazo normal · contato preventivo recomendado
+                        </p>
+                        <button className="mt-3 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                          <span>👤</span> Ver lista de clientes →
+                        </button>
+                      </CardContent>
+                    </Card>
+                    {/* Em Risco */}
+                    <Card
+                      className="bg-card/60 border-orange-500/30 cursor-pointer hover:border-orange-400/60 transition-colors"
+                      onClick={() => setOneShotFiltro(oneShotFiltro === "em_risco" ? "todos" : "em_risco")}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-orange-400 uppercase tracking-wide">● EM RISCO DE PERDA</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-2">46–90 dias</p>
+                        <p className="text-3xl font-bold mb-1">{os.emRisco.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {total > 0 ? Math.round(os.emRisco/total*100) : 0}% dos one-shots · Passaram do prazo ideal · ação urgente necessária
+                        </p>
+                        <button className="mt-3 text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
+                          <span>👤</span> Ver lista de clientes →
+                        </button>
+                      </CardContent>
+                    </Card>
+                    {/* Provavelmente Perdido */}
+                    <Card
+                      className="bg-card/60 border-red-500/30 cursor-pointer hover:border-red-400/60 transition-colors"
+                      onClick={() => setOneShotFiltro(oneShotFiltro === "perdido" ? "todos" : "perdido")}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">● PROVAVELMENTE PERDIDO</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-2">+91 dias</p>
+                        <p className="text-3xl font-bold mb-1">{os.perdido.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {total > 0 ? Math.round(os.perdido/total*100) : 0}% dos one-shots · Muito difícil recuperação · avaliar custo-benefício
+                        </p>
+                        <button className="mt-3 text-xs text-red-400 hover:text-red-300 flex items-center gap-1">
+                          <span>👤</span> Ver lista de clientes →
+                        </button>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+
+                {/* Tabela de clientes filtrada */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3 flex-wrap">
+                    <span className="text-sm font-semibold">
+                      {oneShotFiltro === "aguardando" ? "Aguardando Retorno" :
+                       oneShotFiltro === "em_risco" ? "Em Risco de Perda" :
+                       oneShotFiltro === "perdido" ? "Provavelmente Perdidos" : "Todos os One-Shots"}
+                    </span>
+                    <div className="flex gap-1 ml-2">
+                      {(["todos", "aguardando", "em_risco", "perdido"] as const).map(s => (
+                        <Button key={s} variant={oneShotFiltro === s ? "default" : "outline"} size="sm"
+                          onClick={() => setOneShotFiltro(s)} className="text-xs h-7">
+                          {s === "todos" ? "Todos" : s === "aguardando" ? "Aguardando" : s === "em_risco" ? "Em Risco" : "Perdidos"}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="relative ml-auto">
+                      <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-muted-foreground" />
+                      <Input placeholder="Buscar cliente..." className="pl-8 h-8 text-xs w-48"
+                        value={search} onChange={e => setSearch(e.target.value)} />
+                    </div>
+                  </div>
+                  <Card className="bg-card/60 border-border/50">
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr className="border-b border-border/50 text-xs text-muted-foreground">
+                            <th className="text-left p-3">Cliente</th>
+                            <th className="text-left p-3">Telefone</th>
+                            <th className="text-left p-3">1ª Visita</th>
+                            <th className="text-left p-3">Última Visita</th>
+                            <th className="text-right p-3">Dias</th>
+                            <th className="text-right p-3">Gasto</th>
+                            <th className="text-left p-3">Status</th>
+                          </tr></thead>
+                          <tbody>
+                            {qOneShot.data.clientes.map(c => (
+                              <tr key={c.clienteId} className="border-b border-border/30 hover:bg-muted/20">
+                                <td className="p-3 font-medium">{c.clienteNome || "—"}</td>
+                                <td className="p-3 text-muted-foreground">{c.telefone || "—"}</td>
+                                <td className="p-3 text-muted-foreground">{fmtDate(c.primeiraVenda)}</td>
+                                <td className="p-3 text-muted-foreground">{fmtDate(c.ultimaVenda)}</td>
+                                <td className="p-3 text-right">{c.dias}d</td>
+                                <td className="p-3 text-right">{fmtMoeda(c.totalGasto)}</td>
+                                <td className="p-3">
+                                  <Badge variant="outline" className={
+                                    c.status === "aguardando" ? "border-blue-500/50 text-blue-400" :
+                                    c.status === "em_risco" ? "border-orange-500/50 text-orange-400" :
+                                    "border-red-500/50 text-red-400"
+                                  }>
+                                    {c.status === "aguardando" ? "Aguardando" : c.status === "em_risco" ? "Em Risco" : "Perdido"}
+                                  </Badge>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {qOneShot.data.clientes.length === 0 && (
+                          <div className="text-center py-8 text-muted-foreground text-sm">Nenhum cliente encontrado.</div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
+              );
+            })()
           ) : null}
         </TabsContent>
 
