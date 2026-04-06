@@ -424,7 +424,7 @@ export const raioXRouter = router({
             SELECT v2.cliente, MAX(DATE(v2.data_criacao)) as ultima_antes
             FROM vendas v2
             JOIN usuarios uu2 ON v2.usuario = uu2.id
-            WHERE ${unitCondV}
+            WHERE ${unitCondV.replace(/\buu\./g, 'uu2.')}
               AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
               AND v2.cliente IS NOT NULL AND v2.cliente != 2
               AND DATE(v2.data_criacao) < '${dataInicio}'
