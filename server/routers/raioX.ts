@@ -405,12 +405,31 @@ export const raioXRouter = router({
           ) ci
         `),
         // ── Movimento mensal ─────────────────────────────────────────────────────
-        queryExternal<{ mes: string; atendidos: number }>(`
+        queryExternal<{ mes: string; atendidos: number; em_risco: number; resgatados: number }>(`
           SELECT
             DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
-            COUNT(DISTINCT v.cliente) as atendidos
+            COUNT(DISTINCT v.cliente) as atendidos,
+            COUNT(DISTINCT CASE
+              WHEN DATEDIFF(LAST_DAY(v.data_criacao), uv_mes.ultima_venda) BETWEEN 61 AND 90
+              THEN v.cliente END) as em_risco,
+            COUNT(DISTINCT CASE
+              WHEN DATE(c.data_criacao) < '${dataInicio}'
+                AND DATEDIFF(DATE(v.data_criacao), ult_antes.ultima_antes) > 90
+              THEN v.cliente END) as resgatados
           FROM vendas v
           JOIN usuarios uu ON v.usuario = uu.id
+          JOIN clientes c ON c.id = v.cliente
+          LEFT JOIN ${ultimaVendaSubquery} uv_mes ON uv_mes.cliente = v.cliente
+          LEFT JOIN (
+            SELECT v2.cliente, MAX(DATE(v2.data_criacao)) as ultima_antes
+            FROM vendas v2
+            JOIN usuarios uu2 ON v2.usuario = uu2.id
+            WHERE ${unitCondV}
+              AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
+              AND v2.cliente IS NOT NULL AND v2.cliente != 2
+              AND DATE(v2.data_criacao) < '${dataInicio}'
+            GROUP BY v2.cliente
+          ) ult_antes ON ult_antes.cliente = v.cliente
           WHERE ${unitCondV}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
             AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -563,8 +582,8 @@ export const raioXRouter = router({
         movimentoMensal: movimentoMensalRows.map(r => ({
           mes: r.mes,
           atendidos: Number(r.atendidos),
-          emRisco: 0,
-          resgatados: 0,
+          emRisco: Number(r.em_risco),
+          resgatados: Number(r.resgatados),
         })),
         entradasMensais: entradasMensaisRows.map(r => ({
           mes: r.mes,

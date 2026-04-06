@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  ComposedChart, Line, ReferenceLine,
 } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -742,34 +743,74 @@ export default function RaioXPage() {
               </Card>
 
               {/* ── Movimento da Base ── */}
-              {v.movimentoMensal && v.movimentoMensal.length > 0 && (
+              {v.movimentoMensal && v.movimentoMensal.length > 0 && (() => {
+                const totalAtend = v.movimentoMensal.reduce((s, r) => s + r.atendidos, 0);
+                const mediaAtend = v.movimentoMensal.length > 0 ? Math.round(totalAtend / v.movimentoMensal.length) : 0;
+                const anoAtual = new Date().getFullYear();
+                const anoAtendidos = v.movimentoMensal
+                  .filter(r => r.mes.startsWith(String(anoAtual)))
+                  .reduce((s, r) => s + r.atendidos, 0);
+                const ultimos6m = v.movimentoMensal.slice(-6).reduce((s, r) => s + r.atendidos, 0);
+                return (
                 <Card className="bg-card/60 border-border/50">
                   <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <div>
-                        <CardTitle className="text-sm">Movimento da base</CardTitle>
-                        <p className="text-xs text-muted-foreground mt-0.5">Clique em qualquer barra para ver os clientes daquele mês</p>
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-sm">Movimento da base</CardTitle>
+                          <span className="text-xs text-muted-foreground">· <span className="text-foreground font-medium">{totalAtend.toLocaleString()}</span> atendidos</span>
+                          <InfoPopover
+                            title="Movimento da Base — Mensal"
+                            descricao="Barras: Clientes atendidos naquele mês (clique para ver a lista). Linha laranja: Clientes em risco ao fim do mês. Linha verde: Clientes resgatados no mês."
+                            periodoFiltrado={v.contexto?.periodoFiltrado}
+                            ref={v.contexto?.ref}
+                            baseUsada={v.contexto?.baseUsada}
+                            baseTotal={v.sinais.totalBase}
+                            regra="Atendidos: clientes únicos com visita no mês | Em risco: última visita 61-90d após fim do mês | Resgatados: voltaram após >90d ausentes"
+                            nota="Clique em qualquer barra para ver os clientes daquele mês. Configure os thresholds em Config → Seção 5."
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          12m: <span className="text-foreground">{totalAtend.toLocaleString()}</span>
+                          {" · "}
+                          6m: <span className="text-foreground">{ultimos6m.toLocaleString()}</span>
+                          {" · "}
+                          Ano: <span className="text-foreground">{anoAtendidos.toLocaleString()}</span>
+                          {" · "}
+                          Méd: <span className="text-foreground">{mediaAtend.toLocaleString()}</span>
+                        </p>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={v.movimentoMensal} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <ComposedChart data={v.movimentoMensal} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                         <XAxis dataKey="mes" tickFormatter={fmtMes} tick={{ fontSize: 11, fill: "#888" }} />
                         <YAxis tick={{ fontSize: 11, fill: "#888" }} />
-                        <Tooltip formatter={(val: number, name: string) => [val, name === "atendidos" ? "Atendidos" : name === "emRisco" ? "Em risco" : "Resgatados"]} labelFormatter={fmtMes} contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
-                        <Bar dataKey="atendidos" fill="#ca8a04" radius={[3, 3, 0, 0]} name="Atendidos" />
-                      </BarChart>
+                        <Tooltip
+                          formatter={(val: number, name: string) => [
+                            val.toLocaleString(),
+                            name === "atendidos" ? "Atendidos" : name === "emRisco" ? "Em risco" : "Resgatados"
+                          ]}
+                          labelFormatter={fmtMes}
+                          contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }}
+                        />
+                        <ReferenceLine y={mediaAtend} stroke="#ca8a04" strokeDasharray="4 2" strokeOpacity={0.5} label={{ value: `Méd: ${mediaAtend}`, fill: "#ca8a04", fontSize: 10, position: "insideTopLeft" }} />
+                        <Bar dataKey="atendidos" fill="#ca8a04" radius={[3, 3, 0, 0]} name="atendidos" />
+                        <Line type="monotone" dataKey="emRisco" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: "#f97316" }} name="emRisco" />
+                        <Line type="monotone" dataKey="resgatados" stroke="#22c55e" strokeWidth={2} dot={{ r: 3, fill: "#22c55e" }} name="resgatados" />
+                      </ComposedChart>
                     </ResponsiveContainer>
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-yellow-600 inline-block" />Atendidos</span>
-                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-orange-500 inline-block" />Em risco</span>
-                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-500 inline-block" />Resgatados</span>
+                      <span className="flex items-center gap-1"><span className="inline-block w-5 h-0.5 bg-orange-500" />Em risco</span>
+                      <span className="flex items-center gap-1"><span className="inline-block w-5 h-0.5 bg-green-500" />Resgatados</span>
                     </div>
                   </CardContent>
                 </Card>
-              )}
+                );
+              })()}
 
               {/* ── Entradas na base ── */}
               {v.entradasMensais && v.entradasMensais.length > 0 && (
