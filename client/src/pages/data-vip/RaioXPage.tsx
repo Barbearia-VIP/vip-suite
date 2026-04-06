@@ -2037,11 +2037,138 @@ export default function RaioXPage() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* ── Cohort Histórico (grade M+1..M+6) ── */}
+              {qCohort.data?.cohortHistorico && qCohort.data.cohortHistorico.length > 0 && (
+                <Card className="bg-card/60 border-border/50">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                      Retenção por Mês de 1ª Visita (Cohort Histórico)
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">% que voltou em M+1, M+2… M+6 (mês-calendário após a 1ª visita)</p>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="p-3 mx-4 mb-3 rounded-lg bg-blue-950/40 border border-blue-800/30 text-xs text-blue-300 space-y-1">
+                      <p><strong>Metodologia:</strong> Clientes novos agrupados pelo mês da 1ª visita. Retenção medida por <strong>meses-calendário</strong> (M+1 = visitou no mês seguinte, M+2 = dois meses depois, etc.).</p>
+                      <p className="text-blue-400/70">O que observar: Tendência entre cohorts — se M+1 cai mês a mês, a primeira impressão está piorando. Se M+6 é muito menor que M+1, clientes experimentam mas não ficam.</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border/50 text-xs text-muted-foreground">
+                            <th className="text-left p-3 pl-4">Mês</th>
+                            <th className="text-right p-3">Novos</th>
+                            {[1,2,3,4,5,6].map(m => (
+                              <th key={m} className="text-right p-3">M+{m}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {qCohort.data.cohortHistorico.map((row: Record<string, unknown>) => (
+                            <tr key={String(row.mes)} className="border-b border-border/30 hover:bg-muted/20">
+                              <td className="p-3 pl-4 font-medium">{fmtMes(String(row.mes))}</td>
+                              <td className="p-3 text-right text-foreground">{Number(row.novos)}</td>
+                              {[1,2,3,4,5,6].map(m => {
+                                const val = row[`m${m}`];
+                                if (val === null || val === undefined) return <td key={m} className="p-3 text-right text-muted-foreground/40 text-xs">—</td>;
+                                const pct = Number(val);
+                                return (
+                                  <td key={m} className="p-3 text-right">
+                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                      pct >= 30 ? "bg-green-900/50 text-green-300" :
+                                      pct >= 15 ? "bg-yellow-900/50 text-yellow-300" :
+                                      "bg-red-900/50 text-red-300"
+                                    }`}>{pct}%</span>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* ── Por Barbeiro ── */}
+              {qCohort.data?.cohortPorBarbeiro && qCohort.data.cohortPorBarbeiro.length > 0 && (
+                <Card className="bg-card/60 border-border/50">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Users className="w-4 h-4 text-muted-foreground" />
+                      Por Barbeiro
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">Retenção de clientes novos por colaborador — identifica quem converte melhor a 1ª visita</p>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border/50 text-xs text-muted-foreground">
+                            <th className="text-left p-3 pl-4">Colaborador</th>
+                            <th className="text-right p-3">Novos</th>
+                            <th className="text-right p-3">Ret. 30d</th>
+                            <th className="text-right p-3">Ret. 60d</th>
+                            <th className="text-right p-3">Ret. 90d</th>
+                            <th className="text-right p-3">Mediana 2ª</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(qCohort.data.cohortPorBarbeiro as Array<{
+                            barbeiroId: number; barbeiroNome: string; novos: number;
+                            ret30: number; pctRet30: number; ret60: number; pctRet60: number;
+                            ret90: number; pctRet90: number; mediana2aVisita: number | null;
+                          }>).map((b, i) => (
+                            <tr key={b.barbeiroId} className={`border-b border-border/30 hover:bg-muted/20 ${i === 0 ? "" : ""}`}>
+                              <td className="p-3 pl-4 font-medium">{b.barbeiroNome}</td>
+                              <td className="p-3 text-right text-foreground">{b.novos}</td>
+                              <td className="p-3 text-right">
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                  b.pctRet30 >= 25 ? "bg-green-900/50 text-green-300" :
+                                  b.pctRet30 >= 15 ? "bg-yellow-900/50 text-yellow-300" :
+                                  "bg-red-900/50 text-red-300"
+                                }`}>{b.pctRet30}%</span>
+                              </td>
+                              <td className="p-3 text-right">
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                  b.pctRet60 >= 40 ? "bg-green-900/50 text-green-300" :
+                                  b.pctRet60 >= 25 ? "bg-yellow-900/50 text-yellow-300" :
+                                  "bg-red-900/50 text-red-300"
+                                }`}>{b.pctRet60}%</span>
+                              </td>
+                              <td className="p-3 text-right">
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                  b.pctRet90 >= 45 ? "bg-green-900/50 text-green-300" :
+                                  b.pctRet90 >= 30 ? "bg-yellow-900/50 text-yellow-300" :
+                                  "bg-red-900/50 text-red-300"
+                                }`}>{b.pctRet90}%</span>
+                              </td>
+                              <td className="p-3 text-right text-muted-foreground">
+                                {b.mediana2aVisita !== null ? `${b.mediana2aVisita}d` : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t border-border/50 bg-muted/10 text-xs text-muted-foreground">
+                            <td className="p-3 pl-4 font-medium">Total</td>
+                            <td className="p-3 text-right font-medium text-foreground">
+                              {(qCohort.data.cohortPorBarbeiro as Array<{novos: number}>).reduce((s, b) => s + b.novos, 0)}
+                            </td>
+                            <td colSpan={4} />
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </>
           )}
         </TabsContent>
-
-        {/* ── BARBEIROS ────────────────────────────────────────────────────────── */}
+        {/* ── BARBEIROSS ────────────────────────────────────────────────────────── */}
         <TabsContent value="barbeiros" className="space-y-4 mt-4">
           {qBarbeiros.isLoading ? <Skeleton className="h-60" /> : qBarbeiros.data && qBarbeiros.data.barbeiros.length > 0 ? (
             <>
