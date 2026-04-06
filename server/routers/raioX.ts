@@ -210,26 +210,23 @@ export const raioXRouter = router({
           one_shot_risco: number;
           one_shot_perdido: number;
         }>(`
+          -- Saúde da Base 12m:
+          -- Ativos: ≤45d desde última visita
+          -- Em risco: 46-90d
+          -- Perdidos: >90d (inclui one-shots perdidos)
+          -- One-shot risco: 1 visita histórica + 46-90d sem retornar
+          -- One-shot perdido: 1 visita histórica + >90d sem retornar
           SELECT
             COUNT(DISTINCT bs.cliente) as total_base_s,
-            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 44 THEN bs.cliente END) as ativos,
-            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 45 AND 60 THEN bs.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 45 THEN bs.cliente END) as ativos,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 46 AND 90 THEN bs.cliente END) as em_risco,
             COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 90 THEN bs.cliente END) as perdidos,
-            COUNT(DISTINCT CASE WHEN vp.total_periodo = 1 AND DATEDIFF(NOW(), c.ultima_visita) >= 45 THEN bs.cliente END) as one_shot_urgente,
-            COUNT(DISTINCT CASE WHEN vp.total_periodo = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 45 AND 60 THEN bs.cliente END) as one_shot_risco,
-            COUNT(DISTINCT CASE WHEN vp.total_periodo = 1 AND DATEDIFF(NOW(), c.ultima_visita) > 90 THEN bs.cliente END) as one_shot_perdido
+            COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) >= 46 THEN bs.cliente END) as one_shot_urgente,
+            COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 46 AND 90 THEN bs.cliente END) as one_shot_risco,
+            COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) > 90 THEN bs.cliente END) as one_shot_perdido
           FROM ${baseS12mSubquery} bs
           JOIN clientes c ON c.id = bs.cliente
-          LEFT JOIN (
-            SELECT v.cliente, COUNT(*) as total_periodo
-            FROM vendas v
-            JOIN usuarios uu ON v.usuario = uu.id
-            WHERE ${unitCondV}
-              AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
-              AND v.cliente IS NOT NULL AND v.cliente != 2
-              AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
-            GROUP BY v.cliente
-          ) vp ON vp.cliente = bs.cliente
+          LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bs.cliente
           WHERE c.status = 1 AND c.ultima_visita IS NOT NULL
         `),
         // ── Por Perfil: Base S 12m, classificada por visitas históricas ─────────
