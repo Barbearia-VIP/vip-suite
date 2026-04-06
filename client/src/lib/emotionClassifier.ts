@@ -2,12 +2,18 @@
  * Classificador de emoções para o VIP Cam.
  * Regras calibradas para o modelo @vladmandic/face-api:
  *
- * O modelo retorna valores de angry/disgusted/sad elevados mesmo para rostos neutros.
- * Thresholds altos evitam falsos positivos de insatisfação.
- *
- * - Insatisfeito: angry >= 0.55 OU disgusted >= 0.50 OU (sad >= 0.60 E happy < 0.15)
+ * NÍVEL 1 — Thresholds reduzidos para capturar insatisfação real:
+ * - Insatisfeito: angry >= 0.35 OU disgusted >= 0.35 OU (sad >= 0.45 E happy < 0.20)
  * - Satisfeito: happy >= 0.35
  * - Neutro: qualquer outra coisa (padrão)
+ *
+ * NÍVEL 2 — Regra de prioridade histórica por proporção:
+ * - Insatisfeito: capturas insatisfeitas >= 30% do total
+ * - Satisfeito: capturas satisfeitas >= 40% do total (e insatisfeitas < 30%)
+ * - Neutro: qualquer outra coisa
+ *
+ * Antes: "um sorriso apaga todo o histórico negativo" (regra otimista demais).
+ * Agora: a experiência real ao longo do tempo determina o status final.
  */
 
 export type SatisfactionLevel = 'satisfied' | 'neutral' | 'unsatisfied';
@@ -25,6 +31,7 @@ export interface ExpressionScores {
 
 /**
  * Classifica um frame único com base nas probabilidades de expressão.
+ * Thresholds reduzidos (Nível 1) para capturar insatisfação real.
  */
 export function classifyExpression(scores: ExpressionScores): {
   satisfactionLevel: SatisfactionLevel;
@@ -34,17 +41,16 @@ export function classifyExpression(scores: ExpressionScores): {
   const entries = Object.entries(scores) as [ExpressionName, number][];
   const dominantExpression = entries.reduce((a, b) => b[1] > a[1] ? b : a)[0];
 
-  // Regra de insatisfação (thresholds altos para evitar falsos positivos)
-  // O modelo face-api retorna angry/disgusted/sad elevados mesmo para rostos neutros-sérios.
+  // Regra de insatisfação — thresholds reduzidos para capturar expressões sérias/tensas reais
   if (
-    scores.angry >= 0.55 ||
-    scores.disgusted >= 0.50 ||
-    (scores.sad >= 0.60 && scores.happy < 0.15)
+    scores.angry >= 0.35 ||
+    scores.disgusted >= 0.35 ||
+    (scores.sad >= 0.45 && scores.happy < 0.20)
   ) {
     return { satisfactionLevel: 'unsatisfied', dominantExpression };
   }
 
-  // Regra de satisfação (threshold levemente reduzido para capturar sorrisos leves)
+  // Regra de satisfação
   if (scores.happy >= 0.35) {
     return { satisfactionLevel: 'satisfied', dominantExpression };
   }
@@ -91,7 +97,6 @@ export function averageExpressions(frames: ExpressionScores[]): ExpressionScores
  * - < 0.42: mesma pessoa (alta confiança)
  * - 0.42–0.55: possivelmente a mesma pessoa (zona cinza)
  * - > 0.55: pessoas diferentes
- * O valor 0.55 era muito permissivo e causava agrupamento de rostos distintos.
  */
 export function euclideanDistance(a: Float32Array | number[], b: Float32Array | number[]): number {
   if (a.length !== b.length) return Infinity;
@@ -128,20 +133,41 @@ export function findMatchingClient(
 }
 
 /**
- * Aplica a regra de prioridade de emoção baseada no histórico:
- * 1. Se houver QUALQUER "satisfied" → satisfied
- * 2. Se neutros >= insatisfeitos → neutral
- * 3. Caso contrário → unsatisfied
+ * Aplica a regra de prioridade por PROPORÇÃO (Nível 2).
+ *
+ * Lógica anterior (otimista demais):
+ *   1. Se houver QUALQUER "satisfied" → satisfied para sempre
+ *   2. Se neutros >= insatisfeitos → neutral
+ *   3. Caso contrário → unsatisfied
+ *
+ * Nova lógica (proporcional):
+ *   1. Se insatisfeitos >= 30% do total → unsatisfied
+ *   2. Se satisfeitos >= 40% do total (e insatisfeitos < 30%) → satisfied
+ *   3. Caso contrário → neutral
+ *
+ * Isso reflete a experiência real do cliente ao longo do tempo,
+ * sem que um único sorriso apague todo o histórico negativo.
  */
 export function calcFinalSatisfactionLevel(
   timeline: Array<{ satisfactionLevel: SatisfactionLevel }>
 ): SatisfactionLevel {
+  const total = timeline.length;
+  if (total === 0) return 'neutral';
+
   const satisfied = timeline.filter(t => t.satisfactionLevel === 'satisfied').length;
-  if (satisfied > 0) return 'satisfied';
-  const neutral = timeline.filter(t => t.satisfactionLevel === 'neutral').length;
   const unsatisfied = timeline.filter(t => t.satisfactionLevel === 'unsatisfied').length;
-  if (neutral >= unsatisfied) return 'neutral';
-  return 'unsatisfied';
+
+  const pctUnsatisfied = unsatisfied / total;
+  const pctSatisfied = satisfied / total;
+
+  // Insatisfeito prevalece se >= 30% das capturas forem negativas
+  if (pctUnsatisfied >= 0.30) return 'unsatisfied';
+
+  // Satisfeito se >= 40% das capturas forem positivas (e insatisfeitos < 30%)
+  if (pctSatisfied >= 0.40) return 'satisfied';
+
+  // Neutro em todos os outros casos
+  return 'neutral';
 }
 
 /**
@@ -164,3 +190,23 @@ export const SATISFACTION_EMOJIS: Record<SatisfactionLevel, string> = {
   neutral: '😐',
   unsatisfied: '😠',
 };
+
+/**
+ * Thresholds exportados para uso em outros módulos (ex: reclassificação histórica no backend)
+ */
+export const EMOTION_THRESHOLDS = {
+  /** angry >= este valor → insatisfeito */
+  ANGRY: 0.35,
+  /** disgusted >= este valor → insatisfeito */
+  DISGUSTED: 0.35,
+  /** sad >= este valor (com happy < SAD_HAPPY_MAX) → insatisfeito */
+  SAD: 0.45,
+  /** happy deve ser menor que este valor para sad ser considerado insatisfeito */
+  SAD_HAPPY_MAX: 0.20,
+  /** happy >= este valor → satisfeito */
+  HAPPY: 0.35,
+  /** % mínima de capturas insatisfeitas para status final = insatisfeito */
+  PCT_UNSATISFIED: 0.30,
+  /** % mínima de capturas satisfeitas para status final = satisfeito */
+  PCT_SATISFIED: 0.40,
+} as const;

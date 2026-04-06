@@ -39,20 +39,41 @@ function euclideanDistance(a: number[], b: number[]): number {
 }
 
 /**
- * Aplica a regra de prioridade de emoção baseada no histórico da timeline:
- * 1. Se houver QUALQUER "satisfied" → satisfied
- * 2. Se neutros >= insatisfeitos → neutral
- * 3. Caso contrário → unsatisfied
+ * Aplica a regra de prioridade por PROPORÇÃO (Nível 2).
+ *
+ * Lógica anterior (otimista demais):
+ *   1. Se houver QUALQUER "satisfied" → satisfied para sempre
+ *   2. Se neutros >= insatisfeitos → neutral
+ *   3. Caso contrário → unsatisfied
+ *
+ * Nova lógica (proporcional):
+ *   1. Se insatisfeitos >= 30% do total → unsatisfied
+ *   2. Se satisfeitos >= 40% do total (e insatisfeitos < 30%) → satisfied
+ *   3. Caso contrário → neutral
+ *
+ * Isso reflete a experiência real do cliente ao longo do tempo,
+ * sem que um único sorriso apague todo o histórico negativo.
  */
 function calcFinalSatisfactionLevel(
   timeline: Array<{ satisfactionLevel: string }>
 ): 'satisfied' | 'neutral' | 'unsatisfied' {
+  const total = timeline.length;
+  if (total === 0) return 'neutral';
+
   const satisfied = timeline.filter(t => t.satisfactionLevel === 'satisfied').length;
-  if (satisfied > 0) return 'satisfied';
-  const neutral = timeline.filter(t => t.satisfactionLevel === 'neutral').length;
   const unsatisfied = timeline.filter(t => t.satisfactionLevel === 'unsatisfied').length;
-  if (neutral >= unsatisfied) return 'neutral';
-  return 'unsatisfied';
+
+  const pctUnsatisfied = unsatisfied / total;
+  const pctSatisfied = satisfied / total;
+
+  // Insatisfeito prevalece se >= 30% das capturas forem negativas
+  if (pctUnsatisfied >= 0.30) return 'unsatisfied';
+
+  // Satisfeito se >= 40% das capturas forem positivas (e insatisfeitos < 30%)
+  if (pctSatisfied >= 0.40) return 'satisfied';
+
+  // Neutro em todos os outros casos
+  return 'neutral';
 }
 
 // ─────────────────────────────────────────────
@@ -857,19 +878,19 @@ export const vipCamRouter = router({
       const db = await getDb();
 
       // ── Etapa 1: Reclassificar a timeline inteira com 1 query SQL nativa ──
-      // Regras por expression+confidence com novos thresholds:
+      // Regras por expression+confidence com thresholds Nível 1 (reduzidos):
       //   happy >= 0.35 → satisfied
-      //   angry >= 0.55 → unsatisfied
-      //   disgusted >= 0.50 → unsatisfied
-      //   sad >= 0.60 → unsatisfied
+      //   angry >= 0.35 → unsatisfied  (era 0.55)
+      //   disgusted >= 0.35 → unsatisfied  (era 0.50)
+      //   sad >= 0.45 → unsatisfied  (era 0.60)
       //   qualquer outra coisa → neutral
       const timelineResult = await db!.execute(sql`
         UPDATE cam_sentiment_timeline
         SET satisfactionLevel = CASE
           WHEN expression = 'happy'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.35 THEN 'satisfied'
-          WHEN expression = 'angry'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.55 THEN 'unsatisfied'
-          WHEN expression = 'disgusted' AND CAST(confidence AS DECIMAL(10,4)) >= 0.50 THEN 'unsatisfied'
-          WHEN expression = 'sad'       AND CAST(confidence AS DECIMAL(10,4)) >= 0.60 THEN 'unsatisfied'
+          WHEN expression = 'angry'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.35 THEN 'unsatisfied'
+          WHEN expression = 'disgusted' AND CAST(confidence AS DECIMAL(10,4)) >= 0.35 THEN 'unsatisfied'
+          WHEN expression = 'sad'       AND CAST(confidence AS DECIMAL(10,4)) >= 0.45 THEN 'unsatisfied'
           ELSE 'neutral'
         END
         WHERE unitId = ${input.unitId}
@@ -947,7 +968,7 @@ export const vipCamRouter = router({
           userName: ctx.user!.name ?? 'Usuário',
           acao: 'recalc',
           entidade: 'vip_cam_satisfaction',
-          descricao: `Reclassificação histórica completa: ${timelineTotal} capturas processadas (${timelineUpdated} alteradas), ${clientesUpdated} clientes recalculados`,
+          descricao: `Reclassificação histórica completa (Nível 2 — proporcional): ${timelineTotal} capturas processadas (${timelineUpdated} alteradas), ${clientesUpdated} clientes recalculados`,
         });
       } catch { /* não bloquear por falha de auditoria */ }
 
