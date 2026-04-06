@@ -1097,9 +1097,16 @@ export const raioXRouter = router({
 
       const unitIn = extIds.length === 1 ? `uu.unidade = ${extIds[0]}` : `uu.unidade IN (${extIds.join(",")})`;
 
-      // ── Passo 1: Clientes do período com stats agregados (1 query leve) ─────
-      // Usa clientes.ultima_visita (campo indexado) para classificação
-      // e conta visitas históricas via subquery simples
+      // ── Passo 1: Base de churn = clientes que visitaram nos últimos 620d ────────
+      // Lógica alinhada ao sistema de referência:
+      //   Base = visitaram nos últimos 620d (≈20 meses) antes de dataFim
+      //   Perdido = sem visita nos últimos 45d (75% da janela de 60d)
+      //   Fidelizados = ≥3 visitas históricas
+      //   One-shot = 1 visita histórica
+      const dataBase620 = new Date(new Date(dataFim + "T12:00:00Z").getTime() - 620 * 86400000)
+        .toISOString().split("T")[0];
+      const unitIn2 = extIds.length === 1 ? `uu2.unidade = ${extIds[0]}` : `uu2.unidade IN (${extIds.join(",")})`;
+
       const clientesBase = await queryExternal<{
         cliente_id: number; nome: string; telefone: string;
         ultima_visita: Date; tv_hist: number; ticket: number;
@@ -1113,19 +1120,19 @@ export const raioXRouter = router({
           FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
           WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
             AND v.cliente IS NOT NULL AND v.cliente!=2
-            AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+            AND DATE(v.data_criacao) >= '${dataBase620}' AND DATE(v.data_criacao) <= '${dataFim}'
         ) bp
         JOIN clientes c ON c.id = bp.cliente
         LEFT JOIN (
           SELECT v2.cliente, COUNT(*) as tv
           FROM vendas v2 JOIN usuarios uu2 ON v2.usuario = uu2.id
-          WHERE ${extIds.length === 1 ? `uu2.unidade = ${extIds[0]}` : `uu2.unidade IN (${extIds.join(",")})`} AND v2.comanda_temp=0
+          WHERE ${unitIn2} AND v2.comanda_temp=0
             AND v2.cancelado_motivo IS NULL AND v2.status!=0
             AND v2.cliente IS NOT NULL AND v2.cliente!=2
           GROUP BY v2.cliente
         ) tvh ON tvh.cliente = c.id
         WHERE c.status = 1
-        LIMIT 5000
+        LIMIT 6000
       `);
 
       // ── Passo 2: Resgatados — clientes do período cuja visita ANTERIOR ao período
@@ -1167,15 +1174,19 @@ export const raioXRouter = router({
         };
       };
 
+      // Threshold 45d alinhado ao sistema de referência (75% da janela de 60d)
+      const CHURN_THRESHOLD = 45;
+      const RISCO_MIN = 30; // Em risco: 30-45d
+
       const perdidosList = clientesBase.filter(c => {
         const uv = c.ultima_visita instanceof Date ? c.ultima_visita : new Date(c.ultima_visita as unknown as string);
-        return Math.floor((dataFimMs - uv.getTime()) / 86400000) > 90;
+        return Math.floor((dataFimMs - uv.getTime()) / 86400000) > CHURN_THRESHOLD;
       });
 
       const emRiscoList = clientesBase.filter(c => {
         const uv = c.ultima_visita instanceof Date ? c.ultima_visita : new Date(c.ultima_visita as unknown as string);
         const d = Math.floor((dataFimMs - uv.getTime()) / 86400000);
-        return d >= 45 && d <= 90;
+        return d >= RISCO_MIN && d <= CHURN_THRESHOLD;
       });
 
       const resgatadosList = clientesBase.filter(c => resgatadosSet.has(c.cliente_id));
