@@ -115,20 +115,43 @@ export const raioXRouter = router({
       );
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
+      // Rolling windows (always from NOW, not period-dependent)
       const dataInicio12m = new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0];
       const dataInicio24m = new Date(Date.now() - 730 * 86400000).toISOString().split("T")[0];
 
       const unitCondV = extIds.length === 0 ? "1=1"
         : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
         : `uu.unidade IN (${extIds.join(",")})`;
-      const unitCondVb = extIds.length === 0 ? "1=1"
-        : extIds.length === 1 ? `uu2.unidade = ${extIds[0]}`
-        : `uu2.unidade IN (${extIds.join(",")})`;
       const unitCondSimple = extIds.length === 0 ? "1=1"
         : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
         : `ultima_visita_unidade IN (${extIds.join(",")})`;
 
-      // Subquery: clientes que visitaram no período selecionado
+      // Base S (12m rolling): clientes com visita nos últimos 12 meses
+      // Usado para: Ativos, Em risco, Perdidos, One-shot urgente
+      const baseS12mSubquery = `(
+        SELECT DISTINCT v.cliente
+        FROM vendas v
+        JOIN usuarios uu ON v.usuario = uu.id
+        WHERE ${unitCondV}
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.cliente IS NOT NULL AND v.cliente != 2
+          AND DATE(v.data_criacao) >= '${dataInicio12m}'
+      )`;
+
+      // Base P (24m rolling): clientes com visita nos últimos 24 meses
+      // Usado para: Por Perfil, total base
+      const baseP24mSubquery = `(
+        SELECT v.cliente, COUNT(*) as total_visitas
+        FROM vendas v
+        JOIN usuarios uu ON v.usuario = uu.id
+        WHERE ${unitCondV}
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.cliente IS NOT NULL AND v.cliente != 2
+          AND DATE(v.data_criacao) >= '${dataInicio24m}'
+        GROUP BY v.cliente
+      )`;
+
+      // Clientes do período selecionado (para: clientes únicos, novos, resgatados)
       const clientesPeriodoSubquery = `(
         SELECT DISTINCT v.cliente
         FROM vendas v
@@ -138,177 +161,156 @@ export const raioXRouter = router({
           AND v.cliente IS NOT NULL AND v.cliente != 2
           AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
       )`;
-      // Subquery: visitas totais de cada cliente NO PERÍODO
-      const visitasPeriodoSubquery = `(
+
+      // Visitas históricas por cliente (para: one-shot = 1 visita EVER)
+      const visitasHistoricasSubquery = `(
         SELECT v.cliente, COUNT(*) as total_visitas
         FROM vendas v
         JOIN usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
           AND v.cliente IS NOT NULL AND v.cliente != 2
-          AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
         GROUP BY v.cliente
       )`;
 
       const [
-        statusRows,
-        perfilRows,
+        // Sinais: Base S 12m rolling - ativos/em risco/perdidos/one-shots
+        sinaisRows,
+        // Base P 24m: total base e perfil
+        basePRows,
+        // Status 12m distribuição
         status12mRows,
-        oneShotDistRows,
+        // Clientes únicos no período
+        clientesUnicosRows,
+        // Novos no período (1ª visita histórica no período)
         novosRows,
-        novosRecorrentesRows,
-        ativosNaJanelaRows,
+        // Resgatados no período (voltaram após >90d de ausência)
         resgatadosRows,
-        // Cadência individual: clientes do período classificados por dias sem visitar
+        // Cadência Individual: Base S 12m classificada por dias desde última visita
         cadenciaIndividualRows,
-        // Movimento mensal: atendidos, em risco, resgatados por mês
+        // Movimento mensal: atendidos por mês no período
         movimentoMensalRows,
-        // Entradas mensais: novos + resgatados por mês
+        // Entradas mensais: novos por mês no período
         entradasMensaisRows,
-        // Risco mensal: em risco + churn% por mês
+        // Risco mensal: em risco por mês
         riscoMensalRows,
-        // Saúde por barbeiro (top 8, ordenado por % risco+perdido)
+        // Saúde por barbeiro
         saudeBarbeirosRows,
       ] = await Promise.all([
-        // Base P (Corte 24m): clientes com visita nos últimos 24 meses
+        // ── Sinais (Base S · 12m rolling) ──────────────────────────────────────
         queryExternal<{
-          total: number; ativos: number; em_risco: number; perdidos: number; one_shots: number;
-          one_shot_risco: number; one_shot_perdido: number;
+          total_base_s: number;
+          total_base_p: number;
+          ativos: number;
+          em_risco: number;
+          perdidos: number;
+          one_shots_urgente: number;
         }>(`
-          SELECT 
-            COUNT(*) as total,
-            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN 1 ELSE 0 END) as ativos,
-            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as em_risco,
-            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 90 THEN 1 ELSE 0 END) as perdidos,
-            SUM(CASE WHEN vpc24.total_visitas = 1 THEN 1 ELSE 0 END) as one_shots,
-            SUM(CASE WHEN vpc24.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as one_shot_risco,
-            SUM(CASE WHEN vpc24.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) > 90 THEN 1 ELSE 0 END) as one_shot_perdido
-          FROM clientes c
-          JOIN (
-            SELECT v.cliente, COUNT(*) as total_visitas
-            FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
-            WHERE ${unitCondV}
-              AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
-              AND v.cliente IS NOT NULL AND v.cliente != 2
-              AND DATE(v.data_criacao) >= '${dataInicio24m}'
-            GROUP BY v.cliente
-          ) vpc24 ON vpc24.cliente = c.id
+          SELECT
+            COUNT(DISTINCT bs.cliente) as total_base_s,
+            (SELECT COUNT(DISTINCT bp.cliente) FROM ${baseP24mSubquery} bp) as total_base_p,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN bs.cliente END) as ativos,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN bs.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 90 THEN bs.cliente END) as perdidos,
+            COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 120 THEN bs.cliente END) as one_shots_urgente
+          FROM ${baseS12mSubquery} bs
+          JOIN clientes c ON c.id = bs.cliente
+          LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bs.cliente
           WHERE c.status = 1 AND c.ultima_visita IS NOT NULL
-            AND ${unitCondSimple} AND c.ultima_visita >= '${dataInicio24m}'
         `),
-        // Perfil de visitas (Base P · 24m)
+        // ── Base P 24m: perfil de visitas ──────────────────────────────────────
         queryExternal<{ one_shot: number; ocasional: number; regular: number; fiel: number; recorrente: number }>(`
-          SELECT 
-            SUM(CASE WHEN vpc24.total_visitas = 1 THEN 1 ELSE 0 END) as one_shot,
-            SUM(CASE WHEN vpc24.total_visitas BETWEEN 2 AND 3 THEN 1 ELSE 0 END) as ocasional,
-            SUM(CASE WHEN vpc24.total_visitas BETWEEN 4 AND 6 THEN 1 ELSE 0 END) as regular,
-            SUM(CASE WHEN vpc24.total_visitas BETWEEN 7 AND 12 THEN 1 ELSE 0 END) as fiel,
-            SUM(CASE WHEN vpc24.total_visitas > 12 THEN 1 ELSE 0 END) as recorrente
-          FROM clientes c
-          JOIN (
-            SELECT v.cliente, COUNT(*) as total_visitas
-            FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
-            WHERE ${unitCondV}
-              AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
-              AND v.cliente IS NOT NULL AND v.cliente != 2
-              AND DATE(v.data_criacao) >= '${dataInicio24m}'
-            GROUP BY v.cliente
-          ) vpc24 ON vpc24.cliente = c.id
-          WHERE c.status = 1
+          SELECT
+            SUM(CASE WHEN bp.total_visitas = 1 THEN 1 ELSE 0 END) as one_shot,
+            SUM(CASE WHEN bp.total_visitas BETWEEN 2 AND 3 THEN 1 ELSE 0 END) as ocasional,
+            SUM(CASE WHEN bp.total_visitas BETWEEN 4 AND 6 THEN 1 ELSE 0 END) as regular,
+            SUM(CASE WHEN bp.total_visitas BETWEEN 7 AND 12 THEN 1 ELSE 0 END) as fiel,
+            SUM(CASE WHEN bp.total_visitas > 12 THEN 1 ELSE 0 END) as recorrente
+          FROM ${baseP24mSubquery} bp
         `),
-        // Status 12 meses
+        // ── Status 12m ─────────────────────────────────────────────────────────
         queryExternal<{ perdido: number; em_risco: number; saudavel: number }>(`
-          SELECT 
+          SELECT
             SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 90 THEN 1 ELSE 0 END) as perdido,
             SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as em_risco,
             SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN 1 ELSE 0 END) as saudavel
-          FROM clientes c
-          WHERE ${unitCondSimple} AND c.status = 1 AND c.ultima_visita IS NOT NULL
-            AND c.ultima_visita >= ?
-        `, [dataInicio12m]),
-        // One-shot no período
-        queryExternal<{ total: number; aguardando: number; em_risco: number; perdido: number }>(`
-          SELECT 
-            COUNT(*) as total,
-            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 30 THEN 1 ELSE 0 END) as aguardando,
-            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 31 AND 60 THEN 1 ELSE 0 END) as em_risco,
-            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 60 THEN 1 ELSE 0 END) as perdido
-          FROM clientes c
-          JOIN ${visitasPeriodoSubquery} vpc ON vpc.cliente = c.id
-          WHERE c.status = 1 AND c.ultima_visita IS NOT NULL AND vpc.total_visitas = 1
-        `),
-        // Novos no período
-        queryExternal<{ total: number }>(`
-          SELECT COUNT(*) as total FROM clientes c
-          WHERE ${unitCondSimple} AND c.status = 1
-            AND DATE(c.data_criacao) >= ? AND DATE(c.data_criacao) <= ?
-        `, [dataInicio, dataFim]),
-        // Novos que voltaram (recorrentes)
-        queryExternal<{ total: number }>(`
-          SELECT COUNT(*) as total FROM clientes c
-          WHERE ${unitCondSimple} AND c.status = 1
-            AND DATE(c.data_criacao) >= ? AND DATE(c.data_criacao) <= ?
-            AND (SELECT COUNT(*) FROM vendas v WHERE v.cliente = c.id AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0) > 1
-        `, [dataInicio, dataFim]),
-        // Ativos na janela do período
-        queryExternal<{ total: number }>(`
-          SELECT COUNT(DISTINCT cliente) as total
-          FROM ${clientesPeriodoSubquery} cp
-        `),
-        // Resgatados (perdidos que voltaram no período)
-        queryExternal<{ total: number }>(`
-          SELECT COUNT(DISTINCT c.id) as total
-          FROM clientes c
-          JOIN ${clientesPeriodoSubquery} cp ON cp.cliente = c.id
-          WHERE c.status = 1
-            AND (SELECT MIN(v2.data_criacao) FROM vendas v2
-                 WHERE v2.cliente = c.id AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0) < ?
-            AND DATEDIFF(?, (SELECT MAX(v3.data_criacao) FROM vendas v3
-                 WHERE v3.cliente = c.id AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL AND v3.status != 0
-                 AND v3.data_criacao < ?)) > 90
-        `, [dataInicio, dataInicio, dataInicio]),
-        // Cadência Individual: clientes do período classificados por dias sem visitar
-        queryExternal<{ assiduo: number; regular: number; espacando: number; primeira_vez: number; em_risco: number; perdido: number; total: number }>(`
-          SELECT
-            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 30 AND vpc.total_visitas > 1 THEN 1 ELSE 0 END) as assiduo,
-            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 31 AND 60 AND vpc.total_visitas > 1 THEN 1 ELSE 0 END) as regular,
-            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 AND vpc.total_visitas > 1 THEN 1 ELSE 0 END) as espacando,
-            SUM(CASE WHEN vpc.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN 1 ELSE 0 END) as primeira_vez,
-            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 91 AND 180 THEN 1 ELSE 0 END) as em_risco,
-            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 180 THEN 1 ELSE 0 END) as perdido,
-            COUNT(*) as total
-          FROM clientes c
-          JOIN ${visitasPeriodoSubquery} vpc ON vpc.cliente = c.id
+          FROM ${baseS12mSubquery} bs
+          JOIN clientes c ON c.id = bs.cliente
           WHERE c.status = 1 AND c.ultima_visita IS NOT NULL
         `),
-        // Movimento mensal: atendidos, em_risco, resgatados por mês no período
-        queryExternal<{ mes: string; atendidos: number; em_risco: number; resgatados: number }>(`
+        // ── Clientes únicos no período ─────────────────────────────────────────
+        queryExternal<{ total: number }>(`
+          SELECT COUNT(DISTINCT cp.cliente) as total
+          FROM ${clientesPeriodoSubquery} cp
+        `),
+        // ── Novos no período (1ª visita histórica no período) ──────────────────
+        queryExternal<{ total: number; recorrentes: number; one_shot_total: number }>(`
+          SELECT
+            COUNT(*) as total,
+            SUM(CASE WHEN vh.total_visitas > 1 THEN 1 ELSE 0 END) as recorrentes,
+            SUM(CASE WHEN vh.total_visitas = 1 THEN 1 ELSE 0 END) as one_shot_total
+          FROM clientes c
+          LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = c.id
+          WHERE ${unitCondSimple} AND c.status = 1
+            AND DATE(c.data_criacao) >= '${dataInicio}' AND DATE(c.data_criacao) <= '${dataFim}'
+        `),
+        // ── Resgatados no período ──────────────────────────────────────────────
+        queryExternal<{ total: number }>(`
+          SELECT COUNT(DISTINCT cp.cliente) as total
+          FROM ${clientesPeriodoSubquery} cp
+          JOIN clientes c ON c.id = cp.cliente
+          WHERE c.status = 1
+            AND DATE(c.data_criacao) < '${dataInicio}'
+            AND EXISTS (
+              SELECT 1 FROM vendas v2
+              JOIN usuarios uu2 ON v2.usuario = uu2.id
+              WHERE v2.cliente = cp.cliente
+                AND ${unitCondV.replace(/uu\./g, 'uu2.')}
+                AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
+                AND DATE(v2.data_criacao) < '${dataInicio}'
+                AND DATEDIFF('${dataInicio}', v2.data_criacao) > 90
+              ORDER BY v2.data_criacao DESC LIMIT 1
+            )
+        `),
+        // ── Cadência Individual (Base S 12m) ───────────────────────────────────
+        queryExternal<{ assiduo: number; regular: number; espacando: number; primeira_vez: number; em_risco: number; perdido: number; total: number }>(`
+          SELECT
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 30 AND vh.total_visitas > 1 THEN bs.cliente END) as assiduo,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 31 AND 60 AND vh.total_visitas > 1 THEN bs.cliente END) as regular,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 AND vh.total_visitas > 1 THEN bs.cliente END) as espacando,
+            COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN bs.cliente END) as primeira_vez,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 91 AND 180 THEN bs.cliente END) as em_risco,
+            COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 180 THEN bs.cliente END) as perdido,
+            COUNT(DISTINCT bs.cliente) as total
+          FROM ${baseS12mSubquery} bs
+          JOIN clientes c ON c.id = bs.cliente
+          LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bs.cliente
+          WHERE c.status = 1 AND c.ultima_visita IS NOT NULL
+        `),
+        // ── Movimento mensal ───────────────────────────────────────────────────
+        queryExternal<{ mes: string; atendidos: number }>(`
           SELECT
             DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
-            COUNT(DISTINCT v.cliente) as atendidos,
-            SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN 1 ELSE 0 END) as em_risco,
-            0 as resgatados
+            COUNT(DISTINCT v.cliente) as atendidos
           FROM vendas v
           JOIN usuarios uu ON v.usuario = uu.id
-          JOIN clientes c ON c.id = v.cliente
           WHERE ${unitCondV}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
             AND v.cliente IS NOT NULL AND v.cliente != 2
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
           GROUP BY mes ORDER BY mes
         `),
-        // Entradas mensais: novos + resgatados por mês
-        queryExternal<{ mes: string; novos: number; resgatados: number }>(`
+        // ── Entradas mensais ───────────────────────────────────────────────────
+        queryExternal<{ mes: string; novos: number }>(`
           SELECT
             DATE_FORMAT(c.data_criacao, '%Y-%m') as mes,
-            COUNT(*) as novos,
-            0 as resgatados
+            COUNT(*) as novos
           FROM clientes c
           WHERE ${unitCondSimple} AND c.status = 1
             AND DATE(c.data_criacao) >= '${dataInicio}' AND DATE(c.data_criacao) <= '${dataFim}'
           GROUP BY mes ORDER BY mes
         `),
-        // Risco mensal: em risco por mês + churn%
+        // ── Risco mensal ───────────────────────────────────────────────────────
         queryExternal<{ mes: string; em_risco: number; total_mes: number }>(`
           SELECT
             DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
@@ -323,7 +325,7 @@ export const raioXRouter = router({
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
           GROUP BY mes ORDER BY mes
         `),
-        // Saúde por barbeiro (top 8 piores, ordenado por % risco+perdido desc)
+        // ── Saúde por barbeiro ─────────────────────────────────────────────────
         queryExternal<{ colaborador_nome: string; total: number; saudavel: number; em_risco: number; perdido: number }>(`
           SELECT
             uu.nome as colaborador_nome,
@@ -346,54 +348,54 @@ export const raioXRouter = router({
         `),
       ]);
 
-      const sr = statusRows[0] || { total: 0, ativos: 0, em_risco: 0, perdidos: 0, one_shots: 0, one_shot_risco: 0, one_shot_perdido: 0 };
-      const totalBase = Number(sr.total);
+      const sr = sinaisRows[0] || { total_base_s: 0, total_base_p: 0, ativos: 0, em_risco: 0, perdidos: 0, one_shots_urgente: 0 };
+      const totalBaseS = Number(sr.total_base_s);
+      const totalBaseP = Number(sr.total_base_p);
       const ativos = Number(sr.ativos);
       const emRisco = Number(sr.em_risco);
       const perdidos = Number(sr.perdidos);
-      const oneShots = Number(sr.one_shots);
-      const oneShotRisco = Number(sr.one_shot_risco);
-      const oneShotPerdido = Number(sr.one_shot_perdido);
+      const oneShotUrgente = Number(sr.one_shots_urgente);
+      const clientesUnicos = Number(clientesUnicosRows[0]?.total ?? 0);
       const novos = Number(novosRows[0]?.total ?? 0);
-      const ativosNaJanela = Number(ativosNaJanelaRows[0]?.total ?? 0);
+      const novosRecorrentes = Number(novosRows[0]?.recorrentes ?? 0);
+      const novosOneShotTotal = Number(novosRows[0]?.one_shot_total ?? 0);
       const resgatados = Number(resgatadosRows[0]?.total ?? 0);
-      const oneShotUrgente = oneShotRisco;
-      const pr = perfilRows[0] || { one_shot: 0, ocasional: 0, regular: 0, fiel: 0, recorrente: 0 };
-      const s12 = status12mRows[0] || { perdido: 0, em_risco: 0, saudavel: 0 };
-      const osd = oneShotDistRows[0] || { total: 0, aguardando: 0, em_risco: 0, perdido: 0 };
-      const novosRecorrentes = Number(novosRecorrentesRows[0]?.total ?? 0);
-      const novosOneShotTotal = novos - novosRecorrentes;
       const saudeAquisicao = novos > 0 ? Math.round((novosRecorrentes / novos) * 100) : 0;
+      const pr = basePRows[0] || { one_shot: 0, ocasional: 0, regular: 0, fiel: 0, recorrente: 0 };
+      const s12 = status12mRows[0] || { perdido: 0, em_risco: 0, saudavel: 0 };
       const ci = cadenciaIndividualRows[0] || { assiduo: 0, regular: 0, espacando: 0, primeira_vez: 0, em_risco: 0, perdido: 0, total: 0 };
+      // One-shot distribuição (from Base S)
+      const oneShotTotal = Number(pr.one_shot);
+      const oneShotAguardando = Math.max(0, oneShotTotal - Number(sr.one_shots_urgente));
 
       return {
         sinais: {
-          totalBase,
+          totalBase: totalBaseS,
+          totalBaseP,
           ativos,
           perdidos,
           emRisco,
           novos,
-          oneShots,
           oneShotUrgente,
           resgatados,
-          pctAtivos: totalBase > 0 ? Math.round((ativos / totalBase) * 100) : 0,
-          pctPerdidos: totalBase > 0 ? Math.round((perdidos / totalBase) * 100) : 0,
-          pctEmRisco: totalBase > 0 ? Math.round((emRisco / totalBase) * 100) : 0,
-          pctNovos: ativosNaJanela > 0 ? Math.round((novos / ativosNaJanela) * 100) : 0,
-          pctOneShotUrgente: oneShots > 0 ? Math.round((oneShotUrgente / oneShots) * 100) : 0,
-          pctResgatados: totalBase > 0 ? Math.round((resgatados / totalBase) * 100) : 0,
+          pctAtivos: totalBaseS > 0 ? Math.round((ativos / totalBaseS) * 100) : 0,
+          pctPerdidos: totalBaseS > 0 ? Math.round((perdidos / totalBaseS) * 100) : 0,
+          pctEmRisco: totalBaseS > 0 ? Math.round((emRisco / totalBaseS) * 100) : 0,
+          pctNovos: clientesUnicos > 0 ? Math.round((novos / clientesUnicos) * 100) : 0,
+          pctOneShotUrgente: oneShotTotal > 0 ? Math.round((oneShotUrgente / oneShotTotal) * 100) : 0,
+          pctResgatados: totalBaseS > 0 ? Math.round((resgatados / totalBaseS) * 100) : 0,
         },
         atividade: {
-          clientesUnicos: ativosNaJanela,
+          clientesUnicos,
           novosClientes: novos,
-          ativosNaJanela,
+          ativosNaJanela: ativos,
           resgatados,
         },
         saude: {
           emRisco,
           perdidos,
-          oneShotRisco,
-          oneShotPerdido,
+          oneShotRisco: oneShotUrgente,
+          oneShotPerdido: Math.max(0, oneShotTotal - oneShotAguardando - oneShotUrgente),
         },
         distribuicoes: {
           porPerfil: {
@@ -409,10 +411,10 @@ export const raioXRouter = router({
             saudavel: Number(s12.saudavel),
           },
           oneShot: {
-            total: Number(osd.total),
-            aguardando: Number(osd.aguardando),
-            emRisco: Number(osd.em_risco),
-            perdido: Number(osd.perdido),
+            total: oneShotTotal,
+            aguardando: oneShotAguardando,
+            emRisco: oneShotUrgente,
+            perdido: Math.max(0, oneShotTotal - oneShotAguardando - oneShotUrgente),
           },
         },
         novosClientes: {
@@ -433,13 +435,13 @@ export const raioXRouter = router({
         movimentoMensal: movimentoMensalRows.map(r => ({
           mes: r.mes,
           atendidos: Number(r.atendidos),
-          emRisco: Number(r.em_risco),
-          resgatados: Number(r.resgatados),
+          emRisco: 0,
+          resgatados: 0,
         })),
         entradasMensais: entradasMensaisRows.map(r => ({
           mes: r.mes,
           novos: Number(r.novos),
-          resgatados: Number(r.resgatados),
+          resgatados: 0,
         })),
         riscoMensal: riscoMensalRows.map(r => ({
           mes: r.mes,
