@@ -416,7 +416,7 @@ export default function RaioXPage() {
                       </div>
                     </CardContent>
                   </Card>
-                  {/* Em Risco Total (totalizador: Em Risco + One-shot risco) */}
+                  {/* Em Risco Total (totalizador: Em Risco + One-shot urgente) */}
                   <Card className="bg-orange-500/10 border-orange-500/30">
                     <CardContent className="pt-4 pb-4">
                       <div className="flex items-start justify-between">
@@ -425,21 +425,21 @@ export default function RaioXPage() {
                             Em risco total
                             <InfoPopover
                               title="Em Risco Total"
-                              descricao="Soma de Em Risco (recorrentes 61-90d) + One-shot risco (1 visita, 46-90d). Representa todos os clientes em zona de alerta, independente do perfil."
+                              descricao="Soma de Em Risco (recorrentes 61-90d) + One-shot urgente (1 visita, ≥46d sem retornar). Representa todos os clientes em zona de alerta, independente do perfil."
                               periodoFiltrado={v.contexto?.periodoFiltrado}
                               ref={v.contexto?.ref}
                               baseUsada={v.contexto?.baseUsada}
                               baseTotal={v.sinais.totalBase}
-                              regra={`Em Risco: ${v.saude.emRisco} + One-shot risco: ${v.saude.oneShotRisco}`}
+                              regra={`Em Risco: ${v.saude.emRisco} + One-shot urgente: ${v.sinais.oneShotUrgente}`}
                               usadaEm="Totalizador para comparação com sistemas que não separam one-shots"
                               nota="Use este número ao comparar com o VIP Data, que não separa one-shots do Em Risco geral."
                             />
                           </p>
                           <p className="text-2xl font-bold mt-1 text-orange-300">
-                            {(v.saude.emRisco + v.saude.oneShotRisco).toLocaleString()}
+                            {(v.saude.emRisco + v.sinais.oneShotUrgente).toLocaleString()}
                           </p>
                           <p className="text-[10px] text-orange-400/60 mt-0.5">
-                            {v.saude.emRisco} recorr. + {v.saude.oneShotRisco} one-shot
+                            {v.saude.emRisco} recorr. + {v.sinais.oneShotUrgente} one-shot urg.
                           </p>
                         </div>
                         <AlertTriangle className="w-5 h-5 mt-1 text-orange-300" />
