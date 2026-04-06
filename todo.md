@@ -835,3 +835,11 @@
 - [x] Investigar limiares: testado 46-60d (134 em risco) e 46-90d (263 em risco) vs ref 425 — mantido 46-90d como mais próximo da referência
 - [x] Ativos ajustados para ≤45d (era ≤60d) — label atualizado no frontend
 - [x] Labels Churn e Cadência atualizados para refletir limiares corretos (46-90d, >90d)
+
+## InfoPopover — Saúde da Base (Abr/2026)
+- [x] Backend: retornar metadados de contexto (periodo, ref, base, regra) no endpoint raioX.visaoGeral
+- [x] Frontend: componente InfoPopover reutilizável (ícone ?, popover com contexto)
+- [x] Frontend: botão InfoPopover em "Em Risco" com regra 46d ≤ dias_sem_vir ≤ 90d
+- [x] Frontend: botão InfoPopover em "Perdidos" com regra dias_sem_vir > 90d
+- [x] Frontend: botão InfoPopover em "One-shot risco" com regra visitas=1 E 46d ≤ dias_sem_vir ≤ 90d
+- [x] Frontend: botão InfoPopover em "One-shot perdido" com regra visitas=1 E dias_sem_vir > 90d

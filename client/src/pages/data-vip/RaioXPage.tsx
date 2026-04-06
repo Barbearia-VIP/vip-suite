@@ -16,6 +16,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Users, UserCheck, UserX, AlertTriangle, TrendingDown, TrendingUp,
   Zap, Activity, Target, Scissors, Search, RefreshCw, Info, ChevronRight, Calendar,
@@ -63,6 +64,78 @@ function KpiCard({ label, value, sub, color, icon: Icon }: {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ─── Info Popover ───────────────────────────────────────────────────────────
+function InfoPopover({ title, descricao, periodoFiltrado, ref, baseUsada, baseTotal, regra, usadaEm, nota }: {
+  title: string;
+  descricao: string;
+  periodoFiltrado?: string;
+  ref?: string;
+  baseUsada?: string;
+  baseTotal?: number;
+  regra?: string;
+  usadaEm?: string;
+  nota?: string;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors" aria-label="Entender cálculo">
+          <Info className="w-3 h-3" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0 text-sm" side="bottom" align="start">
+        <div className="p-4 space-y-3">
+          <div>
+            <p className="font-semibold text-foreground">{title}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{descricao}</p>
+          </div>
+          {(periodoFiltrado || ref || baseUsada || regra) && (
+            <div className="bg-muted/40 rounded-md p-3 space-y-1.5 text-xs">
+              <p className="font-medium text-muted-foreground uppercase tracking-wide text-[10px] mb-2">CONTEXTO</p>
+              {periodoFiltrado && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Período filtrado:</span>
+                  <span className="font-medium">{periodoFiltrado}</span>
+                </div>
+              )}
+              {ref && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">REF:</span>
+                  <span className="font-medium">{ref}</span>
+                </div>
+              )}
+              {baseUsada && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">Base usada:</span>
+                  <span className="font-medium text-right">
+                    {baseTotal !== undefined && <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold mr-1">{baseTotal > 999 ? (baseTotal/1000).toFixed(1)+'k' : baseTotal}</span>}
+                    {baseUsada}
+                  </span>
+                </div>
+              )}
+              {regra && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">Regra:</span>
+                  <span className="font-mono text-[11px] font-medium text-right">{regra}</span>
+                </div>
+              )}
+              {usadaEm && (
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground shrink-0">Usada em:</span>
+                  <span className="font-medium text-right">{usadaEm}</span>
+                </div>
+              )}
+            </div>
+          )}
+          {nota && (
+            <p className="text-xs text-amber-400 leading-relaxed">{nota}</p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -318,10 +391,106 @@ export default function RaioXPage() {
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Saúde da Base · 12m</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <KpiCard label="Em risco" value={v.saude.emRisco.toLocaleString()} icon={AlertTriangle} color="text-orange-400" />
-                  <KpiCard label="Perdidos" value={v.saude.perdidos.toLocaleString()} icon={UserX} color="text-red-400" />
-                  <KpiCard label="One-shot risco" value={v.saude.oneShotRisco.toLocaleString()} icon={Zap} color="text-yellow-400" />
-                  <KpiCard label="One-shot perdido" value={v.saude.oneShotPerdido.toLocaleString()} icon={TrendingDown} color="text-red-400" />
+                  {/* Em Risco */}
+                  <Card className="bg-card/60 border-border/50">
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center">
+                            Em risco
+                            <InfoPopover
+                              title="Em risco"
+                              descricao="Última visita entre 46 e 90 dias antes da REF. Zona de alerta — ainda recuperáveis."
+                              periodoFiltrado={v.contexto?.periodoFiltrado}
+                              ref={v.contexto?.ref}
+                              baseUsada={v.contexto?.baseUsada}
+                              baseTotal={v.sinais.totalBase}
+                              regra={v.contexto?.emRisco?.regra}
+                              usadaEm={v.contexto?.emRisco?.usadaEm}
+                              nota="Acione via CRM → aba Ações."
+                            />
+                          </p>
+                          <p className="text-2xl font-bold mt-1 text-orange-400">{v.saude.emRisco.toLocaleString()}</p>
+                        </div>
+                        <AlertTriangle className="w-5 h-5 mt-1 text-orange-400" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {/* Perdidos */}
+                  <Card className="bg-card/60 border-border/50">
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center">
+                            Perdidos
+                            <InfoPopover
+                              title="Perdidos"
+                              descricao="Última visita há mais de 90 dias. Ultrapassaram o limiar de churn."
+                              periodoFiltrado={v.contexto?.periodoFiltrado}
+                              ref={v.contexto?.ref}
+                              baseUsada={v.contexto?.baseUsada}
+                              baseTotal={v.sinais.totalBase}
+                              regra={v.contexto?.perdidos?.regra}
+                              usadaEm={v.contexto?.perdidos?.usadaEm}
+                              nota={"Perdido e por recencia - resgate possivel mas custoso."}
+                            />
+                          </p>
+                          <p className="text-2xl font-bold mt-1 text-red-400">{v.saude.perdidos.toLocaleString()}</p>
+                        </div>
+                        <UserX className="w-5 h-5 mt-1 text-red-400" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {/* One-shot risco */}
+                  <Card className="bg-card/60 border-border/50">
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center">
+                            One-shot risco
+                            <InfoPopover
+                              title="One-shot risco"
+                              descricao="Exatamente 1 visita, sem retorno entre 46 e 90 dias. Já passaram do prazo ideal."
+                              periodoFiltrado={v.contexto?.periodoFiltrado}
+                              ref={v.contexto?.ref}
+                              baseUsada={v.contexto?.baseUsada}
+                              baseTotal={v.sinais.totalBase}
+                              regra={v.contexto?.oneShotRisco?.regra}
+                              usadaEm={v.contexto?.oneShotRisco?.usadaEm}
+                              nota="Contato proativo pode converter em recorrente."
+                            />
+                          </p>
+                          <p className="text-2xl font-bold mt-1 text-yellow-400">{v.saude.oneShotRisco.toLocaleString()}</p>
+                        </div>
+                        <Zap className="w-5 h-5 mt-1 text-yellow-400" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {/* One-shot perdido */}
+                  <Card className="bg-card/60 border-border/50">
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center">
+                            One-shot perdido
+                            <InfoPopover
+                              title="One-shot perdido"
+                              descricao="Exatamente 1 visita, sem retorno há mais de 90 dias. Alta probabilidade de perda definitiva."
+                              periodoFiltrado={v.contexto?.periodoFiltrado}
+                              ref={v.contexto?.ref}
+                              baseUsada={v.contexto?.baseUsada}
+                              baseTotal={v.sinais.totalBase}
+                              regra={v.contexto?.oneShotPerdido?.regra}
+                              usadaEm={v.contexto?.oneShotPerdido?.usadaEm}
+                              nota="Alta probabilidade de não retornar. Ver análise completa em One-Shot."
+                            />
+                          </p>
+                          <p className="text-2xl font-bold mt-1 text-red-400">{v.saude.oneShotPerdido.toLocaleString()}</p>
+                        </div>
+                        <TrendingDown className="w-5 h-5 mt-1 text-red-400" />
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
 

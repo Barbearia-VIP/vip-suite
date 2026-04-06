@@ -525,10 +525,31 @@ export const raioXRouter = router({
           };
         }),
         periodo: { dataInicio, dataFim },
+        contexto: {
+          periodoFiltrado: `${dataInicio} – ${dataFim}`,
+          ref: dataFim,
+          baseUsada: `${dataInicio12m} – ${dataFim}`,
+          emRisco: {
+            regra: "46d ≤ dias_sem_vir ≤ 90d",
+            usadaEm: "Em Risco · Score de saúde (dim. risco) · Distribuições",
+          },
+          perdidos: {
+            regra: "dias_sem_vir > 90d",
+            usadaEm: "Perdidos · Score de saúde (dim. perdidos) · Distribuições",
+          },
+          oneShotRisco: {
+            regra: "visitas=1 E 46d ≤ dias_sem_vir ≤ 90d",
+            usadaEm: "One-shots (em risco + perdido) · Distribuições",
+          },
+          oneShotPerdido: {
+            regra: "visitas=1 E dias_sem_vir > 90d",
+            usadaEm: "One-shots (em risco + perdido) · Distribuições",
+          },
+        },
       };
     }),
 
-  // ── One-Shot ─────────────────────────────────────────────────────────────────
+  // ── One-Shot ─────────────────────────────────────────────────────────────────────────────────
   oneShot: protectedProcedure
     .input(baseInput.extend({
       status: z.enum(["todos", "aguardando", "em_risco", "perdido"]).optional(),
