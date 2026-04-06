@@ -1313,78 +1313,114 @@ export const raioXRouter = router({
       const unitIn2 = extIds.length === 1 ? `uu2.unidade = ${extIds[0]}` : `uu2.unidade IN (${extIds.join(",")})`;
       const unitIn3 = extIds.length === 1 ? `uu3.unidade = ${extIds[0]}` : `uu3.unidade IN (${extIds.join(",")})`;
 
-      // Base por barbeiro: clientes que visitaram nos 620d antes de dataFim
-      // Atribuição: último barbeiro que atendeu o cliente
-      const rows = await queryExternal<{
-        colaborador_id: number;
-        colaborador_nome: string;
-        total: number;
-        perdidos: number;
-        fidelizados: number;
-        perdidos_fid: number;
-        em_risco: number;
-        resgatados: number;
+      // Query 1: clientes da base (620d) com ultima_visita e total de visitas históricas
+      const clientesBase = await queryExternal<{
+        cliente_id: number;
+        ultima_visita: Date | string;
+        tv_hist: number;
       }>(`
         SELECT
-          ult.colaborador_id,
-          ult.colaborador_nome,
-          COUNT(*) as total,
-          SUM(CASE WHEN DATEDIFF('${dataFim}', c.ultima_visita) > 45 THEN 1 ELSE 0 END) as perdidos,
-          SUM(CASE WHEN COALESCE(tvh.tv,0) >= 3 THEN 1 ELSE 0 END) as fidelizados,
-          SUM(CASE WHEN COALESCE(tvh.tv,0) >= 3 AND DATEDIFF('${dataFim}', c.ultima_visita) > 45 THEN 1 ELSE 0 END) as perdidos_fid,
-          SUM(CASE WHEN DATEDIFF('${dataFim}', c.ultima_visita) BETWEEN 45 AND 90 THEN 1 ELSE 0 END) as em_risco,
-          SUM(CASE WHEN rg.cliente IS NOT NULL THEN 1 ELSE 0 END) as resgatados
-        FROM (
-          SELECT DISTINCT v.cliente FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
-          WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
-            AND v.cliente IS NOT NULL AND v.cliente!=2
-            AND DATE(v.data_criacao) >= '${base620Str}' AND DATE(v.data_criacao) <= '${dataFim}'
-        ) bp
-        JOIN clientes c ON c.id = bp.cliente
-        JOIN (
-          -- Último barbeiro que atendeu cada cliente
-          SELECT v2.cliente,
-            (SELECT uu2.id FROM vendas v2b JOIN usuarios uu2 ON v2b.usuario = uu2.id
-             WHERE ${unitIn2} AND v2b.cliente = v2.cliente AND v2b.comanda_temp=0 AND v2b.cancelado_motivo IS NULL AND v2b.status!=0
-             ORDER BY v2b.data_criacao DESC LIMIT 1) as colaborador_id,
-            (SELECT uu2.nome FROM vendas v2b JOIN usuarios uu2 ON v2b.usuario = uu2.id
-             WHERE ${unitIn2} AND v2b.cliente = v2.cliente AND v2b.comanda_temp=0 AND v2b.cancelado_motivo IS NULL AND v2b.status!=0
-             ORDER BY v2b.data_criacao DESC LIMIT 1) as colaborador_nome
-          FROM vendas v2 JOIN usuarios uu2 ON v2.usuario = uu2.id
-          WHERE ${unitIn2} AND v2.comanda_temp=0 AND v2.cancelado_motivo IS NULL AND v2.status!=0
-            AND v2.cliente IS NOT NULL AND v2.cliente!=2
-          GROUP BY v2.cliente
-        ) ult ON ult.cliente = bp.cliente
-        LEFT JOIN (
-          SELECT v3.cliente, COUNT(*) as tv FROM vendas v3 JOIN usuarios uu3 ON v3.usuario = uu3.id
-          WHERE ${unitIn3} AND v3.comanda_temp=0 AND v3.cancelado_motivo IS NULL AND v3.status!=0
-            AND v3.cliente IS NOT NULL AND v3.cliente!=2
-          GROUP BY v3.cliente
-        ) tvh ON tvh.cliente = bp.cliente
-        LEFT JOIN (
-          -- Resgatados: voltaram no período após 90d sem vir
-          SELECT DISTINCT v4.cliente FROM vendas v4 JOIN usuarios uu4 ON v4.usuario = uu4.id
-          WHERE uu4.unidade IN (${extIds.join(",")}) AND v4.comanda_temp=0 AND v4.cancelado_motivo IS NULL AND v4.status!=0
-            AND v4.cliente IS NOT NULL AND v4.cliente!=2
-            AND DATE(v4.data_criacao) >= '${resgate90Str}' AND DATE(v4.data_criacao) <= '${dataFim}'
-        ) rg ON rg.cliente = bp.cliente
-        WHERE c.status = 1 AND ult.colaborador_id IS NOT NULL
-        GROUP BY ult.colaborador_id, ult.colaborador_nome
-        ORDER BY perdidos DESC
+          c.id as cliente_id,
+          c.ultima_visita,
+          COUNT(vh.id) as tv_hist
+        FROM clientes c
+        JOIN vendas vh ON vh.cliente = c.id
+        JOIN usuarios uuh ON vh.usuario = uuh.id
+        WHERE ${unitIn.replace(/uu\./g, 'uuh.')} AND vh.comanda_temp=0 AND vh.cancelado_motivo IS NULL AND vh.status!=0
+          AND vh.cliente IS NOT NULL AND vh.cliente!=2
+        GROUP BY c.id, c.ultima_visita
+        HAVING MAX(DATE(vh.data_criacao)) >= '${base620Str}'
+          AND MAX(DATE(vh.data_criacao)) <= '${dataFim}'
+          AND c.status = 1
       `);
 
-      const barbeiros = rows.map(r => ({
-        colaboradorId: String(r.colaborador_id),
-        colaboradorNome: r.colaborador_nome || "Sem nome",
-        total: Number(r.total),
-        perdidos: Number(r.perdidos),
-        fidelizados: Number(r.fidelizados),
-        perdidosFid: Number(r.perdidos_fid),
-        emRisco: Number(r.em_risco),
-        resgatados: Number(r.resgatados),
-        churnPct: Number(r.total) > 0 ? Math.round(Number(r.perdidos) / Number(r.total) * 1000) / 10 : 0,
-        churnFidPct: Number(r.fidelizados) > 0 ? Math.round(Number(r.perdidos_fid) / Number(r.fidelizados) * 1000) / 10 : 0,
-      }));
+      if (clientesBase.length === 0) return { barbeiros: [] };
+
+      const clienteIds = clientesBase.map(r => r.cliente_id);
+      const idList = clienteIds.join(",");
+
+      // Query 2: último barbeiro de cada cliente (usando MAX data_criacao + JOIN)
+      const ultBarbRows = await queryExternal<{
+        cliente_id: number;
+        colaborador_id: number;
+        colaborador_nome: string;
+        max_dt: string;
+      }>(`
+        SELECT v.cliente as cliente_id, uu.id as colaborador_id, uu.nome as colaborador_nome, MAX(v.data_criacao) as max_dt
+        FROM vendas v
+        JOIN usuarios uu ON v.usuario = uu.id
+        WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
+          AND v.cliente IN (${idList})
+        GROUP BY v.cliente, uu.id, uu.nome
+      `);
+
+      // Para cada cliente, pega o barbeiro com a data mais recente
+      const ultBarbMap = new Map<number, { id: number; nome: string }>();
+      for (const r of ultBarbRows) {
+        const existing = ultBarbMap.get(r.cliente_id);
+        if (!existing || r.max_dt > (existing as any).max_dt) {
+          ultBarbMap.set(r.cliente_id, { id: r.colaborador_id, nome: r.colaborador_nome, max_dt: r.max_dt } as any);
+        }
+      }
+
+      // Query 3: clientes resgatados (voltaram nos últimos 90d)
+      const resgatadosRows = await queryExternal<{ cliente_id: number }>(`
+        SELECT DISTINCT v.cliente as cliente_id
+        FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+        WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
+          AND v.cliente IN (${idList})
+          AND DATE(v.data_criacao) >= '${resgate90Str}' AND DATE(v.data_criacao) <= '${dataFim}'
+      `);
+      const resgatadosSet = new Set(resgatadosRows.map(r => r.cliente_id));
+
+      // Agregar por barbeiro em Node.js
+      const barbeiroMap = new Map<number, {
+        nome: string; total: number; perdidos: number; fidelizados: number;
+        perdidosFid: number; emRisco: number; resgatados: number;
+      }>();
+
+      const dataFimMs = new Date(dataFim + "T12:00:00Z").getTime();
+
+      for (const c of clientesBase) {
+        const barb = ultBarbMap.get(c.cliente_id);
+        if (!barb) continue;
+
+        const uvDate = c.ultima_visita instanceof Date ? c.ultima_visita : new Date(c.ultima_visita as string);
+        const uvStr = `${uvDate.getFullYear()}-${String(uvDate.getMonth()+1).padStart(2,"0")}-${String(uvDate.getDate()).padStart(2,"0")}`;
+        const diasSemVir = Math.floor((dataFimMs - new Date(uvStr + "T12:00:00Z").getTime()) / 86400000);
+        const tvHist = Number(c.tv_hist);
+        const perdido = diasSemVir > 45;
+        const emRisco = diasSemVir >= 45 && diasSemVir <= 90;
+        const fidelizado = tvHist >= 3;
+        const resgatado = resgatadosSet.has(c.cliente_id);
+
+        if (!barbeiroMap.has(barb.id)) {
+          barbeiroMap.set(barb.id, { nome: barb.nome, total: 0, perdidos: 0, fidelizados: 0, perdidosFid: 0, emRisco: 0, resgatados: 0 });
+        }
+        const entry = barbeiroMap.get(barb.id)!;
+        entry.total++;
+        if (perdido) entry.perdidos++;
+        if (fidelizado) entry.fidelizados++;
+        if (perdido && fidelizado) entry.perdidosFid++;
+        if (emRisco) entry.emRisco++;
+        if (resgatado) entry.resgatados++;
+      }
+
+      const barbeiros = Array.from(barbeiroMap.entries())
+        .map(([id, e]) => ({
+          colaboradorId: String(id),
+          colaboradorNome: e.nome || "Sem nome",
+          total: e.total,
+          perdidos: e.perdidos,
+          fidelizados: e.fidelizados,
+          perdidosFid: e.perdidosFid,
+          emRisco: e.emRisco,
+          resgatados: e.resgatados,
+          churnPct: e.total > 0 ? Math.round(e.perdidos / e.total * 1000) / 10 : 0,
+          churnFidPct: e.fidelizados > 0 ? Math.round(e.perdidosFid / e.fidelizados * 1000) / 10 : 0,
+        }))
+        .sort((a, b) => b.perdidos - a.perdidos);
+
       return { barbeiros };
     }),
 
