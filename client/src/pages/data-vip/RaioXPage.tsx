@@ -1094,62 +1094,95 @@ export default function RaioXPage() {
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {/* Aguardando */}
-                    <Card
-                      className="bg-card/60 border-blue-500/30 cursor-pointer hover:border-blue-400/60 transition-colors"
-                      onClick={() => setOneShotFiltro(oneShotFiltro === "aguardando" ? "todos" : "aguardando")}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-semibold text-blue-400 uppercase tracking-wide">● AGUARDANDO RETORNO</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground mb-2">≤45 dias</p>
-                        <p className="text-3xl font-bold mb-1">{os.aguardando.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {total > 0 ? Math.round(os.aguardando/total*100) : 0}% dos one-shots · Dentro do prazo normal · contato preventivo recomendado
-                        </p>
-                        <button className="mt-3 text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
-                          <span>👤</span> Ver lista de clientes →
-                        </button>
-                      </CardContent>
-                    </Card>
+                    {(() => {
+                      const pct = total > 0 ? Math.round(os.aguardando / total * 100) : 0;
+                      const active = oneShotFiltro === "aguardando";
+                      return (
+                        <Card
+                          className={`bg-card/60 cursor-pointer transition-all ${active ? "border-blue-400 ring-1 ring-blue-400/40" : "border-blue-500/20 hover:border-blue-400/50"}`}
+                          onClick={() => setOneShotFiltro(active ? "todos" : "aguardando")}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />
+                              <span className="text-xs font-semibold text-blue-400 uppercase tracking-wide">AGUARDANDO RETORNO</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-3">≤45 dias</p>
+                            <p className="text-4xl font-bold mb-1">{os.aguardando.toLocaleString()}</p>
+                            <p className="text-xs text-muted-foreground mb-3">
+                              {pct}% dos one-shots · Dentro do prazo normal · contato preventivo recomendado
+                            </p>
+                            {/* Barra de progresso azul */}
+                            <div className="w-full h-1 rounded-full bg-muted/30 mb-3">
+                              <div className="h-1 rounded-full bg-blue-400 transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                            <button className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                              <Users className="w-3 h-3" /> Ver lista de clientes →
+                            </button>
+                          </CardContent>
+                        </Card>
+                      );
+                    })()}
                     {/* Em Risco */}
-                    <Card
-                      className="bg-card/60 border-orange-500/30 cursor-pointer hover:border-orange-400/60 transition-colors"
-                      onClick={() => setOneShotFiltro(oneShotFiltro === "em_risco" ? "todos" : "em_risco")}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-semibold text-orange-400 uppercase tracking-wide">● EM RISCO DE PERDA</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground mb-2">46–90 dias</p>
-                        <p className="text-3xl font-bold mb-1">{os.emRisco.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {total > 0 ? Math.round(os.emRisco/total*100) : 0}% dos one-shots · Passaram do prazo ideal · ação urgente necessária
-                        </p>
-                        <button className="mt-3 text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
-                          <span>👤</span> Ver lista de clientes →
-                        </button>
-                      </CardContent>
-                    </Card>
+                    {(() => {
+                      const pct = total > 0 ? Math.round(os.emRisco / total * 100) : 0;
+                      const active = oneShotFiltro === "em_risco";
+                      return (
+                        <Card
+                          className={`bg-card/60 cursor-pointer transition-all ${active ? "border-orange-400 ring-1 ring-orange-400/40" : "border-orange-500/20 hover:border-orange-400/50"}`}
+                          onClick={() => setOneShotFiltro(active ? "todos" : "em_risco")}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
+                              <span className="text-xs font-semibold text-orange-400 uppercase tracking-wide">EM RISCO DE PERDA</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-3">46–90 dias</p>
+                            <p className="text-4xl font-bold mb-1">{os.emRisco.toLocaleString()}</p>
+                            <p className="text-xs text-muted-foreground mb-3">
+                              {pct}% dos one-shots · Passaram do prazo ideal · ação urgente necessária
+                            </p>
+                            {/* Barra de progresso laranja */}
+                            <div className="w-full h-1 rounded-full bg-muted/30 mb-3">
+                              <div className="h-1 rounded-full bg-orange-400 transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                            <button className="text-xs text-orange-400 hover:text-orange-300 flex items-center gap-1">
+                              <Users className="w-3 h-3" /> Ver lista de clientes →
+                            </button>
+                          </CardContent>
+                        </Card>
+                      );
+                    })()}
                     {/* Provavelmente Perdido */}
-                    <Card
-                      className="bg-card/60 border-red-500/30 cursor-pointer hover:border-red-400/60 transition-colors"
-                      onClick={() => setOneShotFiltro(oneShotFiltro === "perdido" ? "todos" : "perdido")}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-semibold text-red-400 uppercase tracking-wide">● PROVAVELMENTE PERDIDO</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground mb-2">+91 dias</p>
-                        <p className="text-3xl font-bold mb-1">{os.perdido.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {total > 0 ? Math.round(os.perdido/total*100) : 0}% dos one-shots · Muito difícil recuperação · avaliar custo-benefício
-                        </p>
-                        <button className="mt-3 text-xs text-red-400 hover:text-red-300 flex items-center gap-1">
-                          <span>👤</span> Ver lista de clientes →
-                        </button>
-                      </CardContent>
-                    </Card>
+                    {(() => {
+                      const pct = total > 0 ? Math.round(os.perdido / total * 100) : 0;
+                      const active = oneShotFiltro === "perdido";
+                      return (
+                        <Card
+                          className={`bg-card/60 cursor-pointer transition-all ${active ? "border-pink-500 ring-1 ring-pink-500/40" : "border-pink-500/20 hover:border-pink-400/50"}`}
+                          onClick={() => setOneShotFiltro(active ? "todos" : "perdido")}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="w-2 h-2 rounded-full bg-pink-500 inline-block" />
+                              <span className="text-xs font-semibold text-pink-400 uppercase tracking-wide">PROVAVELMENTE PERDIDO</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mb-3">+91 dias</p>
+                            <p className="text-4xl font-bold mb-1">{os.perdido.toLocaleString()}</p>
+                            <p className="text-xs text-muted-foreground mb-3">
+                              {pct}% dos one-shots · Muito difícil recuperação · avaliar custo-benefício
+                            </p>
+                            {/* Barra de progresso rosa */}
+                            <div className="w-full h-1 rounded-full bg-muted/30 mb-3">
+                              <div className="h-1 rounded-full bg-pink-500 transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                            <button className="text-xs text-pink-400 hover:text-pink-300 flex items-center gap-1">
+                              <Users className="w-3 h-3" /> Ver lista de clientes →
+                            </button>
+                          </CardContent>
+                        </Card>
+                      );
+                    })()}
                   </div>
                 </div>
 
