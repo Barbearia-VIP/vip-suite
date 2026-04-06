@@ -283,7 +283,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
   });
 
   const currentModule = MODULES.find((m) => m.id === activeModule) ?? MODULES[0];
-  const sidebarItems = SIDEBAR_ITEMS[activeModule];
+  // Ocultar "Ranking" do Data VIP quando uma unidade específica estiver selecionada
+  // (Ranking só faz sentido no modo "Todas as Unidades", selectedUnit === null)
+  const sidebarItems = SIDEBAR_ITEMS[activeModule].filter((item) => {
+    if (item.type === "separator" || item.type === "group") return true;
+    if ((item as any).path === "/data-vip/ranking" && selectedUnit !== null) return false;
+    return true;
+  });
 
   const handleModuleClick = (module: Module) => {
     setActiveModule(module.id);
