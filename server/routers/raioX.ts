@@ -467,15 +467,32 @@ export const raioXRouter = router({
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
           GROUP BY mes ORDER BY mes
         `),
-        // ── Risco mensal ─────────────────────────────────────────────────────────
-        queryExternal<{ mes: string; em_risco: number; total_mes: number }>(`
+            // ── Risco mensal ─────────────────────────────────────────────────────
+        // Em Risco: clientes recorrentes (>1 visita histórica) cuja última visita
+        // ficou entre 61-90d do fim do mês (LAST_DAY), excluindo one-shots.
+        // Churn: clientes que passaram de Em Risco para Perdido naquele mês
+        // (ultima_venda > 90d do fim do mês e > 60d do fim do mês anterior)
+        queryExternal<{ mes: string; em_risco: number; churn_novos: number; total_ativos_mes: number }>(`
           SELECT
             DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
-            COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv3.ultima_venda) BETWEEN 61 AND 90 THEN v.cliente END) as em_risco,
-            COUNT(DISTINCT v.cliente) as total_mes
+            -- Em Risco ao fim do mês: ultima visita ficou 61-90d antes do ultimo dia do mês
+            COUNT(DISTINCT CASE
+              WHEN DATEDIFF(LAST_DAY(STR_TO_DATE(CONCAT(DATE_FORMAT(v.data_criacao,'%Y-%m'),'-01'),'%Y-%m-%d')), uv_rm.ultima_venda) BETWEEN 61 AND 90
+                AND COALESCE(vh_rm.total_visitas, 0) > 1
+              THEN v.cliente END) as em_risco,
+            -- Churn novos: clientes que ficaram perdidos (>90d) ao fim do mês mas nao estavam perdidos no mês anterior
+            COUNT(DISTINCT CASE
+              WHEN DATEDIFF(LAST_DAY(STR_TO_DATE(CONCAT(DATE_FORMAT(v.data_criacao,'%Y-%m'),'-01'),'%Y-%m-%d')), uv_rm.ultima_venda) > 90
+                AND COALESCE(vh_rm.total_visitas, 0) > 1
+              THEN v.cliente END) as churn_novos,
+            -- Base ativa do mês: clientes com ultima visita <= 60d do fim do mês
+            COUNT(DISTINCT CASE
+              WHEN DATEDIFF(LAST_DAY(STR_TO_DATE(CONCAT(DATE_FORMAT(v.data_criacao,'%Y-%m'),'-01'),'%Y-%m-%d')), uv_rm.ultima_venda) <= 60
+              THEN v.cliente END) as total_ativos_mes
           FROM vendas v
           JOIN usuarios uu ON v.usuario = uu.id
-          LEFT JOIN ${ultimaVendaSubquery} uv3 ON uv3.cliente = v.cliente
+          LEFT JOIN ${ultimaVendaSubquery} uv_rm ON uv_rm.cliente = v.cliente
+          LEFT JOIN ${visitasHistoricasSubquery} vh_rm ON vh_rm.cliente = v.cliente
           WHERE ${unitCondV}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
             AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -611,12 +628,22 @@ export const raioXRouter = router({
           novos: Number(r.novos),
           resgatados: Number(r.resgatados),
         })),
-        riscoMensal: riscoMensalRows.map(r => ({
-          mes: r.mes,
-          emRisco: Number(r.em_risco),
-          totalMes: Number(r.total_mes),
-          churnPct: Number(r.total_mes) > 0 ? Math.round((Number(r.em_risco) / Number(r.total_mes)) * 100) : 0,
-        })),
+        riscoMensal: riscoMensalRows.map(r => {
+          const emRisco = Number(r.em_risco);
+          const churnNovos = Number(r.churn_novos);
+          const totalAtivos = Number(r.total_ativos_mes);
+          const baseRef = totalAtivos + emRisco + churnNovos;
+          return {
+            mes: r.mes,
+            emRisco,
+            churnNovos,
+            totalAtivos,
+            // Churn %: perdidos novos / base ativa do mês
+            churnPct: baseRef > 0 ? Math.round((churnNovos / baseRef) * 100) : 0,
+            // Em Risco %: em risco / base ativa do mês
+            emRiscoPct: baseRef > 0 ? Math.round((emRisco / baseRef) * 100) : 0,
+          };
+        }),
         saudeBarbeiros: saudeBarbeirosRows.map(b => {
           const total = Number(b.total);
           const saudavel = Number(b.saudavel);

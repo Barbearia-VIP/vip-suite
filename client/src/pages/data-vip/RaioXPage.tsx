@@ -877,33 +877,78 @@ export default function RaioXPage() {
               })()}
 
               {/* ── Risco & Retenção ── */}
-              {v.riscoMensal && v.riscoMensal.length > 0 && (
+              {v.riscoMensal && v.riscoMensal.length > 0 && (() => {
+                const totalEmRisco = v.riscoMensal.reduce((s, r) => s + r.emRisco, 0);
+                const totalChurn = v.riscoMensal.reduce((s, r) => s + r.churnNovos, 0);
+                const mediaChurnPct = v.riscoMensal.length > 0
+                  ? Math.round(v.riscoMensal.reduce((s, r) => s + r.churnPct, 0) / v.riscoMensal.length)
+                  : 0;
+                const mediaEmRiscoPct = v.riscoMensal.length > 0
+                  ? Math.round(v.riscoMensal.reduce((s, r) => s + r.emRiscoPct, 0) / v.riscoMensal.length)
+                  : 0;
+                return (
                 <Card className="bg-card/60 border-border/50">
                   <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <div>
-                        <CardTitle className="text-sm">Risco & Retenção</CardTitle>
-                        <p className="text-xs text-muted-foreground mt-0.5">Em risco por mês + Churn %</p>
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-sm">Risco & Retenção</CardTitle>
+                          <span className="text-xs text-muted-foreground">· <span className="text-orange-400 font-medium">{totalEmRisco.toLocaleString()}</span> em risco + <span className="text-red-400 font-medium">{totalChurn.toLocaleString()}</span> churn</span>
+                          <InfoPopover
+                            title="Risco & Retenção — Mensal"
+                            descricao="Laranja: Clientes recorrentes com última visita 61-90d antes do fim do mês (em zona de alerta). Vermelho: Clientes que passaram para perdido naquele mês (churn). Linha laranja: % em risco da base. Linha vermelha: Churn % do mês."
+                            periodoFiltrado={v.contexto?.periodoFiltrado}
+                            ref={v.contexto?.ref}
+                            baseUsada={v.contexto?.baseUsada}
+                            baseTotal={v.sinais.totalBase}
+                            regra="Em Risco: DATEDIFF(LAST_DAY(mês), ultima_venda) BETWEEN 61 AND 90, excl. one-shots | Churn: DATEDIFF(LAST_DAY(mês), ultima_venda) > 90, excl. one-shots | Churn %: churn / (ativos + em_risco + churn) do mês"
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Em risco méd: <span className="text-orange-400">{mediaEmRiscoPct}%</span>
+                          {" · "}
+                          Churn méd: <span className="text-red-400">{mediaChurnPct}%</span>
+                          {" · "}
+                          Total em risco: <span className="text-foreground">{totalEmRisco.toLocaleString()}</span>
+                          {" · "}
+                          Total churn: <span className="text-foreground">{totalChurn.toLocaleString()}</span>
+                        </p>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={v.riscoMensal} margin={{ top: 5, right: 30, left: -20, bottom: 0 }}>
+                    <ResponsiveContainer width="100%" height={230}>
+                      <ComposedChart data={v.riscoMensal} margin={{ top: 5, right: 40, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                         <XAxis dataKey="mes" tickFormatter={fmtMes} tick={{ fontSize: 11, fill: "#888" }} />
                         <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "#888" }} />
-                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "#888" }} tickFormatter={v => `${v}%`} />
-                        <Tooltip formatter={(val: number, name: string) => [name === "churnPct" ? `${val}%` : val, name === "emRisco" ? "Em risco" : "Churn %"]} labelFormatter={fmtMes} contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
-                        <Bar yAxisId="left" dataKey="emRisco" fill={CORES.laranja} radius={[3, 3, 0, 0]} name="emRisco" />
-                      </BarChart>
+                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "#888" }} tickFormatter={(v: number) => `${v}%`} domain={[0, 100]} />
+                        <Tooltip
+                          formatter={(val: number, name: string) => [
+                            name === "churnPct" || name === "emRiscoPct" ? `${val}%` : val.toLocaleString(),
+                            name === "emRisco" ? "Em risco" :
+                            name === "churnNovos" ? "Churn (novos perdidos)" :
+                            name === "emRiscoPct" ? "Em risco %" : "Churn %"
+                          ]}
+                          labelFormatter={fmtMes}
+                          contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }}
+                        />
+                        <Bar yAxisId="left" dataKey="emRisco" fill="#f97316" radius={[3, 3, 0, 0]} name="emRisco" opacity={0.85} />
+                        <Bar yAxisId="left" dataKey="churnNovos" fill="#ef4444" radius={[3, 3, 0, 0]} name="churnNovos" opacity={0.85} />
+                        <Line yAxisId="right" type="monotone" dataKey="emRiscoPct" stroke="#fb923c" strokeWidth={2} strokeDasharray="4 2" dot={{ r: 3, fill: "#fb923c" }} name="emRiscoPct" />
+                        <Line yAxisId="right" type="monotone" dataKey="churnPct" stroke="#f87171" strokeWidth={2} dot={{ r: 3, fill: "#f87171" }} name="churnPct" />
+                      </ComposedChart>
                     </ResponsiveContainer>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-orange-500 inline-block" />Em risco</span>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
+                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-orange-500 inline-block" />Em risco (61-90d)</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-500 inline-block" />Churn novos</span>
+                      <span className="flex items-center gap-1"><span className="inline-block w-5 h-0.5 bg-orange-400" style={{borderTop:'2px dashed #fb923c', background:'transparent'}} />Em risco %</span>
+                      <span className="flex items-center gap-1"><span className="inline-block w-5 h-0.5 bg-red-400" />Churn %</span>
                     </div>
                   </CardContent>
                 </Card>
-              )}
+                );
+              })()}
 
               {/* ── Saúde por Barbeiro ── */}
               {v.saudeBarbeiros && v.saudeBarbeiros.length > 0 && (
