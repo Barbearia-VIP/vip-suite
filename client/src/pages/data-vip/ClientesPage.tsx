@@ -200,6 +200,7 @@ export default function ClientesPage() {
   const [clienteDetalhesId, setClienteDetalhesId] = useState<number | null>(null);
   const [showFreqAnalise, setShowFreqAnalise] = useState(false);
   const [showDiasAnalise, setShowDiasAnalise] = useState(false);
+  const [showStatusAnalise, setShowStatusAnalise] = useState(false);
   const [whatsappModal, setWhatsappModal] = useState(false);
   const [whatsappMsg, setWhatsappMsg] = useState("");
 
@@ -238,7 +239,7 @@ export default function ClientesPage() {
     { enabled: enabled && clienteDetalhesId !== null }
   );
 
-  // ── Dados derivados ───────────────────────────────────────────────────────
+  // ── Dados derivados ─────────────────────────────────────────────────────────────────────────────────────
   const statusDados = useMemo(() => {
     const s = qStatus.data;
     if (!s) return {} as Record<string, number>;
@@ -246,6 +247,52 @@ export default function ClientesPage() {
   }, [qStatus.data]);
   const statusTotal = useMemo(() => Object.values(statusDados).reduce((a, b) => a + b, 0), [statusDados]);
   const statusItens = STATUS_ORDEM.map(k => ({ label: STATUS_CFG[k].label, valor: statusDados[k] ?? 0, cor: STATUS_CFG[k].cor }));
+
+  // Análise automática de composição por status
+  const statusAnalise = useMemo(() => {
+    const s = qStatus.data;
+    if (!s || statusTotal === 0) return [];
+    const pctPerdido = Math.round((s.perdido / statusTotal) * 100);
+    const pctAssiduo = Math.round((s.assiduo / statusTotal) * 100);
+    const pctEmRisco = Math.round((s.emRisco / statusTotal) * 100);
+    const pctNovos = s.novos ? Math.round((s.novos / statusTotal) * 100) : 0;
+    const pctFieis = s.fieis3mais ? Math.round((s.fieis3mais / statusTotal) * 100) : 0;
+    const pctSo1vez = s.so1vez ? Math.round((s.so1vez / statusTotal) * 100) : 0;
+
+    const linhas: { emoji: string; texto: string }[] = [];
+
+    if (pctPerdido > 30) {
+      linhas.push({ emoji: "\ud83d\udea8", texto: `${pctPerdido}% da base está perdida (${fmtNum(s.perdido)} clientes) — acima do ideal de 20%. Campanha de reativação urgente recomendada.` });
+    } else if (pctPerdido > 20) {
+      linhas.push({ emoji: "\u26a0\ufe0f", texto: `${pctPerdido}% da base está perdida (${fmtNum(s.perdido)} clientes) — levemente acima do ideal. Monitore e acione os mais recentes.` });
+    } else {
+      linhas.push({ emoji: "\u2705", texto: `${pctPerdido}% da base perdida (${fmtNum(s.perdido)}) — dentro do limite saudável de 20%.` });
+    }
+
+    if (pctAssiduo >= 35) {
+      linhas.push({ emoji: "\u2705", texto: `${pctAssiduo}% dos clientes são assíduos (${fmtNum(s.assiduo)}) — excelente base fiel. Mantenha o engajamento com esses clientes.` });
+    } else {
+      linhas.push({ emoji: "\ud83d\udca1", texto: `Apenas ${pctAssiduo}% são assíduos (${fmtNum(s.assiduo)}) — foque em converter Regulares e Espaçando em Assíduos com programas de fidelidade.` });
+    }
+
+    if (s.emRisco > 0) {
+      linhas.push({ emoji: "\ud83d\udfe0", texto: `${fmtNum(s.emRisco)} clientes (${pctEmRisco}%) estão Em Risco — priorize contato imediato para evitar perda.` });
+    }
+
+    if (s.novos && s.novos > 0) {
+      linhas.push({ emoji: "\ud83c\udf1f", texto: `${fmtNum(s.novos)} novos clientes (${pctNovos}%) fizeram a primeira visita no período — foque na conversão deles em recorrentes.` });
+    }
+
+    if (s.so1vez && s.so1vez > 0) {
+      linhas.push({ emoji: "\u23f3", texto: `${fmtNum(s.so1vez)} clientes (${pctSo1vez}%) vieram apenas 1 vez no período — alta taxa de não retorno. Considere follow-up pós-visita.` });
+    }
+
+    if (s.fieis3mais && s.fieis3mais > 0) {
+      linhas.push({ emoji: "\ud83d\udcaa", texto: `${fmtNum(s.fieis3mais)} clientes fiéis (${pctFieis}%) vieram 3+ vezes — base sólida de recorrentes. Esses são os embaixadores da marca.` });
+    }
+
+    return linhas;
+  }, [qStatus.data, statusTotal]);
 
   const evolData = useMemo(() => (qEvol.data ?? []).map(r => {
     const [ano, mes] = r.periodo.split("-").map(Number);
@@ -638,27 +685,84 @@ export default function ClientesPage() {
           {/* Composição por status */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Composição por Status · Foto atual</CardTitle>
-              <p className="text-xs text-muted-foreground">Barras proporcionais ao total da carteira</p>
+              <CardTitle className="text-base">Composição por Status · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
+              <p className="text-xs text-muted-foreground">Barras proporcionais ao total · Período selecionado</p>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-1.5">
               {qStatus.isLoading ? <Skeleton className="h-40 w-full" /> : (
-                STATUS_ORDEM.map(k => {
-                  const v = statusDados[k] ?? 0;
-                  const pct = statusTotal > 0 ? (v / statusTotal) * 100 : 0;
-                  const cfg = STATUS_CFG[k];
-                  return (
-                    <div key={k} className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground w-24 shrink-0">{cfg.label}</span>
-                      <div className="flex-1 h-5 bg-muted/30 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all" style={{ width: `${Math.max(pct, 0.5)}%`, backgroundColor: cfg.cor }}>
-                          {pct >= 5 && <span className="text-[10px] font-bold text-white">{fmtNum(v)}</span>}
+                <>
+                  {/* 6 status principais */}
+                  {STATUS_ORDEM.map(k => {
+                    const v = statusDados[k] ?? 0;
+                    const pct = statusTotal > 0 ? (v / statusTotal) * 100 : 0;
+                    const cfg = STATUS_CFG[k];
+                    return (
+                      <div key={k} className="flex items-center gap-3">
+                        <span className="text-xs text-muted-foreground w-24 shrink-0">{cfg.label}</span>
+                        <div className="flex-1 h-6 bg-muted/20 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full flex items-center justify-end pr-2 transition-all duration-500"
+                            style={{ width: `${Math.max(pct, 0.5)}%`, backgroundColor: cfg.cor }}
+                          >
+                            {pct >= 5 && <span className="text-[10px] font-bold text-white">{fmtNum(v)}</span>}
+                          </div>
                         </div>
+                        <span className="text-xs text-muted-foreground w-20 shrink-0 text-right">{fmtNum(v)} ({pct.toFixed(0)}%)</span>
                       </div>
-                      <span className="text-xs text-muted-foreground w-20 shrink-0 text-right">{fmtNum(v)} ({pct.toFixed(0)}%)</span>
+                    );
+                  })}
+
+                  {/* Separador */}
+                  <div className="border-t border-border/40 my-2" />
+
+                  {/* 3 métricas extras: Novos, Só 1 vez, Fiéis */}
+                  {[
+                    { label: "Novos", valor: qStatus.data?.novos ?? 0, cor: "#a855f7" },
+                    { label: "Só 1 vez", valor: qStatus.data?.so1vez ?? 0, cor: "#ef4444" },
+                    { label: "Fiéis (3+ excl.)", valor: qStatus.data?.fieis3mais ?? 0, cor: "#22c55e" },
+                  ].map((item, i) => {
+                    const pct = statusTotal > 0 ? (item.valor / statusTotal) * 100 : 0;
+                    return (
+                      <div key={i} className="flex items-center gap-3">
+                        <span className="text-xs text-muted-foreground w-24 shrink-0">{item.label}</span>
+                        <div className="flex-1 h-6 bg-muted/20 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full flex items-center justify-end pr-2 transition-all duration-500"
+                            style={{ width: `${Math.max(pct, 0.5)}%`, backgroundColor: item.cor }}
+                          >
+                            {pct >= 5 && <span className="text-[10px] font-bold text-white">{fmtNum(item.valor)}</span>}
+                          </div>
+                        </div>
+                        <span className="text-xs text-muted-foreground w-20 shrink-0 text-right">{fmtNum(item.valor)} ({pct.toFixed(0)}%)</span>
+                      </div>
+                    );
+                  })}
+
+                  {/* Botão Mostrar/Ocultar análise */}
+                  <button
+                    onClick={() => setShowStatusAnalise(v => !v)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mt-2"
+                  >
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    {showStatusAnalise ? "Ocultar análise" : "Mostrar análise"}
+                    {showStatusAnalise ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+
+                  {/* Painel de análise automática */}
+                  {showStatusAnalise && (
+                    <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-2 mt-1">
+                      <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                        Análise automática
+                        <span className="text-muted-foreground text-xs font-normal">(gerada com base nos dados do período)</span>
+                      </p>
+                      {statusAnalise.map((linha, i) => (
+                        <p key={i} className="text-sm text-muted-foreground leading-relaxed">
+                          <span className="mr-1.5">{linha.emoji}</span>{linha.texto}
+                        </p>
+                      ))}
                     </div>
-                  );
-                })
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

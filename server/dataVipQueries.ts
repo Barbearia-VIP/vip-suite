@@ -1830,8 +1830,73 @@ export async function getClientesDistribuicaoStatus(extIds: number[], colaborado
     GROUP BY status_label
   `, [ini, fimExcl]);
 
+  // Só 1 vez: clientes com exatamente 1 visita no período
+  const rowsSo1vez = await queryExternal<{ total: number }>(`
+    SELECT COUNT(*) as total
+    FROM (
+      SELECT v.cliente
+      FROM vendas v
+      JOIN usuarios uu ON v.usuario = uu.id
+      ${colabJoin}
+      WHERE ${unitCondV}
+        AND v.data_criacao >= ?
+        AND v.data_criacao < ?
+        AND v.comanda_temp = 0
+        AND v.status != 0
+        AND v.cliente IS NOT NULL
+      GROUP BY v.cliente
+      HAVING COUNT(DISTINCT v.id) = 1
+    ) sub
+  `, [ini, fimExcl]);
+
+  // Fiéis (3+ excl.): clientes com 3 ou mais visitas no período
+  const rowsFieis = await queryExternal<{ total: number }>(`
+    SELECT COUNT(*) as total
+    FROM (
+      SELECT v.cliente
+      FROM vendas v
+      JOIN usuarios uu ON v.usuario = uu.id
+      ${colabJoin}
+      WHERE ${unitCondV}
+        AND v.data_criacao >= ?
+        AND v.data_criacao < ?
+        AND v.comanda_temp = 0
+        AND v.status != 0
+        AND v.cliente IS NOT NULL
+      GROUP BY v.cliente
+      HAVING COUNT(DISTINCT v.id) >= 3
+    ) sub
+  `, [ini, fimExcl]);
+
+  // Novos: clientes cuja primeira visita na unidade foi no período
+  const unitCondNovos = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu2.unidade = ${extIds[0]}`
+    : `uu2.unidade IN (${extIds.join(",")})`;
+  const rowsNovos = await queryExternal<{ total: number }>(`
+    SELECT COUNT(DISTINCT v.cliente) as total
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    ${colabJoin}
+    WHERE ${unitCondV}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+      AND v.cliente IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM vendas v2
+        JOIN usuarios uu2 ON v2.usuario = uu2.id
+        WHERE v2.cliente = v.cliente
+          AND ${unitCondNovos}
+          AND v2.data_criacao < ?
+          AND v2.comanda_temp = 0
+          AND v2.status != 0
+      )
+  `, [ini, fimExcl, ini]);
+
   const map: Record<string, number> = {};
   for (const r of rows) map[r.status_label] = Number(r.total);
+  const totalBase = Object.values(map).reduce((s, v) => s + v, 0);
 
   return {
     assiduo: map["assiduo"] ?? 0,
@@ -1840,7 +1905,10 @@ export async function getClientesDistribuicaoStatus(extIds: number[], colaborado
     primeiraVez: map["1a_vez"] ?? 0,
     emRisco: map["em_risco"] ?? 0,
     perdido: map["perdido"] ?? 0,
-    total: Object.values(map).reduce((s, v) => s + v, 0),
+    total: totalBase,
+    novos: Number(rowsNovos[0]?.total ?? 0),
+    so1vez: Number(rowsSo1vez[0]?.total ?? 0),
+    fieis3mais: Number(rowsFieis[0]?.total ?? 0),
   };
 }
 
