@@ -1096,149 +1096,112 @@ export const raioXRouter = router({
       }
 
       const unitIn = extIds.length === 1 ? `uu.unidade = ${extIds[0]}` : `uu.unidade IN (${extIds.join(",")})`;
-      const unitInC = extIds.length === 1 ? `uu2.unidade = ${extIds[0]}` : `uu2.unidade IN (${extIds.join(",")})`;
 
-      // Base do período: clientes que visitaram entre dataInicio e dataFim
-      const basePeriodo = `(
-        SELECT DISTINCT v.cliente
-        FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
-        WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
-          AND v.cliente IS NOT NULL AND v.cliente!=2
-          AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
-      )`;
+      // ── Passo 1: Clientes do período com stats agregados (1 query leve) ─────
+      // Usa clientes.ultima_visita (campo indexado) para classificação
+      // e conta visitas históricas via subquery simples
+      const clientesBase = await queryExternal<{
+        cliente_id: number; nome: string; telefone: string;
+        ultima_visita: Date; tv_hist: number; ticket: number;
+      }>(`
+        SELECT
+          c.id as cliente_id, c.nome, c.telefone, c.ultima_visita,
+          COALESCE(tvh.tv, 0) as tv_hist,
+          COALESCE(c.consumo, 0) as ticket
+        FROM (
+          SELECT DISTINCT v.cliente
+          FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+          WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
+            AND v.cliente IS NOT NULL AND v.cliente!=2
+            AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+        ) bp
+        JOIN clientes c ON c.id = bp.cliente
+        LEFT JOIN (
+          SELECT v2.cliente, COUNT(*) as tv
+          FROM vendas v2 JOIN usuarios uu2 ON v2.usuario = uu2.id
+          WHERE ${extIds.length === 1 ? `uu2.unidade = ${extIds[0]}` : `uu2.unidade IN (${extIds.join(",")})`} AND v2.comanda_temp=0
+            AND v2.cancelado_motivo IS NULL AND v2.status!=0
+            AND v2.cliente IS NOT NULL AND v2.cliente!=2
+          GROUP BY v2.cliente
+        ) tvh ON tvh.cliente = c.id
+        WHERE c.status = 1
+        LIMIT 5000
+      `);
 
-      // Total histórico de visitas por cliente
-      const totalVisitasHist = `(
-        SELECT v.cliente, COUNT(*) as tv
-        FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
-        WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
-          AND v.cliente IS NOT NULL AND v.cliente!=2
-        GROUP BY v.cliente
-      )`;
+      // ── Passo 2: Resgatados — clientes do período cuja visita ANTERIOR ao período
+      //    foi há ≥90d antes de dataInicio (usando MAX da última visita antes do período)
+      const resgatadosIds = await queryExternal<{ cliente_id: number; ultima_antes: Date }>(`
+        SELECT bp.cliente as cliente_id, MAX(DATE(v_ant.data_criacao)) as ultima_antes
+        FROM (
+          SELECT DISTINCT v.cliente
+          FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+          WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
+            AND v.cliente IS NOT NULL AND v.cliente!=2
+            AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+        ) bp
+        JOIN vendas v_ant ON v_ant.cliente = bp.cliente
+        JOIN usuarios uu_ant ON v_ant.usuario = uu_ant.id
+        WHERE ${extIds.length === 1 ? `uu_ant.unidade = ${extIds[0]}` : `uu_ant.unidade IN (${extIds.join(",")})`}
+          AND v_ant.comanda_temp=0 AND v_ant.cancelado_motivo IS NULL AND v_ant.status!=0
+          AND DATE(v_ant.data_criacao) < '${dataInicio}'
+        GROUP BY bp.cliente
+        HAVING DATEDIFF('${dataInicio}', ultima_antes) >= 90
+        LIMIT 1000
+      `);
 
-      const [kpisRows, emRiscoRows, perdidosRows, resgatadosRows, churnMensalRows] = await Promise.all([
-        // KPIs principais
-        queryExternal<{
-          total: number; perdidos_total: number; fidelizados_total: number;
-          perdidos_fidelizados: number; oneshot_total: number; perdidos_oneshot: number;
-          resgatados: number; em_risco_45_90: number; ticket_medio: number;
-        }>(`
-          SELECT
-            COUNT(DISTINCT bp.cliente) as total,
-            SUM(CASE WHEN DATEDIFF('${dataFim}', c.ultima_visita) > 90 THEN 1 ELSE 0 END) as perdidos_total,
-            SUM(CASE WHEN COALESCE(tvh.tv, 0) >= 3 THEN 1 ELSE 0 END) as fidelizados_total,
-            SUM(CASE WHEN COALESCE(tvh.tv, 0) >= 3 AND DATEDIFF('${dataFim}', c.ultima_visita) > 90 THEN 1 ELSE 0 END) as perdidos_fidelizados,
-            SUM(CASE WHEN COALESCE(tvh.tv, 0) = 1 THEN 1 ELSE 0 END) as oneshot_total,
-            SUM(CASE WHEN COALESCE(tvh.tv, 0) = 1 AND DATEDIFF('${dataFim}', c.ultima_visita) > 90 THEN 1 ELSE 0 END) as perdidos_oneshot,
-            SUM(CASE WHEN EXISTS (
-              SELECT 1 FROM vendas v2 JOIN usuarios uu2 ON v2.usuario = uu2.id
-              WHERE v2.cliente = bp.cliente AND ${unitInC}
-                AND v2.comanda_temp=0 AND v2.cancelado_motivo IS NULL AND v2.status!=0
-                AND DATE(v2.data_criacao) >= '${dataInicio}' AND DATE(v2.data_criacao) <= '${dataFim}'
-                AND EXISTS (
-                  SELECT 1 FROM vendas v3 JOIN usuarios uu3 ON v3.usuario = uu3.id
-                  WHERE v3.cliente = bp.cliente AND uu3.unidade = uu2.unidade
-                    AND v3.comanda_temp=0 AND v3.cancelado_motivo IS NULL AND v3.status!=0
-                    AND DATE(v3.data_criacao) < '${dataInicio}'
-                    AND DATEDIFF('${dataInicio}', DATE(v3.data_criacao)) >= 90
-                    AND NOT EXISTS (
-                      SELECT 1 FROM vendas v4 JOIN usuarios uu4 ON v4.usuario = uu4.id
-                      WHERE v4.cliente = bp.cliente AND uu4.unidade = uu2.unidade
-                        AND v4.comanda_temp=0 AND v4.cancelado_motivo IS NULL AND v4.status!=0
-                        AND DATE(v4.data_criacao) >= DATE_SUB('${dataInicio}', INTERVAL 90 DAY)
-                        AND DATE(v4.data_criacao) < '${dataInicio}'
-                    )
-                )
-            ) THEN 1 ELSE 0 END) as resgatados,
-            SUM(CASE WHEN DATEDIFF('${dataFim}', c.ultima_visita) BETWEEN 45 AND 90 THEN 1 ELSE 0 END) as em_risco_45_90,
-            AVG(c.consumo) as ticket_medio
-          FROM ${basePeriodo} bp
-          JOIN clientes c ON c.id = bp.cliente
-          LEFT JOIN ${totalVisitasHist} tvh ON tvh.cliente = bp.cliente
-          WHERE c.status = 1
-        `),
-        // Clientes em risco (45-90d)
-        queryExternal<{ id: number; nome: string; telefone: string; ultima_visita: Date; tv: number }>(`
-          SELECT c.id, c.nome, c.telefone, c.ultima_visita, COALESCE(tvh.tv, 0) as tv
-          FROM ${basePeriodo} bp
-          JOIN clientes c ON c.id = bp.cliente
-          LEFT JOIN ${totalVisitasHist} tvh ON tvh.cliente = bp.cliente
-          WHERE c.status = 1 AND DATEDIFF('${dataFim}', c.ultima_visita) BETWEEN 45 AND 90
-          ORDER BY c.ultima_visita ASC LIMIT 500
-        `),
-        // Perdidos (>90d)
-        queryExternal<{ id: number; nome: string; telefone: string; ultima_visita: Date; tv: number }>(`
-          SELECT c.id, c.nome, c.telefone, c.ultima_visita, COALESCE(tvh.tv, 0) as tv
-          FROM ${basePeriodo} bp
-          JOIN clientes c ON c.id = bp.cliente
-          LEFT JOIN ${totalVisitasHist} tvh ON tvh.cliente = bp.cliente
-          WHERE c.status = 1 AND DATEDIFF('${dataFim}', c.ultima_visita) > 90
-          ORDER BY c.ultima_visita ASC LIMIT 500
-        `),
-        // Resgatados
-        queryExternal<{ id: number; nome: string; telefone: string; ultima_visita: Date; tv: number }>(`
-          SELECT c.id, c.nome, c.telefone, c.ultima_visita, COALESCE(tvh.tv, 0) as tv
-          FROM ${basePeriodo} bp
-          JOIN clientes c ON c.id = bp.cliente
-          LEFT JOIN ${totalVisitasHist} tvh ON tvh.cliente = bp.cliente
-          WHERE c.status = 1
-            AND EXISTS (
-              SELECT 1 FROM vendas v2 JOIN usuarios uu2 ON v2.usuario = uu2.id
-              WHERE v2.cliente = bp.cliente AND ${unitInC}
-                AND v2.comanda_temp=0 AND v2.cancelado_motivo IS NULL AND v2.status!=0
-                AND DATE(v2.data_criacao) >= '${dataInicio}' AND DATE(v2.data_criacao) <= '${dataFim}'
-                AND EXISTS (
-                  SELECT 1 FROM vendas v3 JOIN usuarios uu3 ON v3.usuario = uu3.id
-                  WHERE v3.cliente = bp.cliente AND uu3.unidade = uu2.unidade
-                    AND v3.comanda_temp=0 AND v3.cancelado_motivo IS NULL AND v3.status!=0
-                    AND DATE(v3.data_criacao) < '${dataInicio}'
-                    AND DATEDIFF('${dataInicio}', DATE(v3.data_criacao)) >= 90
-                    AND NOT EXISTS (
-                      SELECT 1 FROM vendas v4 JOIN usuarios uu4 ON v4.usuario = uu4.id
-                      WHERE v4.cliente = bp.cliente AND uu4.unidade = uu2.unidade
-                        AND v4.comanda_temp=0 AND v4.cancelado_motivo IS NULL AND v4.status!=0
-                        AND DATE(v4.data_criacao) >= DATE_SUB('${dataInicio}', INTERVAL 90 DAY)
-                        AND DATE(v4.data_criacao) < '${dataInicio}'
-                    )
-                )
-            )
-          ORDER BY c.ultima_visita DESC LIMIT 200
-        `),
-        // Churn mensal
-        queryExternal<{ mes: string; total: number }>(`
-          SELECT DATE_FORMAT(c.ultima_visita, '%Y-%m') as mes, COUNT(*) as total
-          FROM ${basePeriodo} bp
-          JOIN clientes c ON c.id = bp.cliente
-          WHERE c.status = 1 AND DATEDIFF('${dataFim}', c.ultima_visita) > 90
-            AND c.ultima_visita >= DATE_SUB('${dataFim}', INTERVAL 12 MONTH)
-          GROUP BY mes ORDER BY mes
-        `),
-      ]);
+      const resgatadosSet = new Set(resgatadosIds.map(r => r.cliente_id));
 
-      const k = kpisRows[0] || { total: 0, perdidos_total: 0, fidelizados_total: 0, perdidos_fidelizados: 0, oneshot_total: 0, perdidos_oneshot: 0, resgatados: 0, em_risco_45_90: 0, ticket_medio: 0 };
-      const total = Number(k.total);
-      const perdidosTotal = Number(k.perdidos_total);
-      const fidelizadosTotal = Number(k.fidelizados_total);
-      const perdidosFidelizados = Number(k.perdidos_fidelizados);
-      const oneShotTotal = Number(k.oneshot_total);
-      const perdidosOneShot = Number(k.perdidos_oneshot);
-      const resgatadosTotal = Number(k.resgatados);
-      const emRisco4590 = Number(k.em_risco_45_90);
+      // ── Classificação no Node.js (sem carga extra no banco) ─────────────────
+      const dataFimMs = new Date(dataFim + "T12:00:00Z").getTime();
 
-      const mapCliente = (r: { id: number; nome: string; telefone: string; ultima_visita: Date; tv: number }) => ({
-        clienteId: String(r.id),
-        clienteNome: r.nome,
-        telefone: r.telefone,
-        ultimaVenda: r.ultima_visita,
-        totalVisitas: Number(r.tv),
-        dias: r.ultima_visita
-          ? (() => {
-              const uv = r.ultima_visita instanceof Date ? r.ultima_visita : new Date(r.ultima_visita as unknown as string);
-              const ref = new Date(dataFim + "T12:00:00Z");
-              return Math.max(0, Math.floor((ref.getTime() - uv.getTime()) / 86400000));
-            })()
-          : 999,
+      const mapC = (c: typeof clientesBase[0]) => {
+        const uv = c.ultima_visita instanceof Date ? c.ultima_visita : new Date(c.ultima_visita as unknown as string);
+        const dias = Math.max(0, Math.floor((dataFimMs - uv.getTime()) / 86400000));
+        return {
+          clienteId: String(c.cliente_id),
+          clienteNome: c.nome,
+          telefone: c.telefone,
+          ultimaVenda: c.ultima_visita,
+          totalVisitas: Number(c.tv_hist),
+          dias,
+        };
+      };
+
+      const perdidosList = clientesBase.filter(c => {
+        const uv = c.ultima_visita instanceof Date ? c.ultima_visita : new Date(c.ultima_visita as unknown as string);
+        return Math.floor((dataFimMs - uv.getTime()) / 86400000) > 90;
       });
+
+      const emRiscoList = clientesBase.filter(c => {
+        const uv = c.ultima_visita instanceof Date ? c.ultima_visita : new Date(c.ultima_visita as unknown as string);
+        const d = Math.floor((dataFimMs - uv.getTime()) / 86400000);
+        return d >= 45 && d <= 90;
+      });
+
+      const resgatadosList = clientesBase.filter(c => resgatadosSet.has(c.cliente_id));
+
+      const total = clientesBase.length;
+      const perdidosTotal = perdidosList.length;
+      const emRisco4590 = emRiscoList.length;
+      const resgatadosTotal = resgatadosList.length;
+      const fidelizadosTotal = clientesBase.filter(c => Number(c.tv_hist) >= 3).length;
+      const perdidosFidelizados = perdidosList.filter(c => Number(c.tv_hist) >= 3).length;
+      const oneShotTotal = clientesBase.filter(c => Number(c.tv_hist) === 1).length;
+      const perdidosOneShot = perdidosList.filter(c => Number(c.tv_hist) === 1).length;
+      const ticketMedio = total > 0
+        ? clientesBase.reduce((s, c) => s + Number(c.ticket), 0) / total
+        : 0;
+
+      // Churn mensal (baseado em ultima_visita dos perdidos)
+      const churnMensalMap: Record<string, number> = {};
+      for (const c of perdidosList) {
+        const uv = c.ultima_visita instanceof Date ? c.ultima_visita : new Date(c.ultima_visita as unknown as string);
+        const mes = `${uv.getFullYear()}-${String(uv.getMonth() + 1).padStart(2, "0")}`;
+        churnMensalMap[mes] = (churnMensalMap[mes] || 0) + 1;
+      }
+      const churnMensal = Object.entries(churnMensalMap)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([mes, total]) => ({ mes, total }));
 
       return {
         resumo: {
@@ -1250,8 +1213,8 @@ export const raioXRouter = router({
           taxaRetencao: total > 0 ? Math.round(((total - perdidosTotal) / total) * 100) : 0,
           taxaChurn: total > 0 ? Math.round((perdidosTotal / total) * 100) : 0,
           mediaVisitas: 0,
-          ticketMedio: Math.round(Number(k.ticket_medio) * 100) / 100,
-          receitaPerdida: Math.round(perdidosTotal * Number(k.ticket_medio) * 100) / 100,
+          ticketMedio: Math.round(ticketMedio * 100) / 100,
+          receitaPerdida: Math.round(perdidosTotal * ticketMedio * 100) / 100,
         },
         kpis: {
           churnGeral: perdidosTotal,
@@ -1265,11 +1228,11 @@ export const raioXRouter = router({
           resgatados: resgatadosTotal,
           emRisco45_90: emRisco4590,
         },
-        perdidos: perdidosRows.map(mapCliente),
-        emRisco: emRiscoRows.map(mapCliente),
-        resgatados: resgatadosRows.map(mapCliente),
-        perdidosRecentes: perdidosRows.slice(0, 100).map(mapCliente),
-        churnMensal: churnMensalRows.map(r => ({ mes: r.mes, total: Number(r.total) })),
+        perdidos: perdidosList.slice(0, 500).map(mapC),
+        emRisco: emRiscoList.slice(0, 500).map(mapC),
+        resgatados: resgatadosList.slice(0, 200).map(mapC),
+        perdidosRecentes: perdidosList.slice(0, 100).map(mapC),
+        churnMensal,
         periodo: { dataInicio, dataFim, diasPeriodo },
       };
     }),
