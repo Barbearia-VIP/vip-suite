@@ -45,7 +45,6 @@ const STATUS_CFG: Record<string, { label: string; cor: string; bg: string; desc:
   perdido:    { label: "Perdido",   cor: "#ef4444", bg: "bg-red-500/10 border-red-500/30",       desc: "> 75 dias sem vir" },
 };
 const STATUS_ORDEM = ["assiduo", "regular", "espacando", "primeiraVez", "emRisco", "perdido"] as const;
-const FREQ_CORES   = ["#22c55e","#3b82f6","#a855f7","#f97316","#ef4444","#06b6d4","#eab308","#ec4899","#6366f1","#14b8a6","#f59e0b"];
 
 // ── Helpers de data ───────────────────────────────────────────────────────────
 interface Periodo { iniMes: number; iniAno: number; fimMes: number; fimAno: number; }
@@ -199,6 +198,7 @@ export default function ClientesPage() {
   const [contatadosLocal, setContatadosLocal] = useState<Set<number>>(new Set());
 
   const [clienteDetalhesId, setClienteDetalhesId] = useState<number | null>(null);
+  const [showFreqAnalise, setShowFreqAnalise] = useState(false);
   const [whatsappModal, setWhatsappModal] = useState(false);
   const [whatsappMsg, setWhatsappMsg] = useState("");
 
@@ -252,6 +252,71 @@ export default function ClientesPage() {
   }), [qEvol.data]);
 
   const freqTotal = useMemo(() => (qFreq.data ?? []).reduce((s, r) => s + r.total, 0), [qFreq.data]);
+
+  // Cores fixas por faixa de frequência
+  const FREQ_CORES_MAP: Record<string, string> = {
+    "1x (aguardando)": "#9ca3af",
+    "1x (>30d)": "#f97316",
+    "1x (>60d)": "#ef4444",
+    "2 vezes": "#3b82f6",
+    "3-4 vezes": "#a855f7",
+    "5-9 vezes": "#22c55e",
+    "10-12 vezes": "#06b6d4",
+    "13-15 vezes": "#14b8a6",
+    "16-20 vezes": "#eab308",
+    "21-30 vezes": "#ec4899",
+    "30+ vezes": "#6366f1",
+  };
+
+  const freqItens = useMemo(() => (qFreq.data ?? []).map(r => ({
+    label: r.faixa,
+    valor: r.total,
+    cor: FREQ_CORES_MAP[r.faixa] ?? "#6b7280",
+  })), [qFreq.data]);
+
+  // Análise automática de frequência
+  const freqAnalise = useMemo(() => {
+    const d = qFreq.data;
+    if (!d || freqTotal === 0) return [];
+    const get = (faixa: string) => d.find(r => r.faixa === faixa)?.total ?? 0;
+    const uma1 = get("1x (aguardando)");
+    const uma2 = get("1x (>30d)");
+    const uma3 = get("1x (>60d)");
+    const totalUma = uma1 + uma2 + uma3;
+    const duas = get("2 vezes");
+    const tresMais = d.filter(r => !r.faixa.startsWith("1x") && r.faixa !== "2 vezes").reduce((s, r) => s + r.total, 0);
+    const dez_mais = d.filter(r => ["10-12 vezes","13-15 vezes","16-20 vezes","21-30 vezes","30+ vezes"].includes(r.faixa)).reduce((s, r) => s + r.total, 0);
+    const pctUma = Math.round((totalUma / freqTotal) * 100);
+    const pctTresMais = Math.round((tresMais / freqTotal) * 100);
+
+    // Calcular meses no período
+    const mesesPeriodo = (filtros.fimAno - filtros.iniAno) * 12 + (filtros.fimMes - filtros.iniMes) + 1;
+    const visitasIdeal = mesesPeriodo; // 1x/mês = ideal
+    const clientesIdeal = d.filter(r => {
+      const n = parseInt(r.faixa);
+      if (r.faixa.startsWith("1x")) return false;
+      if (r.faixa.includes("-")) {
+        const [a, b] = r.faixa.split("-").map(s => parseInt(s));
+        return a >= visitasIdeal;
+      }
+      if (r.faixa.endsWith("+")) return parseInt(r.faixa) >= visitasIdeal;
+      return n >= visitasIdeal;
+    }).reduce((s, r) => s + r.total, 0);
+    const pctIdeal = Math.round((clientesIdeal / freqTotal) * 100);
+
+    const linhas: { emoji: string; texto: string }[] = [];
+
+    linhas.push({ emoji: "\u2139\ufe0f", texto: `Para um período de ~${mesesPeriodo} meses, o ideal é que cada cliente venha pelo menos ${visitasIdeal}x (1x/mês = bom). ${pctIdeal}% atingem essa marca.` });
+    linhas.push({ emoji: "\u2705", texto: `Apenas ${pctUma}% dos clientes vieram 1 vez (${fmtNum(totalUma)}) — ${pctUma <= 35 ? "boa taxa de retenção!" : "taxa de retenção abaixo do ideal."}` });
+    if (uma3 > 0) linhas.push({ emoji: "\ud83d\udd34", texto: `${fmtNum(uma3)} (${Math.round((uma3/freqTotal)*100)}%) vieram 1 vez há mais de 60 dias — provavelmente perdidos. Campanha de resgate recomendada.` });
+    if (uma2 > 0) linhas.push({ emoji: "\ud83d\udfe0", texto: `${fmtNum(uma2)} (${Math.round((uma2/freqTotal)*100)}%) vieram 1 vez há 31-60 dias — atenção, risco de perda iminente. Follow-up urgente.` });
+    if (uma1 > 0) linhas.push({ emoji: "\u23f3", texto: `${fmtNum(uma1)} (${Math.round((uma1/freqTotal)*100)}%) vieram 1 vez há ≤30 dias — aguardando retorno dentro da janela normal.` });
+    if (tresMais > 0) linhas.push({ emoji: "\u2705", texto: `${pctTresMais}% dos clientes vieram 3+ vezes (${fmtNum(tresMais)}) — base fidelizada sólida. Esses são clientes com cadência mensal ou melhor.` });
+    if (dez_mais > 0) linhas.push({ emoji: "\u2b50", texto: `${fmtNum(dez_mais)} clientes vieram 10+ vezes no período — seus clientes mais fiéis!` });
+    if (duas > 0) linhas.push({ emoji: "\u26a0\ufe0f", texto: `${fmtNum(duas)} clientes com 2 visitas — cadência de ~${Math.round(mesesPeriodo * 30 / 2)}d, abaixo do ideal.` });
+
+    return linhas;
+  }, [qFreq.data, freqTotal, filtros]);
 
   const diasDados = useMemo(() => {
     const d = qDias.data; if (!d) return [];
@@ -439,28 +504,51 @@ export default function ClientesPage() {
           {/* Distribuição por frequência */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Distribuição por Frequência de Visitas · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
+              <CardTitle className="text-base">Distribuição por frequência de visitas · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {qFreq.isLoading ? <Skeleton className="h-12 w-full" /> : (
+            <CardContent className="space-y-3">
+              {qFreq.isLoading ? <Skeleton className="h-10 w-full" /> : (
                 <>
-                  <BarraSegmentada itens={(qFreq.data ?? []).map((r, i) => ({ label: r.faixa, valor: r.total, cor: FREQ_CORES[i % FREQ_CORES.length] }))} total={freqTotal} altura="h-8" />
-                  <div className="mt-4 space-y-1.5">
-                    {(qFreq.data ?? []).map((r, i) => {
-                      const pct = freqTotal > 0 ? (r.total / freqTotal) * 100 : 0;
+                  {/* Barra única segmentada */}
+                  <BarraSegmentada itens={freqItens} total={freqTotal} altura="h-10" />
+
+                  {/* Legenda compacta em linha */}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1">
+                    {freqItens.map((item, i) => {
+                      const pct = freqTotal > 0 ? Math.round((item.valor / freqTotal) * 100) : 0;
                       return (
-                        <div key={i} className="flex items-center gap-3">
-                          <span className="text-xs text-muted-foreground w-28 shrink-0 text-right">{r.faixa}</span>
-                          <div className="flex-1 h-5 bg-muted/30 rounded-full overflow-hidden">
-                            <div className="h-full rounded-full flex items-center justify-end pr-2 transition-all" style={{ width: `${Math.max(pct, 1)}%`, backgroundColor: FREQ_CORES[i % FREQ_CORES.length] }}>
-                              {pct >= 6 && <span className="text-[10px] font-bold text-white">{fmtNum(r.total)}</span>}
-                            </div>
-                          </div>
-                          <span className="text-xs text-muted-foreground w-16 shrink-0">{fmtNum(r.total)} ({pct.toFixed(0)}%)</span>
-                        </div>
+                        <span key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.cor }} />
+                          {item.label}: {fmtNum(item.valor)} ({pct}%)
+                        </span>
                       );
                     })}
                   </div>
+
+                  {/* Botão Mostrar/Ocultar análise */}
+                  <button
+                    onClick={() => setShowFreqAnalise(v => !v)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mt-1"
+                  >
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    {showFreqAnalise ? "Ocultar análise" : "Mostrar análise"}
+                    {showFreqAnalise ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+
+                  {/* Painel de análise automática */}
+                  {showFreqAnalise && (
+                    <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-2">
+                      <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                        Análise automática
+                        <span className="text-muted-foreground text-xs font-normal">(gerada com base nos dados do período)</span>
+                      </p>
+                      {freqAnalise.map((linha, i) => (
+                        <p key={i} className="text-sm text-muted-foreground leading-relaxed">
+                          <span className="mr-1.5">{linha.emoji}</span>{linha.texto}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </>
               )}
             </CardContent>
