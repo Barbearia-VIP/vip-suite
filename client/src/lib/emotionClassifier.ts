@@ -4,12 +4,12 @@
  *
  * NÍVEL 1 — Thresholds de frame:
  * - Insatisfeito: angry >= 0.30 OU disgusted >= 0.30 OU (sad >= 0.40 E happy < 0.15)
- * - Satisfeito: happy >= 0.15  ← captura expressões relaxadas/confortáveis (face-api retorna 0.10-0.25 para satisfação leve)
+ * - Satisfeito: happy >= 0.12  ← captura expressões relaxadas/confortáveis (face-api retorna 0.08-0.20 para satisfação leve)
  * - Neutro: qualquer outra coisa (padrão)
  *
  * Justificativa: o modelo face-api retorna happy ~0.10-0.25 para expressões relaxadas/neutras-positivas.
  * Com threshold 0.20 ainda havia muitos neutros porque expressões confortáveis ficam em 0.10-0.18.
- * Reduzindo para 0.15 capturamos melhor a satisfação real em ambientes de barbearia.
+ * Reduzindo para 0.12 capturamos melhor a satisfação real em ambientes de barbearia.
  *
  * NÍVEL 2 — Regra de prioridade histórica por proporção:
  * - Insatisfeito: capturas insatisfeitas >= 25% do total
@@ -55,7 +55,7 @@ export function classifyExpression(scores: ExpressionScores): {
   }
 
   // Regra de satisfação — threshold baixo para capturar expressões relaxadas/confortáveis
-  if (scores.happy >= 0.15) {
+  if (scores.happy >= 0.12) {
     return { satisfactionLevel: 'satisfied', dominantExpression };
   }
 
@@ -197,9 +197,9 @@ export const EMOTION_THRESHOLDS = {
   /** sad >= este valor (com happy < SAD_HAPPY_MAX) → insatisfeito */
   SAD: 0.40,
   /** happy deve ser menor que este valor para sad ser considerado insatisfeito */
-  SAD_HAPPY_MAX: 0.15,
+  SAD_HAPPY_MAX: 0.12,
   /** happy >= este valor → satisfeito */
-  HAPPY: 0.15,
+  HAPPY: 0.12,
   /** % mínima de capturas insatisfeitas para status final = insatisfeito */
   PCT_UNSATISFIED: 0.25,
   /** % mínima de capturas satisfeitas para status final = satisfeito */

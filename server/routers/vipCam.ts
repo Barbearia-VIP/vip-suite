@@ -890,7 +890,7 @@ export const vipCamRouter = router({
       const timelineResult = await db!.execute(sql`
         UPDATE cam_sentiment_timeline
         SET satisfactionLevel = CASE
-          WHEN expression = 'happy'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.15 THEN 'satisfied'
+          WHEN expression = 'happy'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.12 THEN 'satisfied'
           WHEN expression = 'angry'     AND CAST(confidence AS DECIMAL(10,4)) >= 0.30 THEN 'unsatisfied'
           WHEN expression = 'disgusted' AND CAST(confidence AS DECIMAL(10,4)) >= 0.30 THEN 'unsatisfied'
           WHEN expression = 'sad'       AND CAST(confidence AS DECIMAL(10,4)) >= 0.40 THEN 'unsatisfied'
