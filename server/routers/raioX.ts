@@ -1326,7 +1326,7 @@ export const raioXRouter = router({
         FROM clientes c
         JOIN vendas vh ON vh.cliente = c.id
         JOIN usuarios uuh ON vh.usuario = uuh.id
-        WHERE ${unitIn.replace(/uu\./g, 'uuh.')} AND uuh.visivel_agenda != 'nenhuma'
+        WHERE ${unitIn.replace(/uu\./g, 'uuh.')} AND uuh.visivel_dashboard = 1
           AND vh.comanda_temp=0 AND vh.cancelado_motivo IS NULL AND vh.status!=0
           AND vh.cliente IS NOT NULL AND vh.cliente!=2
           AND c.status = 1
@@ -1350,7 +1350,7 @@ export const raioXRouter = router({
         SELECT v.cliente as cliente_id, uu.id as colaborador_id, uu.nome as colaborador_nome, MAX(v.data_criacao) as max_dt
         FROM vendas v
         JOIN usuarios uu ON v.usuario = uu.id
-        WHERE ${unitIn} AND uu.visivel_agenda != 'nenhuma'
+        WHERE ${unitIn} AND uu.visivel_dashboard = 1
           AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
           AND v.cliente IN (${idList})
         GROUP BY v.cliente, uu.id, uu.nome
