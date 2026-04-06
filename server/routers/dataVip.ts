@@ -1699,11 +1699,12 @@ export const dataVipRouter = router({
       unitId: z.number().optional(),
       dataInicio: z.string(), // 'YYYY-MM-DD'
       dataFim: z.string(),    // 'YYYY-MM-DD'
+      colaboradorId: z.number().nullable().optional(),
     }))
     .query(async ({ ctx, input }) => {
       try {
         const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
-        return await getClientesKpis(extIds, input.dataInicio, input.dataFim);
+        return await getClientesKpis(extIds, input.dataInicio, input.dataFim, input.colaboradorId);
       } catch (err) { handleExternalDbError(err); }
     }),
 
@@ -1711,11 +1712,12 @@ export const dataVipRouter = router({
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
+      colaboradorId: z.number().nullable().optional(),
     }))
     .query(async ({ ctx, input }) => {
       try {
         const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
-        return await getClientesDistribuicaoStatus(extIds);
+        return await getClientesDistribuicaoStatus(extIds, input.colaboradorId);
       } catch (err) { handleExternalDbError(err); }
     }),
 
@@ -1725,11 +1727,12 @@ export const dataVipRouter = router({
       unitId: z.number().optional(),
       dataInicio: z.string(),
       dataFim: z.string(),
+      colaboradorId: z.number().nullable().optional(),
     }))
     .query(async ({ ctx, input }) => {
       try {
         const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
-        return await getClientesEvolucaoMensal(extIds, input.dataInicio, input.dataFim);
+        return await getClientesEvolucaoMensal(extIds, input.dataInicio, input.dataFim, input.colaboradorId);
       } catch (err) { handleExternalDbError(err); }
     }),
 
@@ -1739,11 +1742,12 @@ export const dataVipRouter = router({
       unitId: z.number().optional(),
       dataInicio: z.string(),
       dataFim: z.string(),
+      colaboradorId: z.number().nullable().optional(),
     }))
     .query(async ({ ctx, input }) => {
       try {
         const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
-        return await getClientesDistribuicaoFrequencia(extIds, input.dataInicio, input.dataFim);
+        return await getClientesDistribuicaoFrequencia(extIds, input.dataInicio, input.dataFim, input.colaboradorId);
       } catch (err) { handleExternalDbError(err); }
     }),
 
@@ -1753,11 +1757,12 @@ export const dataVipRouter = router({
       unitId: z.number().optional(),
       dataInicio: z.string(),
       dataFim: z.string(),
+      colaboradorId: z.number().nullable().optional(),
     }))
     .query(async ({ ctx, input }) => {
       try {
         const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
-        return await getClientesDistribuicaoDiasSemVir(extIds, input.dataInicio, input.dataFim);
+        return await getClientesDistribuicaoDiasSemVir(extIds, input.dataInicio, input.dataFim, input.colaboradorId);
       } catch (err) { handleExternalDbError(err); }
     }),
 

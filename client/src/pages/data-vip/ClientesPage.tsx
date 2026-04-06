@@ -215,16 +215,15 @@ export default function ClientesPage() {
   const dataFim    = toDateStr(filtros.fimMes, filtros.fimAno, true);
   const base       = { orgId: org?.id, unitId: selectedUnit?.id };
   const enabled    = !!(org?.id || selectedUnit?.id);
-
-  // ── Queries base ──────────────────────────────────────────────────────────
+  // ── Queries base ───────────────────────────────────────────────────────────────────────────
   const qColabs  = trpc.dataVip.listarColaboradoresClientes.useQuery({ ...base, dataInicio, dataFim }, { enabled });
-  const qKpis    = trpc.dataVip.clientesKpis.useQuery({ ...base, dataInicio, dataFim }, { enabled });
-  const qStatus  = trpc.dataVip.clientesDistribuicaoStatus.useQuery(base, { enabled });
-  const qEvol    = trpc.dataVip.clientesEvolucaoMensal.useQuery({ ...base, dataInicio, dataFim }, { enabled });
-  const qFreq    = trpc.dataVip.clientesDistribuicaoFrequencia.useQuery({ ...base, dataInicio, dataFim }, { enabled });
-  const qDias    = trpc.dataVip.clientesDistribuicaoDiasSemVir.useQuery({ ...base, dataInicio, dataFim }, { enabled });
-
-  // ── Queries por aba ───────────────────────────────────────────────────────
+  // Todas as queries base respeitam o colaboradorId selecionado
+  const qKpis    = trpc.dataVip.clientesKpis.useQuery({ ...base, dataInicio, dataFim, colaboradorId }, { enabled });
+  const qStatus  = trpc.dataVip.clientesDistribuicaoStatus.useQuery({ ...base, colaboradorId }, { enabled });
+  const qEvol    = trpc.dataVip.clientesEvolucaoMensal.useQuery({ ...base, dataInicio, dataFim, colaboradorId }, { enabled });
+  const qFreq    = trpc.dataVip.clientesDistribuicaoFrequencia.useQuery({ ...base, dataInicio, dataFim, colaboradorId }, { enabled });
+  const qDias    = trpc.dataVip.clientesDistribuicaoDiasSemVir.useQuery({ ...base, dataInicio, dataFim, colaboradorId }, { enabled });
+  // ── Queries por aba ──────────────────────────────────────────────────────
   const qChurn   = trpc.dataVip.clientesChurnRisco.useQuery(
     { ...base, dataInicio, dataFim, colaboradorId, statusFiltro: churnStatus, limit: 200 },
     { enabled: enabled && aba === "churn_risco" }

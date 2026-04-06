@@ -1629,11 +1629,14 @@ export async function getFaturamentoPorFaixaHoraria(extIds: number[], dataInicio
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** KPIs gerais do painel de clientes para um período */
-export async function getClientesKpis(extIds: number[], dataInicio: string, dataFim: string) {
+export async function getClientesKpis(extIds: number[], dataInicio: string, dataFim: string, colaboradorId?: number | null) {
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
   const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+  // Usa vp.colaborador (barbeiro que executou o serviço) em vez de v.usuario (caixa)
+  const colabJoin = colaboradorId ? `JOIN vendas_produtos vp_colab ON vp_colab.venda = v.id AND vp_colab.colaborador = ${Number(colaboradorId)}` : "";
+  const colabCond = colaboradorId ? `AND EXISTS (SELECT 1 FROM vendas_produtos vp_f WHERE vp_f.venda = v.id AND vp_f.colaborador = ${Number(colaboradorId)})` : "";
 
   // Total clientes únicos no período + novos (primeira visita na unidade)
   const rows = await queryExternal<{
@@ -1654,6 +1657,7 @@ export async function getClientesKpis(extIds: number[], dataInicio: string, data
       AND v.comanda_temp = 0
       AND v.status != 0
       AND v.cliente IS NOT NULL
+      ${colaboradorId ? `AND vp.colaborador = ${Number(colaboradorId)}` : ""}
   `, [dataInicio, dataFimExcl]);
 
   // Clientes novos = primeira visita nesta unidade no período
@@ -1667,6 +1671,7 @@ export async function getClientesKpis(extIds: number[], dataInicio: string, data
       AND v.comanda_temp = 0
       AND v.status != 0
       AND v.cliente IS NOT NULL
+      ${colabCond}
       AND v.cliente NOT IN (
         SELECT DISTINCT v2.cliente
         FROM vendas v2
@@ -1692,6 +1697,7 @@ export async function getClientesKpis(extIds: number[], dataInicio: string, data
         AND v.comanda_temp = 0
         AND v.status != 0
         AND v.cliente IS NOT NULL
+        ${colabCond}
         AND v.cliente NOT IN (
           SELECT DISTINCT v2.cliente
           FROM vendas v2
@@ -1727,6 +1733,7 @@ export async function getClientesKpis(extIds: number[], dataInicio: string, data
       AND v.comanda_temp = 0
       AND v.status != 0
       AND v.cliente IS NOT NULL
+      ${colabCond}
       AND v.cliente NOT IN (
         SELECT DISTINCT v3.cliente
         FROM vendas v3
@@ -1769,13 +1776,14 @@ export async function getClientesKpis(extIds: number[], dataInicio: string, data
  * - 1ª Vez: apenas 1 visita, última há ≤ 30d
  * Simplificação: usamos dias desde última visita na unidade
  */
-export async function getClientesDistribuicaoStatus(extIds: number[]) {
+export async function getClientesDistribuicaoStatus(extIds: number[], colaboradorId?: number | null) {
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `c.ultima_visita_unidade = ${extIds[0]}`
     : `c.ultima_visita_unidade IN (${extIds.join(",")})`;
   const unitCondV = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
+  const colabJoinV = colaboradorId ? `JOIN vendas_produtos vp_c ON vp_c.venda = v.id AND vp_c.colaborador = ${Number(colaboradorId)}` : "";
 
   const rows = await queryExternal<{
     status_label: string;
@@ -1796,6 +1804,7 @@ export async function getClientesDistribuicaoStatus(extIds: number[]) {
       SELECT v.cliente, COUNT(DISTINCT v.id) as total_visitas
       FROM vendas v
       JOIN usuarios uu ON v.usuario = uu.id
+      ${colabJoinV}
       WHERE ${unitCondV}
         AND v.comanda_temp = 0
         AND v.status != 0
@@ -1823,11 +1832,12 @@ export async function getClientesDistribuicaoStatus(extIds: number[]) {
 }
 
 /** Evolução mensal: clientes únicos e novos por mês no período */
-export async function getClientesEvolucaoMensal(extIds: number[], dataInicio: string, dataFim: string) {
+export async function getClientesEvolucaoMensal(extIds: number[], dataInicio: string, dataFim: string, colaboradorId?: number | null) {
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
   const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+  const colabJoin = colaboradorId ? `JOIN vendas_produtos vp_c ON vp_c.venda = v.id AND vp_c.colaborador = ${Number(colaboradorId)}` : "";
 
   const rows = await queryExternal<{
     ano: number;
@@ -1852,6 +1862,7 @@ export async function getClientesEvolucaoMensal(extIds: number[], dataInicio: st
       END) as novos
     FROM vendas v
     JOIN usuarios uu ON v.usuario = uu.id
+    ${colabJoin}
     WHERE ${unitCond}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
@@ -1870,11 +1881,12 @@ export async function getClientesEvolucaoMensal(extIds: number[], dataInicio: st
 }
 
 /** Distribuição por frequência de visitas no período */
-export async function getClientesDistribuicaoFrequencia(extIds: number[], dataInicio: string, dataFim: string) {
+export async function getClientesDistribuicaoFrequencia(extIds: number[], dataInicio: string, dataFim: string, colaboradorId?: number | null) {
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
   const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+  const colabJoin = colaboradorId ? `JOIN vendas_produtos vp_c ON vp_c.venda = v.id AND vp_c.colaborador = ${Number(colaboradorId)}` : "";
 
   const rows = await queryExternal<{ faixa: string; ordem: number; total: number }>(`
     SELECT
@@ -1912,6 +1924,7 @@ export async function getClientesDistribuicaoFrequencia(extIds: number[], dataIn
         DATEDIFF(NOW(), MAX(v.data_criacao)) as dias_desde_visita
       FROM vendas v
       JOIN usuarios uu ON v.usuario = uu.id
+      ${colabJoin}
       WHERE ${unitCond}
         AND v.data_criacao >= ?
         AND v.data_criacao < ?
@@ -1931,11 +1944,12 @@ export async function getClientesDistribuicaoFrequencia(extIds: number[], dataIn
 }
 
 /** Distribuição por dias sem vir (baseado na última visita atual dos clientes que visitaram no período) */
-export async function getClientesDistribuicaoDiasSemVir(extIds: number[], dataInicio: string, dataFim: string) {
+export async function getClientesDistribuicaoDiasSemVir(extIds: number[], dataInicio: string, dataFim: string, colaboradorId?: number | null) {
   const unitCond = extIds.length === 0 ? "1=1"
     : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
     : `uu.unidade IN (${extIds.join(",")})`;
   const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+  const colabJoin = colaboradorId ? `JOIN vendas_produtos vp_c ON vp_c.venda = v.id AND vp_c.colaborador = ${Number(colaboradorId)}` : "";
 
   const rows = await queryExternal<{ faixa: string; total: number }>(`
     SELECT
@@ -1951,6 +1965,7 @@ export async function getClientesDistribuicaoDiasSemVir(extIds: number[], dataIn
       SELECT v.cliente, MAX(v.data_criacao) as ultima_visita_periodo
       FROM vendas v
       JOIN usuarios uu ON v.usuario = uu.id
+      ${colabJoin}
       WHERE ${unitCond}
         AND v.data_criacao >= ?
         AND v.data_criacao < ?
