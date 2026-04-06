@@ -43,6 +43,8 @@ import {
   getClientesTopExpandido,
   getListaColaboradoresClientes,
   getClienteDetalhes,
+  getChurnSaudeBase,
+  getChurnPorBarbeiro,
 } from "../dataVipQueries";
 
 // Inicializa scheduler automático (08:00 BRT)
@@ -1953,4 +1955,32 @@ export const dataVipRouter = router({
       }
     }),
 
+
+  // ── Churn & Saúde da Base ────────────────────────────────────────────────────────────────
+  churnSaudeBase: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+      janelaDias: z.number().default(60),
+    }))
+    .query(async ({ input, ctx }) => {
+      const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+      return getChurnSaudeBase(extIds, input.dataInicio, input.dataFim, input.janelaDias);
+    }),
+
+  // ── Churn por Barbeiro ───────────────────────────────────────────────────────────────────────────
+  churnPorBarbeiro: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string(),
+      janelaDias: z.number().default(60),
+    }))
+    .query(async ({ input, ctx }) => {
+      const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+      return getChurnPorBarbeiro(extIds, input.dataInicio, input.dataFim, input.janelaDias);
+    }),
 });

@@ -1118,62 +1118,6 @@ export async function getRaioXVisaoGeral(extIds: number[]) {
 
 // ─── Churn por barbeiro ───────────────────────────────────────────────────────
 
-export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, dataFim: string) {
-  const unitCond = extIds.length === 0 ? "1=1"
-    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
-    : `uu.unidade IN (${extIds.join(",")})`;
-
-  return queryExternal<{
-    colaborador_id: number;
-    colaborador_nome: string;
-    total_clientes: number;
-    ativos: number;
-    em_risco: number;
-    perdidos: number;
-    one_shots: number;
-    media_visitas: number;
-    media_gasto: number;
-  }>(`
-    SELECT 
-      uu.id as colaborador_id,
-      uu.nome as colaborador_nome,
-      COUNT(DISTINCT vp.venda) as total_clientes,
-      COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 60 THEN v.cliente END) as ativos,
-      COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN v.cliente END) as em_risco,
-      COUNT(DISTINCT CASE WHEN DATEDIFF(NOW(), c.ultima_visita) > 90 THEN v.cliente END) as perdidos,
-      COUNT(DISTINCT CASE WHEN (
-        SELECT COUNT(*) FROM vendas v3 
-        JOIN usuarios u3 ON v3.usuario = u3.id 
-        WHERE v3.cliente = v.cliente 
-          AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u3.unidade = ${extIds[0]}` : `u3.unidade IN (${extIds.join(",")})`})
-          AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL AND v3.status != 0
-      ) = 1 THEN v.cliente END) as one_shots,
-      AVG((
-        SELECT COUNT(*) FROM vendas v4 
-        JOIN usuarios u4 ON v4.usuario = u4.id 
-        WHERE v4.cliente = v.cliente 
-          AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u4.unidade = ${extIds[0]}` : `u4.unidade IN (${extIds.join(",")})`})
-          AND v4.comanda_temp = 0 AND v4.cancelado_motivo IS NULL AND v4.status != 0
-      )) as media_visitas,
-      AVG(c.consumo) as media_gasto
-    FROM vendas v
-    JOIN usuarios uu ON v.usuario = uu.id
-    JOIN clientes c ON c.id = v.cliente
-    JOIN vendas_produtos vp ON vp.venda = v.id
-    WHERE ${unitCond}
-      AND uu.visivel_agenda != 'nenhuma'
-      AND v.data_criacao >= ?
-      AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
-      AND v.comanda_temp = 0
-      AND v.cancelado_motivo IS NULL
-      AND v.status != 0
-      AND v.cliente IS NOT NULL
-      AND v.cliente != 2
-    GROUP BY uu.id, uu.nome
-    HAVING total_clientes > 0
-    ORDER BY total_clientes DESC
-  `, [dataInicio, dataFim]);
-}
 
 // ─── Cadência de visitas ──────────────────────────────────────────────────────
 
@@ -2434,4 +2378,237 @@ export async function getClienteDetalhes(extIds: number[], clienteId: number) {
       valor: Number(r.valor),
     })),
   };
+}
+
+/**
+ * Churn & Saúde da Base
+ * - Base ativa: clientes que visitaram no período
+ * - Perdidos: clientes da base ativa que não voltaram após janelaDias
+ * - Churn %: perdidos / base ativa
+ * - Resgatados: clientes que não vieram antes do início do período mas voltaram no período
+ * - Tempo médio resgate: média de dias de ausência dos resgatados
+ * - Valor perdido estimado: perdidos * ticket médio da unidade no período
+ */
+export async function getChurnSaudeBase(extIds: number[], dataInicio: string, dataFim: string, janelaDias: number = 60) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+  const unitCond2 = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu2.unidade = ${extIds[0]}`
+    : `uu2.unidade IN (${extIds.join(",")})`;
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+
+  // Base ativa: clientes únicos no período
+  const rowsBase = await queryExternal<{ total: number; ticket_medio: number }>(`
+    SELECT COUNT(DISTINCT v.cliente) as total,
+           COALESCE(SUM(v.total) / COUNT(DISTINCT v.id), 0) as ticket_medio
+    FROM vendas v
+    JOIN usuarios uu ON v.usuario = uu.id
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+      AND v.cliente IS NOT NULL
+  `, [dataInicio, dataFimExcl]);
+
+  const baseAtiva = Number(rowsBase[0]?.total ?? 0);
+  const ticketMedio = Number(rowsBase[0]?.ticket_medio ?? 0);
+
+  // Perdidos: clientes da base ativa que não voltaram nos últimos janelaDias
+  const rowsPerdidos = await queryExternal<{ total: number }>(`
+    SELECT COUNT(*) as total
+    FROM (
+      SELECT v.cliente, MAX(v.data_criacao) as ultima_visita
+      FROM vendas v
+      JOIN usuarios uu ON v.usuario = uu.id
+      WHERE ${unitCond}
+        AND v.data_criacao >= ?
+        AND v.data_criacao < ?
+        AND v.comanda_temp = 0
+        AND v.status != 0
+        AND v.cliente IS NOT NULL
+      GROUP BY v.cliente
+      HAVING DATEDIFF(NOW(), MAX(v.data_criacao)) > ?
+    ) sub
+  `, [dataInicio, dataFimExcl, janelaDias]);
+
+  const perdidos = Number(rowsPerdidos[0]?.total ?? 0);
+
+  // Resgatados: clientes que voltaram no período após ausência > janelaDias
+  const rowsResgatados = await queryExternal<{ total: number; tempo_medio: number }>(`
+    SELECT COUNT(*) as total,
+           COALESCE(AVG(dias_ausencia), 0) as tempo_medio
+    FROM (
+      SELECT v.cliente,
+             DATEDIFF(MIN(v.data_criacao), MAX(v2.data_criacao)) as dias_ausencia
+      FROM vendas v
+      JOIN usuarios uu ON v.usuario = uu.id
+      JOIN vendas v2 ON v2.cliente = v.cliente
+      JOIN usuarios uu2 ON v2.usuario = uu2.id
+      WHERE ${unitCond}
+        AND v.data_criacao >= ?
+        AND v.data_criacao < ?
+        AND v.comanda_temp = 0
+        AND v.status != 0
+        AND v.cliente IS NOT NULL
+        AND ${unitCond2}
+        AND v2.data_criacao < ?
+        AND v2.comanda_temp = 0
+        AND v2.status != 0
+      GROUP BY v.cliente
+      HAVING DATEDIFF(MIN(v.data_criacao), MAX(v2.data_criacao)) > ?
+    ) sub
+  `, [dataInicio, dataFimExcl, dataInicio, janelaDias]);
+
+  const resgatados = Number(rowsResgatados[0]?.total ?? 0);
+  const tempoMedioResgate = Number(rowsResgatados[0]?.tempo_medio ?? 0);
+
+  return {
+    baseAtiva,
+    perdidos,
+    churnPct: baseAtiva > 0 ? (perdidos / baseAtiva) * 100 : 0,
+    resgatados,
+    tempoMedioResgate,
+    valorPerdidoEst: perdidos * ticketMedio,
+    ticketMedio,
+  };
+}
+
+/**
+ * Churn por Barbeiro
+ * Para cada barbeiro que atendeu no período:
+ * - Base ativa: clientes únicos atendidos por ele
+ * - Perdidos: clientes dele que não voltaram após janelaDias
+ * - Churn %: perdidos / base ativa
+ * - Exclusivos: % de clientes que só foram atendidos por ele no período
+ * - Compartilhados: % de clientes que também foram atendidos por outros
+ */
+export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, dataFim: string, janelaDias: number = 60) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+    : `uu.unidade IN (${extIds.join(",")})`;
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+
+  // Base ativa por barbeiro
+  const rowsBase = await queryExternal<{
+    colaborador_id: number;
+    colaborador_nome: string;
+    base_ativa: number;
+  }>(`
+    SELECT vp.colaborador as colaborador_id,
+           COALESCE(c.nome, CONCAT('Colaborador ', vp.colaborador)) as colaborador_nome,
+           COUNT(DISTINCT v.cliente) as base_ativa
+    FROM vendas_produtos vp
+    JOIN vendas v ON vp.venda = v.id
+    JOIN usuarios uu ON v.usuario = uu.id
+    LEFT JOIN colaboradores c ON vp.colaborador = c.id
+    WHERE ${unitCond}
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+      AND v.cliente IS NOT NULL
+      AND vp.colaborador IS NOT NULL
+    GROUP BY vp.colaborador, c.nome
+    ORDER BY base_ativa DESC
+  `, [dataInicio, dataFimExcl]);
+
+  if (rowsBase.length === 0) return [];
+
+  const results = [];
+
+  for (const row of rowsBase) {
+    const colabId = Number(row.colaborador_id);
+    const baseAtiva = Number(row.base_ativa);
+
+    // Perdidos: clientes deste barbeiro que não voltaram após janelaDias
+    const rowsPerd = await queryExternal<{ total: number }>(`
+      SELECT COUNT(*) as total
+      FROM (
+        SELECT v.cliente, MAX(v.data_criacao) as ultima_visita
+        FROM vendas_produtos vp
+        JOIN vendas v ON vp.venda = v.id
+        JOIN usuarios uu ON v.usuario = uu.id
+        WHERE ${unitCond}
+          AND vp.colaborador = ?
+          AND v.data_criacao >= ?
+          AND v.data_criacao < ?
+          AND v.comanda_temp = 0
+          AND v.status != 0
+          AND v.cliente IS NOT NULL
+        GROUP BY v.cliente
+        HAVING DATEDIFF(NOW(), MAX(v.data_criacao)) > ?
+      ) sub
+    `, [colabId, dataInicio, dataFimExcl, janelaDias]);
+
+    // Exclusivos: clientes atendidos SOMENTE por este barbeiro no período
+    const rowsExcl = await queryExternal<{ total: number }>(`
+      SELECT COUNT(*) as total
+      FROM (
+        SELECT v.cliente
+        FROM vendas_produtos vp
+        JOIN vendas v ON vp.venda = v.id
+        JOIN usuarios uu ON v.usuario = uu.id
+        WHERE ${unitCond}
+          AND vp.colaborador = ?
+          AND v.data_criacao >= ?
+          AND v.data_criacao < ?
+          AND v.comanda_temp = 0
+          AND v.status != 0
+          AND v.cliente IS NOT NULL
+        GROUP BY v.cliente
+        HAVING COUNT(DISTINCT vp.colaborador) = 1
+          AND MAX(vp.colaborador) = ?
+      ) sub
+    `, [colabId, dataInicio, dataFimExcl, colabId]);
+
+    // Clientes exclusivos deste barbeiro (só ele atendeu no período)
+    const rowsExclFinal = await queryExternal<{ total: number }>(`
+      SELECT COUNT(*) as total
+      FROM (
+        SELECT v.cliente
+        FROM vendas v
+        JOIN usuarios uu ON v.usuario = uu.id
+        WHERE ${unitCond}
+          AND v.data_criacao >= ?
+          AND v.data_criacao < ?
+          AND v.comanda_temp = 0
+          AND v.status != 0
+          AND v.cliente IS NOT NULL
+          AND v.cliente IN (
+            SELECT DISTINCT v2.cliente
+            FROM vendas_produtos vp2
+            JOIN vendas v2 ON vp2.venda = v2.id
+            JOIN usuarios uu2 ON v2.usuario = uu2.id
+            WHERE uu2.unidade IN (${extIds.length > 0 ? extIds.join(",") : "0"})
+              AND vp2.colaborador = ?
+              AND v2.data_criacao >= ?
+              AND v2.data_criacao < ?
+              AND v2.comanda_temp = 0
+              AND v2.status != 0
+          )
+        GROUP BY v.cliente
+        HAVING COUNT(DISTINCT (
+          SELECT vp3.colaborador FROM vendas_produtos vp3 WHERE vp3.venda = v.id LIMIT 1
+        )) = 1
+      ) sub
+    `, [dataInicio, dataFimExcl, colabId, dataInicio, dataFimExcl]);
+
+    const perdidos = Number(rowsPerd[0]?.total ?? 0);
+    const exclusivos = Number(rowsExcl[0]?.total ?? 0);
+    const exclusivosPct = baseAtiva > 0 ? (exclusivos / baseAtiva) * 100 : 0;
+
+    results.push({
+      colaboradorId: colabId,
+      colaboradorNome: String(row.colaborador_nome),
+      baseAtiva,
+      perdidos,
+      churnPct: baseAtiva > 0 ? (perdidos / baseAtiva) * 100 : 0,
+      exclusivosPct,
+      compartilhadosPct: 100 - exclusivosPct,
+    });
+  }
+
+  return results;
 }

@@ -201,6 +201,7 @@ export default function ClientesPage() {
   const [showFreqAnalise, setShowFreqAnalise] = useState(false);
   const [showDiasAnalise, setShowDiasAnalise] = useState(false);
   const [showStatusAnalise, setShowStatusAnalise] = useState(false);
+  const [janelaDias, setJanelaDias] = useState<30 | 60 | 90>(60);
   const [whatsappModal, setWhatsappModal] = useState(false);
   const [whatsappMsg, setWhatsappMsg] = useState("");
 
@@ -237,6 +238,14 @@ export default function ClientesPage() {
   const qDetalhe = trpc.dataVip.clienteDetalhes.useQuery(
     { ...base, clienteId: clienteDetalhesId ?? 0 },
     { enabled: enabled && clienteDetalhesId !== null }
+  );
+  const qChurnSaude = trpc.dataVip.churnSaudeBase.useQuery(
+    { ...base, dataInicio, dataFim, janelaDias },
+    { enabled: enabled && aba === "churn_risco" }
+  );
+  const qChurnBarbeiro = trpc.dataVip.churnPorBarbeiro.useQuery(
+    { ...base, dataInicio, dataFim, janelaDias },
+    { enabled: enabled && aba === "churn_risco" }
   );
 
   // ── Dados derivados ─────────────────────────────────────────────────────────────────────────────────────
@@ -769,8 +778,170 @@ export default function ClientesPage() {
         </>
       )}
 
+
+      {/* ─── Churn & Saúde da Base ──────────────────────────────────────────── */}
+      {aba === "churn_risco" && (
+        <div className="space-y-4">
+          {/* Seletor de janela */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground font-medium">Janela:</span>
+            {([30, 60, 90] as const).map(j => (
+              <button
+                key={j}
+                onClick={() => setJanelaDias(j)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  janelaDias === j ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:bg-muted/50"
+                }`}
+              >
+                {j}d
+              </button>
+            ))}
+          </div>
+
+          {/* KPIs de Churn & Saúde da Base */}
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Churn & Saúde da Base</CardTitle>
+                <span className="text-xs text-muted-foreground">Janela {janelaDias}d</span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {qChurnSaude.isLoading ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
+                </div>
+              ) : qChurnSaude.data ? (() => {
+                const cs = qChurnSaude.data;
+                const churnPct = cs.churnPct;
+                const churnCor = churnPct >= 20 ? "#ef4444" : churnPct >= 10 ? "#f97316" : "#22c55e";
+                const churnLabel = churnPct >= 20 ? "Crítico" : churnPct >= 10 ? "Atenção" : "Saudável";
+                const kpis = [
+                  { label: "BASE ATIVA", valor: fmtNum(cs.baseAtiva), sub: "Clientes no período", cor: "#3b82f6" },
+                  { label: "PERDIDOS", valor: fmtNum(cs.perdidos), sub: `Sem retorno há >${janelaDias}d`, cor: "#ef4444" },
+                  { label: "CHURN %", valor: `${churnPct.toFixed(1)}%`, sub: churnLabel, cor: churnCor, barra: true, pct: churnPct },
+                  { label: "RESGATADOS", valor: fmtNum(cs.resgatados), sub: "Voltaram após ausência", cor: "#22c55e" },
+                  { label: "TEMPO MÉD. RESGATE", valor: `${cs.tempoMedioResgate.toFixed(1)}d`, sub: "Dias de ausência", cor: "#a855f7" },
+                  { label: "VALOR PERDIDO EST.", valor: fmtMoedaCompact(cs.valorPerdidoEst), sub: "Perdidos × ticket médio", cor: "#f97316" },
+                ];
+                return (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                      {kpis.map((k, i) => (
+                        <div key={i} className="rounded-xl border border-border bg-card/50 p-4 space-y-1" style={{ borderColor: `${k.cor}30` }}>
+                          <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">{k.label}</p>
+                          <p className="text-2xl font-bold" style={{ color: k.cor }}>{k.valor}</p>
+                          {k.barra && (
+                            <div className="w-full h-1.5 bg-muted/30 rounded-full overflow-hidden mt-1">
+                              <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(k.pct!, 100)}%`, backgroundColor: k.cor }} />
+                            </div>
+                          )}
+                          <p className="text-[11px] text-muted-foreground">{k.sub}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Análise automática */}
+                    <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-2">
+                      <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                        Análise Automática
+                        <span className="text-muted-foreground text-xs font-normal">(janela {janelaDias}d)</span>
+                      </p>
+                      {(() => {
+                        const linhas: { emoji: string; texto: string }[] = [];
+                        if (churnPct >= 20) {
+                          linhas.push({ emoji: "🚨", texto: `Churn de ${churnPct.toFixed(1)}% — crítico! Prioridade máxima: entender por que ${fmtNum(cs.perdidos)} clientes saíram. Valor perdido estimado: ${fmtMoeda(cs.valorPerdidoEst)}. Ações urgentes: contato com perdidos recentes, revisão de qualidade e precificação.` });
+                        } else if (churnPct >= 10) {
+                          linhas.push({ emoji: "⚠️", texto: `Churn de ${churnPct.toFixed(1)}% — atenção. ${fmtNum(cs.perdidos)} clientes sem retorno há mais de ${janelaDias} dias. Valor perdido estimado: ${fmtMoeda(cs.valorPerdidoEst)}.` });
+                        } else {
+                          linhas.push({ emoji: "✅", texto: `Churn de ${churnPct.toFixed(1)}% — saudável. ${fmtNum(cs.perdidos)} clientes sem retorno há mais de ${janelaDias} dias.` });
+                        }
+                        if (cs.resgatados > 0) {
+                          linhas.push({ emoji: "✅", texto: `Ponto positivo: ${fmtNum(cs.resgatados)} clientes foram resgatados (tempo médio de ausência: ${cs.tempoMedioResgate.toFixed(1)} dias).` });
+                        }
+                        return linhas.map((l, i) => (
+                          <p key={i} className="text-sm text-muted-foreground leading-relaxed">
+                            <span className="mr-1.5">{l.emoji}</span>{l.texto}
+                          </p>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                );
+              })() : null}
+            </CardContent>
+          </Card>
+
+          {/* Churn por Barbeiro */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Churn por Barbeiro</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)} · Janela {janelaDias}d
+              </p>
+            </CardHeader>
+            <CardContent>
+              {qChurnBarbeiro.isLoading ? (
+                <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+              ) : (qChurnBarbeiro.data ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Nenhum dado disponível para o período.</p>
+              ) : (
+                <div className="space-y-0">
+                  {/* Cabeçalho */}
+                  <div className="grid grid-cols-[1fr_100px_80px_130px_100px_100px_100px] gap-2 px-3 py-2 text-[11px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50">
+                    <span>Barbeiro</span>
+                    <span className="text-right">Base ativa</span>
+                    <span className="text-right">Perdidos</span>
+                    <span>Churn %</span>
+                    <span className="text-right">Exclusivos</span>
+                    <span className="text-right">Compartilhados</span>
+                    <span className="text-right">Ações</span>
+                  </div>
+                  {(qChurnBarbeiro.data ?? []).map((row, i) => {
+                    const isAlto = row.churnPct >= 15;
+                    const churnCor = row.churnPct >= 20 ? "#ef4444" : row.churnPct >= 15 ? "#f97316" : "#22c55e";
+                    return (
+                      <div
+                        key={i}
+                        className={`grid grid-cols-[1fr_100px_80px_130px_100px_100px_100px] gap-2 px-3 py-3 items-center border-b border-border/30 hover:bg-muted/20 transition-colors ${isAlto ? "bg-red-500/5" : ""}`}
+                      >
+                        <span className={`text-sm font-medium ${isAlto ? "text-red-400" : "text-foreground"}`}>{row.colaboradorNome}</span>
+                        <span className="text-sm text-right text-muted-foreground underline decoration-dotted">{fmtNum(row.baseAtiva)}</span>
+                        <span className={`text-sm text-right font-semibold ${row.perdidos > 0 ? "text-red-400" : "text-muted-foreground"}`}>{fmtNum(row.perdidos)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold" style={{ color: churnCor }}>{row.churnPct.toFixed(1)}%</span>
+                          <div className="flex-1 h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${Math.min(row.churnPct * 2, 100)}%`, backgroundColor: churnCor }} />
+                          </div>
+                        </div>
+                        <span className="text-sm text-right text-muted-foreground">{row.exclusivosPct.toFixed(1)}%</span>
+                        <span className="text-sm text-right text-muted-foreground">{row.compartilhadosPct.toFixed(1)}%</span>
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => { setColaboradorId(row.colaboradorId); setAba("visao_geral"); }}
+                            className="text-xs text-primary hover:underline font-medium"
+                          >
+                            Ver carteira
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Legenda */}
+                  <div className="mt-4 p-3 rounded-lg bg-muted/20 border border-border/40 text-xs text-muted-foreground space-y-1">
+                    <p className="font-semibold text-foreground">📋 Como interpretar</p>
+                    <p><strong>Exclusivos:</strong> % dos clientes ativos que só são atendidos por esse barbeiro. Alto = carteira fiel.</p>
+                    <p><strong>Compartilhados:</strong> % dos clientes que também são atendidos por outros barbeiros.</p>
+                    <p><strong>Linhas em vermelho:</strong> barbeiros com churn acima de 15% — priorizar conversa e plano de ação.</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* ═══════════════════════════════════════════════════════════════════ */}
-      {/* ABA: CHURN & RISCO                                                 */}
+      {/* ABA: CHURN & RISCO - TABELA CLIENTES                               */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {aba === "churn_risco" && (
         <Card>
