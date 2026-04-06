@@ -15,7 +15,7 @@ const COLORS = { satisfied: '#22c55e', neutral: '#f59e0b', unsatisfied: '#ef4444
 
 export default function CamRelatoriosPage() {
   const { selectedUnit } = useApp();
-  const unitId = selectedUnit?.orgId;
+  const unitId = selectedUnit?.id;
   const today = new Date().toISOString().slice(0, 10);
   const thirtyDaysAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.toISOString().slice(0, 10); })();
   const [startDate, setStartDate] = useState(thirtyDaysAgo);

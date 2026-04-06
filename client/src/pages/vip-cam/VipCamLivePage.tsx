@@ -25,7 +25,7 @@ interface DetectionEvent {
 
 export default function VipCamLivePage() {
   const { selectedUnit } = useApp();
-  const unitId = selectedUnit?.orgId ?? 0;
+  const unitId = selectedUnit?.id ?? 0;
 
   const [recentDetections, setRecentDetections] = useState<DetectionEvent[]>([]);
   const [sessionStats, setSessionStats] = useState({

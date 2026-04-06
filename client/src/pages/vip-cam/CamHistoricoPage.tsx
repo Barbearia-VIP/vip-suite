@@ -14,7 +14,7 @@ import { SATISFACTION_LABELS, SATISFACTION_COLORS, SATISFACTION_EMOJIS, Satisfac
 
 export default function CamHistoricoPage() {
   const { selectedUnit } = useApp();
-  const unitId = selectedUnit?.orgId;
+  const unitId = selectedUnit?.id;
   const [page, setPage] = useState(1);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');

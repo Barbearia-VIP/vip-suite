@@ -18,7 +18,7 @@ import { toast } from 'sonner';
 
 export default function CamConfigPage() {
   const { selectedUnit } = useApp();
-  const unitId = selectedUnit?.orgId ?? 0;
+  const unitId = selectedUnit?.id ?? 0;
 
   const [cameraType, setCameraType] = useState<'usb' | 'ip'>('usb');
   const [rtspUrl, setRtspUrl] = useState('');
