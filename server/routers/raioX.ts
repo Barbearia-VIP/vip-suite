@@ -2044,4 +2044,318 @@ export const raioXRouter = router({
         },
       };
     }),
+
+  // ── Routing (segmentação de clientes por barbeiro) ──────────────────────────────────────
+  routing: protectedProcedure
+    .input(baseInput)
+    .query(async ({ ctx, input }) => {
+      const { extIds } = await resolveExternalIds(
+        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+      );
+      if (extIds.length === 0) return { kpis: null, barbeiros: [], segmentosGeral: null, evolucao: [] };
+
+      // Filtro de unidade via JOIN usuarios (a tabela vendas não tem coluna unidade)
+      const unitIn = extIds.length === 1 ? `uu.unidade = ${extIds[0]}` : `uu.unidade IN (${extIds.join(",")})`;
+      const unitIn2 = extIds.length === 1 ? `uu2.unidade = ${extIds[0]}` : `uu2.unidade IN (${extIds.join(",")})`;
+      const unitCondU = extIds.length === 1 ? `uu.unidade = ${extIds[0]}` : `uu.unidade IN (${extIds.join(",")})`;
+
+      const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
+      const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
+      // Janela de atividade: 60 dias (cliente ativo = visitou nos últimos 60 dias)
+      const janelaAtividade = 60;
+
+      // ── ETAPA 1: IDs dos clientes que visitaram no período (query rápida) ───────────
+      const clientesPeriodo = await queryExternal<{ cliente_id: number }>(`
+        SELECT DISTINCT v.cliente as cliente_id
+        FROM vendas v
+        JOIN usuarios uu ON uu.id = v.usuario
+        WHERE ${unitIn}
+          AND DATE(v.data_criacao) >= '${dataInicio}'
+          AND DATE(v.data_criacao) <= '${dataFim}'
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.cliente IS NOT NULL AND v.cliente != 2
+      `);
+
+      if (clientesPeriodo.length === 0) {
+        return { kpis: null, barbeiros: [], segmentosGeral: null, evolucao: [] };
+      }
+
+      // Limitar a 2000 clientes para evitar timeout (pegar os mais recentes)
+      const clienteIds = clientesPeriodo.map(r => Number(r.cliente_id)).slice(0, 2000);
+      const clienteIdsStr = clienteIds.join(",");
+
+      // ── ETAPA 2A: Histórico agregado por cliente (sem subquery IN) ──────────────
+      const clientesRows = await queryExternal<{
+        cliente_id: number;
+        total_visitas_hist: number;
+        barbeiros_distintos: number;
+        ultima_visita: string;
+        dias_desde_ultima: number;
+        primeira_visita_hist: string;
+      }>(`
+        SELECT
+          v.cliente as cliente_id,
+          COUNT(v.id) as total_visitas_hist,
+          COUNT(DISTINCT v.usuario) as barbeiros_distintos,
+          MAX(v.data_criacao) as ultima_visita,
+          DATEDIFF(NOW(), MAX(v.data_criacao)) as dias_desde_ultima,
+          MIN(v.data_criacao) as primeira_visita_hist
+        FROM vendas v
+        WHERE v.cliente IN (${clienteIdsStr})
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.cliente IS NOT NULL AND v.cliente != 2
+        GROUP BY v.cliente
+      `);
+
+      // ── ETAPA 2B: Barbeiro principal e último barbeiro por cliente ──────────────
+      const barbeirosPorCliente = await queryExternal<{
+        cliente_id: number;
+        ultimo_barbeiro_id: number;
+        ultimo_barbeiro_nome: string;
+        barbeiro_principal_id: number;
+        barbeiro_principal_nome: string;
+      }>(`
+        SELECT
+          t.cliente_id,
+          t.ultimo_barbeiro_id,
+          uu_ult.nome as ultimo_barbeiro_nome,
+          t.barbeiro_principal_id,
+          uu_pri.nome as barbeiro_principal_nome
+        FROM (
+          SELECT
+            v.cliente as cliente_id,
+            SUBSTRING_INDEX(GROUP_CONCAT(v.usuario ORDER BY v.data_criacao DESC), ',', 1) as ultimo_barbeiro_id,
+            SUBSTRING_INDEX(
+              SUBSTRING_INDEX(GROUP_CONCAT(v.usuario ORDER BY cnt_barb DESC, v.usuario ASC), ',', 1),
+              ',', -1
+            ) as barbeiro_principal_id
+          FROM vendas v
+          JOIN (
+            SELECT vi.cliente, vi.usuario, COUNT(*) as cnt_barb
+            FROM vendas vi
+            WHERE vi.cliente IN (${clienteIdsStr})
+              AND vi.comanda_temp = 0 AND vi.cancelado_motivo IS NULL AND vi.status != 0
+              AND vi.cliente IS NOT NULL AND vi.cliente != 2
+            GROUP BY vi.cliente, vi.usuario
+          ) cnt ON cnt.cliente = v.cliente AND cnt.usuario = v.usuario
+          WHERE v.cliente IN (${clienteIdsStr})
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          GROUP BY v.cliente
+        ) t
+        LEFT JOIN usuarios uu_ult ON uu_ult.id = t.ultimo_barbeiro_id
+        LEFT JOIN usuarios uu_pri ON uu_pri.id = t.barbeiro_principal_id
+      `);
+
+      // Mapa de barbeiro por cliente
+      const barbMapByCliente = new Map(barbeirosPorCliente.map(b => [Number(b.cliente_id), b]));
+
+      // ── 3. Busca lista de barbeiros ativos ─────────────────────────────────────────────
+      const barbeirosList = await queryExternal<{ id: number; nome: string }>(`
+        SELECT DISTINCT uu.id, uu.nome
+        FROM usuarios uu
+        WHERE ${unitCondU}
+          AND uu.visivel_agenda != 'nenhuma'
+          AND uu.status = 1
+        ORDER BY uu.nome
+      `);
+
+      // ── 4. Classifica cada cliente em um segmento ─────────────────────────────
+      type Segmento = "fiel" | "exclusivo" | "aguardando" | "nao_voltou" | "convertendo" | "saindo" | "com_outro";
+
+      interface ClienteClassificado {
+        clienteId: number;
+        barbeiroId: number;
+        barbeiroNome: string;
+        segmento: Segmento;
+        ativo: boolean;
+        diasDesdeUltima: number;
+        totalVisitas: number;
+        barbeirosDistintos: number;
+      }
+
+      const classificados: ClienteClassificado[] = clientesRows.map(r => {
+        const dias = Number(r.dias_desde_ultima) || 0;
+        const visitas = Number(r.total_visitas_hist);
+        const distintos = Number(r.barbeiros_distintos);
+        const ativo = dias <= janelaAtividade;
+        const barbInfo = barbMapByCliente.get(Number(r.cliente_id));
+        const barbeiroId = Number(barbInfo?.barbeiro_principal_id) || 0;
+        const barbeiroNome = barbInfo?.barbeiro_principal_nome || "Desconhecido";
+        const ultimoBarbeiroId = Number(barbInfo?.ultimo_barbeiro_id) || 0;
+
+        let segmento: Segmento;
+        if (distintos === 1) {
+          if (visitas >= 3) segmento = "fiel";
+          else if (visitas === 2) segmento = "exclusivo";
+          else if (dias <= 45) segmento = "aguardando";
+          else segmento = "nao_voltou";
+        } else {
+          if (visitas === 1) segmento = "com_outro";
+          else if (ultimoBarbeiroId === barbeiroId) segmento = "convertendo";
+          else segmento = "saindo";
+        }
+
+        return { clienteId: Number(r.cliente_id), barbeiroId, barbeiroNome, segmento, ativo, diasDesdeUltima: dias, totalVisitas: visitas, barbeirosDistintos: distintos };
+      });
+
+      // ── 4. KPIs globais ───────────────────────────────────────────────────────
+      const totalClientes = classificados.length;
+      const so1Barbeiro = classificados.filter(c => c.barbeirosDistintos === 1).length;
+      const multiBarbeiro = classificados.filter(c => c.barbeirosDistintos > 1).length;
+      const voltaram2x = classificados.filter(c => c.totalVisitas >= 2).length;
+      const perdidos = classificados.filter(c => !c.ativo).length;
+
+      // Média de barbeiros por cliente
+      const mediaBarb = totalClientes > 0
+        ? Math.round((classificados.reduce((s, c) => s + c.barbeirosDistintos, 0) / totalClientes) * 100) / 100
+        : 0;
+
+      // ── 5. Agrupa por barbeiro ─────────────────────────────────────────────────
+      const porBarbeiro = new Map<number, {
+        id: number; nome: string;
+        ativos: number; perdidos: number;
+        so1Barb: number; multiBarb: number;
+        fiel: number; exclusivo: number; aguardando: number; naoVoltou: number;
+        convertendo: number; saindo: number; comOutro: number;
+      }>();
+
+      // Inicializa com todos os barbeiros ativos
+      for (const b of barbeirosList) {
+        porBarbeiro.set(Number(b.id), {
+          id: Number(b.id), nome: b.nome,
+          ativos: 0, perdidos: 0,
+          so1Barb: 0, multiBarb: 0,
+          fiel: 0, exclusivo: 0, aguardando: 0, naoVoltou: 0,
+          convertendo: 0, saindo: 0, comOutro: 0,
+        });
+      }
+
+      for (const c of classificados) {
+        let entry = porBarbeiro.get(c.barbeiroId);
+        if (!entry) {
+          entry = { id: c.barbeiroId, nome: c.barbeiroNome, ativos: 0, perdidos: 0, so1Barb: 0, multiBarb: 0, fiel: 0, exclusivo: 0, aguardando: 0, naoVoltou: 0, convertendo: 0, saindo: 0, comOutro: 0 };
+          porBarbeiro.set(c.barbeiroId, entry);
+        }
+        if (c.ativo) entry.ativos++; else entry.perdidos++;
+        if (c.barbeirosDistintos === 1) entry.so1Barb++; else entry.multiBarb++;
+        if (c.segmento === "fiel") entry.fiel++;
+        else if (c.segmento === "exclusivo") entry.exclusivo++;
+        else if (c.segmento === "aguardando") entry.aguardando++;
+        else if (c.segmento === "nao_voltou") entry.naoVoltou++;
+        else if (c.segmento === "convertendo") entry.convertendo++;
+        else if (c.segmento === "saindo") entry.saindo++;
+        else if (c.segmento === "com_outro") entry.comOutro++;
+      }
+
+      const barbeirosFinal = Array.from(porBarbeiro.values())
+        .filter(b => (b.ativos + b.perdidos) > 0)
+        .sort((a, b) => (b.ativos + b.perdidos) - (a.ativos + a.perdidos))
+        .map(b => {
+          const total = b.ativos + b.perdidos || 1;
+          const pctPerdidos = Math.round((b.perdidos / total) * 100);
+          return {
+            ...b,
+            total: b.ativos + b.perdidos,
+            pctPerdidos,
+            pctSo1Barb: Math.round((b.so1Barb / total) * 100),
+            pctMultiBarb: Math.round((b.multiBarb / total) * 100),
+            pctFiel: Math.round((b.fiel / total) * 100),
+            pctExclusivo: Math.round((b.exclusivo / total) * 100),
+            pctAguardando: Math.round((b.aguardando / total) * 100),
+            pctNaoVoltou: Math.round((b.naoVoltou / total) * 100),
+            pctConvertendo: Math.round((b.convertendo / total) * 100),
+            pctSaindo: Math.round((b.saindo / total) * 100),
+            pctComOutro: Math.round((b.comOutro / total) * 100),
+          };
+        });
+
+      // ── 6. Segmentos — Visão Geral ───────────────────────────────────────────
+      const segFiel = classificados.filter(c => c.segmento === "fiel").length;
+      const segExclusivo = classificados.filter(c => c.segmento === "exclusivo").length;
+      const segConvertendo = classificados.filter(c => c.segmento === "convertendo").length;
+      const segSaindo = classificados.filter(c => c.segmento === "saindo").length;
+      const segAguardando = classificados.filter(c => c.segmento === "aguardando").length;
+      const segNaoVoltou = classificados.filter(c => c.segmento === "nao_voltou").length;
+      const segComOutro = classificados.filter(c => c.segmento === "com_outro").length;
+
+      // ── 7. Evolução mensal (novos, rec. fiéis, rec. exclusivos, rec. rotativos, total) ──
+      const evolucaoRows = await queryExternal<{
+        mes: string;
+        novos: number;
+        rec_fieis: number;
+        rec_exclusivos: number;
+        rec_rotativos: number;
+        total_atendimentos: number;
+        total_clientes: number;
+      }>(`
+        SELECT
+          DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
+          COUNT(DISTINCT CASE WHEN hist2.primeira_visita_geral >= DATE_FORMAT(v.data_criacao, '%Y-%m-01') THEN v.cliente END) as novos,
+          COUNT(DISTINCT CASE WHEN hist2.total_visitas_hist >= 3 AND hist2.barbeiros_distintos = 1 THEN v.cliente END) as rec_fieis,
+          COUNT(DISTINCT CASE WHEN hist2.total_visitas_hist = 2 AND hist2.barbeiros_distintos = 1 THEN v.cliente END) as rec_exclusivos,
+          COUNT(DISTINCT CASE WHEN hist2.barbeiros_distintos > 1 THEN v.cliente END) as rec_rotativos,
+          COUNT(v.id) as total_atendimentos,
+          COUNT(DISTINCT v.cliente) as total_clientes
+        FROM vendas v
+        JOIN (
+          SELECT
+            v2.cliente,
+            COUNT(v2.id) as total_visitas_hist,
+            COUNT(DISTINCT v2.usuario) as barbeiros_distintos,
+            MIN(v2.data_criacao) as primeira_visita_geral
+          FROM vendas v2
+          JOIN usuarios uu2 ON uu2.id = v2.usuario
+          WHERE v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
+            AND v2.cliente IS NOT NULL AND v2.cliente != 2
+            AND ${unitIn2}
+          GROUP BY v2.cliente
+        ) hist2 ON hist2.cliente = v.cliente
+        JOIN usuarios uu ON uu.id = v.usuario
+        WHERE ${unitIn}
+          AND DATE(v.data_criacao) >= DATE_SUB('${dataInicio}', INTERVAL 11 MONTH)
+          AND DATE(v.data_criacao) <= '${dataFim}'
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.cliente IS NOT NULL AND v.cliente != 2
+        GROUP BY DATE_FORMAT(v.data_criacao, '%Y-%m')
+        ORDER BY mes ASC
+      `);
+
+      return {
+        kpis: {
+          totalClientes,
+          so1Barbeiro,
+          multiBarbeiro,
+          voltaram2x,
+          mediaBarb,
+          perdidos,
+          pctSo1Barbeiro: totalClientes > 0 ? Math.round((so1Barbeiro / totalClientes) * 100) : 0,
+          pctMultiBarbeiro: totalClientes > 0 ? Math.round((multiBarbeiro / totalClientes) * 100) : 0,
+          pctVoltaram2x: totalClientes > 0 ? Math.round((voltaram2x / totalClientes) * 100) : 0,
+          pctPerdidos: totalClientes > 0 ? Math.round((perdidos / totalClientes) * 100) : 0,
+          janelaAtividade,
+        },
+        barbeiros: barbeirosFinal,
+        segmentosGeral: {
+          fiel: segFiel, exclusivo: segExclusivo, convertendo: segConvertendo,
+          saindo: segSaindo, aguardando: segAguardando, naoVoltou: segNaoVoltou,
+          comOutro: segComOutro,
+          pctFiel: totalClientes > 0 ? Math.round((segFiel / totalClientes) * 100) : 0,
+          pctExclusivo: totalClientes > 0 ? Math.round((segExclusivo / totalClientes) * 100) : 0,
+          pctConvertendo: totalClientes > 0 ? Math.round((segConvertendo / totalClientes) * 100) : 0,
+          pctSaindo: totalClientes > 0 ? Math.round((segSaindo / totalClientes) * 100) : 0,
+          pctAguardando: totalClientes > 0 ? Math.round((segAguardando / totalClientes) * 100) : 0,
+          pctNaoVoltou: totalClientes > 0 ? Math.round((segNaoVoltou / totalClientes) * 100) : 0,
+          pctComOutro: totalClientes > 0 ? Math.round((segComOutro / totalClientes) * 100) : 0,
+        },
+        evolucao: evolucaoRows.map(r => ({
+          mes: r.mes,
+          novos: Number(r.novos),
+          recFieis: Number(r.rec_fieis),
+          recExclusivos: Number(r.rec_exclusivos),
+          recRotativos: Number(r.rec_rotativos),
+          totalAtendimentos: Number(r.total_atendimentos),
+          totalClientes: Number(r.total_clientes),
+        })),
+      };
+    }),
 });
