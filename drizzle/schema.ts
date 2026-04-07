@@ -1302,3 +1302,27 @@ export const clienteContatos = mysqlTable("cliente_contatos", {
 
 export type ClienteContato = typeof clienteContatos.$inferSelect;
 export type InsertClienteContato = typeof clienteContatos.$inferInsert;
+
+// ─────────────────────────────────────────────
+// DATA VIP — Faixas de comissão progressiva por meta
+// Cada faixa define: ao atingir valorMinServicos (R$) no período,
+// o barbeiro passa a ganhar pctComissao% sobre todos os serviços.
+// ─────────────────────────────────────────────
+export const metaFaixas = mysqlTable("meta_faixas", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),              // FK → units.id
+  orgId: int("orgId").notNull(),                // FK → organizations.id
+  ordem: int("ordem").notNull().default(0),     // Ordem de exibição (0 = faixa base)
+  valorMinServicos: decimal("valorMinServicos", { precision: 12, scale: 2 }).notNull().default("0"), // Valor mínimo de serviços para ativar a faixa
+  pctComissao: decimal("pctComissao", { precision: 5, scale: 2 }).notNull(),   // % de comissão ao atingir a faixa
+  descricao: varchar("descricao", { length: 255 }),                             // Label opcional (ex: "Meta Bronze")
+  ativo: int("ativo").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_meta_faixas_unit").on(t.unitId),
+  index("idx_meta_faixas_org").on(t.orgId),
+]);
+
+export type MetaFaixa = typeof metaFaixas.$inferSelect;
+export type InsertMetaFaixa = typeof metaFaixas.$inferInsert;

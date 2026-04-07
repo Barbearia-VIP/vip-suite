@@ -944,3 +944,10 @@
 
 - [x] Verificar token salvo no banco: token IGAA (curta duração) ao invés de EAA (longa duração)
 - [x] Melhorar testConnection: detecta token IGAA com instruções claras, limpa aspas extras, mensagens de erro enriquecidas
+
+## Metas Progressivas por Faixas (2026-04-07)
+
+- [x] Criar tabela meta_faixas no banco (unitId, faixaMinServicos, pctComissao, pctBonus, ordem)
+- [x] Criar endpoints tRPC: metaFaixasList, metaFaixaSave, metaFaixasSaveAll, metaFaixaDelete
+- [x] Redesenhar UI da página Metas com tabela editável de faixas + simulador de ganhos
+- [x] Integrar cálculo de meta na página Comissões (faixa atingida, próxima faixa e comissão efetiva)

@@ -8,7 +8,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
-import { sql } from "drizzle-orm";
+import { sql, eq, and, asc } from "drizzle-orm";
+import { metaFaixas } from "../../drizzle/schema";
 import { getSyncStatus, getAllSyncStatuses, startAutoSyncScheduler } from "../vipDataSync";
 import {
   getDashboardKpis,
@@ -2013,7 +2014,7 @@ export const dataVipRouter = router({
       return getChurnSaudeBase(extIds, input.dataInicio, input.dataFim, input.janelaDias, input.colaboradorId);
     }),
 
-  // ── Churn por Barbeiro ───────────────────────────────────────────────────────────────────────────
+  // ── Churn por Barbeiro ───────────────────────────────────────────────────────────────────────────────────────
   churnPorBarbeiro: protectedProcedure
     .input(z.object({
       orgId: z.number().optional(),
@@ -2026,5 +2027,123 @@ export const dataVipRouter = router({
     .query(async ({ input, ctx }) => {
       const { extIds } = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
       return getChurnPorBarbeiro(extIds, input.dataInicio, input.dataFim, input.janelaDias, input.colaboradorId);
+    }),
+
+  // ── Meta Faixas (comissão progressiva) ──────────────────────────────────────────────────────────────────
+  // Lista todas as faixas de uma unidade
+  metaFaixasList: protectedProcedure
+    .input(z.object({
+      orgId: z.number().optional(),
+      unitId: z.number().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { orgFilter, unitFilter } = await resolveUnitFilter(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+      const conditions = [];
+      if (unitFilter) conditions.push(eq(metaFaixas.unitId, unitFilter));
+      else if (orgFilter) conditions.push(eq(metaFaixas.orgId, orgFilter));
+      const rows = conditions.length > 0
+        ? await db.select().from(metaFaixas).where(and(...conditions)).orderBy(asc(metaFaixas.ordem))
+        : await db.select().from(metaFaixas).orderBy(asc(metaFaixas.ordem));
+      return rows.map(r => ({
+        id: r.id,
+        unitId: r.unitId,
+        orgId: r.orgId,
+        ordem: r.ordem,
+        valorMinServicos: Number(r.valorMinServicos),
+        pctComissao: Number(r.pctComissao),
+        descricao: r.descricao ?? "",
+        ativo: r.ativo === 1,
+      }));
+    }),
+
+  // Salva (cria ou atualiza) uma faixa
+  metaFaixaSave: protectedProcedure
+    .input(z.object({
+      id: z.number().optional(),            // undefined = criar novo
+      unitId: z.number(),
+      orgId: z.number(),
+      ordem: z.number().default(0),
+      valorMinServicos: z.number().min(0),
+      pctComissao: z.number().min(0).max(100),
+      descricao: z.string().optional(),
+      ativo: z.boolean().default(true),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.id) {
+        await db.update(metaFaixas).set({
+          ordem: input.ordem,
+          valorMinServicos: String(input.valorMinServicos),
+          pctComissao: String(input.pctComissao),
+          descricao: input.descricao ?? null,
+          ativo: input.ativo ? 1 : 0,
+        }).where(eq(metaFaixas.id, input.id));
+        return { id: input.id };
+      } else {
+        const [result] = await db.insert(metaFaixas).values({
+          unitId: input.unitId,
+          orgId: input.orgId,
+          ordem: input.ordem,
+          valorMinServicos: String(input.valorMinServicos),
+          pctComissao: String(input.pctComissao),
+          descricao: input.descricao ?? null,
+          ativo: input.ativo ? 1 : 0,
+        }) as any;
+        return { id: (result as any).insertId };
+      }
+    }),
+
+  // Salva todas as faixas de uma unidade de uma vez (substitui)
+  metaFaixasSaveAll: protectedProcedure
+    .input(z.object({
+      unitId: z.number(),
+      orgId: z.number(),
+      faixas: z.array(z.object({
+        id: z.number().optional(),
+        ordem: z.number(),
+        valorMinServicos: z.number().min(0),
+        pctComissao: z.number().min(0).max(100),
+        descricao: z.string().optional(),
+      })),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Deleta todas as faixas existentes da unidade
+      await db.delete(metaFaixas).where(and(
+        eq(metaFaixas.unitId, input.unitId),
+        eq(metaFaixas.orgId, input.orgId),
+      ));
+      // Insere as novas faixas
+      if (input.faixas.length > 0) {
+        await db.insert(metaFaixas).values(
+          input.faixas.map((f, i) => ({
+            unitId: input.unitId,
+            orgId: input.orgId,
+            ordem: i,
+            valorMinServicos: String(f.valorMinServicos),
+            pctComissao: String(f.pctComissao),
+            descricao: f.descricao ?? null,
+            ativo: 1,
+          }))
+        );
+      }
+      return { success: true, count: input.faixas.length };
+    }),
+
+  // Deleta uma faixa
+  metaFaixaDelete: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(metaFaixas).where(eq(metaFaixas.id, input.id));
+      return { success: true };
     }),
 });
