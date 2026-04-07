@@ -898,3 +898,18 @@
 - [x] Remover card "Sem Nome" do diagnóstico
 - [x] Corrigir distribuições: visitas, ausência, horários de pico, dias da semana
 - [x] Corrigir clientes com/sem telefone (query na tabela clientes)
+
+## Comissões — Correções (2026-04-07)
+
+- [ ] Investigar por que comissões retornam R$ 0,00 (regras não encontradas ou não aplicadas)
+- [ ] Corrigir busca de regras de comissão por colaborador/unidade
+- [ ] Garantir que todos os colaboradores com venda no período apareçam
+- [ ] Exibir comissões calculadas conforme regras cadastradas na aba colaboradores
+
+## Comissões Integradas com Colaboradores (2026-04-07)
+
+- [x] Verificar estrutura da tabela dimensao_colaboradores e como comissão de serviços está cadastrada
+- [x] Adicionar campo pct_comissao_produtos na tabela de colaboradores (schema + migration)
+- [x] Adicionar campo de comissão de produtos na UI da aba Colaboradores
+- [x] Corrigir endpoint comissoes para buscar percentuais da tabela de colaboradores (serviços e produtos)
+- [x] Redesenhar UI da página Comissões com cards por colaborador (S.Base, S.Extra, Produtos)

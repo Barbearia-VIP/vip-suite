@@ -714,17 +714,40 @@ export const dataVipRouter = router({
       const [regras] = await db.execute(sql`SELECT * FROM regras_comissao WHERE ${rWhere}`) as any;
       return colabs.map(c => {
         const regra = (regras as any[]).find((r: any) => r.colaboradorId === String(c.colaborador_id));
-        const pct = regra ? Number(regra.percentual) : 30;
-        // Suporta tanto o retorno de getColaboradoresByRange (faturamento) quanto getColaboradores (total_vendas)
-        const fat = Number((c as any).faturamento ?? (c as any).total_vendas ?? 0);
+        const pctServicos = regra ? Number(regra.percentual) : 0;
+        const pctProdutos = regra ? Number(regra.pctComissaoProdutos ?? 0) : 0;
+        // Suporta tanto getColaboradoresByRange (faturamento) quanto getColaboradores (total_vendas)
+        const fatTotal = Number((c as any).faturamento ?? (c as any).total_vendas ?? 0);
         const atend = Number((c as any).atendimentos ?? (c as any).total_servicos_realizados ?? 0);
+        // Breakdown por tipo (disponível em getColaboradoresByRange)
+        const extraValor = Number((c as any).extra_valor ?? 0);
+        const produtosValor = Number((c as any).produtos_valor ?? 0);
+        // Serviços base = faturamento total - extras - produtos
+        const servicosBaseValor = Math.max(0, fatTotal - extraValor - produtosValor);
+        // Calcular comissões separadas
+        const comissaoServicosBase = Math.round(servicosBaseValor * (pctServicos / 100) * 100) / 100;
+        const comissaoServicosExtra = Math.round(extraValor * (pctServicos / 100) * 100) / 100;
+        const comissaoProdutos = Math.round(produtosValor * (pctProdutos / 100) * 100) / 100;
+        const comissaoTotal = Math.round((comissaoServicosBase + comissaoServicosExtra + comissaoProdutos) * 100) / 100;
         return {
           colaboradorId: String(c.colaborador_id),
           colaboradorNome: c.colaborador_nome,
-          faturamento: fat,
+          faturamento: fatTotal,
           atendimentos: atend,
-          percentual: pct,
-          comissao: Math.round(fat * (pct / 100) * 100) / 100,
+          diasTrabalhados: Number((c as any).dias_trabalhados ?? 0),
+          faturamentoDia: Math.round(Number((c as any).faturamento_dia ?? 0) * 100) / 100,
+          // Breakdown faturamento
+          servicosBaseValor,
+          extraValor,
+          produtosValor,
+          // Percentuais
+          percentual: pctServicos,
+          pctComissaoProdutos: pctProdutos,
+          // Comissões calculadas
+          comissaoServicosBase,
+          comissaoServicosExtra,
+          comissaoProdutos,
+          comissao: comissaoTotal,
         };
       });
     }),
@@ -734,15 +757,16 @@ export const dataVipRouter = router({
       orgId: z.number(),
       colaboradorId: z.string(),
       percentual: z.number().min(0).max(100),
+      pctComissaoProdutos: z.number().min(0).max(100).optional().default(0),
     }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.execute(sql`
-        INSERT INTO regras_comissao (orgId, colaboradorId, percentual, ativo)
-        VALUES (${input.orgId}, ${input.colaboradorId}, ${input.percentual}, 1)
-        ON DUPLICATE KEY UPDATE percentual = VALUES(percentual), updatedAt = NOW()
+        INSERT INTO regras_comissao (orgId, colaboradorId, percentual, pctComissaoProdutos, ativo)
+        VALUES (${input.orgId}, ${input.colaboradorId}, ${input.percentual}, ${input.pctComissaoProdutos}, 1)
+        ON DUPLICATE KEY UPDATE percentual = VALUES(percentual), pctComissaoProdutos = VALUES(pctComissaoProdutos), updatedAt = NOW()
       `);
       return { success: true };
     }),

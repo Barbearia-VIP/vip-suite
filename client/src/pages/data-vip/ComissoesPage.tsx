@@ -1,6 +1,7 @@
 /**
- * ComissoesPage.tsx — Cálculo de comissões por barbeiro
- * Suporta filtro por mês ou período personalizado via DateRangePicker
+ * ComissoesPage.tsx — Cálculo de comissões por colaborador
+ * Layout: cards por colaborador com breakdown S.Base / S.Extra / Produtos
+ * Percentuais gerenciados na aba Colaboradores
  */
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
@@ -9,15 +10,15 @@ import { useOrg } from "@/hooks/useOrg";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DateRangePicker, buildPeriodos, type DateFilter } from "@/components/ui/DateRangePicker";
-import { toast } from "sonner";
-import { DollarSign, Calendar } from "lucide-react";
+import { DollarSign, Calendar, TrendingUp, Users, Scissors, Package } from "lucide-react";
 
 function fmt(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
+}
+function fmtPct(v: number) {
+  return `${v.toFixed(1)}%`;
 }
 
 export default function ComissoesPage() {
@@ -31,11 +32,8 @@ export default function ComissoesPage() {
     mode: "month",
     periodo: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
   });
-  const [editPct, setEditPct] = useState<Record<string, number>>({});
-
   const periodos = useMemo(() => buildPeriodos(24), []);
 
-  // Parâmetros para a query
   const queryParams = useMemo(() => {
     if (filter.mode === "range") {
       return { orgId: org?.id, unitId: selectedUnit?.id, dataInicio: filter.dataInicio, dataFim: filter.dataFim };
@@ -44,15 +42,11 @@ export default function ComissoesPage() {
   }, [filter, org?.id, selectedUnit?.id]);
 
   const q = trpc.dataVip.comissoes.useQuery(queryParams, { enabled: !!org?.id });
-  const utils = trpc.useUtils();
-  const saveRegra = trpc.dataVip.saveRegrasComissao.useMutation({
-    onSuccess: () => { toast.success("Regra de comissão salva"); utils.dataVip.comissoes.invalidate(); },
-    onError: (e) => toast.error(e.message),
-  });
-
   const colabs = q.data ?? [];
-  const totalComissoes = colabs.reduce((s, c) => s + c.comissao, 0);
+
   const totalFat = colabs.reduce((s, c) => s + c.faturamento, 0);
+  const totalComissoes = colabs.reduce((s, c) => s + c.comissao, 0);
+  const pctMedio = totalFat > 0 ? (totalComissoes / totalFat) * 100 : 0;
   const isRangeMode = filter.mode === "range";
 
   return (
@@ -64,7 +58,12 @@ export default function ComissoesPage() {
             <DollarSign className="w-6 h-6 text-orange-400" /> Comissões
           </h1>
           <p className="text-sm text-muted-foreground">
-            {selectedUnit ? selectedUnit.name : "Todas as unidades"}
+            {selectedUnit ? selectedUnit.name : "Todas as unidades"} · {colabs.length} colaboradores
+            {isAdmin && (
+              <span className="ml-2 text-xs text-muted-foreground/70">
+                — Gerencie os percentuais na aba <strong>Colaboradores</strong>
+              </span>
+            )}
           </p>
         </div>
         <DateRangePicker
@@ -75,118 +74,197 @@ export default function ComissoesPage() {
         />
       </div>
 
-      {/* Badge de modo range */}
+      {/* Badge modo range */}
       {isRangeMode && (
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="text-xs gap-1.5">
             <Calendar className="w-3 h-3" />
-            Período personalizado — dados em tempo real da tabela de vendas
+            Período personalizado — dados em tempo real
           </Badge>
         </div>
       )}
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Total Faturamento (Barbeiros)</p>
-            {q.isLoading
-              ? <Skeleton className="h-7 w-32 mt-1" />
-              : <p className="text-xl font-bold mt-1">{fmt(totalFat)}</p>
-            }
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <TrendingUp className="w-3 h-3" /> Faturamento
+            </p>
+            {q.isLoading ? <Skeleton className="h-7 w-28 mt-1" /> : (
+              <p className="text-xl font-bold mt-1 text-green-400">{fmt(totalFat)}</p>
+            )}
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Total Comissões</p>
-            {q.isLoading
-              ? <Skeleton className="h-7 w-32 mt-1" />
-              : <p className="text-xl font-bold mt-1 text-orange-400">{fmt(totalComissoes)}</p>
-            }
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <DollarSign className="w-3 h-3" /> Comissões
+            </p>
+            {q.isLoading ? <Skeleton className="h-7 w-28 mt-1" /> : (
+              <p className="text-xl font-bold mt-1 text-orange-400">{fmt(totalComissoes)}</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <TrendingUp className="w-3 h-3" /> % Médio
+            </p>
+            {q.isLoading ? <Skeleton className="h-7 w-20 mt-1" /> : (
+              <p className="text-xl font-bold mt-1">{fmtPct(pctMedio)}</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Users className="w-3 h-3" /> Colaboradores
+            </p>
+            {q.isLoading ? <Skeleton className="h-7 w-12 mt-1" /> : (
+              <>
+                <p className="text-xl font-bold mt-1">{colabs.length}</p>
+                {totalFat > 0 && colabs.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-0.5">Média: {fmt(totalFat / colabs.length)}</p>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Tabela */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-muted-foreground text-xs">
-                  <th className="text-left px-4 py-2">Barbeiro</th>
-                  <th className="text-right px-4 py-2">Faturamento</th>
-                  <th className="text-right px-4 py-2">Atendimentos</th>
-                  <th className="text-right px-4 py-2">% Comissão</th>
-                  <th className="text-right px-4 py-2">Comissão</th>
-                  {isAdmin && !isRangeMode && <th className="text-center px-4 py-2">Ação</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {q.isLoading
-                  ? Array.from({ length: 5 }).map((_, i) => (
-                      <tr key={i}>
-                        <td colSpan={isAdmin && !isRangeMode ? 6 : 5} className="px-4 py-2">
-                          <Skeleton className="h-4 w-full" />
-                        </td>
-                      </tr>
-                    ))
-                  : colabs.length === 0
-                    ? (
-                      <tr>
-                        <td colSpan={isAdmin && !isRangeMode ? 6 : 5} className="px-4 py-8 text-center text-muted-foreground text-sm">
-                          Nenhum dado encontrado para o período selecionado
-                        </td>
-                      </tr>
-                    )
-                    : colabs.map((c: any) => (
-                        <tr key={c.colaboradorId} className="border-b border-border/50 hover:bg-muted/30">
-                          <td className="px-4 py-2 font-medium">{c.colaboradorNome}</td>
-                          <td className="px-4 py-2 text-right text-green-400">{fmt(c.faturamento)}</td>
-                          <td className="px-4 py-2 text-right">{c.atendimentos.toLocaleString("pt-BR")}</td>
-                          <td className="px-4 py-2 text-right">
-                            {isAdmin && !isRangeMode ? (
-                              <Input
-                                type="number" min={0} max={100} step={1}
-                                value={editPct[c.colaboradorId] ?? c.percentual}
-                                onChange={e => setEditPct(prev => ({ ...prev, [c.colaboradorId]: Number(e.target.value) }))}
-                                className="h-7 text-xs w-20 text-right"
-                              />
-                            ) : (
-                              <span>{c.percentual}%</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2 text-right font-semibold text-orange-400">{fmt(c.comissao)}</td>
-                          {isAdmin && !isRangeMode && (
-                            <td className="px-4 py-2 text-center">
-                              {editPct[c.colaboradorId] !== undefined && editPct[c.colaboradorId] !== c.percentual && (
-                                <Button
-                                  size="sm"
-                                  className="h-7 text-xs"
-                                  onClick={() => saveRegra.mutate({
-                                    orgId: org!.id,
-                                    colaboradorId: c.colaboradorId,
-                                    percentual: editPct[c.colaboradorId],
-                                  })}
-                                >
-                                  Salvar
-                                </Button>
-                              )}
-                            </td>
-                          )}
-                        </tr>
-                      ))
-                }
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Cards por colaborador */}
+      {q.isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4 space-y-3">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-6 w-32" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : colabs.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center text-muted-foreground text-sm">
+            Nenhum dado encontrado para o período selecionado
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {colabs.map((c: any, i: number) => {
+            const rank = i + 1;
+            const rankColor = rank === 1 ? "text-yellow-400" : rank === 2 ? "text-slate-300" : rank === 3 ? "text-amber-600" : "text-muted-foreground";
+            const fatDia = c.diasTrabalhados > 0 ? c.faturamentoDia : 0;
+            return (
+              <Card key={c.colaboradorId} className="border-border/60">
+                <CardContent className="p-4 space-y-3">
+                  {/* Header do card */}
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-bold ${rankColor}`}>{rank}°</span>
+                      <div>
+                        <p className="font-semibold text-sm leading-tight">{c.colaboradorNome}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {c.diasTrabalhados > 0 ? `${c.diasTrabalhados} dias` : "—"}
+                        </p>
+                      </div>
+                    </div>
+                    {fatDia > 0 && (
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">Fat/dia</p>
+                        <p className="text-sm font-semibold text-green-400">{fmt(fatDia)}</p>
+                      </div>
+                    )}
+                  </div>
 
-      {/* Nota sobre edição de percentuais */}
-      {isRangeMode && isAdmin && (
+                  {/* Faturamento total */}
+                  <div className="flex justify-between text-sm border-b border-border/40 pb-2">
+                    <span className="text-muted-foreground">Faturamento</span>
+                    <span className="font-semibold text-green-400">{fmt(c.faturamento)}</span>
+                  </div>
+
+                  {/* Breakdown comissões */}
+                  <div className="space-y-1.5">
+                    {/* S. Base */}
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <Scissors className="w-3 h-3 text-blue-400" /> S. Base
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">{fmt(c.servicosBaseValor)}</span>
+                        <span className="text-muted-foreground">→</span>
+                        <span className={c.comissaoServicosBase > 0 ? "text-orange-400 font-semibold" : "text-muted-foreground"}>
+                          {fmt(c.comissaoServicosBase)}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                          {c.percentual}%
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* S. Extra */}
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <Scissors className="w-3 h-3 text-purple-400" /> S. Extra
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">{fmt(c.extraValor)}</span>
+                        <span className="text-muted-foreground">→</span>
+                        <span className={c.comissaoServicosExtra > 0 ? "text-orange-400 font-semibold" : "text-muted-foreground"}>
+                          {fmt(c.comissaoServicosExtra)}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                          {c.percentual}%
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Produtos */}
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <Package className="w-3 h-3 text-amber-400" /> Produtos
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">{fmt(c.produtosValor)}</span>
+                        <span className="text-muted-foreground">→</span>
+                        <span className={c.comissaoProdutos > 0 ? "text-orange-400 font-semibold" : "text-muted-foreground"}>
+                          {fmt(c.comissaoProdutos)}
+                        </span>
+                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                          {c.pctComissaoProdutos}%
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Total comissão */}
+                  <div className="flex justify-between items-center pt-1 border-t border-border/40">
+                    <span className="text-sm text-muted-foreground">
+                      Total Comissão{" "}
+                      <span className="text-xs">
+                        ({c.faturamento > 0 ? fmtPct((c.comissao / c.faturamento) * 100) : "0.0%"})
+                      </span>
+                    </span>
+                    <span className={`text-base font-bold ${c.comissao > 0 ? "text-orange-400" : "text-muted-foreground"}`}>
+                      {fmt(c.comissao)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Nota sobre edição */}
+      {isAdmin && (
         <p className="text-xs text-muted-foreground text-center">
-          A edição de percentuais de comissão está disponível apenas no modo de seleção por mês.
+          Para editar os percentuais de comissão, acesse a aba <strong>Colaboradores</strong> e ajuste os campos "% Serviços" e "% Produtos" de cada colaborador.
         </p>
       )}
     </div>
