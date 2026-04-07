@@ -918,3 +918,7 @@
 
 - [x] Investigar por que extra_valor e produtos_valor chegam zerados no endpoint comissoes
 - [x] Corrigir query para separar corretamente S.Base, S.Extra e Produtos
+
+## Comissões — Fix Malformed packet (2026-04-07)
+
+- [x] Corrigir erro "Malformed communication packet" na query getColaboradoresComissoes (parâmetros SQL inválidos)

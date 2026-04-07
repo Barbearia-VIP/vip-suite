@@ -2694,11 +2694,13 @@ export async function getColaboradoresComissoes(
     const placeholders = nomesBase.map(() => "?").join(",");
     baseCond = `p.tipo = 'ser' AND p.nome IN (${placeholders})`;
     extraCond = `p.tipo = 'ser' AND p.nome NOT IN (${placeholders})`;
-    params = [...nomesBase, ...nomesBase, dataInicio, dataInicio, dataFimExcl];
+    // params: nomesBase x2 (para baseCond e extraCond nos CASE WHEN) + dataInicio + dataFimExcl (WHERE)
+    params = [...nomesBase, ...nomesBase, dataInicio, dataFimExcl];
   } else {
     baseCond = `p.tipo = 'ser' AND p.categoria = 'base'`;
     extraCond = `p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL)`;
-    params = [dataInicio, dataInicio, dataFimExcl];
+    // params: apenas dataInicio + dataFimExcl (WHERE) — sem placeholders nos CASE WHEN
+    params = [dataInicio, dataFimExcl];
   }
 
   return queryExternal<{
