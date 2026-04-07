@@ -884,3 +884,9 @@
 
 ## Cohort Histórico — Comparação Lado a Lado
 - [x] Cohort Histórico: exibir linhas de A e B sobrepostas na grade M+1…M+6 quando modo comparação ativo
+
+## Aba Diagnóstico — Raio X Clientes
+
+- [ ] Endpoint raioX.diagnostico com KPIs de qualidade de dados e saúde da base
+- [ ] UI: cards de KPIs (total clientes, sem telefone, sem cadastro, etc.)
+- [ ] UI: gráficos e tabelas de diagnóstico da base de clientes

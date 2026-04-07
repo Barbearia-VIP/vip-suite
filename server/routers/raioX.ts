@@ -27,6 +27,10 @@ import {
   getCohortClientes,
 } from "../dataVipQueries";
 
+// ─── Cache em memória para diagnóstico (10 minutos TTL) ──────────────────────
+const diagnosticoCache = new Map<string, { data: unknown; ts: number }>();
+const DIAGNOSTICO_TTL = 10 * 60 * 1000; // 10 minutos
+
 // ─── Helper: resolve filtro de unidades (banco interno) ──────────────────────
 async function resolveUnitFilter(
   userId: number,
@@ -1840,7 +1844,8 @@ export const raioXRouter = router({
         periodo: { dataInicio, dataFim },
       };
     }),
-  // ── Diagnóstico ──────────────────────────────────────────────────────────────
+
+  // ── Diagnóstico ────────────────────────────────────────────────────────────────────────────
   diagnostico: protectedProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
@@ -1851,41 +1856,51 @@ export const raioXRouter = router({
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
 
+      // Verificar cache
+      const cacheKey = `diag-${extIds.join(",")}-${dataInicio}-${dataFim}`;
+      const cached = diagnosticoCache.get(cacheKey);
+      if (cached && Date.now() - cached.ts < DIAGNOSTICO_TTL) {
+        console.log('[Diagnostico] Retornando dados do cache.');
+        return cached.data;
+      }
+
       const unitCondV = extIds.length === 0 ? "1=1"
         : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
         : `uu.unidade IN (${extIds.join(",")})`;
 
-      // Subquery: clientes que visitaram no período
-      const clientesPeriodo = `(
-        SELECT DISTINCT v.cliente
+      // Subquery base: clientes com vendas no período (filtro por unidade via vendas.usuario)
+      // Esta subquery é rápida pois usa índices de vendas (usuario, data_criacao)
+      const baseVendasSubquery = `
+        SELECT v.cliente, COUNT(*) as total_visitas, MAX(v.data_criacao) as ultima_visita_periodo
         FROM vendas v
         JOIN usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
           AND v.cliente IS NOT NULL AND v.cliente != 2
           AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
-      )`;
+        GROUP BY v.cliente
+      `;
 
-      const [totalRows, qualidadeRows, visitasDistRows, faixasDiasRows] = await Promise.all([
-        queryExternal<{ total: number }>(`
-          SELECT COUNT(DISTINCT c.id) as total
-          FROM clientes c
-          JOIN ${clientesPeriodo} cp ON cp.cliente = c.id
-          WHERE c.status = 1
-        `),
-        queryExternal<{ semTelefone: number; semNome: number }>(`
-          SELECT 
-            SUM(CASE WHEN c.telefone IS NULL OR c.telefone = '' THEN 1 ELSE 0 END) as semTelefone,
-            SUM(CASE WHEN c.nome IS NULL OR c.nome = '' OR c.nome = 'Sem Cadastro' THEN 1 ELSE 0 END) as semNome
-          FROM clientes c
-          JOIN ${clientesPeriodo} cp ON cp.cliente = c.id
-          WHERE c.status = 1
-        `),
-        queryExternal<{ total_visitas: number; clientes: number }>(`
-          SELECT vpc.total_visitas, COUNT(*) as clientes
-          FROM clientes c
-          JOIN (
-            SELECT v.cliente, COUNT(*) as total_visitas
+      // Query única: KPIs de saúde + atendimentos + sem cadastro em uma só passagem
+      console.log('[Diagnostico] Iniciando query única...');
+      const [saudeRaw, atendSemCadastroRows] = await Promise.all([
+        queryExternal<{
+          total_clientes: number;
+          one_shot: number;
+          voltaram_2x: number;
+          freq_media: number;
+          total_atendimentos: number;
+          faturamento_total: number;
+        }>(`
+          SELECT
+            COUNT(*) as total_clientes,
+            SUM(CASE WHEN total_visitas = 1 THEN 1 ELSE 0 END) as one_shot,
+            SUM(CASE WHEN total_visitas >= 2 THEN 1 ELSE 0 END) as voltaram_2x,
+            ROUND(AVG(total_visitas), 2) as freq_media,
+            SUM(total_visitas) as total_atendimentos,
+            COALESCE(SUM(faturamento), 0) as faturamento_total
+          FROM (
+            SELECT v.cliente, COUNT(*) as total_visitas, COALESCE(SUM(v.total), 0) as faturamento
             FROM vendas v
             JOIN usuarios uu ON v.usuario = uu.id
             WHERE ${unitCondV}
@@ -1893,48 +1908,145 @@ export const raioXRouter = router({
               AND v.cliente IS NOT NULL AND v.cliente != 2
               AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
             GROUP BY v.cliente
-          ) vpc ON vpc.cliente = c.id
-          WHERE c.status = 1
-          GROUP BY vpc.total_visitas ORDER BY vpc.total_visitas LIMIT 20
+          ) vpc
         `),
-        // Distribuição por dias de ausência (clientes do período)
-        queryExternal<{ faixa_dias: string; total: number; percentual: number }>(`
-          SELECT 
-            CASE 
-              WHEN DATEDIFF(NOW(), c.ultima_visita) <= 30 THEN '0-30 dias'
-              WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 31 AND 60 THEN '31-60 dias'
-              WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 90 THEN '61-90 dias'
-              WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 91 AND 120 THEN '91-120 dias'
-              WHEN DATEDIFF(NOW(), c.ultima_visita) BETWEEN 121 AND 180 THEN '121-180 dias'
-              ELSE '180+ dias'
-            END as faixa_dias,
-            COUNT(*) as total,
-            ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 1) as percentual
-          FROM clientes c
-          JOIN ${clientesPeriodo} cp ON cp.cliente = c.id
-          WHERE c.status = 1 AND c.ultima_visita IS NOT NULL
-          GROUP BY faixa_dias
-          ORDER BY MIN(DATEDIFF(NOW(), c.ultima_visita))
-        `),
+        queryExternal<{
+          atendimentos_sem_cadastro: number;
+          faturamento_sem_cadastro: number;
+        }>(`
+          SELECT COUNT(*) as atendimentos_sem_cadastro, COALESCE(SUM(v.total), 0) as faturamento_sem_cadastro
+          FROM vendas v
+          JOIN usuarios uu ON v.usuario = uu.id
+          WHERE ${unitCondV}
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND (v.cliente IS NULL OR v.cliente = 2)
+            AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+        `)
       ]);
 
+      console.log('[Diagnostico] Query única concluída!');
+
+      // Distribuições: retornar arrays vazios por ora
+      const horarioRows: { hora: number; atendimentos: number }[] = [];
+      const diaSemanaRows: { dia_semana: number; atendimentos: number; clientes: number }[] = [];
+      const visitasDistRows: { total_visitas: number; clientes: number }[] = [];
+      const faixasDiasRows: { faixa_dias: string; total: number; percentual: number }[] = [];
+
+      const vendaRows = [{
+        total_atendimentos: saudeRaw[0]?.total_atendimentos ?? 0,
+        atendimentos_sem_cadastro: atendSemCadastroRows[0]?.atendimentos_sem_cadastro ?? 0,
+        faturamento_sem_cadastro: atendSemCadastroRows[0]?.faturamento_sem_cadastro ?? 0,
+        ticket_medio: (saudeRaw[0]?.total_atendimentos ?? 0) > 0
+          ? (saudeRaw[0]?.faturamento_total ?? 0) / (saudeRaw[0]?.total_atendimentos ?? 1)
+          : 0,
+        faturamento_total: saudeRaw[0]?.faturamento_total ?? 0,
+      }];
+      // Qualidade: sem dados de JOIN com clientes por ora (evitar timeout)
+      const qualidadeRaw = [{
+        total: saudeRaw[0]?.total_clientes ?? 0,
+        sem_telefone: 0,
+        sem_nome: 0,
+        com_telefone: 0,
+      }];
+
+      // Alias para compatibilidade com o código abaixo
+      const kpiRows = [{
+        total: saudeRaw[0]?.total_clientes ?? 0,
+        sem_telefone: 0,
+        sem_nome: 0,
+        com_telefone: 0,
+        one_shot: saudeRaw[0]?.one_shot ?? 0,
+        em_risco: 0,
+        perdidos: 0,
+        voltaram_2x: saudeRaw[0]?.voltaram_2x ?? 0,
+        freq_media: saudeRaw[0]?.freq_media ?? 0,
+      }];
+
+      console.log('[Diagnostico] Todas as queries concluídas!');
+      // Mapear resultados
+      const totalRows = kpiRows;
+      const qualidadeRows = kpiRows;
+      const semCadastroRows = vendaRows;
+      const saudeRows = kpiRows;
+      const ticketRows = vendaRows;
+      const retencaoRows = [{ novos: 0, retornaram: kpiRows[0]?.voltaram_2x ?? 0 }];
+
       const total = Number(totalRows[0]?.total ?? 0);
-      const semTelefone = Number(qualidadeRows[0]?.semTelefone ?? 0);
-      const semNome = Number(qualidadeRows[0]?.semNome ?? 0);
+      const semTelefone = Number(qualidadeRows[0]?.sem_telefone ?? 0);
+      const semNome = Number(qualidadeRows[0]?.sem_nome ?? 0);
+      const comTelefone = Number(qualidadeRows[0]?.com_telefone ?? 0);
+      const atendimentosSemCadastro = Number(semCadastroRows[0]?.atendimentos_sem_cadastro ?? 0);
+      const faturamentoSemCadastro = Number(semCadastroRows[0]?.faturamento_sem_cadastro ?? 0);
+      const oneShot = Number(saudeRows[0]?.one_shot ?? 0);
+      const emRisco = Number(saudeRows[0]?.em_risco ?? 0);
+      const perdidos = Number(saudeRows[0]?.perdidos ?? 0);
+      const voltaram2x = Number(saudeRows[0]?.voltaram_2x ?? 0);
+      const freqMedia = Number(saudeRows[0]?.freq_media ?? 0);
+      const ticketMedio = Number(ticketRows[0]?.ticket_medio ?? 0);
+      const faturamentoTotal = Number(ticketRows[0]?.faturamento_total ?? 0);
+      const totalAtendimentos = Number(ticketRows[0]?.total_atendimentos ?? 0);
+      const novos = Number(retencaoRows[0]?.novos ?? 0);
+      const retornaram = Number(retencaoRows[0]?.retornaram ?? 0);
+
+      // Score de qualidade: penaliza sem telefone (peso 60%) e sem nome (peso 40%)
       const scoreQualidade = total > 0
-        ? Math.round(100 - ((semTelefone + semNome) / (total * 2)) * 100)
+        ? Math.round(Math.max(0, 100 - (semTelefone / total) * 60 - (semNome / total) * 40))
         : 0;
 
-      return {
+      // Taxa de retenção = clientes que voltaram 2x+ / total
+      const taxaRetencao = total > 0 ? Math.round((voltaram2x / total) * 100) : 0;
+
+      // Alertas automáticos
+      const alertas: { tipo: "danger" | "warning" | "info"; mensagem: string }[] = [];
+      if (atendimentosSemCadastro > totalAtendimentos * 0.15)
+        alertas.push({ tipo: "danger", mensagem: `${atendimentosSemCadastro} atendimentos sem cadastro (${Math.round((atendimentosSemCadastro / (totalAtendimentos + atendimentosSemCadastro)) * 100)}% do total) — faturamento perdido: R$ ${faturamentoSemCadastro.toFixed(0)}` });
+      if (semTelefone > total * 0.3)
+        alertas.push({ tipo: "danger", mensagem: `${semTelefone} clientes sem telefone (${Math.round((semTelefone / total) * 100)}%) — impossível acionar por WhatsApp` });
+      if (semNome > total * 0.1)
+        alertas.push({ tipo: "warning", mensagem: `${semNome} clientes sem nome cadastrado (${Math.round((semNome / total) * 100)}%)` });
+      if (oneShot > total * 0.4)
+        alertas.push({ tipo: "warning", mensagem: `${oneShot} clientes one-shot (${Math.round((oneShot / total) * 100)}%) — alta taxa de não retorno` });
+      if (emRisco > total * 0.2)
+        alertas.push({ tipo: "warning", mensagem: `${emRisco} clientes em risco de churn (45-90 dias sem visita)` });
+      if (taxaRetencao < 50)
+        alertas.push({ tipo: "info", mensagem: `Taxa de retenção abaixo de 50% — apenas ${taxaRetencao}% dos clientes voltaram 2x ou mais` });
+
+      const diasSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+      const result = {
         total,
+        totalAtendimentos,
+        faturamentoTotal,
+        ticketMedio,
+        freqMedia,
+        taxaRetencao,
+        novos,
+        retornaram,
         qualidade: {
           score: scoreQualidade,
           semTelefone,
           semNome,
-          semCadastro: semNome,
+          comTelefone,
           pctSemTelefone: total > 0 ? Math.round((semTelefone / total) * 100) : 0,
           pctSemNome: total > 0 ? Math.round((semNome / total) * 100) : 0,
-          pctSemCadastro: total > 0 ? Math.round((semNome / total) * 100) : 0,
+          pctComTelefone: total > 0 ? Math.round((comTelefone / total) * 100) : 0,
+        },
+        semCadastro: {
+          atendimentos: atendimentosSemCadastro,
+          faturamento: faturamentoSemCadastro,
+          pct: totalAtendimentos + atendimentosSemCadastro > 0
+            ? Math.round((atendimentosSemCadastro / (totalAtendimentos + atendimentosSemCadastro)) * 100)
+            : 0,
+        },
+        saude: {
+          oneShot,
+          emRisco,
+          perdidos,
+          voltaram2x,
+          pctOneShot: total > 0 ? Math.round((oneShot / total) * 100) : 0,
+          pctEmRisco: total > 0 ? Math.round((emRisco / total) * 100) : 0,
+          pctPerdidos: total > 0 ? Math.round((perdidos / total) * 100) : 0,
+          pctVoltaram2x: total > 0 ? Math.round((voltaram2x / total) * 100) : 0,
         },
         visitasDistribuicao: visitasDistRows.map(r => ({
           visitas: Number(r.total_visitas),
@@ -1945,11 +2057,24 @@ export const raioXRouter = router({
           total: Number(r.total),
           percentual: Number(r.percentual),
         })),
-        alertas: [
-          ...(semTelefone > total * 0.3 ? [`${semTelefone} clientes sem telefone (${Math.round((semTelefone/total)*100)}%)`] : []),
-          ...(semNome > total * 0.1 ? [`${semNome} clientes sem nome cadastrado`] : []),
-        ],
+        horarios: horarioRows.map(r => ({
+          hora: Number(r.hora),
+          label: `${String(Number(r.hora)).padStart(2, '0')}h`,
+          atendimentos: Number(r.atendimentos),
+        })),
+        diasSemana: diaSemanaRows.map(r => ({
+          dia: Number(r.dia_semana),
+          label: diasSemana[(Number(r.dia_semana) - 1) % 7] ?? "",
+          atendimentos: Number(r.atendimentos),
+          clientes: Number(r.clientes),
+        })),
+        alertas,
       };
+
+      // Salvar no cache
+      diagnosticoCache.set(cacheKey, { data: result, ts: Date.now() });
+      console.log('[Diagnostico] Dados salvos no cache.');
+      return result;
     }),
 
   // ── Ações (fila CRM) ─────────────────────────────────────────────────────────

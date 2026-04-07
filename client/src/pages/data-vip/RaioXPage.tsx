@@ -2827,48 +2827,219 @@ export default function RaioXPage() {
         </TabsContent>
 
         {/* ── DIAGNÓSTICO ──────────────────────────────────────────────────────── */}
-        <TabsContent value="diagnostico" className="space-y-4 mt-4">
+        <TabsContent value="diagnostico" className="space-y-5 mt-4">
           {(qDiag.isLoading || (qDiag.isError && isExternalDbTimeoutError(qDiag.error) && (qDiag.failureCount ?? 0) < 3)) ? (
-            <DataVipLoadingState rows={3} />
+            <DataVipLoadingState rows={4} />
           ) : qDiag.isError ? (
             <DataVipErrorState onRetry={() => qDiag.refetch()} />
           ) : qDiag.data ? (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <KpiCard label="Score de qualidade" value={`${qDiag.data.qualidade.score}%`} icon={Activity}
-                  color={qDiag.data.qualidade.score >= 80 ? "text-green-400" : qDiag.data.qualidade.score >= 60 ? "text-yellow-400" : "text-red-400"} />
-                <KpiCard label="Total de clientes" value={qDiag.data.total.toLocaleString()} icon={Users} />
-                <KpiCard label="Sem telefone" value={qDiag.data.qualidade.semTelefone.toLocaleString()} icon={AlertTriangle} color="text-yellow-400"
-                  sub={`${qDiag.data.qualidade.pctSemTelefone}% da base`} />
-                <KpiCard label="Sem cadastro" value={qDiag.data.qualidade.semCadastro.toLocaleString()} icon={UserX} color="text-orange-400"
-                  sub={`${qDiag.data.qualidade.pctSemCadastro}% da base`} />
-              </div>
+              {/* ── Alertas automáticos ── */}
               {qDiag.data.alertas.length > 0 && (
-                <Card className="bg-yellow-500/10 border-yellow-500/30">
-                  <CardContent className="pt-4 pb-4">
-                    <p className="text-sm font-medium text-yellow-400 mb-2 flex items-center gap-1.5">
-                      <AlertTriangle className="w-4 h-4" /> Alertas de qualidade
-                    </p>
-                    {qDiag.data.alertas.map((a, i) => (
-                      <p key={i} className="text-sm text-muted-foreground">• {a}</p>
-                    ))}
+                <div className="space-y-2">
+                  {qDiag.data.alertas.map((a, i) => (
+                    <div key={i} className={`flex items-start gap-2.5 rounded-lg px-4 py-3 text-sm ${
+                      a.tipo === "danger" ? "bg-red-500/10 border border-red-500/30 text-red-300"
+                      : a.tipo === "warning" ? "bg-yellow-500/10 border border-yellow-500/30 text-yellow-300"
+                      : "bg-blue-500/10 border border-blue-500/30 text-blue-300"
+                    }`}>
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>{a.mensagem}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* ── Bloco 1: KPIs gerais ── */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Visão Geral</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <KpiCard label="Total de clientes" value={qDiag.data.total.toLocaleString()} icon={Users} sub="no período" />
+                  <KpiCard label="Total de atendimentos" value={qDiag.data.totalAtendimentos.toLocaleString()} icon={Scissors} sub="com cadastro" />
+                  <KpiCard label="Ticket médio" value={fmtMoeda(qDiag.data.ticketMedio)} icon={TrendingUp} />
+                  <KpiCard label="Freq. média" value={`${qDiag.data.freqMedia.toFixed(1)}x`} icon={Activity} sub="visitas/cliente" />
+                </div>
+              </div>
+
+              {/* ── Bloco 2: Qualidade de dados ── */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Qualidade de Dados</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className={`rounded-xl p-4 border flex flex-col gap-1 ${
+                    qDiag.data.qualidade.score >= 80 ? "bg-green-500/10 border-green-500/30"
+                    : qDiag.data.qualidade.score >= 60 ? "bg-yellow-500/10 border-yellow-500/30"
+                    : "bg-red-500/10 border-red-500/30"
+                  }`}>
+                    <p className="text-xs text-muted-foreground">Score de qualidade</p>
+                    <p className={`text-2xl font-bold ${
+                      qDiag.data.qualidade.score >= 80 ? "text-green-400"
+                      : qDiag.data.qualidade.score >= 60 ? "text-yellow-400"
+                      : "text-red-400"
+                    }`}>{qDiag.data.qualidade.score}%</p>
+                    <div className="w-full bg-white/10 rounded-full h-1.5 mt-1">
+                      <div className={`h-1.5 rounded-full ${
+                        qDiag.data.qualidade.score >= 80 ? "bg-green-400"
+                        : qDiag.data.qualidade.score >= 60 ? "bg-yellow-400"
+                        : "bg-red-400"
+                      }`} style={{ width: `${qDiag.data.qualidade.score}%` }} />
+                    </div>
+                  </div>
+                  <KpiCard label="Com telefone" value={qDiag.data.qualidade.comTelefone.toLocaleString()} icon={UserCheck} color="text-green-400"
+                    sub={`${qDiag.data.qualidade.pctComTelefone}% da base`} />
+                  <KpiCard label="Sem telefone" value={qDiag.data.qualidade.semTelefone.toLocaleString()} icon={AlertTriangle} color="text-yellow-400"
+                    sub={`${qDiag.data.qualidade.pctSemTelefone}% da base`} />
+                  <KpiCard label="Sem nome" value={qDiag.data.qualidade.semNome.toLocaleString()} icon={UserX} color="text-orange-400"
+                    sub={`${qDiag.data.qualidade.pctSemNome}% da base`} />
+                </div>
+              </div>
+
+              {/* ── Bloco 3: Atendimentos sem cadastro ── */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Atendimentos Sem Cadastro</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className={`rounded-xl p-4 border col-span-1 md:col-span-1 ${
+                    qDiag.data.semCadastro.pct > 15 ? "bg-red-500/10 border-red-500/30" : "bg-card/60 border-border/50"
+                  }`}>
+                    <p className="text-xs text-muted-foreground mb-1">Atendimentos sem cadastro</p>
+                    <p className={`text-3xl font-bold ${
+                      qDiag.data.semCadastro.pct > 15 ? "text-red-400" : "text-foreground"
+                    }`}>{qDiag.data.semCadastro.atendimentos.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{qDiag.data.semCadastro.pct}% do total de atendimentos</p>
+                    <p className="text-xs text-muted-foreground">Faturamento: {fmtMoeda(qDiag.data.semCadastro.faturamento)}</p>
+                    <p className="text-xs text-muted-foreground mt-2 italic">Clientes atendidos sem nome/telefone registrado — oportunidade perdida de retenção</p>
+                  </div>
+                  <div className="rounded-xl p-4 border bg-card/60 border-border/50 col-span-1 md:col-span-2 flex flex-col justify-between">
+                    <p className="text-xs text-muted-foreground mb-3">Composição dos atendimentos no período</p>
+                    <div className="space-y-2">
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-green-400">Com cadastro</span>
+                          <span className="text-green-400">{qDiag.data.totalAtendimentos.toLocaleString()} ({100 - qDiag.data.semCadastro.pct}%)</span>
+                        </div>
+                        <div className="w-full bg-white/10 rounded-full h-2">
+                          <div className="h-2 rounded-full bg-green-500" style={{ width: `${100 - qDiag.data.semCadastro.pct}%` }} />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-red-400">Sem cadastro</span>
+                          <span className="text-red-400">{qDiag.data.semCadastro.atendimentos.toLocaleString()} ({qDiag.data.semCadastro.pct}%)</span>
+                        </div>
+                        <div className="w-full bg-white/10 rounded-full h-2">
+                          <div className="h-2 rounded-full bg-red-500" style={{ width: `${qDiag.data.semCadastro.pct}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Bloco 4: Saúde da base ── */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Saúde da Base</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <KpiCard label="Retornaram 2x+" value={qDiag.data.saude.voltaram2x.toLocaleString()} icon={TrendingUp} color="text-green-400"
+                    sub={`${qDiag.data.saude.pctVoltaram2x}% da base`} />
+                  <KpiCard label="One-shot" value={qDiag.data.saude.oneShot.toLocaleString()} icon={Zap} color="text-yellow-400"
+                    sub={`${qDiag.data.saude.pctOneShot}% — visitaram 1x`} />
+                  <KpiCard label="Em risco" value={qDiag.data.saude.emRisco.toLocaleString()} icon={AlertTriangle} color="text-orange-400"
+                    sub={`${qDiag.data.saude.pctEmRisco}% — 45-90d sem visita`} />
+                  <KpiCard label="Perdidos" value={qDiag.data.saude.perdidos.toLocaleString()} icon={TrendingDown} color="text-red-400"
+                    sub={`${qDiag.data.saude.pctPerdidos}% — +90d sem visita`} />
+                </div>
+              </div>
+
+              {/* ── Bloco 5: Gráficos lado a lado ── */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Distribuição por número de visitas */}
+                <Card className="bg-card/60 border-border/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Distribuição por número de visitas</CardTitle>
+                    <p className="text-xs text-muted-foreground">Quantos clientes visitaram X vezes no período</p>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={(qDiag.data?.visitasDistribuicao ?? []).slice(0, 12)} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                        <XAxis dataKey="visitas" tick={{ fontSize: 11, fill: "#888" }} label={{ value: "visitas", position: "insideBottom", offset: -2, fontSize: 10, fill: "#666" }} />
+                        <YAxis tick={{ fontSize: 11, fill: "#888" }} />
+                        <Tooltip formatter={(val: number) => [val.toLocaleString(), "Clientes"]} contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
+                        <Bar dataKey="clientes" fill={CORES.roxo} radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
                   </CardContent>
                 </Card>
-              )}
-              <Card className="bg-card/60 border-border/50">
-                <CardHeader className="pb-2"><CardTitle className="text-sm">Distribuição por número de visitas</CardTitle></CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <BarChart data={qDiag.data.visitasDistribuicao.slice(0, 15)} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                      <XAxis dataKey="visitas" tick={{ fontSize: 11, fill: "#888" }} />
-                      <YAxis tick={{ fontSize: 11, fill: "#888" }} />
-                      <Tooltip formatter={(val: number) => [val.toLocaleString(), "Clientes"]} contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
-                      <Bar dataKey="clientes" fill={CORES.roxo} radius={[3, 3, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
+
+                {/* Distribuição por dias de ausência */}
+                <Card className="bg-card/60 border-border/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Ausência desde última visita</CardTitle>
+                    <p className="text-xs text-muted-foreground">Distribuição dos clientes por tempo sem visitar</p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 mt-1">
+                      {(qDiag.data?.faixasDias ?? []).map((f: { faixa: string; total: number; percentual: number }, i: number) => {
+                        const color = i === 0 ? "bg-green-500" : i === 1 ? "bg-blue-500" : i === 2 ? "bg-yellow-500" : i === 3 ? "bg-orange-500" : "bg-red-500";
+                        const textColor = i === 0 ? "text-green-400" : i === 1 ? "text-blue-400" : i === 2 ? "text-yellow-400" : i === 3 ? "text-orange-400" : "text-red-400";
+                        return (
+                          <div key={f.faixa}>
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className={textColor}>{f.faixa}</span>
+                              <span className="text-muted-foreground">{f.total.toLocaleString()} ({f.percentual}%)</span>
+                            </div>
+                            <div className="w-full bg-white/10 rounded-full h-1.5">
+                              <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${f.percentual}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* ── Bloco 6: Horários e dias da semana ── */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Horários de pico */}
+                <Card className="bg-card/60 border-border/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Horários de pico</CardTitle>
+                    <p className="text-xs text-muted-foreground">Atendimentos por hora do dia</p>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={160}>
+                      <BarChart data={qDiag.data?.horarios ?? []} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#888" }} />
+                        <YAxis tick={{ fontSize: 10, fill: "#888" }} />
+                        <Tooltip formatter={(val: number) => [val.toLocaleString(), "Atendimentos"]} contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
+                        <Bar dataKey="atendimentos" fill={CORES.azul} radius={[2, 2, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+
+                {/* Dias da semana */}
+                <Card className="bg-card/60 border-border/50">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Movimento por dia da semana</CardTitle>
+                    <p className="text-xs text-muted-foreground">Atendimentos e clientes únicos por dia</p>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={160}>
+                      <BarChart data={qDiag.data?.diasSemana ?? []} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                        <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#888" }} />
+                        <YAxis tick={{ fontSize: 11, fill: "#888" }} />
+                        <Tooltip contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }}
+                          formatter={(val: number, name: string) => [val.toLocaleString(), name === "atendimentos" ? "Atendimentos" : "Clientes únicos"]} />
+                        <Bar dataKey="atendimentos" fill={CORES.verde} radius={[2, 2, 0, 0]} name="atendimentos" />
+                        <Bar dataKey="clientes" fill={CORES.roxo} radius={[2, 2, 0, 0]} name="clientes" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
             </>
           ) : null}
         </TabsContent>
