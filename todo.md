@@ -927,3 +927,7 @@
 
 - [x] Agrupar Colaboradores, Comissões, Metas, Serviços sob título "Gestão de Colaboradores" com espaçamento
 - [x] Remover Relatórios, Sincronização e Administração do menu lateral do Data VIP
+
+## Instagram — Bug Configurações (2026-04-07)
+
+- [x] Corrigir salvamento de configurações do Instagram por unidade (dados não persistem)

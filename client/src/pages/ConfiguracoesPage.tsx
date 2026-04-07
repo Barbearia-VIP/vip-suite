@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,28 +31,67 @@ const MODULES = [
 function ModuleConfigCard({ mod, unitId, orgId }: { mod: typeof MODULES[number]; unitId: number; orgId: number }) {
   const Icon = mod.icon;
   const [values, setValues] = useState<Record<string, string>>({});
+  const [initialized, setInitialized] = useState(false);
   const [saved, setSaved] = useState(false);
-  const configsQuery = trpc.orgs.moduleConfigs.useQuery({ unitId, orgId });
-  // Initialize values from existing config
-  const configData = configsQuery.data;
-  if (configData && Object.keys(values).length === 0) {
-    const existing = configData.find(c => c.module === mod.key);
-    if (existing?.config) {
-      const cfg = existing.config as Record<string, string>;
-      if (Object.keys(cfg).length > 0) setTimeout(() => setValues(cfg), 0);
+
+  const configsQuery = trpc.orgs.moduleConfigs.useQuery(
+    { unitId, orgId },
+    { enabled: unitId > 0 && orgId > 0 }
+  );
+  const accessQuery = trpc.orgs.moduleAccess.useQuery(
+    { unitId, orgId },
+    { enabled: unitId > 0 && orgId > 0 }
+  );
+
+  // Initialize values from existing config using useEffect (correct React pattern)
+  useEffect(() => {
+    if (configsQuery.data && !initialized) {
+      const existing = configsQuery.data.find((c: any) => c.module === mod.key);
+      if (existing?.config) {
+        const cfg = existing.config as Record<string, string>;
+        if (Object.keys(cfg).length > 0) {
+          setValues(cfg);
+          setInitialized(true);
+        }
+      } else {
+        // No config yet — mark as initialized so we don't keep retrying
+        setInitialized(true);
+      }
     }
-  }
-  const accessQuery = trpc.orgs.moduleAccess.useQuery({ unitId, orgId });
-  const currentAccess = accessQuery.data?.find(a => a.module === mod.key);
+  }, [configsQuery.data, mod.key, initialized]);
+
+  // Reset when unitId changes so new unit's config loads fresh
+  useEffect(() => {
+    setValues({});
+    setInitialized(false);
+  }, [unitId]);
+
+  const currentAccess = accessQuery.data?.find((a: any) => a.module === mod.key);
   const isEnabled = currentAccess?.enabled ?? false;
+
   const saveConfig = trpc.orgs.saveModuleConfig.useMutation({
-    onSuccess: () => { toast.success(`${mod.label} configurado!`); setSaved(true); setTimeout(() => setSaved(false), 3000); },
-    onError: (e: { message: string }) => toast.error(e.message),
+    onSuccess: () => {
+      toast.success(`${mod.label} configurado com sucesso!`);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      configsQuery.refetch();
+    },
+    onError: (e: { message: string }) => toast.error(`Erro ao salvar: ${e.message}`),
   });
+
   const setAccess = trpc.orgs.setModuleAccess.useMutation({
     onSuccess: () => accessQuery.refetch(),
     onError: (e: { message: string }) => toast.error(e.message),
   });
+
+  const handleSave = () => {
+    if (!unitId || !orgId) {
+      toast.error("Selecione uma unidade antes de salvar.");
+      return;
+    }
+    saveConfig.mutate({ orgId, unitId, module: mod.key, config: values, active: isEnabled });
+  };
+
   return (
     <Card className="bg-card border-border">
       <CardHeader className="pb-3">
@@ -70,16 +109,33 @@ function ModuleConfigCard({ mod, unitId, orgId }: { mod: typeof MODULES[number];
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {mod.fields.map(field => (
-          <div key={field.key} className="space-y-1.5">
-            <Label className="text-xs">{field.label}</Label>
-            <Input type={field.type === "password" ? "password" : "text"} placeholder={field.placeholder}
-              value={values[field.key] ?? ""} onChange={e => setValues(p => ({ ...p, [field.key]: e.target.value }))} className="text-xs h-8" />
+        {configsQuery.isLoading ? (
+          <div className="space-y-2">
+            {mod.fields.map(f => <div key={f.key} className="h-8 rounded bg-muted/30 animate-pulse" />)}
           </div>
-        ))}
-        <Button size="sm" className="w-full gap-1.5 text-xs h-8 mt-2" disabled={saveConfig.isPending}
-          onClick={() => saveConfig.mutate({ orgId, unitId, module: mod.key, config: values, active: isEnabled })}>
-          {saved ? <><CheckCircle className="w-3.5 h-3.5" />Salvo!</> : <><Save className="w-3.5 h-3.5" />{saveConfig.isPending ? "Salvando..." : "Salvar"}</>}
+        ) : (
+          mod.fields.map(field => (
+            <div key={field.key} className="space-y-1.5">
+              <Label className="text-xs">{field.label}</Label>
+              <Input
+                type={field.type === "password" ? "password" : "text"}
+                placeholder={field.placeholder}
+                value={values[field.key] ?? ""}
+                onChange={e => setValues(p => ({ ...p, [field.key]: e.target.value }))}
+                className="text-xs h-8"
+              />
+            </div>
+          ))
+        )}
+        <Button
+          size="sm"
+          className="w-full gap-1.5 text-xs h-8 mt-2"
+          disabled={saveConfig.isPending || configsQuery.isLoading}
+          onClick={handleSave}
+        >
+          {saved
+            ? <><CheckCircle className="w-3.5 h-3.5" />Salvo!</>
+            : <><Save className="w-3.5 h-3.5" />{saveConfig.isPending ? "Salvando..." : "Salvar"}</>}
         </Button>
       </CardContent>
     </Card>
@@ -99,7 +155,7 @@ function UsersTab({ orgId, units }: { orgId: number; units: Array<{ id: number; 
           <Users className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
           <p className="text-sm text-muted-foreground">Nenhum usuário encontrado.</p>
         </CardContent></Card>
-      ) : (usersQuery.data ?? []).map(user => (
+      ) : (usersQuery.data ?? []).map((user: any) => (
         <Card key={user.profileId} className="bg-card border-border"><CardContent className="p-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -156,10 +212,17 @@ export default function ConfiguracoesPage() {
               ))}
             </div>
           )}
-          {activeUnit && <div className="flex items-center gap-2 mb-2"><Building2 className="w-3.5 h-3.5 text-muted-foreground" /><span className="text-xs text-muted-foreground">Configurando: <strong className="text-foreground">{activeUnit.name}</strong></span></div>}
+          {activeUnit && (
+            <div className="flex items-center gap-2 mb-2">
+              <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">Configurando: <strong className="text-foreground">{activeUnit.name}</strong></span>
+            </div>
+          )}
           {activeUnitId ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {MODULES.map(mod => <ModuleConfigCard key={mod.key} mod={mod} unitId={activeUnitId} orgId={org.id} />)}
+              {MODULES.map(mod => (
+                <ModuleConfigCard key={`${mod.key}-${activeUnitId}`} mod={mod} unitId={activeUnitId} orgId={org.id} />
+              ))}
             </div>
           ) : (
             <Card className="bg-card border-border border-dashed"><CardContent className="p-8 text-center">
