@@ -2,7 +2,6 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -103,38 +102,38 @@ export default function HistoricoIAPage() {
       {statsQuery.isLoading ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <Card key={i} className="animate-pulse"><CardContent className="p-4 h-20" /></Card>
+            <div className="glass-card animate-pulse" key={i}><div className="p-4 h-20" /></div>
           ))}
         </div>
       ) : stats ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="border-violet-500/20 bg-violet-500/5">
-            <CardContent className="p-4">
+          <div className="glass-card border-violet-500/20 bg-violet-500/5">
+            <div className="p-6 pt-0 p-4">
               <p className="text-xs text-muted-foreground mb-1">Total Respondidas</p>
               <p className="text-2xl font-bold text-violet-400">{stats.total}</p>
               {stats.ultimaResposta && (
                 <p className="text-xs text-muted-foreground mt-1">Última: {fmtDate(stats.ultimaResposta)}</p>
               )}
-            </CardContent>
-          </Card>
-          <Card className="border-emerald-500/20 bg-emerald-500/5">
-            <CardContent className="p-4">
+            </div>
+          </div>
+          <div className="glass-card border-emerald-500/20 bg-emerald-500/5">
+            <div className="p-6 pt-0 p-4">
               <p className="text-xs text-muted-foreground mb-1">Publicadas no Google</p>
               <p className="text-2xl font-bold text-emerald-400">{stats.publicadas}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {stats.total > 0 ? Math.round((stats.publicadas / stats.total) * 100) : 0}% do total
               </p>
-            </CardContent>
-          </Card>
-          <Card className="border-amber-500/20 bg-amber-500/5">
-            <CardContent className="p-4">
+            </div>
+          </div>
+          <div className="glass-card border-amber-500/20 bg-amber-500/5">
+            <div className="p-6 pt-0 p-4">
               <p className="text-xs text-muted-foreground mb-1">Pendentes</p>
               <p className="text-2xl font-bold text-amber-400">{stats.pendentes}</p>
               <p className="text-xs text-muted-foreground mt-1">Aguardando publicação</p>
-            </CardContent>
-          </Card>
-          <Card className="border-slate-500/20 bg-slate-500/5">
-            <CardContent className="p-4">
+            </div>
+          </div>
+          <div className="glass-card border-slate-500/20 bg-slate-500/5">
+            <div className="p-6 pt-0 p-4">
               <p className="text-xs text-muted-foreground mb-1">Por Sentimento</p>
               <div className="flex gap-2 mt-1">
                 <span className="text-xs text-emerald-400 font-semibold">+{stats.positivas}</span>
@@ -142,16 +141,16 @@ export default function HistoricoIAPage() {
                 <span className="text-xs text-red-400 font-semibold">-{stats.negativas}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">Pos / Neu / Neg</p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       ) : null}
 
       {/* Filtros */}
-      <Card>
-        <CardHeader className="pb-3">
+      <div className="glass-card">
+        <div className="p-6 pb-2 pb-3">
           <div className="flex flex-wrap gap-3 items-center">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Filtros</CardTitle>
+            <h3 className="font-semibold text-foreground text-sm font-medium text-muted-foreground">Filtros</h3>
             <Select
               value={filtroPlataforma}
               onValueChange={(v) => { setFiltroPlataforma(v); handleFiltroChange(); }}
@@ -185,9 +184,9 @@ export default function HistoricoIAPage() {
               </span>
             )}
           </div>
-        </CardHeader>
+        </div>
 
-        <CardContent className="p-0">
+        <div className="p-6 pt-0 p-0">
           {historicoQuery.isLoading ? (
             <div className="p-8 text-center text-muted-foreground text-sm">Carregando histórico...</div>
           ) : !historico?.items?.length ? (
@@ -253,7 +252,7 @@ export default function HistoricoIAPage() {
 
           {/* Paginação */}
           {historico && historico.totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <div className="flex items-center justify-between px-4 py-3 border-t border-white/10">
               <Button
                 variant="outline"
                 size="sm"
@@ -277,8 +276,8 @@ export default function HistoricoIAPage() {
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

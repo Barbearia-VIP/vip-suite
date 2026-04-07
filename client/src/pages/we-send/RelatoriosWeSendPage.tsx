@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import PageHeader from "@/components/PageHeader";
 import { BarChart3, Send, CheckCircle, XCircle, Users, TrendingUp, RefreshCw } from "lucide-react";
@@ -55,25 +54,25 @@ export default function RelatoriosWeSendPage() {
               { label: "Total falhas", value: dashboard.totalFalhas.toLocaleString(), icon: XCircle, color: "text-red-500" },
               { label: "Taxa de sucesso", value: `${dashboard.taxaSucesso}%`, icon: TrendingUp, color: "text-emerald-500" },
             ].map(kpi => (
-              <Card key={kpi.label} className="bg-card border-border">
-                <CardContent className="p-4">
+              <div className="glass-card bg-white/5 border-white/10" key={kpi.label}>
+                <div className="p-6 pt-0 p-4">
                   <div className="flex items-center gap-2 mb-1">
                     <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
                     <span className="text-xs text-muted-foreground">{kpi.label}</span>
                   </div>
                   <p className="text-xl font-bold text-foreground">{kpi.value}</p>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ))}
           </div>
 
           {/* Campanhas por status */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="bg-card border-border">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-foreground">Campanhas por status</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
+            <div className="glass-card bg-white/5 border-white/10">
+              <div className="p-6 pb-2 pb-3">
+                <h3 className="font-semibold text-foreground text-sm font-semibold text-foreground">Campanhas por status</h3>
+              </div>
+              <div className="p-6 pt-0 space-y-2">
                 {Object.entries(porStatus).length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-4">Nenhuma campanha ainda</p>
                 ) : (
@@ -92,14 +91,14 @@ export default function RelatoriosWeSendPage() {
                     </div>
                   ))
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            <Card className="bg-card border-border">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-foreground">Top campanhas por envios</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
+            <div className="glass-card bg-white/5 border-white/10">
+              <div className="p-6 pb-2 pb-3">
+                <h3 className="font-semibold text-foreground text-sm font-semibold text-foreground">Top campanhas por envios</h3>
+              </div>
+              <div className="p-6 pt-0 space-y-2">
                 {top5.length === 0 ? (
                   <p className="text-xs text-muted-foreground text-center py-4">Nenhuma campanha ainda</p>
                 ) : (
@@ -111,21 +110,21 @@ export default function RelatoriosWeSendPage() {
                     </div>
                   ))
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           {/* Tabela de campanhas */}
           {campanhas.length > 0 && (
-            <Card className="bg-card border-border">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-foreground">Todas as campanhas</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <div className="glass-card bg-white/5 border-white/10">
+              <div className="p-6 pb-2 pb-3">
+                <h3 className="font-semibold text-foreground text-sm font-semibold text-foreground">Todas as campanhas</h3>
+              </div>
+              <div className="p-6 pt-0">
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b border-border">
+                      <tr className="border-b border-white/10">
                         <th className="text-left py-2 text-muted-foreground font-medium">Campanha</th>
                         <th className="text-right py-2 text-muted-foreground font-medium">Contatos</th>
                         <th className="text-right py-2 text-muted-foreground font-medium">Enviados</th>
@@ -154,18 +153,18 @@ export default function RelatoriosWeSendPage() {
                     </tbody>
                   </table>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
         </>
       ) : (
-        <Card className="bg-card border-border">
-          <CardContent className="p-8 text-center">
+        <div className="glass-card bg-white/5 border-white/10">
+          <div className="p-6 pt-0 p-8 text-center">
             <BarChart3 className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm font-medium text-foreground mb-1">Nenhum dado disponível</p>
             <p className="text-xs text-muted-foreground">Crie campanhas para ver relatórios aqui</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );

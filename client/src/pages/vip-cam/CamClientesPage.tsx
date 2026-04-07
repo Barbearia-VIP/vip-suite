@@ -4,7 +4,6 @@
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { useApp } from '@/contexts/AppContext';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -85,8 +84,8 @@ export default function CamClientesPage() {
             {(data?.clientes ?? []).map(cliente => {
               const level = (cliente.satisfactionLevel ?? 'neutral') as SatisfactionLevel;
               return (
-                <Card key={cliente.id} className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setSelectedId(cliente.id)}>
-                  <CardContent className="p-3 flex items-center gap-3">
+                <div className="glass-card hover:bg-muted/30 transition-colors cursor-pointer" key={cliente.id} onClick={() => setSelectedId(cliente.id)}>
+                  <div className="p-6 pt-0 p-3 flex items-center gap-3">
                     <Avatar className="h-10 w-10">
                       <AvatarImage src={cliente.faceImageUrl ?? cliente.fotoUrl ?? undefined} />
                       <AvatarFallback className="text-xs">{SATISFACTION_EMOJIS[level]}</AvatarFallback>
@@ -113,8 +112,8 @@ export default function CamClientesPage() {
                       </Badge>
                     </div>
                     <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               );
             })}
             {(data?.clientes ?? []).length === 0 && (

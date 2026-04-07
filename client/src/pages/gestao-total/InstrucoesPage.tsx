@@ -6,7 +6,6 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -94,7 +93,7 @@ function PlanoView({ plano, titulo, categoria, responsavelNome, geradoPorIA, sta
                 key={key}
                 onClick={() => onStatusChange(key)}
                 className={`text-xs px-2.5 py-1 rounded-full border transition-all ${
-                  status === key ? `${cfg.color} ${cfg.bg} font-medium` : "text-muted-foreground border-border hover:border-primary/40"
+                  status === key ? `${cfg.color} ${cfg.bg} font-medium` : "text-muted-foreground border-white/10 hover:border-primary/40"
                 }`}
               >
                 {cfg.label}
@@ -195,7 +194,7 @@ function PlanoView({ plano, titulo, categoria, responsavelNome, geradoPorIA, sta
                   <span className="text-sm font-bold text-violet-400">{p.numero ?? i + 1}</span>
                 </div>
                 <div className="flex-1 pb-2">
-                  <div className="rounded-xl border border-border bg-card/50 p-4 space-y-3">
+                  <div className="rounded-xl border border-white/10 bg-card/50 p-4 space-y-3">
                     <h4 className="text-sm font-semibold text-foreground">{p.titulo}</h4>
                     <p className="text-sm text-muted-foreground leading-relaxed">{p.descricao}</p>
                     {p.dicas && p.dicas.length > 0 && (
@@ -448,12 +447,9 @@ export default function InstrucoesPage() {
             const st = STATUS_CONFIG[it.status] ?? STATUS_CONFIG.pendente;
             const plano = it.plano as Plano | null;
             return (
-              <Card
-                key={it.id}
-                className="group border-border hover:border-primary/30 transition-all cursor-pointer bg-card/50 hover:bg-card/80"
-                onClick={() => setViewingIT(it)}
+              <div className="glass-card group border-white/10 hover:border-primary/30 transition-all cursor-pointer bg-card/50 hover:bg-card/80" key={it.id} onClick={() => setViewingIT(it)}
               >
-                <CardContent className="p-4 space-y-3">
+                <div className="p-6 pt-0 p-4 space-y-3">
                   {/* Título + badge IA */}
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="text-sm font-semibold text-foreground line-clamp-2 leading-snug flex-1">{it.titulo}</h3>
@@ -499,7 +495,7 @@ export default function InstrucoesPage() {
 
                   {/* Passos resumo */}
                   {plano?.passos && plano.passos.length > 0 && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1 border-t border-border">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1 border-t border-white/10">
                       <CheckCircle2 className="w-3 h-3 text-green-400" />
                       <span>{plano.passos.length} passos</span>
                       {plano.materiais && plano.materiais.length > 0 && (
@@ -540,8 +536,8 @@ export default function InstrucoesPage() {
                       </Button>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -551,9 +547,9 @@ export default function InstrucoesPage() {
       {viewingIT && (
         <div className="fixed inset-0 z-50 flex">
           <div className="flex-1 bg-black/50 backdrop-blur-sm" onClick={() => setViewingIT(null)} />
-          <div className="w-full max-w-2xl bg-background border-l border-border flex flex-col shadow-2xl overflow-hidden">
+          <div className="w-full max-w-2xl bg-background border-l border-white/10 flex flex-col shadow-2xl overflow-hidden">
             {/* Header */}
-            <div className="flex items-start justify-between gap-3 p-5 border-b border-border shrink-0">
+            <div className="flex items-start justify-between gap-3 p-5 border-b border-white/10 shrink-0">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center shrink-0">
@@ -590,7 +586,7 @@ export default function InstrucoesPage() {
                   onStatusChange={updateStatusM ? (s) => handleStatusChange(viewingIT, s) : undefined}
                 />
               ) : viewingIT.conteudo ? (
-                <div className="rounded-xl border border-border bg-card/50 p-4">
+                <div className="rounded-xl border border-white/10 bg-card/50 p-4">
                   <pre className="whitespace-pre-wrap text-sm text-foreground font-sans leading-relaxed">{viewingIT.conteudo}</pre>
                 </div>
               ) : (

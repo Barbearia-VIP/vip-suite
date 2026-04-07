@@ -2,7 +2,6 @@
  * PrivilegiosPage.tsx — Controle de privilégios e permissões do Gestão Total
  */
 import { Shield, Users, Lock, Eye, Edit2, Trash2, Plus } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 const PERFIS = [
@@ -63,16 +62,16 @@ export default function PrivilegiosPage() {
 
       <div className="space-y-3">
         {PERFIS.map((perfil) => (
-          <Card key={perfil.nome} className="bg-card border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
+          <div className="glass-card bg-white/5 border-white/10" key={perfil.nome}>
+            <div className="p-6 pb-2 pb-2">
+              <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">
                 <span className={`text-[11px] font-semibold px-2 py-0.5 rounded border ${perfil.cor}`}>
                   {perfil.nome}
                 </span>
                 <span className="text-xs text-muted-foreground font-normal">{perfil.descricao}</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </h3>
+            </div>
+            <div className="p-6 pt-0">
               <div className="flex flex-wrap gap-2">
                 {perfil.permissoes.map((p) => {
                   const Icon = PERMISSAO_ICONS[p] ?? Shield;
@@ -87,20 +86,20 @@ export default function PrivilegiosPage() {
                   );
                 })}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
 
-      <Card className="bg-card border-border border-dashed">
-        <CardContent className="p-6 text-center">
+      <div className="glass-card bg-white/5 border-white/10 border-dashed">
+        <div className="p-6 pt-0 p-6 text-center">
           <Shield className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
           <p className="text-sm font-medium text-foreground">Configuração granular em desenvolvimento</p>
           <p className="text-xs text-muted-foreground mt-1">
             Em breve será possível customizar permissões por módulo, página e ação individualmente para cada perfil.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

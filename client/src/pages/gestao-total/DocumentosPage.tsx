@@ -6,7 +6,6 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -114,30 +113,30 @@ export default function DocumentosPage() {
       <div className="flex gap-2 flex-wrap items-center">
         <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar documentos..." className="max-w-xs text-sm" />
         {["todos", "geral", "rh", "financeiro", "operacional", "juridico", "marketing"].map(c => (
-          <button key={c} onClick={() => setFilterCat(c)} className={`text-xs px-3 py-1 rounded-full border transition-colors capitalize ${filterCat === c ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>{c}</button>
+          <button key={c} onClick={() => setFilterCat(c)} className={`text-xs px-3 py-1 rounded-full border transition-colors capitalize ${filterCat === c ? "bg-primary text-primary-foreground border-primary" : "border-white/10 text-muted-foreground hover:text-foreground"}`}>{c}</button>
         ))}
       </div>
 
       {q.isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-lg" />)}</div>
       ) : filtered.length === 0 ? (
-        <Card className="bg-card border-border">
-          <CardContent className="p-8 text-center">
+        <div className="glass-card bg-white/5 border-white/10">
+          <div className="p-6 pt-0 p-8 text-center">
             <FileText className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">Nenhum documento cadastrado</p>
             <Button size="sm" variant="outline" className="mt-3" onClick={() => setShowForm(true)}>Adicionar documento</Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {filtered.map(d => (
-            <Card key={d.id} className="bg-card border-border hover:border-primary/40 transition-colors">
-              <CardHeader className="pb-2">
+            <div className="glass-card bg-white/5 border-white/10 hover:border-primary/40 transition-colors" key={d.id}>
+              <div className="p-6 pb-2 pb-2">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-2 min-w-0">
                     <FileText className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                     <div className="min-w-0">
-                      <CardTitle className="text-sm truncate">{d.titulo}</CardTitle>
+                      <h3 className="font-semibold text-foreground text-sm truncate">{d.titulo}</h3>
                       <p className="text-xs text-muted-foreground capitalize mt-0.5">{d.categoria} {d.versao && `• v${d.versao}`}</p>
                     </div>
                   </div>
@@ -147,9 +146,9 @@ export default function DocumentosPage() {
                     <button onClick={() => deleteM.mutate({ id: d.id, orgId: d.orgId })} className="text-muted-foreground hover:text-red-400 p-0.5"><Trash2 className="w-3 h-3" /></button>
                   </div>
                 </div>
-              </CardHeader>
-              {d.descricao && <CardContent className="pt-0"><p className="text-xs text-muted-foreground line-clamp-2">{d.descricao}</p></CardContent>}
-            </Card>
+              </div>
+              {d.descricao && <div className="p-6 pt-0 pt-0"><p className="text-xs text-muted-foreground line-clamp-2">{d.descricao}</p></div>}
+            </div>
           ))}
         </div>
       )}

@@ -5,7 +5,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -106,19 +105,19 @@ export default function CargosPage() {
       {q.isLoading ? (
         <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>
       ) : cargos.length === 0 ? (
-        <Card className="bg-card border-border">
-          <CardContent className="p-8 text-center">
+        <div className="glass-card bg-white/5 border-white/10">
+          <div className="p-6 pt-0 p-8 text-center">
             <Briefcase className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">Nenhum cargo cadastrado</p>
             <Button size="sm" variant="outline" className="mt-3" onClick={() => setShowForm(true)}>Criar cargo</Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
         <div className="space-y-4">
           {(["estrategico", "tatico", "operacional"] as const).map(nivel => byNivel[nivel].length > 0 && (
             <div key={nivel}>
               <h3 className={`text-xs font-semibold uppercase tracking-wider mb-2 capitalize ${NIVEL_COLORS[nivel]}`}>{nivel}</h3>
-              <Card className="bg-card border-border">
+              <div className="glass-card bg-white/5 border-white/10">
                 <div className="divide-y divide-border">
                   {byNivel[nivel].map(c => (
                     <div key={c.id} className="flex items-center justify-between px-4 py-3 hover:bg-muted/30">
@@ -134,7 +133,7 @@ export default function CargosPage() {
                     </div>
                   ))}
                 </div>
-              </Card>
+              </div>
             </div>
           ))}
         </div>

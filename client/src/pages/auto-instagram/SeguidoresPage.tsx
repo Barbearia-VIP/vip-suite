@@ -7,7 +7,7 @@ export default function SeguidoresPage() {
         title="Seguidores"
         description="Boas-vindas automáticas a novos seguidores"
       />
-      <div className="rounded-lg border border-border bg-card p-8 text-center">
+      <div className="rounded-lg border border-white/10 bg-white/5 p-8 text-center">
         <div
           className="w-12 h-12 rounded-xl mx-auto mb-4 flex items-center justify-center"
           style={{ background: "oklch(0.65 0.15 320)20" }}

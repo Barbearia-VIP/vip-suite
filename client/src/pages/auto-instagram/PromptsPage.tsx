@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -71,9 +70,9 @@ export default function PromptsPage() {
     return (
       <div className="p-6">
         <PageHeader title="Editor de Prompts" description="Selecione uma unidade" />
-        <Card className="mt-6 border-border bg-card">
-          <CardContent className="py-12 text-center text-muted-foreground">Selecione uma unidade no seletor do topo.</CardContent>
-        </Card>
+        <div className="glass-card mt-6 border-white/10 bg-white/5">
+          <div className="p-6 pt-0 py-12 text-center text-muted-foreground">Selecione uma unidade no seletor do topo.</div>
+        </div>
       </div>
     );
   }
@@ -93,15 +92,15 @@ export default function PromptsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Prompt de comentários */}
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
+        <div className="glass-card bg-white/5 border-white/10">
+          <div className="p-6 pb-2 pb-3">
+            <h3 className="font-semibold text-foreground text-sm font-medium flex items-center gap-2">
               <MessageCircle className="w-4 h-4 text-green-400" />
               Prompt para Comentários
-            </CardTitle>
+            </h3>
             <p className="text-xs text-muted-foreground">Define como o bot responde a comentários nos posts</p>
-          </CardHeader>
-          <CardContent className="space-y-3">
+          </div>
+          <div className="p-6 pt-0 space-y-3">
             <Textarea
               value={commentPrompt}
               onChange={(e) => setCommentPrompt(e.target.value)}
@@ -115,19 +114,19 @@ export default function PromptsPage() {
                 Restaurar padrão
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Prompt de stories */}
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
+        <div className="glass-card bg-white/5 border-white/10">
+          <div className="p-6 pb-2 pb-3">
+            <h3 className="font-semibold text-foreground text-sm font-medium flex items-center gap-2">
               <Activity className="w-4 h-4 text-blue-400" />
               Prompt para Stories
-            </CardTitle>
+            </h3>
             <p className="text-xs text-muted-foreground">Define como o bot responde a mensagens de stories</p>
-          </CardHeader>
-          <CardContent className="space-y-3">
+          </div>
+          <div className="p-6 pt-0 space-y-3">
             <Textarea
               value={storyPrompt}
               onChange={(e) => setStoryPrompt(e.target.value)}
@@ -141,20 +140,20 @@ export default function PromptsPage() {
                 Restaurar padrão
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Teste ao vivo */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
+      <div className="glass-card bg-white/5 border-white/10">
+        <div className="p-6 pb-2 pb-3">
+          <h3 className="font-semibold text-foreground text-sm font-medium flex items-center gap-2">
             <Zap className="w-4 h-4 text-primary" />
             Teste ao Vivo
-          </CardTitle>
+          </h3>
           <p className="text-xs text-muted-foreground">Simule como o bot responderia a um comentário ou story específico</p>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </div>
+        <div className="p-6 pt-0 space-y-4">
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -207,8 +206,8 @@ export default function PromptsPage() {
               <li>Instrua sobre o uso de emojis</li>
             </ul>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

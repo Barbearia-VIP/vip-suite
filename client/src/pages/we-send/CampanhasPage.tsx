@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -74,8 +73,8 @@ export default function CampanhasPage() {
           ))}
         </div>
       ) : campanhas.length === 0 ? (
-        <Card className="bg-card border-border">
-          <CardContent className="p-8 text-center">
+        <div className="glass-card bg-white/5 border-white/10">
+          <div className="p-6 pt-0 p-8 text-center">
             <MessageSquare className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm font-medium text-foreground mb-1">Nenhuma campanha ainda</p>
             <p className="text-xs text-muted-foreground mb-4">Crie sua primeira campanha de WhatsApp</p>
@@ -84,8 +83,8 @@ export default function CampanhasPage() {
                 <Send className="w-3.5 h-3.5" />Criar campanha
               </Button>
             </Link>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
         <div className="space-y-3">
           {campanhas.map(campanha => {
@@ -97,8 +96,8 @@ export default function CampanhasPage() {
             const progresso = total > 0 ? Math.round((enviados + falhas) / total * 100) : 0;
 
             return (
-              <Card key={campanha.id} className="bg-card border-border hover:border-primary/30 transition-colors">
-                <CardContent className="p-4">
+              <div className="glass-card bg-white/5 border-white/10 hover:border-primary/30 transition-colors" key={campanha.id}>
+                <div className="p-6 pt-0 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
@@ -146,8 +145,8 @@ export default function CampanhasPage() {
                       )}
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -172,7 +171,7 @@ export default function CampanhasPage() {
                   { label: "Enviados", value: campanhaQuery.data.totalEnviados || 0, color: "text-green-500" },
                   { label: "Falhas", value: campanhaQuery.data.totalFalhas || 0, color: "text-red-500" },
                 ].map(m => (
-                  <div key={m.label} className="text-center p-3 rounded-lg bg-muted/30 border border-border">
+                  <div key={m.label} className="text-center p-3 rounded-lg bg-muted/30 border border-white/10">
                     <p className={`text-xl font-bold ${m.color}`}>{m.value}</p>
                     <p className="text-xs text-muted-foreground">{m.label}</p>
                   </div>
@@ -180,14 +179,14 @@ export default function CampanhasPage() {
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-medium text-foreground">Mensagem:</p>
-                <div className="rounded-lg bg-muted/30 border border-border p-3 text-xs text-muted-foreground whitespace-pre-wrap">
+                <div className="rounded-lg bg-muted/30 border border-white/10 p-3 text-xs text-muted-foreground whitespace-pre-wrap">
                   {campanhaQuery.data.mensagem}
                 </div>
               </div>
               {campanhaQuery.data.contatos && campanhaQuery.data.contatos.length > 0 && (
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-foreground">Contatos ({campanhaQuery.data.contatos.length}):</p>
-                  <div className="rounded-lg border border-border overflow-hidden">
+                  <div className="rounded-lg border border-white/10 overflow-hidden">
                     <div className="max-h-48 overflow-y-auto">
                       {campanhaQuery.data.contatos.map((c, i) => {
                         const statusColors: Record<string, string> = {

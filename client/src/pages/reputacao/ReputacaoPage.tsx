@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import PageHeader from "@/components/PageHeader";
@@ -132,23 +131,23 @@ export default function ReputacaoPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((k) => (
-          <Card key={k.label}>
-            <CardContent className="p-4">
+          <div className="glass-card" key={k.label}>
+            <div className="p-6 pt-0 p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-muted-foreground">{k.label}</span>
                 <div className={`p-1.5 rounded-lg ${k.bg}`}><k.icon className={`w-4 h-4 ${k.color}`} /></div>
               </div>
               <div className="text-2xl font-bold">{dashQuery.isLoading ? "..." : k.value}</div>
               <div className="text-xs text-muted-foreground mt-1">{k.sub}</div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
+        <div className="glass-card lg:col-span-2">
+          <div className="p-6 pb-2">
+            <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-primary" />
               Evolução da Nota Média
               {primeiraMes && (
@@ -156,9 +155,9 @@ export default function ReputacaoPage() {
                   desde {(() => { const [a,m] = primeiraMes.split("-"); const ms=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]; return `${ms[parseInt(m,10)-1]}/${a}`; })()}
                 </span>
               )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="p-6 pt-0">
             {evolucao.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-sm gap-2">
                 <BarChart3 className="w-8 h-8 opacity-30" />
@@ -176,12 +175,12 @@ export default function ReputacaoPage() {
 <EvolucaoNotaChart data={evolucao} notaMediaGeral={notaMediaGeral} />
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader><CardTitle className="text-base">Distribuição de Sentimentos</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
+        <div className="glass-card">
+          <div className="p-6 pb-2"><h3 className="font-semibold text-foreground text-base">Distribuição de Sentimentos</h3></div>
+          <div className="p-6 pt-0 space-y-3">
             {[
               { label: "Positivas", value: resumo?.totalPositivas ?? 0, color: "bg-green-500", icon: ThumbsUp, textColor: "text-green-600" },
               { label: "Neutras", value: resumo?.totalNeutras ?? 0, color: "bg-amber-500", icon: Minus, textColor: "text-amber-600" },
@@ -206,18 +205,18 @@ export default function ReputacaoPage() {
                 <Link href="/reputacao/avaliacoes">Ver todas as avaliações</Link>
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
+      <div className="glass-card">
+        <div className="p-6 pb-2 flex flex-row items-center justify-between">
+          <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-primary" />Avaliações Recentes
-          </CardTitle>
+          </h3>
           <Button variant="ghost" size="sm" asChild><Link href="/reputacao/avaliacoes">Ver todas →</Link></Button>
-        </CardHeader>
-        <CardContent>
+        </div>
+        <div className="p-6 pt-0">
           {dashQuery.isLoading ? (
             <div className="space-y-3">{[1, 2, 3].map((i) => <div key={i} className="h-20 bg-muted/50 rounded-lg animate-pulse" />)}</div>
           ) : recentes.length === 0 ? (
@@ -229,7 +228,7 @@ export default function ReputacaoPage() {
           ) : (
             <div className="space-y-3">
               {recentes.map((av: any) => (
-                <div key={av.id} className="p-3 rounded-lg border bg-card/50 hover:bg-card transition-colors">
+                <div key={av.id} className="p-3 rounded-lg border bg-card/50 hover:bg-white/5 transition-colors">
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-sm">{av.autorNome || "Anônimo"}</span>
@@ -251,8 +250,8 @@ export default function ReputacaoPage() {
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

@@ -5,7 +5,6 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -50,7 +49,7 @@ function TarefaCard({ tarefa, onEdit, onDelete, onStatusChange }: {
   const [, navigate] = useLocation();
   const isIT = !!tarefa.instrucaoId;
   return (
-    <div className={`bg-card border rounded-lg p-3 space-y-2 hover:border-primary/40 transition-colors ${isIT ? "border-violet-500/30" : "border-border"}`}>
+    <div className={`bg-white/5 border rounded-lg p-3 space-y-2 hover:border-primary/40 transition-colors ${isIT ? "border-violet-500/30" : "border-white/10"}`}>
       {isIT && (
         <div className="flex items-center gap-1.5">
           <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-violet-400 border-violet-400/30 gap-1 h-4">
@@ -90,7 +89,7 @@ function TarefaCard({ tarefa, onEdit, onDelete, onStatusChange }: {
       )}
       {tarefa.status !== "concluida" && (
         <Select value={tarefa.status} onValueChange={v => onStatusChange(tarefa.id, v as Tarefa["status"])}>
-          <SelectTrigger className="h-6 text-xs border-border bg-muted/30">
+          <SelectTrigger className="h-6 text-xs border-white/10 bg-muted/30">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -215,7 +214,7 @@ export default function TarefasPage() {
           <p className="text-sm text-muted-foreground">{tarefas.length} tarefas • {tarefas.filter(t => t.status === "pendente").length} pendentes</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex border border-border rounded-lg overflow-hidden">
+          <div className="flex border border-white/10 rounded-lg overflow-hidden">
             <button onClick={() => setView("kanban")} className={`px-3 py-1.5 text-xs flex items-center gap-1.5 transition-colors ${view === "kanban" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
               <LayoutGrid className="w-3.5 h-3.5" /> Kanban
             </button>
@@ -251,7 +250,7 @@ export default function TarefasPage() {
                     <TarefaCard key={t.id} tarefa={t} onEdit={setEditingTarefa} onDelete={handleDelete} onStatusChange={handleStatusChange} />
                   ))}
                   {colTarefas.length === 0 && (
-                    <div className="border-2 border-dashed border-border rounded-lg p-4 text-center">
+                    <div className="border-2 border-dashed border-white/10 rounded-lg p-4 text-center">
                       <p className="text-xs text-muted-foreground">Sem tarefas</p>
                     </div>
                   )}
@@ -261,7 +260,7 @@ export default function TarefasPage() {
           })}
         </div>
       ) : (
-        <Card className="bg-card border-border">
+        <div className="glass-card bg-white/5 border-white/10">
           <div className="divide-y divide-border">
             {filtered.length === 0 ? (
               <div className="p-8 text-center text-sm text-muted-foreground">Nenhuma tarefa encontrada</div>
@@ -286,7 +285,7 @@ export default function TarefasPage() {
               </div>
             ))}
           </div>
-        </Card>
+        </div>
       )}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-md">

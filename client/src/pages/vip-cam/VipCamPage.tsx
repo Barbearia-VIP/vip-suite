@@ -5,7 +5,6 @@
 import { Link } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { useApp } from '@/contexts/AppContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -39,7 +38,7 @@ function SatisfactionBadge({ level }: { level: string }) {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-card border border-border rounded-lg p-3 shadow-lg text-xs space-y-1">
+    <div className="bg-white/5 border border-white/10 rounded-lg p-3 shadow-lg text-xs space-y-1">
       <p className="font-semibold text-foreground mb-1">{label}</p>
       {payload.map((p: any) => (
         <div key={p.name} className="flex items-center gap-2">
@@ -219,8 +218,8 @@ export default function VipCamPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((k) => (
-          <Card key={k.label}>
-            <CardContent className="p-4">
+          <div className="glass-card" key={k.label}>
+            <div className="p-6 pt-0 p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-muted-foreground">{k.label}</span>
                 <div className={`p-1.5 rounded-lg ${k.bg}`}>
@@ -229,22 +228,22 @@ export default function VipCamPage() {
               </div>
               <div className="text-2xl font-bold">{k.value}</div>
               <div className="text-xs text-muted-foreground mt-1">{k.sub}</div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
 
       {/* Distribuição + Tendência 7 dias */}
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Tendência 7 dias — col-span-2 */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
+        <div className="glass-card lg:col-span-2">
+          <div className="p-6 pb-2">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <CardTitle className="text-base flex items-center gap-2">
+              <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-primary" />
                 Tendência — Últimos {trendPeriod} Dias
                 {trendPeriod > 7 && <span className="text-xs font-normal text-muted-foreground">(agrupado por semana)</span>}
-              </CardTitle>
+              </h3>
               <div className="flex gap-1">
                 {([7, 30, 90] as PeriodOption[]).map(p => (
                   <button
@@ -261,8 +260,8 @@ export default function VipCamPage() {
                 ))}
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
+          </div>
+          <div className="p-6 pt-0">
             {areaData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm gap-2">
                 <BarChart3 className="w-8 h-8 opacity-30" />
@@ -299,15 +298,15 @@ export default function VipCamPage() {
                 </AreaChart>
               </ResponsiveContainer>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Distribuição de Satisfação — Hoje */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Distribuição — Hoje</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="glass-card">
+          <div className="p-6 pb-2">
+            <h3 className="font-semibold text-foreground text-base">Distribuição — Hoje</h3>
+          </div>
+          <div className="p-6 pt-0">
             {pieData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm gap-2">
                 <Camera className="w-8 h-8 opacity-30" />
@@ -362,21 +361,21 @@ export default function VipCamPage() {
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Detecções por Hora + Clientes Recentes */}
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Detecções por hora */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
+        <div className="glass-card lg:col-span-2">
+          <div className="p-6 pb-2">
+            <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
               <Clock className="w-4 h-4 text-primary" />
               Detecções por Hora — Hoje
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="p-6 pt-0">
             {hourlyData.length === 0 ? (
               <div className="flex items-center justify-center h-40 text-muted-foreground text-sm gap-2">
                 <AlertCircle className="w-5 h-5 opacity-40" />
@@ -395,21 +394,21 @@ export default function VipCamPage() {
                 </BarChart>
               </ResponsiveContainer>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Clientes recentes */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
+        <div className="glass-card">
+          <div className="p-6 pb-2 flex flex-row items-center justify-between pb-2">
+            <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
               <Users className="w-4 h-4 text-primary" />
               Clientes Recentes
-            </CardTitle>
+            </h3>
             <Button variant="ghost" size="sm" asChild>
               <Link href="/vip-cam/clientes">Ver todos →</Link>
             </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
+          </div>
+          <div className="p-6 pt-0 space-y-3">
             {!clientesData?.clientes?.length ? (
               <div className="flex flex-col items-center justify-center h-32 text-muted-foreground text-sm gap-2">
                 <Users className="w-7 h-7 opacity-30" />
@@ -434,8 +433,8 @@ export default function VipCamPage() {
                 <Link href="/vip-cam/clientes">Ver base completa</Link>
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

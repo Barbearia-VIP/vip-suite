@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -156,8 +155,8 @@ export default function AvaliacoesPage() {
 
       {/* Box de progresso do lote */}
       {showBatchBox && batchJob && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="p-4">
+        <div className="glass-card border-primary/30 bg-primary/5">
+          <div className="p-6 pt-0 p-4">
             <div className="flex items-start justify-between gap-3 mb-3">
               <div className="flex items-center gap-2">
                 <Zap className={`w-4 h-4 text-primary ${!batchJob.concluido ? "animate-pulse" : ""}`} />
@@ -192,11 +191,11 @@ export default function AvaliacoesPage() {
                 <span>{batchJob.processados - batchJob.erros} respostas geradas com sucesso</span>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
-      <Card>
+      <div className="glass-card">
         <div className="p-4 space-y-3">
           <div className="flex flex-wrap gap-3">
             <div className="relative flex-1 min-w-48">
@@ -248,19 +247,19 @@ export default function AvaliacoesPage() {
             </Button>
           </div>
         </div>
-      </Card>
+      </div>
 
       <div className="space-y-3">
         {query.isLoading ? (
           [1, 2, 3, 4, 5].map(i => <div key={i} className="h-24 bg-muted/50 rounded-lg animate-pulse" />)
         ) : avaliacoes.length === 0 ? (
-          <Card><CardContent className="py-12 text-center text-muted-foreground">
+          <div className="glass-card"><div className="p-6 pt-0 py-12 text-center text-muted-foreground">
             <MessageSquare className="w-10 h-10 mx-auto mb-2 opacity-30" />
             <p>Nenhuma avaliação encontrada.</p>
-          </CardContent></Card>
+          </div></div>
         ) : avaliacoes.map((av: any) => (
-          <Card key={av.id} className="hover:shadow-sm transition-shadow">
-            <CardContent className="p-4">
+          <div className="glass-card hover:shadow-sm transition-shadow" key={av.id}>
+            <div className="p-6 pt-0 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -288,8 +287,8 @@ export default function AvaliacoesPage() {
                   )}
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
 

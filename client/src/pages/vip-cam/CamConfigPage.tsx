@@ -4,7 +4,6 @@
 import { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc';
 import { useApp } from '@/contexts/AppContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -82,17 +81,17 @@ export default function CamConfigPage() {
     <div className="p-6 space-y-6">
       <PageHeader title="Configurações VIP Cam" description="Configure a câmera de reconhecimento facial" />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
+      <div className="glass-card">
+        <div className="p-6 pb-2 pb-3">
+          <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">
             <Camera className="h-4 w-4" />Tipo de Câmera
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          </h3>
+        </div>
+        <div className="p-6 pt-0 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => setCameraType('usb')}
-              className={`p-4 rounded-lg border-2 text-left transition-colors ${cameraType === 'usb' ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/30'}`}
+              className={`p-4 rounded-lg border-2 text-left transition-colors ${cameraType === 'usb' ? 'border-primary bg-primary/5' : 'border-white/10 hover:border-muted-foreground/30'}`}
             >
               <Camera className="h-6 w-6 mb-2 text-primary" />
               <p className="font-medium text-sm">Webcam USB</p>
@@ -101,7 +100,7 @@ export default function CamConfigPage() {
             </button>
             <button
               onClick={() => setCameraType('ip')}
-              className={`p-4 rounded-lg border-2 text-left transition-colors ${cameraType === 'ip' ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/30'}`}
+              className={`p-4 rounded-lg border-2 text-left transition-colors ${cameraType === 'ip' ? 'border-primary bg-primary/5' : 'border-white/10 hover:border-muted-foreground/30'}`}
             >
               <Wifi className="h-6 w-6 mb-2 text-primary" />
               <p className="font-medium text-sm">Câmera IP</p>
@@ -109,17 +108,17 @@ export default function CamConfigPage() {
               {cameraType === 'ip' && <Badge className="mt-2 text-xs">Selecionado</Badge>}
             </button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {cameraType === 'ip' && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2">
+        <div className="glass-card">
+          <div className="p-6 pb-2 pb-3">
+            <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">
               <Wifi className="h-4 w-4" />Câmera IP — Conexão RTSP
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </h3>
+          </div>
+          <div className="p-6 pt-0 space-y-4">
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription className="text-xs">
@@ -151,13 +150,13 @@ export default function CamConfigPage() {
                 <Input type="password" placeholder="senha" value={rtspPassword} onChange={e => setRtspPassword(e.target.value)} autoComplete="new-password" />
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm">Parâmetros de Detecção</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
+      <div className="glass-card">
+        <div className="p-6 pb-2 pb-3"><h3 className="font-semibold text-foreground text-sm">Parâmetros de Detecção</h3></div>
+        <div className="p-6 pt-0 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <Label>Câmera ativa</Label>
@@ -182,18 +181,18 @@ export default function CamConfigPage() {
               <p className="text-xs text-muted-foreground">Tempo para acumular frames antes de classificar</p>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Card de Manutenção — Recálculo em lote da satisfação */}
-      <Card className="border-amber-500/30 bg-amber-500/5">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
+      <div className="glass-card border-amber-500/30 bg-amber-500/5">
+        <div className="p-6 pb-2 pb-3">
+          <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">
             <RefreshCw className="h-4 w-4 text-amber-500" />
             Recalcular Satisfação dos Clientes
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+          </h3>
+        </div>
+        <div className="p-6 pt-0 space-y-3">
           <p className="text-xs text-muted-foreground">
             Reaplica a regra de prioridade positiva (SenseVIP) em todos os clientes desta unidade,
             usando o histórico completo de capturas. Use após importar dados históricos ou
@@ -213,18 +212,18 @@ export default function CamConfigPage() {
             </p>
             <RecalcHistory unitId={unitId} />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Card de Reclassificação Histórica com Novos Thresholds */}
-      <Card className="border-blue-500/30 bg-blue-500/5">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
+      <div className="glass-card border-blue-500/30 bg-blue-500/5">
+        <div className="p-6 pb-2 pb-3">
+          <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">
             <History className="h-4 w-4 text-blue-400" />
             Reclassificar Histórico com Nova Lógica
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+          </h3>
+        </div>
+        <div className="p-6 pt-0 space-y-3">
           <p className="text-xs text-muted-foreground">
             Reavalia <strong>cada captura histórica</strong> da timeline usando a expressão dominante
             e os novos thresholds calibrados para o modelo face-api: angry ≥ 0.55, disgusted ≥ 0.50,
@@ -238,8 +237,8 @@ export default function CamConfigPage() {
             </AlertDescription>
           </Alert>
           <ReclassifyHistoryButton unitId={unitId} />
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saveConfig.isPending}>

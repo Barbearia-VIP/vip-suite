@@ -6,7 +6,6 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -155,15 +154,15 @@ export default function RiscosPage() {
       {q.isLoading ? (
         <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>
       ) : riscos.length === 0 ? (
-        <Card className="bg-card border-border">
-          <CardContent className="p-8 text-center">
+        <div className="glass-card bg-white/5 border-white/10">
+          <div className="p-6 pt-0 p-8 text-center">
             <Shield className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">Nenhum risco mapeado</p>
             <Button size="sm" variant="outline" className="mt-3" onClick={() => setShowForm(true)}>Mapear risco</Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
-        <Card className="bg-card border-border">
+        <div className="glass-card bg-white/5 border-white/10">
           <div className="divide-y divide-border">
             {riscos.map(r => {
               const nivel = NIVEL_RISCO[r.probabilidade]?.[r.impacto] ?? "Médio";
@@ -188,7 +187,7 @@ export default function RiscosPage() {
               );
             })}
           </div>
-        </Card>
+        </div>
       )}
 
       <Dialog open={showForm} onOpenChange={setShowForm}>

@@ -4,7 +4,6 @@
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
 import { useApp } from '@/contexts/AppContext';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -52,7 +51,7 @@ export default function CamHistoricoPage() {
             {(data?.timeline ?? []).map((t, i) => {
               const level = (t.satisfactionLevel ?? 'neutral') as SatisfactionLevel;
               return (
-                <Card key={i}><CardContent className="p-3 flex items-center gap-3">
+                <div className="glass-card" key={i}><div className="p-6 pt-0 p-3 flex items-center gap-3">
                   <span className="text-2xl">{SATISFACTION_EMOJIS[level]}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium" style={{ color: SATISFACTION_COLORS[level] }}>{SATISFACTION_LABELS[level]}</p>
@@ -64,7 +63,7 @@ export default function CamHistoricoPage() {
                   <span className="text-xs text-muted-foreground whitespace-nowrap">
                     {t.recordedAt ? new Date(t.recordedAt).toLocaleString('pt-BR') : ''}
                   </span>
-                </CardContent></Card>
+                </div></div>
               );
             })}
             {(data?.timeline ?? []).length === 0 && (

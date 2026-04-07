@@ -5,7 +5,6 @@ import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -123,7 +122,7 @@ export default function IAConselheiroPage() {
         </div>
 
         {/* Mensagens */}
-        <Card className="flex-1 bg-card border-border overflow-hidden flex flex-col">
+        <div className="glass-card flex-1 bg-white/5 border-white/10 overflow-hidden flex flex-col">
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
@@ -136,7 +135,7 @@ export default function IAConselheiroPage() {
                 </div>
                 <div className="grid grid-cols-1 gap-2 w-full max-w-sm">
                   {["Como melhorar a retenção de clientes?","Quais indicadores devo acompanhar?","Como motivar minha equipe?"].map(s=>(
-                    <button key={s} onClick={()=>setInput(s)} className="text-xs text-left px-3 py-2 rounded-lg border border-border hover:border-primary/40 text-muted-foreground hover:text-foreground transition-colors">{s}</button>
+                    <button key={s} onClick={()=>setInput(s)} className="text-xs text-left px-3 py-2 rounded-lg border border-white/10 hover:border-primary/40 text-muted-foreground hover:text-foreground transition-colors">{s}</button>
                   ))}
                 </div>
               </div>
@@ -161,7 +160,7 @@ export default function IAConselheiroPage() {
           </div>
 
           {/* Input */}
-          <div className="border-t border-border p-3">
+          <div className="border-t border-white/10 p-3">
             <div className="flex gap-2">
               <Input
                 value={input}
@@ -176,7 +175,7 @@ export default function IAConselheiroPage() {
               </Button>
             </div>
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );

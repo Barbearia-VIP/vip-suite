@@ -2,7 +2,6 @@
  * ConfiguracoesGtPage.tsx — Configurações do módulo Gestão Total
  */
 import { Settings, Bell, Palette, Globe, Lock, Database } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 
 const CONFIG_SECTIONS = [
@@ -50,16 +49,16 @@ export default function ConfiguracoesGtPage() {
         {CONFIG_SECTIONS.map((section) => {
           const Icon = section.icon;
           return (
-            <Card key={section.title} className="bg-card border-border hover:border-primary/30 transition-colors">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2">
+            <div className="glass-card bg-white/5 border-white/10 hover:border-primary/30 transition-colors" key={section.title}>
+              <div className="p-6 pb-2 pb-2">
+                <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
                     <Icon className="w-4 h-4 text-primary" />
                   </div>
                   {section.title}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+                </h3>
+              </div>
+              <div className="p-6 pt-0 space-y-3">
                 <p className="text-xs text-muted-foreground">{section.description}</p>
                 <button
                   onClick={() => toast.info("Funcionalidade em desenvolvimento")}
@@ -67,21 +66,21 @@ export default function ConfiguracoesGtPage() {
                 >
                   {section.action} →
                 </button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           );
         })}
       </div>
 
-      <Card className="bg-card border-border border-dashed">
-        <CardContent className="p-6 text-center">
+      <div className="glass-card bg-white/5 border-white/10 border-dashed">
+        <div className="p-6 pt-0 p-6 text-center">
           <Settings className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
           <p className="text-sm font-medium text-foreground">Mais configurações em breve</p>
           <p className="text-xs text-muted-foreground mt-1">
             Esta seção será expandida com integrações, webhooks e automações avançadas.
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

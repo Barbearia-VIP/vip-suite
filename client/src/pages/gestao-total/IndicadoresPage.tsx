@@ -8,7 +8,6 @@ import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
 import { useLocation } from "wouter";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -85,8 +84,8 @@ function IndicadorCard({ ind, onNavigate }: { ind: Indicador; onNavigate: (path:
   const link = CATEGORIA_LINK[ind.categoria];
 
   return (
-    <Card className="hover:shadow-md transition-shadow border-border/60 bg-card">
-      <CardContent className="p-4 space-y-3">
+    <div className="glass-card hover:shadow-md transition-shadow border-border/60 bg-white/5">
+      <div className="p-6 pt-0 p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             {CATEGORIA_ICON[ind.categoria] ?? <Target className="w-4 h-4 text-muted-foreground" />}
@@ -125,8 +124,8 @@ function IndicadorCard({ ind, onNavigate }: { ind: Indicador; onNavigate: (path:
             )}
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -145,8 +144,8 @@ function GraficosView({ indicadores }: { indicadores: Indicador[] }) {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardContent className="p-4">
+      <div className="glass-card">
+        <div className="p-6 pt-0 p-4">
           <h3 className="text-sm font-semibold mb-4 text-foreground">% de Atingimento por Indicador</h3>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={barData} margin={{ top: 5, right: 10, left: 0, bottom: 70 }}>
@@ -172,11 +171,11 @@ function GraficosView({ indicadores }: { indicadores: Indicador[] }) {
               <Bar dataKey="pct" name="% da Meta" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <Card>
-        <CardContent className="p-4">
+      <div className="glass-card">
+        <div className="p-6 pt-0 p-4">
           <h3 className="text-sm font-semibold mb-4 text-foreground">Radar de Performance</h3>
           <ResponsiveContainer width="100%" height={300}>
             <RadarChart data={radarData}>
@@ -192,8 +191,8 @@ function GraficosView({ indicadores }: { indicadores: Indicador[] }) {
               <Legend wrapperStyle={{ fontSize: 12 }} />
             </RadarChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
@@ -239,28 +238,28 @@ export default function IndicadoresPage() {
 
       {!isLoading && indicadores.length > 0 && (
         <div className="grid grid-cols-3 gap-3">
-          <Card className="border-green-500/30 bg-green-500/5">
-            <CardContent className="p-3 text-center">
+          <div className="glass-card border-green-500/30 bg-green-500/5">
+            <div className="p-6 pt-0 p-3 text-center">
               <p className="text-2xl font-bold text-green-400">{totalOk}</p>
               <p className="text-xs text-muted-foreground mt-0.5">No alvo (≥80%)</p>
-            </CardContent>
-          </Card>
-          <Card className="border-yellow-500/30 bg-yellow-500/5">
-            <CardContent className="p-3 text-center">
+            </div>
+          </div>
+          <div className="glass-card border-yellow-500/30 bg-yellow-500/5">
+            <div className="p-6 pt-0 p-3 text-center">
               <p className="text-2xl font-bold text-yellow-400">{totalAtencao}</p>
               <p className="text-xs text-muted-foreground mt-0.5">Atenção (40–79%)</p>
-            </CardContent>
-          </Card>
-          <Card className="border-red-500/30 bg-red-500/5">
-            <CardContent className="p-3 text-center">
+            </div>
+          </div>
+          <div className="glass-card border-red-500/30 bg-red-500/5">
+            <div className="p-6 pt-0 p-3 text-center">
               <p className="text-2xl font-bold text-red-400">{totalCritico}</p>
               <p className="text-xs text-muted-foreground mt-0.5">Crítico (&lt;40%)</p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       )}
 
-      <div className="flex items-center gap-1 border-b border-border">
+      <div className="flex items-center gap-1 border-b border-white/10">
         {[
           { key: "geral", label: "Visão Geral", icon: <LayoutGrid className="w-4 h-4" /> },
           { key: "categoria", label: "Por Categoria", icon: <Tag className="w-4 h-4" /> },

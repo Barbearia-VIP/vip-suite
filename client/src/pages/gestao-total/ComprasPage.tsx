@@ -5,7 +5,6 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -115,12 +114,12 @@ export default function ComprasPage() {
       </div>
       <div className="flex gap-2 flex-wrap">
         {["todos","rascunho","aguardando_aprovacao","aprovado","recebido","cancelado"].map(s=>(
-          <button key={s} onClick={()=>setFilterStatus(s)} className={`text-xs px-3 py-1 rounded-full border transition-colors capitalize ${filterStatus===s?"bg-primary text-primary-foreground border-primary":"border-border text-muted-foreground hover:text-foreground"}`}>{s}</button>
+          <button key={s} onClick={()=>setFilterStatus(s)} className={`text-xs px-3 py-1 rounded-full border transition-colors capitalize ${filterStatus===s?"bg-primary text-primary-foreground border-primary":"border-white/10 text-muted-foreground hover:text-foreground"}`}>{s}</button>
         ))}
       </div>
       {q.isLoading?<div className="space-y-2">{Array.from({length:4}).map((_,i)=><Skeleton key={i} className="h-16 rounded-lg" />)}</div>
-      :filtered.length===0?<Card className="bg-card border-border"><CardContent className="p-8 text-center"><ShoppingCart className="w-8 h-8 text-muted-foreground mx-auto mb-2" /><p className="text-sm text-muted-foreground">Nenhuma compra registrada</p><Button size="sm" variant="outline" className="mt-3" onClick={()=>setShowForm(true)}>Solicitar compra</Button></CardContent></Card>
-      :<Card className="bg-card border-border"><div className="divide-y divide-border">{filtered.map(c=>(
+      :filtered.length===0?<div className="glass-card bg-white/5 border-white/10"><div className="p-6 pt-0 p-8 text-center"><ShoppingCart className="w-8 h-8 text-muted-foreground mx-auto mb-2" /><p className="text-sm text-muted-foreground">Nenhuma compra registrada</p><Button size="sm" variant="outline" className="mt-3" onClick={()=>setShowForm(true)}>Solicitar compra</Button></div></div>
+      :<div className="glass-card bg-white/5 border-white/10"><div className="divide-y divide-border">{filtered.map(c=>(
         <div key={c.id} className="flex items-center justify-between px-4 py-3 hover:bg-muted/30">
           <div className="flex items-center gap-3 min-w-0">
             {STATUS_ICONS[c.status]??<Clock className="w-4 h-4 text-muted-foreground" />}
@@ -136,7 +135,7 @@ export default function ComprasPage() {
             <button onClick={()=>deleteM.mutate({id:c.id,orgId:c.orgId})} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
           </div>
         </div>
-      ))}</div></Card>}
+      ))}</div></div>}
       <Dialog open={showForm} onOpenChange={setShowForm}><DialogContent className="max-w-md max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Nova Compra</DialogTitle></DialogHeader>
         <FormCompra onSave={d=>{if(!org?.id)return;saveM.mutate({orgId:org.id,unitId:selectedUnit?.id,...d});}} onClose={()=>setShowForm(false)} />
       </DialogContent></Dialog>

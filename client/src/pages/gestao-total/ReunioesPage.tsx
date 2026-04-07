@@ -5,7 +5,6 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -92,8 +91,8 @@ export default function ReunioesPage() {
         <Button size="sm" onClick={()=>setShowForm(true)} className="gap-1.5"><Plus className="w-3.5 h-3.5" /> Nova Reunião</Button>
       </div>
       {q.isLoading?<div className="space-y-2">{Array.from({length:4}).map((_,i)=><Skeleton key={i} className="h-20 rounded-lg" />)}</div>
-      :reunioes.length===0?<Card className="bg-card border-border"><CardContent className="p-8 text-center"><Calendar className="w-8 h-8 text-muted-foreground mx-auto mb-2" /><p className="text-sm text-muted-foreground">Nenhuma reunião agendada</p><Button size="sm" variant="outline" className="mt-3" onClick={()=>setShowForm(true)}>Agendar reunião</Button></CardContent></Card>
-      :<Card className="bg-card border-border"><div className="divide-y divide-border">{reunioes.map(r=>(
+      :reunioes.length===0?<div className="glass-card bg-white/5 border-white/10"><div className="p-6 pt-0 p-8 text-center"><Calendar className="w-8 h-8 text-muted-foreground mx-auto mb-2" /><p className="text-sm text-muted-foreground">Nenhuma reunião agendada</p><Button size="sm" variant="outline" className="mt-3" onClick={()=>setShowForm(true)}>Agendar reunião</Button></div></div>
+      :<div className="glass-card bg-white/5 border-white/10"><div className="divide-y divide-border">{reunioes.map(r=>(
         <div key={r.id} className="flex items-start justify-between px-4 py-3 hover:bg-muted/30">
           <div className="flex items-start gap-3 min-w-0">
             <Calendar className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
@@ -113,7 +112,7 @@ export default function ReunioesPage() {
             <button onClick={()=>deleteM.mutate({id:r.id,orgId:r.orgId})} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
           </div>
         </div>
-      ))}</div></Card>}
+      ))}</div></div>}
       <Dialog open={showForm} onOpenChange={setShowForm}><DialogContent className="max-w-md max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Nova Reunião</DialogTitle></DialogHeader>
         <FormReuniao onSave={d=>{if(!org?.id)return;const {data:dt,...rest}=d as {data?:string;titulo:string;duracao?:number;local?:string;pauta?:string;participantes?:string[]};saveM.mutate({orgId:org.id,unitId:selectedUnit?.id,data:dt??"",...rest});}} onClose={()=>setShowForm(false)} />
       </DialogContent></Dialog>

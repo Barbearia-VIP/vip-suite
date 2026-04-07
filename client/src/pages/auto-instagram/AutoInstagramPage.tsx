@@ -1,5 +1,4 @@
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useApp } from "@/contexts/AppContext";
@@ -65,11 +64,11 @@ export default function AutoInstagramPage() {
     return (
       <div className="p-6">
         <PageHeader title="Auto Instagram" description="Selecione uma unidade para gerenciar o bot" />
-        <Card className="mt-6 border-border bg-card">
-          <CardContent className="py-12 text-center text-muted-foreground">
+        <div className="glass-card mt-6 border-white/10 bg-white/5">
+          <div className="p-6 pt-0 py-12 text-center text-muted-foreground">
             Selecione uma unidade no seletor do topo para gerenciar o bot do Instagram.
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -101,8 +100,8 @@ export default function AutoInstagramPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className={`border-2 ${isRunning ? "border-green-500/50 bg-green-500/5" : isConfigured ? "border-yellow-500/50 bg-yellow-500/5" : "border-red-500/50 bg-red-500/5"}`}>
-          <CardContent className="p-4">
+        <div className={`glass-card border-2 ${isRunning ? "border-green-500/50 bg-green-500/5" : isConfigured ? "border-yellow-500/50 bg-yellow-500/5" : "border-red-500/50 bg-red-500/5"}`}>
+          <div className="p-6 pt-0 p-4">
             <div className="flex items-center gap-3">
               <div className={`w-3 h-3 rounded-full ${isRunning ? "bg-green-500 animate-pulse" : isConfigured ? "bg-yellow-500" : "bg-red-500"}`} />
               <div>
@@ -117,33 +116,33 @@ export default function AutoInstagramPage() {
                 Último ciclo: {formatDistanceToNow(new Date(status.lastRun), { addSuffix: true, locale: ptBR })}
               </p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
+        <div className="glass-card bg-white/5 border-white/10">
+          <div className="p-6 pt-0 p-4">
             <div className="flex items-center gap-2 mb-1">
               <MessageCircle className="w-4 h-4 text-green-400" />
               <p className="text-xs text-muted-foreground">Comentários (7 dias)</p>
             </div>
             <p className="text-2xl font-bold text-foreground">{stats?.replies ?? 0}</p>
             <p className="text-xs text-muted-foreground">respostas enviadas</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
+        <div className="glass-card bg-white/5 border-white/10">
+          <div className="p-6 pt-0 p-4">
             <div className="flex items-center gap-2 mb-1">
               <Activity className="w-4 h-4 text-blue-400" />
               <p className="text-xs text-muted-foreground">Stories (7 dias)</p>
             </div>
             <p className="text-2xl font-bold text-foreground">{stats?.stories ?? 0}</p>
             <p className="text-xs text-muted-foreground">respostas enviadas</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className={`border-border ${(stats?.pendingApproval ?? 0) > 0 ? "border-yellow-500/50 bg-yellow-500/5" : "bg-card"}`}>
-          <CardContent className="p-4">
+        <div className={`glass-card ${(stats?.pendingApproval ?? 0) > 0 ? "border-yellow-500/50 bg-yellow-500/5" : "bg-white/5"}`}>
+          <div className="p-6 pt-0 p-4">
             <div className="flex items-center gap-2 mb-1">
               <CheckSquare className={`w-4 h-4 ${(stats?.pendingApproval ?? 0) > 0 ? "text-yellow-400" : "text-muted-foreground"}`} />
               <p className="text-xs text-muted-foreground">Aguardando Aprovação</p>
@@ -156,14 +155,14 @@ export default function AutoInstagramPage() {
                 <p className="text-xs text-yellow-400 hover:underline cursor-pointer mt-1">Ver fila →</p>
               </Link>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Alertas */}
       {!isRunning && isConfigured && (
-        <Card className="border-yellow-500/50 bg-yellow-500/5">
-          <CardContent className="p-4 flex items-center gap-3">
+        <div className="glass-card border-yellow-500/50 bg-yellow-500/5">
+          <div className="p-6 pt-0 p-4 flex items-center gap-3">
             <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0" />
             <div>
               <p className="text-sm font-medium text-yellow-400">Bot pausado</p>
@@ -172,13 +171,13 @@ export default function AutoInstagramPage() {
             <Button size="sm" onClick={() => startBotMut.mutate({ unitId })} className="ml-auto bg-green-600 hover:bg-green-700 text-white">
               <Play className="w-3.5 h-3.5 mr-1.5" /> Iniciar
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {!isConfigured && (
-        <Card className="border-red-500/50 bg-red-500/5">
-          <CardContent className="p-4 flex items-center gap-3">
+        <div className="glass-card border-red-500/50 bg-red-500/5">
+          <div className="p-6 pt-0 p-4 flex items-center gap-3">
             <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
             <div>
               <p className="text-sm font-medium text-red-400">Credenciais não configuradas</p>
@@ -189,20 +188,20 @@ export default function AutoInstagramPage() {
                 <Settings className="w-3.5 h-3.5 mr-1.5" /> Configurar
               </Button>
             </Link>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Gráfico */}
-        <Card className="lg:col-span-2 bg-card border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
+        <div className="glass-card lg:col-span-2 bg-white/5 border-white/10">
+          <div className="p-6 pb-2 pb-2">
+            <h3 className="font-semibold text-foreground text-sm font-medium flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-primary" />
               Atividade dos Últimos 7 Dias
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="p-6 pt-0">
             {(stats?.chartData?.length ?? 0) > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={stats?.chartData ?? []}>
@@ -221,15 +220,15 @@ export default function AutoInstagramPage() {
                 Nenhuma atividade registrada nos últimos 7 dias
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Acesso rápido */}
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Acesso Rápido</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1 p-4 pt-0">
+        <div className="glass-card bg-white/5 border-white/10">
+          <div className="p-6 pb-2 pb-2">
+            <h3 className="font-semibold text-foreground text-sm font-medium">Acesso Rápido</h3>
+          </div>
+          <div className="p-6 pt-0 space-y-1 p-4 pt-0">
             {[
               { href: "/auto-instagram/prompts", icon: BookOpen, label: "Editor de Prompts", desc: "Personalidade do bot" },
               { href: "/auto-instagram/aprovacao", icon: CheckSquare, label: "Fila de Aprovação", desc: `${stats?.pendingApproval ?? 0} pendentes`, badge: stats?.pendingApproval },
@@ -249,22 +248,22 @@ export default function AutoInstagramPage() {
                 </div>
               </Link>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Log recente */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-2 flex flex-row items-center justify-between">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
+      <div className="glass-card bg-white/5 border-white/10">
+        <div className="p-6 pb-2 pb-2 flex flex-row items-center justify-between">
+          <h3 className="font-semibold text-foreground text-sm font-medium flex items-center gap-2">
             <Activity className="w-4 h-4 text-primary" />
             Atividade Recente
-          </CardTitle>
+          </h3>
           <Link href="/auto-instagram/logs">
             <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">Ver todos →</Button>
           </Link>
-        </CardHeader>
-        <CardContent className="p-0">
+        </div>
+        <div className="p-6 pt-0 p-0">
           {activity.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground text-sm">Nenhuma atividade registrada ainda</div>
           ) : (
@@ -287,8 +286,8 @@ export default function AutoInstagramPage() {
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

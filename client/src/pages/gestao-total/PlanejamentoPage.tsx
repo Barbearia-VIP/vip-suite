@@ -7,7 +7,6 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -200,8 +199,8 @@ export default function PlanejamentoPage() {
 
       {/* Empty state */}
       {!q.isLoading && !hasContent && (
-        <Card className="bg-card border-border border-dashed">
-          <CardContent className="p-8 text-center">
+        <div className="glass-card bg-white/5 border-white/10 border-dashed">
+          <div className="p-6 pt-0 p-8 text-center">
             <Sparkles className="w-10 h-10 text-violet-400 mx-auto mb-3" />
             <h3 className="font-semibold text-foreground mb-1">Nenhum planejamento ainda</h3>
             <p className="text-sm text-muted-foreground mb-4">
@@ -211,8 +210,8 @@ export default function PlanejamentoPage() {
             <Button onClick={() => setShowAIModal(true)} className="gap-2 bg-violet-600 hover:bg-violet-700">
               <Sparkles className="w-4 h-4" /> Gerar Planejamento com IA
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {q.isLoading ? (
@@ -221,24 +220,24 @@ export default function PlanejamentoPage() {
         <div className="space-y-6">
           {/* Missão, Visão, Valores */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="bg-card border-border">
-              <CardHeader className="pb-2"><CardTitle className="text-sm text-primary">Missão</CardTitle></CardHeader>
-              <CardContent className="pt-0">
+            <div className="glass-card bg-white/5 border-white/10">
+              <div className="p-6 pb-2 pb-2"><h3 className="font-semibold text-foreground text-sm text-primary">Missão</h3></div>
+              <div className="p-6 pt-0 pt-0">
                 <Textarea value={missao} onChange={e => setMissao(e.target.value)} placeholder="Por que a empresa existe..." className="text-sm min-h-[80px] bg-transparent border-0 p-0 focus-visible:ring-0 resize-none" />
-              </CardContent>
-            </Card>
-            <Card className="bg-card border-border">
-              <CardHeader className="pb-2"><CardTitle className="text-sm text-primary">Visão</CardTitle></CardHeader>
-              <CardContent className="pt-0">
+              </div>
+            </div>
+            <div className="glass-card bg-white/5 border-white/10">
+              <div className="p-6 pb-2 pb-2"><h3 className="font-semibold text-foreground text-sm text-primary">Visão</h3></div>
+              <div className="p-6 pt-0 pt-0">
                 <Textarea value={visao} onChange={e => setVisao(e.target.value)} placeholder="Onde quer chegar em 5 anos..." className="text-sm min-h-[80px] bg-transparent border-0 p-0 focus-visible:ring-0 resize-none" />
-              </CardContent>
-            </Card>
-            <Card className="bg-card border-border">
-              <CardHeader className="pb-2"><CardTitle className="text-sm text-primary">Valores</CardTitle></CardHeader>
-              <CardContent className="pt-0">
+              </div>
+            </div>
+            <div className="glass-card bg-white/5 border-white/10">
+              <div className="p-6 pb-2 pb-2"><h3 className="font-semibold text-foreground text-sm text-primary">Valores</h3></div>
+              <div className="p-6 pt-0 pt-0">
                 <Textarea value={valores} onChange={e => setValores(e.target.value)} placeholder="Princípios que guiam as decisões..." className="text-sm min-h-[80px] bg-transparent border-0 p-0 focus-visible:ring-0 resize-none" />
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           {/* SWOT */}
@@ -255,8 +254,8 @@ export default function PlanejamentoPage() {
           {/* Objetivos */}
           <div>
             <h2 className="text-sm font-semibold text-foreground mb-3">Objetivos Estratégicos</h2>
-            <Card className="bg-card border-border">
-              <CardContent className="p-3 space-y-2">
+            <div className="glass-card bg-white/5 border-white/10">
+              <div className="p-6 pt-0 p-3 space-y-2">
                 {objetivos.map((o, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <Target className="w-3.5 h-3.5 text-primary shrink-0" />
@@ -269,8 +268,8 @@ export default function PlanejamentoPage() {
                   <Input value={novoObjetivo} onChange={e => setNovoObjetivo(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && novoObjetivo.trim()) { setObjetivos([...objetivos, { titulo: novoObjetivo.trim() }]); setNovoObjetivo(""); } }} placeholder="Novo objetivo estratégico..." className="text-sm" />
                   <Button size="sm" variant="outline" onClick={() => { if (novoObjetivo.trim()) { setObjetivos([...objetivos, { titulo: novoObjetivo.trim() }]); setNovoObjetivo(""); } }}><Plus className="w-3.5 h-3.5" /></Button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -288,7 +287,7 @@ export default function PlanejamentoPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="rounded-lg bg-muted/30 border border-border p-3 space-y-1">
+            <div className="rounded-lg bg-muted/30 border border-white/10 p-3 space-y-1">
               <p className="text-xs text-muted-foreground font-medium">Unidade selecionada</p>
               <p className="text-sm font-semibold text-foreground">{currentUnit?.name ?? "—"}</p>
               {currentUnit?.city && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" />{currentUnit.city}</p>}
@@ -366,7 +365,7 @@ export default function PlanejamentoPage() {
                 <p className="text-xs font-semibold mb-2">Objetivos Estratégicos</p>
                 <div className="space-y-1.5">
                   {(aiResult.objetivos ?? []).map((o, i) => (
-                    <div key={i} className="flex items-center gap-2 rounded-md border border-border p-2">
+                    <div key={i} className="flex items-center gap-2 rounded-md border border-white/10 p-2">
                       <ChevronRight className="w-3.5 h-3.5 text-primary shrink-0" />
                       <span className="text-xs flex-1">{o.titulo}</span>
                       {o.prazo && <span className="text-xs text-muted-foreground">{o.prazo}</span>}

@@ -5,7 +5,6 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -134,16 +133,16 @@ export default function FinanceiroPage() {
           <Button size="sm" onClick={()=>setShowForm(true)} className="gap-1.5"><Plus className="w-3.5 h-3.5" /> Novo</Button>
         </div>
       </div>
-      {syncStatusQ.data && <Card className="bg-blue-500/10 border-blue-500/30"><CardContent className="p-3 flex items-center gap-3"><Database className="w-4 h-4 text-blue-400 shrink-0" /><div className="min-w-0 flex-1"><p className="text-xs text-blue-300 font-medium">Sincronização Data VIP ativa</p><p className="text-[10px] text-blue-400/70 mt-0.5">{syncStatusQ.data.totalRegistros} registros · Período: {syncStatusQ.data.periodoInicio} a {syncStatusQ.data.periodoFim} · Última atualização: {new Date(syncStatusQ.data.ultimaAtualizacao).toLocaleString('pt-BR')}</p></div></CardContent></Card>}
+      {syncStatusQ.data && <div className="glass-card bg-blue-500/10 border-blue-500/30"><div className="p-6 pt-0 p-3 flex items-center gap-3"><Database className="w-4 h-4 text-blue-400 shrink-0" /><div className="min-w-0 flex-1"><p className="text-xs text-blue-300 font-medium">Sincronização Data VIP ativa</p><p className="text-[10px] text-blue-400/70 mt-0.5">{syncStatusQ.data.totalRegistros} registros · Período: {syncStatusQ.data.periodoInicio} a {syncStatusQ.data.periodoFim} · Última atualização: {new Date(syncStatusQ.data.ultimaAtualizacao).toLocaleString('pt-BR')}</p></div></div></div>}
       <div className="grid grid-cols-3 gap-3">
         {[{label:"Receitas",val:totalR,icon:TrendingUp,cls:"text-green-400"},{label:"Despesas",val:totalD,icon:TrendingDown,cls:"text-red-400"},{label:"Resultado",val:totalR-totalD,icon:DollarSign,cls:totalR-totalD>=0?"text-green-400":"text-red-400"}].map(k=>(
-          <Card key={k.label} className="bg-card border-border"><CardContent className="p-4">
+          <div className="glass-card bg-white/5 border-white/10" key={k.label}><div className="p-6 pt-0 p-4">
             <div className="flex items-center gap-2 mb-1"><k.icon className={`w-4 h-4 ${k.cls}`} /><p className="text-xs text-muted-foreground">{k.label}</p></div>
             <p className={`text-xl font-bold ${k.cls}`}>{fmt(k.val)}</p>
-          </CardContent></Card>
+          </div></div>
         ))}
       </div>
-      <div className="flex border border-border rounded-lg overflow-hidden w-fit">
+      <div className="flex border border-white/10 rounded-lg overflow-hidden w-fit">
         {(["lancamentos","dre"] as const).map(t=>(
           <button key={t} onClick={()=>setTab(t)} className={`px-4 py-1.5 text-xs transition-colors capitalize ${tab===t?"bg-primary text-primary-foreground":"text-muted-foreground hover:text-foreground"}`}>{t==="dre"?"DRE":"Lançamentos"}</button>
         ))}
@@ -151,12 +150,12 @@ export default function FinanceiroPage() {
       {tab==="lancamentos"&&<>
         <div className="flex gap-2">
           {(["todos","receita","despesa"] as const).map(t=>(
-            <button key={t} onClick={()=>setFilterTipo(t)} className={`text-xs px-3 py-1 rounded-full border transition-colors capitalize ${filterTipo===t?"bg-primary text-primary-foreground border-primary":"border-border text-muted-foreground hover:text-foreground"}`}>{t}</button>
+            <button key={t} onClick={()=>setFilterTipo(t)} className={`text-xs px-3 py-1 rounded-full border transition-colors capitalize ${filterTipo===t?"bg-primary text-primary-foreground border-primary":"border-white/10 text-muted-foreground hover:text-foreground"}`}>{t}</button>
           ))}
         </div>
         {listQ.isLoading?<div className="space-y-2">{Array.from({length:5}).map((_,i)=><Skeleton key={i} className="h-14 rounded-lg" />)}</div>
-        :lancamentos.length===0?<Card className="bg-card border-border"><CardContent className="p-8 text-center"><DollarSign className="w-8 h-8 text-muted-foreground mx-auto mb-2" /><p className="text-sm text-muted-foreground">Nenhum lançamento em {referencia}</p><Button size="sm" variant="outline" className="mt-3" onClick={()=>setShowForm(true)}>Adicionar</Button></CardContent></Card>
-        :<Card className="bg-card border-border"><div className="divide-y divide-border">{lancamentos.map(l=>(
+        :lancamentos.length===0?<div className="glass-card bg-white/5 border-white/10"><div className="p-6 pt-0 p-8 text-center"><DollarSign className="w-8 h-8 text-muted-foreground mx-auto mb-2" /><p className="text-sm text-muted-foreground">Nenhum lançamento em {referencia}</p><Button size="sm" variant="outline" className="mt-3" onClick={()=>setShowForm(true)}>Adicionar</Button></div></div>
+        :<div className="glass-card bg-white/5 border-white/10"><div className="divide-y divide-border">{lancamentos.map(l=>(
           <div key={l.id} className="flex items-center justify-between px-4 py-3 hover:bg-muted/30">
               <div className="flex items-center gap-3 min-w-0">
               <div className={`w-2 h-2 rounded-full shrink-0 ${l.tipo==="receita"?"bg-green-400":"bg-red-400"}`} />
@@ -178,16 +177,16 @@ export default function FinanceiroPage() {
               {l.dataVipRef && <span className="text-[10px] text-muted-foreground/50 px-1" title="Gerado automaticamente pelo Data VIP">auto</span>}
             </div>
           </div>
-        ))}</div></Card>}
+        ))}</div></div>}
       </>}
-      {tab==="dre"&&<Card className="bg-card border-border"><CardHeader className="pb-2"><CardTitle className="text-sm">DRE — {referencia}</CardTitle></CardHeader><CardContent>
+      {tab==="dre"&&<div className="glass-card bg-white/5 border-white/10"><div className="p-6 pb-2 pb-2"><h3 className="font-semibold text-foreground text-sm">DRE — {referencia}</h3></div><div className="p-6 pt-0">
         {dreQ.isLoading?<div className="space-y-2">{Array.from({length:4}).map((_,i)=><Skeleton key={i} className="h-8 rounded" />)}</div>
         :dre?<div className="space-y-2">
           {[{label:"Receita Total",val:dre.receitas,cls:"text-green-400"},{label:"(-) Despesas",val:-dre.despesas,cls:"text-red-400"},{label:"= Resultado",val:dre.lucro,cls:dre.lucro>=0?"text-green-400 text-base font-bold":"text-red-400 text-base font-bold"},{label:"Margem",text:`${dre.margem.toFixed(1)}%`,val:0,cls:"text-muted-foreground"}].map(r=>(
             <div key={r.label} className="flex justify-between py-2 border-b border-border/50 last:border-0"><span className="text-sm text-foreground">{r.label}</span><span className={`text-sm ${r.cls}`}>{r.text??fmt(r.val)}</span></div>
           ))}
         </div>:<p className="text-sm text-muted-foreground text-center py-4">Sem dados para {referencia}</p>}
-      </CardContent></Card>}
+      </div></div>}
       <Dialog open={showForm} onOpenChange={setShowForm}><DialogContent className="max-w-md max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Novo Lançamento</DialogTitle></DialogHeader>
         <FormLancamento onSave={d=>{if(!org?.id)return;saveM.mutate({orgId:org.id,unitId:selectedUnit?.id,...d});}} onClose={()=>setShowForm(false)} />
       </DialogContent></Dialog>

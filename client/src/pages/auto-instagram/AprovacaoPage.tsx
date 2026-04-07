@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -47,9 +46,9 @@ export default function AprovacaoPage() {
     return (
       <div className="p-6">
         <PageHeader title="Fila de Aprovação" description="Selecione uma unidade" />
-        <Card className="mt-6 border-border bg-card">
-          <CardContent className="py-12 text-center text-muted-foreground">Selecione uma unidade no seletor do topo.</CardContent>
-        </Card>
+        <div className="glass-card mt-6 border-white/10 bg-white/5">
+          <div className="p-6 pt-0 py-12 text-center text-muted-foreground">Selecione uma unidade no seletor do topo.</div>
+        </div>
       </div>
     );
   }
@@ -68,18 +67,18 @@ export default function AprovacaoPage() {
       />
 
       {queue.length === 0 ? (
-        <Card className="bg-card border-border">
-          <CardContent className="py-16 text-center">
+        <div className="glass-card bg-white/5 border-white/10">
+          <div className="p-6 pt-0 py-16 text-center">
             <CheckSquare className="w-12 h-12 text-green-400 mx-auto mb-3" />
             <p className="text-foreground font-medium">Fila vazia!</p>
             <p className="text-sm text-muted-foreground mt-1">Não há respostas aguardando aprovação no momento.</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
         <div className="space-y-4">
           {queue.map((item) => (
-            <Card key={item.id} className="bg-card border-border">
-              <CardContent className="p-4 space-y-3">
+            <div className="glass-card bg-white/5 border-white/10" key={item.id}>
+              <div className="p-6 pt-0 p-4 space-y-3">
                 {/* Comentário original */}
                 <div className="rounded-lg bg-muted/30 p-3">
                   <div className="flex items-center gap-2 mb-1.5">
@@ -141,8 +140,8 @@ export default function AprovacaoPage() {
                     </>
                   )}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       )}

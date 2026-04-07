@@ -5,7 +5,6 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -42,10 +41,10 @@ const STATUS_COLORS: Record<string, string> = {
   planejamento: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   ativa: "bg-green-500/20 text-green-400 border-green-500/30",
   pausada: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-  concluida: "bg-muted text-muted-foreground border-border",
+  concluida: "bg-muted text-muted-foreground border-white/10",
   draft: "bg-purple-500/20 text-purple-400 border-purple-500/30",
   active: "bg-green-500/20 text-green-400 border-green-500/30",
-  archived: "bg-muted text-muted-foreground border-border",
+  archived: "bg-muted text-muted-foreground border-white/10",
 };
 const CANAL_ICONS: Record<string, string> = {
   instagram: "IG", facebook: "FB", whatsapp: "WA", email: "EM", google: "GG", offline: "OF", outro: "OT",
@@ -261,8 +260,8 @@ export default function MarketingPage() {
         {/* ABA: Estratégias com IA */}
         <TabsContent value="estrategias" className="mt-4 space-y-4">
           {/* Card de geração */}
-          <Card className="border-primary/30 bg-primary/5">
-            <CardContent className="p-5 flex items-center justify-between gap-4 flex-wrap">
+          <div className="glass-card border-primary/30 bg-primary/5">
+            <div className="p-6 pt-0 p-5 flex items-center justify-between gap-4 flex-wrap">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <Wand2 className="h-5 w-5 text-primary" />
@@ -275,34 +274,34 @@ export default function MarketingPage() {
               <Button onClick={() => setWizardOpen(true)} className="gap-2 shrink-0">
                 <Wand2 className="h-4 w-4" /> Gerar Nova Campanha com IA
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {aiQ.isLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-lg" />)}
             </div>
           ) : aiCampaigns.length === 0 ? (
-            <Card>
-              <CardContent className="p-8 text-center">
+            <div className="glass-card">
+              <div className="p-6 pt-0 p-8 text-center">
                 <Sparkles className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">Nenhuma estratégia gerada ainda</p>
                 <Button size="sm" variant="outline" className="mt-3" onClick={() => setWizardOpen(true)}>
                   Gerar primeira campanha
                 </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {aiCampaigns.map((c: AICampaign) => {
                 const channels = (c.channelMix as AICampaign[] | undefined) ?? [];
                 const wr = c.wizardResponses as AICampaign | undefined;
                 return (
-                  <Card key={c.id} className="bg-card border-border hover:border-primary/40 transition-colors">
-                    <CardHeader className="pb-2">
+                  <div className="glass-card bg-white/5 border-white/10 hover:border-primary/40 transition-colors" key={c.id}>
+                    <div className="p-6 pb-2 pb-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <CardTitle className="text-sm truncate">{c.campaignName}</CardTitle>
+                          <h3 className="font-semibold text-foreground text-sm truncate">{c.campaignName}</h3>
                           <div className="flex items-center gap-2 mt-1">
                             <Badge variant="outline" className={`text-xs ${STATUS_COLORS[c.status] ?? ""}`}>{c.status}</Badge>
                             <span className="text-xs text-muted-foreground">
@@ -317,8 +316,8 @@ export default function MarketingPage() {
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                    </CardHeader>
-                    <CardContent className="pt-0 space-y-3">
+                    </div>
+                    <div className="p-6 pt-0 pt-0 space-y-3">
                       {c.executiveSummary && (
                         <p className="text-xs text-muted-foreground line-clamp-2">{c.executiveSummary}</p>
                       )}
@@ -347,8 +346,8 @@ export default function MarketingPage() {
                           <UserCheck className="h-3 w-3" /> Destinar
                         </Button>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -360,7 +359,7 @@ export default function MarketingPage() {
           <div className="flex gap-2 flex-wrap">
             {["todos", "planejamento", "ativa", "pausada", "concluida"].map(s => (
               <button key={s} onClick={() => setFilterStatus(s)}
-                className={`text-xs px-3 py-1 rounded-full border transition-colors capitalize ${filterStatus === s ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
+                className={`text-xs px-3 py-1 rounded-full border transition-colors capitalize ${filterStatus === s ? "bg-primary text-primary-foreground border-primary" : "border-white/10 text-muted-foreground hover:text-foreground"}`}>
                 {s}
               </button>
             ))}
@@ -369,25 +368,25 @@ export default function MarketingPage() {
           {manualQ.isLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-36 rounded-lg" />)}</div>
           ) : campanhas.length === 0 ? (
-            <Card className="bg-card border-border">
-              <CardContent className="p-8 text-center">
+            <div className="glass-card bg-white/5 border-white/10">
+              <div className="p-6 pt-0 p-8 text-center">
                 <Megaphone className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">Nenhuma campanha cadastrada</p>
                 <Button size="sm" variant="outline" className="mt-3" onClick={() => setShowForm(true)}>Criar campanha</Button>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {campanhas.map(c => (
-                <Card key={c.id} className="bg-card border-border hover:border-primary/40 transition-colors">
-                  <CardHeader className="pb-2">
+                <div className="glass-card bg-white/5 border-white/10 hover:border-primary/40 transition-colors" key={c.id}>
+                  <div className="p-6 pb-2 pb-2">
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-2 min-w-0">
                         <div className="w-7 h-7 rounded bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
                           {CANAL_ICONS[c.canal] ?? "??"}
                         </div>
                         <div className="min-w-0">
-                          <CardTitle className="text-sm truncate">{c.nome}</CardTitle>
+                          <h3 className="font-semibold text-foreground text-sm truncate">{c.nome}</h3>
                           <p className="text-xs text-muted-foreground capitalize mt-0.5">{c.canal}</p>
                         </div>
                       </div>
@@ -397,16 +396,16 @@ export default function MarketingPage() {
                         <button onClick={() => deleteM.mutate({ id: c.id, orgId: c.orgId })} className="text-muted-foreground hover:text-red-400 p-0.5"><Trash2 className="w-3 h-3" /></button>
                       </div>
                     </div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
+                  </div>
+                  <div className="p-6 pt-0 pt-0">
                     <div className="grid grid-cols-2 gap-2">
                       {c.budget && <div><p className="text-xs text-muted-foreground">Budget</p><p className="text-sm font-semibold">{fmt(Number(c.budget))}</p></div>}
                       {c.gasto && <div><p className="text-xs text-muted-foreground">Gasto</p><p className="text-sm font-semibold">{fmt(Number(c.gasto))}</p></div>}
                       {c.alcance && <div><p className="text-xs text-muted-foreground">Alcance</p><p className="text-sm font-semibold">{c.alcance.toLocaleString("pt-BR")}</p></div>}
                       {c.conversoes && <div><p className="text-xs text-muted-foreground">Conversões</p><p className="text-sm font-semibold text-green-400">{c.conversoes}</p></div>}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           )}

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -62,13 +61,13 @@ export default function GestaoTotalPage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {MOCK_INDICATORS.map(ind => (
-          <Card key={ind.label} className="bg-card border-border">
-            <CardContent className="p-4">
+          <div className="glass-card bg-white/5 border-white/10" key={ind.label}>
+            <div className="p-6 pt-0 p-4">
               <p className="text-xs text-muted-foreground mb-1">{ind.label}</p>
               <p className="text-2xl font-bold text-foreground">{ind.value}</p>
               <p className="text-xs mt-1" style={{ color: ind.trend.startsWith("-") ? "oklch(0.65 0.15 30)" : "oklch(0.65 0.15 145)" }}>{ind.trend} vs mês anterior</p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
 
@@ -91,16 +90,16 @@ export default function GestaoTotalPage() {
               const S = STATUS_CONFIG[task.status] ?? STATUS_CONFIG.pending;
               const StatusIcon = S.icon;
               return (
-                <Card key={task.id} className="bg-card border-border">
-                  <CardContent className="p-3 flex items-center gap-3">
+                <div className="glass-card bg-white/5 border-white/10" key={task.id}>
+                  <div className="p-6 pt-0 p-3 flex items-center gap-3">
                     <button onClick={() => setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: t.status === "done" ? "pending" : "done" } : t))}>
                       <StatusIcon className={`w-4 h-4 ${S.color}`} />
                     </button>
                     <span className={`flex-1 text-sm ${task.status === "done" ? "line-through text-muted-foreground" : "text-foreground"}`}>{task.title}</span>
                     <Badge className={`text-xs shrink-0 ${PRIORITY_COLORS[task.priority]}`}>{task.priority}</Badge>
                     <span className="text-xs text-muted-foreground shrink-0">{task.assignee}</span>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -113,18 +112,18 @@ export default function GestaoTotalPage() {
               { label: "Despesas", value: "R$ 24.200", sub: "Mês atual", color: "oklch(0.65 0.15 30)" },
               { label: "Lucro Líquido", value: "R$ 44.200", sub: "Margem: 64.6%", color: "oklch(0.65 0.15 200)" },
             ].map(item => (
-              <Card key={item.label} className="bg-card border-border">
-                <CardContent className="p-5">
+              <div className="glass-card bg-white/5 border-white/10" key={item.label}>
+                <div className="p-6 pt-0 p-5">
                   <p className="text-xs text-muted-foreground mb-1">{item.label}</p>
                   <p className="text-2xl font-bold" style={{ color: item.color }}>{item.value}</p>
                   <p className="text-xs text-muted-foreground mt-1">{item.sub}</p>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ))}
           </div>
-          <Card className="bg-card border-border mt-4">
-            <CardHeader className="pb-2"><CardTitle className="text-sm">DRE Simplificado — Março 2026</CardTitle></CardHeader>
-            <CardContent>
+          <div className="glass-card bg-white/5 border-white/10 mt-4">
+            <div className="p-6 pb-2 pb-2"><h3 className="font-semibold text-foreground text-sm">DRE Simplificado — Março 2026</h3></div>
+            <div className="p-6 pt-0">
               <div className="space-y-2">
                 {[
                   { label: "Receita de Serviços", value: "R$ 62.000", type: "positive" },
@@ -141,8 +140,8 @@ export default function GestaoTotalPage() {
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="processos" className="mt-4">
@@ -153,9 +152,9 @@ export default function GestaoTotalPage() {
               { title: "Atendimento ao Cliente", steps: ["Recepcionar", "Consultar histórico", "Executar serviço", "Registrar feedback"], done: 2 },
               { title: "Compras e Estoque", steps: ["Verificar mínimos", "Solicitar cotações", "Aprovar compra", "Receber e registrar"], done: 1 },
             ].map(proc => (
-              <Card key={proc.title} className="bg-card border-border">
-                <CardHeader className="pb-2"><CardTitle className="text-sm">{proc.title}</CardTitle></CardHeader>
-                <CardContent className="space-y-1.5">
+              <div className="glass-card bg-white/5 border-white/10" key={proc.title}>
+                <div className="p-6 pb-2 pb-2"><h3 className="font-semibold text-foreground text-sm">{proc.title}</h3></div>
+                <div className="p-6 pt-0 space-y-1.5">
                   {proc.steps.map((step, i) => (
                     <div key={step} className="flex items-center gap-2">
                       {i < proc.done
@@ -167,18 +166,18 @@ export default function GestaoTotalPage() {
                   <div className="w-full bg-muted rounded-full h-1.5 mt-2">
                     <div className="h-1.5 rounded-full bg-primary" style={{ width: `${(proc.done / proc.steps.length) * 100}%` }} />
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ))}
           </div>
         </TabsContent>
 
         <TabsContent value="ia" className="mt-4">
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2"><Brain className="w-4 h-4 text-primary" />IA Conselheiro</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          <div className="glass-card bg-white/5 border-white/10">
+            <div className="p-6 pb-2 pb-2">
+              <h3 className="font-semibold text-foreground text-sm flex items-center gap-2"><Brain className="w-4 h-4 text-primary" />IA Conselheiro</h3>
+            </div>
+            <div className="p-6 pt-0 space-y-3">
               <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
                 <p className="text-xs font-medium text-foreground mb-2">Análise do mês — Março 2026</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
@@ -194,8 +193,8 @@ export default function GestaoTotalPage() {
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

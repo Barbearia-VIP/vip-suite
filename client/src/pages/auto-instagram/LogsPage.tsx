@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +25,7 @@ const typeColor: Record<string, string> = {
   story_reply: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   welcome: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
   error: "bg-red-500/10 text-red-400 border-red-500/20",
-  info: "bg-muted/50 text-muted-foreground border-border",
+  info: "bg-muted/50 text-muted-foreground border-white/10",
   warning: "bg-orange-500/10 text-orange-400 border-orange-500/20",
 };
 
@@ -66,9 +65,9 @@ export default function LogsPage() {
     return (
       <div className="p-6">
         <PageHeader title="Histórico de Logs" description="Selecione uma unidade" />
-        <Card className="mt-6 border-border bg-card">
-          <CardContent className="py-12 text-center text-muted-foreground">Selecione uma unidade no seletor do topo.</CardContent>
-        </Card>
+        <div className="glass-card mt-6 border-white/10 bg-white/5">
+          <div className="p-6 pt-0 py-12 text-center text-muted-foreground">Selecione uma unidade no seletor do topo.</div>
+        </div>
       </div>
     );
   }
@@ -78,8 +77,8 @@ export default function LogsPage() {
       <PageHeader title="Histórico de Logs" description={`${total} registros encontrados`} />
 
       {/* Filtros */}
-      <Card className="bg-card border-border">
-        <CardContent className="p-4">
+      <div className="glass-card bg-white/5 border-white/10">
+        <div className="p-6 pt-0 p-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -99,18 +98,18 @@ export default function LogsPage() {
             <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} placeholder="De" />
             <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} placeholder="Até" />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Lista de logs */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
+      <div className="glass-card bg-white/5 border-white/10">
+        <div className="p-6 pb-2 pb-2">
+          <h3 className="font-semibold text-foreground text-sm font-medium flex items-center gap-2">
             <FileText className="w-4 h-4 text-primary" />
             Logs de Atividade
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
+          </h3>
+        </div>
+        <div className="p-6 pt-0 p-0">
           {logsQuery.isLoading ? (
             <div className="py-12 text-center text-muted-foreground text-sm">Carregando...</div>
           ) : logs.length === 0 ? (
@@ -138,8 +137,8 @@ export default function LogsPage() {
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Paginação */}
       {totalPages > 1 && (

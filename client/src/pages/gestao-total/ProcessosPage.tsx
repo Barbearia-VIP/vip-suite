@@ -7,7 +7,6 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,12 +45,12 @@ function ProcessoCard({ p, onEdit, onDelete, onEnviarIT }: {
   const [expanded, setExpanded] = useState(false);
   const etapas = Array.isArray(p.etapas) ? (p.etapas as Etapa[]) : [];
   return (
-    <Card className="bg-card border-border">
-      <CardHeader className="pb-2">
+    <div className="glass-card bg-white/5 border-white/10">
+      <div className="p-6 pb-2 pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <CardTitle className="text-sm">{p.nome}</CardTitle>
+              <h3 className="font-semibold text-foreground text-sm">{p.nome}</h3>
               {p.geradoPorIA ? <Badge variant="outline" className="text-xs text-violet-400 border-violet-400/30">IA</Badge> : null}
               <Badge variant="outline" className={`text-xs ${p.tipo === "principal" ? "text-blue-400 border-blue-400/30" : "text-gray-400 border-gray-400/30"}`}>
                 {p.tipo === "principal" ? "Principal" : "Apoio"}
@@ -68,9 +67,9 @@ function ProcessoCard({ p, onEdit, onDelete, onEnviarIT }: {
             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-300" onClick={onDelete}><Trash2 className="w-3.5 h-3.5" /></Button>
           </div>
         </div>
-      </CardHeader>
+      </div>
       {etapas.length > 0 && (
-        <CardContent className="pt-0">
+        <div className="p-6 pt-0 pt-0">
           <button onClick={() => setExpanded(!expanded)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
             {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             {etapas.length} etapa{etapas.length !== 1 ? "s" : ""}
@@ -88,9 +87,9 @@ function ProcessoCard({ p, onEdit, onDelete, onEnviarIT }: {
               ))}
             </div>
           )}
-        </CardContent>
+        </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -334,8 +333,8 @@ export default function ProcessosPage() {
       </div>
 
       {!q.isLoading && processos.length === 0 && (
-        <Card className="bg-card border-border border-dashed">
-          <CardContent className="p-8 text-center">
+        <div className="glass-card bg-white/5 border-white/10 border-dashed">
+          <div className="p-6 pt-0 p-8 text-center">
             <Layers className="w-10 h-10 text-violet-400 mx-auto mb-3" />
             <h3 className="font-semibold text-foreground mb-1">Nenhum processo ainda</h3>
             <p className="text-sm text-muted-foreground mb-4">
@@ -346,8 +345,8 @@ export default function ProcessosPage() {
             <Button onClick={() => setShowAIModal(true)} className="gap-2 bg-violet-600 hover:bg-violet-700">
               <Sparkles className="w-4 h-4" /> Gerar Processos com IA
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {q.isLoading ? (
@@ -411,7 +410,7 @@ export default function ProcessosPage() {
             <DialogDescription>A IA usará o planejamento estratégico salvo para gerar os processos operacionais.</DialogDescription>
           </DialogHeader>
           <div className="py-3 space-y-3">
-            <div className="rounded-lg bg-muted/30 border border-border p-3">
+            <div className="rounded-lg bg-muted/30 border border-white/10 p-3">
               <p className="text-xs text-muted-foreground font-medium mb-1">Contexto utilizado</p>
               <p className="text-sm font-semibold">{currentUnit?.name ?? "—"}</p>
               {planejamentoQ.data?.missao && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">Missão: {planejamentoQ.data.missao}</p>}
@@ -437,7 +436,7 @@ export default function ProcessosPage() {
           </DialogHeader>
           <div className="space-y-3 py-2">
             {aiProcessos.map((p, i) => (
-              <div key={i} className={`rounded-lg border p-3 transition-opacity ${p.aceito === false ? "opacity-40 border-border" : "border-violet-500/30 bg-violet-500/5"}`}>
+              <div key={i} className={`rounded-lg border p-3 transition-opacity ${p.aceito === false ? "opacity-40 border-white/10" : "border-violet-500/30 bg-violet-500/5"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -521,7 +520,7 @@ export default function ProcessosPage() {
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors ${
                       String(c.id) === itColaboradorId
                         ? "border-violet-500/50 bg-violet-500/10 text-foreground"
-                        : "border-border bg-card hover:border-violet-500/30 hover:bg-violet-500/5 text-foreground"
+                        : "border-white/10 bg-white/5 hover:border-violet-500/30 hover:bg-violet-500/5 text-foreground"
                     }`}
                   >
                     <div className="w-8 h-8 rounded-full bg-violet-500/20 flex items-center justify-center shrink-0 text-sm font-semibold text-violet-400">

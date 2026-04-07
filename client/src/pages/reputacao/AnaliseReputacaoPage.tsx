@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import PageHeader from "@/components/PageHeader";
@@ -195,27 +194,27 @@ export default function AnaliseReputacaoPage() {
           { label: "% Positivas",     value: resumo ? `${Math.round((Number(resumo.totalPositivas) / (Number(resumo.totalAvaliacoes) || 1)) * 100)}%` : "—", icon: ThumbsUp,  color: "text-green-500", bg: "bg-green-500/10" },
           { label: "% Negativas",     value: resumo ? `${Math.round((Number(resumo.totalNegativas) / (Number(resumo.totalAvaliacoes) || 1)) * 100)}%` : "—", icon: ThumbsDown, color: "text-red-500",   bg: "bg-red-500/10"   },
         ].map((k) => (
-          <Card key={k.label}>
-            <CardContent className="p-4">
+          <div className="glass-card" key={k.label}>
+            <div className="p-6 pt-0 p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-muted-foreground">{k.label}</span>
                 <div className={`p-1.5 rounded-lg ${k.bg}`}><k.icon className={`w-4 h-4 ${k.color}`} /></div>
               </div>
               <div className="text-2xl font-bold">{resumoQuery.isLoading ? "..." : k.value}</div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
 
       {/* ── NPS + Alertas (50/50) ── */}
       <div className="grid lg:grid-cols-2 gap-6">
         {/* NPS Gauge */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
+        <div className="glass-card">
+          <div className="p-6 pb-2 pb-2">
+            <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
               <Star className="w-4 h-4 text-amber-500" />
               NPS Estimado
-            </CardTitle>
+            </h3>
             <p className="text-xs text-muted-foreground">
               {npsUsandoHistorico ? (
                 <span className="inline-flex items-center gap-1">
@@ -224,20 +223,20 @@ export default function AnaliseReputacaoPage() {
                 </span>
               ) : "Net Promoter Score baseado nas notas do período selecionado"}
             </p>
-          </CardHeader>
-          <CardContent>
+          </div>
+          <div className="p-6 pt-0">
             {analiseQuery.isLoading || resumoQuery.isLoading ? (
               <div className="h-56 rounded-lg bg-muted animate-pulse" />
             ) : (
               <NPSGauge porNota={porNotaRaw} />
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Alertas de Reputação */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
+        <div className="glass-card">
+          <div className="p-6 pb-2 pb-3">
+            <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
               <Zap className="w-4 h-4 text-amber-500" />
               Alertas de Reputação
               {alertasCriticos > 0 && (
@@ -245,9 +244,9 @@ export default function AnaliseReputacaoPage() {
                   {alertasCriticos} crítico{alertasCriticos > 1 ? "s" : ""}
                 </Badge>
               )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="p-6 pt-0">
             {alertasQuery.isLoading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map(i => <div key={i} className="h-14 rounded-lg bg-muted animate-pulse" />)}
@@ -287,19 +286,19 @@ export default function AnaliseReputacaoPage() {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* ── Tempo de Resposta da IA ── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
+      <div className="glass-card">
+        <div className="p-6 pb-2 pb-3">
+          <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
             <Timer className="w-4 h-4 text-primary" />
             Tempo de Resposta da IA
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </h3>
+        </div>
+        <div className="p-6 pt-0">
           {tempoRespostaQuery.isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map(i => <div key={i} className="h-8 rounded bg-muted animate-pulse" />)}
@@ -327,13 +326,13 @@ export default function AnaliseReputacaoPage() {
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* ── Evolução da Nota Média (histórico completo) ── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
+      <div className="glass-card">
+        <div className="p-6 pb-2">
+          <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-primary" />
             Evolução da Nota Média
             {primeiraMes && (() => {
@@ -345,9 +344,9 @@ export default function AnaliseReputacaoPage() {
                 </span>
               );
             })()}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </h3>
+        </div>
+        <div className="p-6 pt-0">
           {dashQuery.isLoading ? (
             <div className="h-64 rounded-lg bg-muted animate-pulse" />
           ) : evolucaoHistorica.length === 0 ? (
@@ -357,32 +356,32 @@ export default function AnaliseReputacaoPage() {
           ) : (
             <EvolucaoNotaChart data={evolucaoHistorica} notaMediaGeral={notaMediaGeral} />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* ── Distribuição de Sentimentos ── */}
       {hasSentimento && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
+        <div className="glass-card">
+          <div className="p-6 pb-2">
+            <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
               <ThumbsUp className="w-4 h-4 text-primary" />
               Distribuição de Sentimentos
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+            </h3>
+          </div>
+          <div className="p-6 pt-0">
             <SentimentoChart data={sentimentoData} />
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* ── Nuvem de Palavras ── */}
-      <Card>
-        <CardHeader className="pb-3">
+      <div className="glass-card">
+        <div className="p-6 pb-2 pb-3">
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <CardTitle className="text-base flex items-center gap-2">
+            <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-primary" />
               Nuvem de Palavras dos Comentários
-            </CardTitle>
+            </h3>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> positivo
@@ -410,8 +409,8 @@ export default function AnaliseReputacaoPage() {
               </Select>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
+        </div>
+        <div className="p-6 pt-0">
           {palavrasQuery.isLoading ? (
             <div className="flex flex-wrap gap-2 p-2 min-h-[180px] items-center justify-center">
               {Array.from({ length: 20 }).map((_, i) => (
@@ -426,8 +425,8 @@ export default function AnaliseReputacaoPage() {
               {palavras.length} palavras · tamanho proporcional à frequência · passe o mouse para detalhes
             </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

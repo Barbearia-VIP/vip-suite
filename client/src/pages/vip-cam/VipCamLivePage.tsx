@@ -6,7 +6,6 @@ import { Link } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { useApp } from '@/contexts/AppContext';
 import { EmotionCamera } from '@/components/vip-cam/EmotionCamera';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Settings, BarChart2, Users, Clock } from 'lucide-react';
@@ -100,9 +99,9 @@ export default function VipCamLivePage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Câmera principal */}
         <div className="lg:col-span-2">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
+          <div className="glass-card">
+            <div className="p-6 pb-2 pb-3">
+              <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
                 Câmera ao Vivo
                 {config && (
@@ -110,26 +109,26 @@ export default function VipCamLivePage() {
                     {config.cameraType === 'usb' ? '📷 USB' : '🌐 IP'}
                   </Badge>
                 )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </h3>
+            </div>
+            <div className="p-6 pt-0">
               <EmotionCamera
                 unitId={unitId}
                 config={config}
                 onDetection={handleDetection}
               />
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
 
         {/* Painel lateral */}
         <div className="flex flex-col gap-4">
           {/* Estatísticas da sessão */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Sessão Atual</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          <div className="glass-card">
+            <div className="p-6 pb-2 pb-2">
+              <h3 className="font-semibold text-foreground text-sm">Sessão Atual</h3>
+            </div>
+            <div className="p-6 pt-0 space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Total detectado</span>
                 <span className="font-semibold">{sessionStats.total}</span>
@@ -167,18 +166,18 @@ export default function VipCamLivePage() {
                   />
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Feed de detecções recentes */}
-          <Card className="flex-1">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
+          <div className="glass-card flex-1">
+            <div className="p-6 pb-2 pb-2">
+              <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">
                 <Clock className="h-4 w-4" />
                 Detecções Recentes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+              </h3>
+            </div>
+            <div className="p-6 pt-0">
               {recentDetections.length === 0 ? (
                 <p className="text-xs text-muted-foreground text-center py-4">
                   Aguardando detecções...
@@ -207,8 +206,8 @@ export default function VipCamLivePage() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Links rápidos */}
           <div className="grid grid-cols-2 gap-2">

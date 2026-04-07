@@ -2,7 +2,6 @@
  * GuiaSistemaPage.tsx — Guia de uso do módulo Gestão Total
  */
 import { BookOpen, ChevronRight, LayoutDashboard, ClipboardList, Map, Activity, Users, BarChart3, FileText, AlertTriangle, TrendingUp, ShieldAlert, Megaphone, DollarSign, Calendar, ShoppingCart, Brain, Settings, Shield } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState } from "react";
 
 const GUIA_SECTIONS = [
@@ -114,8 +113,8 @@ export default function GuiaSistemaPage() {
         <p className="text-sm text-muted-foreground">Como usar cada seção do módulo Gestão Total</p>
       </div>
 
-      <Card className="bg-primary/5 border-primary/20">
-        <CardContent className="p-4 flex items-start gap-3">
+      <div className="glass-card bg-primary/5 border-primary/20">
+        <div className="p-6 pt-0 p-4 flex items-start gap-3">
           <BookOpen className="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div>
             <p className="text-sm font-medium text-foreground">Bem-vindo ao Gestão Total</p>
@@ -124,20 +123,16 @@ export default function GuiaSistemaPage() {
               Clique em qualquer seção abaixo para entender como utilizá-la.
             </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <div className="space-y-2">
         {GUIA_SECTIONS.map((section) => {
           const Icon = section.icon;
           const isOpen = expanded === section.titulo;
           return (
-            <Card
-              key={section.titulo}
-              className={`bg-card border-border cursor-pointer transition-all ${isOpen ? "border-primary/30" : "hover:border-muted-foreground/30"}`}
-              onClick={() => setExpanded(isOpen ? null : section.titulo)}
-            >
-              <CardContent className="p-4">
+            <div key={section.titulo} className={`glass-card cursor-pointer transition-all ${isOpen ? "border-primary/30" : "hover:border-muted-foreground/30"}`} onClick={() => setExpanded(isOpen ? null : section.titulo)}>
+              <div className="p-6 pt-0 p-4">
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isOpen ? "bg-primary/15" : "bg-muted/50"}`}>
                     <Icon className={`w-4 h-4 ${isOpen ? "text-primary" : "text-muted-foreground"}`} />
@@ -149,12 +144,12 @@ export default function GuiaSistemaPage() {
                   <ChevronRight className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`} />
                 </div>
                 {isOpen && (
-                  <div className="mt-3 pt-3 border-t border-border">
+                  <div className="mt-3 pt-3 border-t border-white/10">
                     <p className="text-xs text-muted-foreground leading-relaxed">{section.conteudo}</p>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           );
         })}
       </div>

@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -175,7 +174,7 @@ export default function WeSendPage() {
       />
 
       {/* Status da sessão */}
-      <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-border bg-card">
+      <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-white/10 bg-white/5">
         {isSessionWorking ? <Wifi className="w-4 h-4 text-green-500" /> : <WifiOff className="w-4 h-4 text-muted-foreground" />}
         <span className="text-xs text-muted-foreground">Status WhatsApp:</span>
         <span className={`text-xs font-medium ${currentStatusColor}`}>{currentStatusLabel}</span>
@@ -207,25 +206,25 @@ export default function WeSendPage() {
             { label: "Este mês", value: dashboard.enviadosMes.toLocaleString(), icon: BarChart3, color: "text-blue-500" },
             { label: "Taxa de sucesso", value: `${dashboard.taxaSucesso}%`, icon: CheckCircle, color: "text-emerald-500" },
           ].map(kpi => (
-            <Card key={kpi.label} className="bg-card border-border">
-              <CardContent className="p-4">
+            <div className="glass-card bg-white/5 border-white/10" key={kpi.label}>
+              <div className="p-6 pt-0 p-4">
                 <div className="flex items-center gap-2 mb-1">
                   <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
                   <span className="text-xs text-muted-foreground">{kpi.label}</span>
                 </div>
                 <p className="text-xl font-bold text-foreground">{kpi.value}</p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       )}
 
       {/* Wizard nova campanha */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+      <div className="glass-card bg-white/5 border-white/10">
+        <div className="p-6 pb-2 pb-3">
+          <h3 className="font-semibold text-foreground text-sm font-semibold text-foreground flex items-center gap-2">
             <Plus className="w-4 h-4 text-primary" />Nova Campanha
-          </CardTitle>
+          </h3>
           <div className="flex items-center gap-1 mt-2 flex-wrap">
             {STEPS.map((s, i) => (
               <div key={i} className="flex items-center gap-1">
@@ -244,8 +243,8 @@ export default function WeSendPage() {
               </div>
             ))}
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        </div>
+        <div className="p-6 pt-0 space-y-4">
           {step === 0 && (
             <div className="space-y-4">
               <div className="space-y-1.5">
@@ -291,7 +290,7 @@ export default function WeSendPage() {
                 </Button>
               </div>
               {contatos.length > 0 && (
-                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5 max-h-40 overflow-y-auto">
+                <div className="rounded-lg border border-white/10 bg-muted/30 p-3 space-y-1.5 max-h-40 overflow-y-auto">
                   <p className="text-xs font-medium text-foreground">{contatos.length} contatos</p>
                   {contatos.map((c, i) => (
                     <div key={i} className="flex items-center justify-between text-xs">
@@ -432,8 +431,8 @@ export default function WeSendPage() {
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

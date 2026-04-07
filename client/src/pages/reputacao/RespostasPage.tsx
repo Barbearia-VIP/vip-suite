@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -41,29 +40,29 @@ export default function RespostasPage() {
         description="Histórico de avaliações respondidas com inteligência artificial"
       />
 
-      <Card>
+      <div className="glass-card">
         <div className="p-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input placeholder="Buscar nas respostas..." value={busca} onChange={(e) => { setBusca(e.target.value); setPagina(1); }} className="pl-9" />
           </div>
         </div>
-      </Card>
+      </div>
 
       <div className="space-y-3">
         {query.isLoading ? (
           [1, 2, 3].map(i => <div key={i} className="h-32 bg-muted/50 rounded-lg animate-pulse" />)
         ) : avaliacoes.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
+          <div className="glass-card">
+            <div className="p-6 pt-0 py-12 text-center text-muted-foreground">
               <Sparkles className="w-10 h-10 mx-auto mb-2 opacity-30" />
               <p className="text-sm">Nenhuma resposta registrada ainda.</p>
               <p className="text-xs mt-1">Use o botão "Responder" na página de Avaliações para gerar respostas com IA.</p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ) : avaliacoes.map((av: any) => (
-          <Card key={av.id}>
-            <CardContent className="p-4">
+          <div className="glass-card" key={av.id}>
+            <div className="p-6 pt-0 p-4">
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge variant="outline" className="text-xs">{av.plataforma || "—"}</Badge>
@@ -83,8 +82,8 @@ export default function RespostasPage() {
                   <p className="text-sm">{av.resposta}</p>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
 

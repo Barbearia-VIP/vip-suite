@@ -1,5 +1,4 @@
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -48,9 +47,9 @@ export default function StoriesPage() {
     return (
       <div className="p-6">
         <PageHeader title="Respostas a Stories" description="Selecione uma unidade" />
-        <Card className="mt-6 border-border bg-card">
-          <CardContent className="py-12 text-center text-muted-foreground">Selecione uma unidade no seletor do topo.</CardContent>
-        </Card>
+        <div className="glass-card mt-6 border-white/10 bg-white/5">
+          <div className="p-6 pt-0 py-12 text-center text-muted-foreground">Selecione uma unidade no seletor do topo.</div>
+        </div>
       </div>
     );
   }
@@ -69,14 +68,14 @@ export default function StoriesPage() {
       />
 
       {/* Configuração */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
+      <div className="glass-card bg-white/5 border-white/10">
+        <div className="p-6 pb-2 pb-3">
+          <h3 className="font-semibold text-foreground text-sm font-medium flex items-center gap-2">
             <Activity className="w-4 h-4 text-blue-400" />
             Configuração de Stories
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          </h3>
+        </div>
+        <div className="p-6 pt-0 space-y-4">
           <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
             <div>
               <Label className="text-sm font-medium">Bot ativo para Stories</Label>
@@ -98,18 +97,18 @@ export default function StoriesPage() {
               <li>O prompt usado é o "Prompt para Stories" configurado no Editor de Prompts</li>
             </ul>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Logs de stories */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
+      <div className="glass-card bg-white/5 border-white/10">
+        <div className="p-6 pb-2 pb-2">
+          <h3 className="font-semibold text-foreground text-sm font-medium flex items-center gap-2">
             <MessageCircle className="w-4 h-4 text-primary" />
             Histórico de Respostas a Stories
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
+          </h3>
+        </div>
+        <div className="p-6 pt-0 p-0">
           {logsQuery.isLoading ? (
             <div className="py-8 text-center text-muted-foreground text-sm">Carregando...</div>
           ) : logs.length === 0 ? (
@@ -130,8 +129,8 @@ export default function StoriesPage() {
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

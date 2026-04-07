@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useApp } from "@/contexts/AppContext";
@@ -45,9 +44,9 @@ export default function DiagnosticoPage() {
     return (
       <div className="p-6">
         <PageHeader title="Diagnóstico" description="Selecione uma unidade" />
-        <Card className="mt-6 border-border bg-card">
-          <CardContent className="py-12 text-center text-muted-foreground">Selecione uma unidade no seletor do topo.</CardContent>
-        </Card>
+        <div className="glass-card mt-6 border-white/10 bg-white/5">
+          <div className="p-6 pt-0 py-12 text-center text-muted-foreground">Selecione uma unidade no seletor do topo.</div>
+        </div>
       </div>
     );
   }
@@ -61,8 +60,8 @@ export default function DiagnosticoPage() {
 
       {/* Status geral */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className={`border-2 ${isConfigured ? "border-green-500/30 bg-green-500/5" : "border-red-500/30 bg-red-500/5"}`}>
-          <CardContent className="p-4 flex items-center gap-3">
+        <div className={`glass-card border-2 ${isConfigured ? "border-green-500/30 bg-green-500/5" : "border-red-500/30 bg-red-500/5"}`}>
+          <div className="p-6 pt-0 p-4 flex items-center gap-3">
             {isConfigured
               ? <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
               : <XCircle className="w-5 h-5 text-red-400 flex-shrink-0" />}
@@ -72,11 +71,11 @@ export default function DiagnosticoPage() {
                 {isConfigured ? "Configuradas" : "Não configuradas"}
               </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className={`border-2 ${status?.isRunning ? "border-green-500/30 bg-green-500/5" : "border-yellow-500/30 bg-yellow-500/5"}`}>
-          <CardContent className="p-4 flex items-center gap-3">
+        <div className={`glass-card border-2 ${status?.isRunning ? "border-green-500/30 bg-green-500/5" : "border-yellow-500/30 bg-yellow-500/5"}`}>
+          <div className="p-6 pt-0 p-4 flex items-center gap-3">
             <div className={`w-3 h-3 rounded-full flex-shrink-0 ${status?.isRunning ? "bg-green-500 animate-pulse" : "bg-yellow-500"}`} />
             <div>
               <p className="text-xs text-muted-foreground">Bot</p>
@@ -84,11 +83,11 @@ export default function DiagnosticoPage() {
                 {status?.isRunning ? "Em execução" : "Parado"}
               </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="bg-card border-border">
-          <CardContent className="p-4 flex items-center gap-3">
+        <div className="glass-card bg-white/5 border-white/10">
+          <div className="p-6 pt-0 p-4 flex items-center gap-3">
             <Clock className="w-5 h-5 text-muted-foreground flex-shrink-0" />
             <div>
               <p className="text-xs text-muted-foreground">Último ciclo</p>
@@ -98,19 +97,19 @@ export default function DiagnosticoPage() {
                   : "Nunca executado"}
               </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Teste de conexão */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
+      <div className="glass-card bg-white/5 border-white/10">
+        <div className="p-6 pb-2 pb-3">
+          <h3 className="font-semibold text-foreground text-sm font-medium flex items-center gap-2">
             <Zap className="w-4 h-4 text-primary" />
             Teste de Conexão com a API
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          </h3>
+        </div>
+        <div className="p-6 pt-0 space-y-4">
           <p className="text-sm text-muted-foreground">
             Verifica se o Access Token está válido e se consegue acessar as informações da conta do Instagram.
           </p>
@@ -177,18 +176,18 @@ export default function DiagnosticoPage() {
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Forçar ciclo */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
+      <div className="glass-card bg-white/5 border-white/10">
+        <div className="p-6 pb-2 pb-3">
+          <h3 className="font-semibold text-foreground text-sm font-medium flex items-center gap-2">
             <Play className="w-4 h-4 text-primary" />
             Forçar Ciclo Agora
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+          </h3>
+        </div>
+        <div className="p-6 pt-0 space-y-3">
           <p className="text-sm text-muted-foreground">
             Executa imediatamente um ciclo de verificação de comentários, sem aguardar o intervalo configurado.
           </p>
@@ -201,16 +200,16 @@ export default function DiagnosticoPage() {
               ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Executando...</>
               : <><Play className="w-4 h-4 mr-2" /> Executar Ciclo Agora</>}
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Configuração atual */}
       {config && (
-        <Card className="bg-card border-border">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Configuração Atual</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <div className="glass-card bg-white/5 border-white/10">
+          <div className="p-6 pb-2 pb-3">
+            <h3 className="font-semibold text-foreground text-sm font-medium">Configuração Atual</h3>
+          </div>
+          <div className="p-6 pt-0">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
                 { label: "Intervalo", value: `${config.checkIntervalMinutes} min` },
@@ -224,8 +223,8 @@ export default function DiagnosticoPage() {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -6,7 +6,6 @@ import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -24,8 +23,8 @@ function KpiCard({ title, value, sub, icon: Icon, color, href }: {
   icon: React.ElementType; color: string; href?: string;
 }) {
   const content = (
-    <Card className="bg-card border-border hover:border-primary/40 transition-colors cursor-pointer">
-      <CardContent className="p-4">
+    <div className="glass-card bg-white/5 border-white/10 hover:border-primary/40 transition-colors cursor-pointer">
+      <div className="p-6 pt-0 p-4">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs text-muted-foreground mb-1">{title}</p>
@@ -36,8 +35,8 @@ function KpiCard({ title, value, sub, icon: Icon, color, href }: {
             <Icon className="w-4.5 h-4.5" style={{ color }} />
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
   if (href) return <Link href={href}>{content}</Link>;
   return content;
@@ -117,8 +116,8 @@ export default function GestaoTotalDashboard() {
 
       {/* Resultado financeiro */}
       {k && (
-        <Card className="bg-card border-border">
-          <CardContent className="p-4">
+        <div className="glass-card bg-white/5 border-white/10">
+          <div className="p-6 pt-0 p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-muted-foreground">Resultado do Mês</p>
@@ -136,23 +135,23 @@ export default function GestaoTotalDashboard() {
                 </button>
               </Link>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Tarefas recentes */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="text-sm flex items-center gap-2">
+      <div className="glass-card bg-white/5 border-white/10">
+        <div className="p-6 pb-2 pb-3 flex flex-row items-center justify-between">
+          <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">
             <ClipboardList className="w-4 h-4 text-primary" /> Tarefas Recentes
-          </CardTitle>
+          </h3>
           <Link href="/gestao-total/tarefas">
             <button className="text-xs text-primary hover:underline flex items-center gap-1">
               Ver todas <ArrowRight className="w-3 h-3" />
             </button>
           </Link>
-        </CardHeader>
-        <CardContent className="p-0">
+        </div>
+        <div className="p-6 pt-0 p-0">
           {tarefasQ.isLoading ? (
             <div className="p-4 space-y-2">
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 rounded" />)}
@@ -184,8 +183,8 @@ export default function GestaoTotalDashboard() {
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Atalhos de módulos */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -196,14 +195,14 @@ export default function GestaoTotalDashboard() {
           { label: "Marketing", href: "/gestao-total/marketing", icon: TrendingUp, color: "oklch(0.65 0.15 60)" },
         ].map(item => (
           <Link key={item.href} href={item.href}>
-            <Card className="bg-card border-border hover:border-primary/40 transition-colors cursor-pointer">
-              <CardContent className="p-4 flex items-center gap-3">
+            <div className="glass-card bg-white/5 border-white/10 hover:border-primary/40 transition-colors cursor-pointer">
+              <div className="p-6 pt-0 p-4 flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${item.color}20` }}>
                   <item.icon className="w-4 h-4" style={{ color: item.color }} />
                 </div>
                 <span className="text-sm font-medium text-foreground">{item.label}</span>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </Link>
         ))}
       </div>

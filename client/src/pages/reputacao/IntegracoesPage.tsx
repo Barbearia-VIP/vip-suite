@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -221,14 +220,14 @@ export default function IntegracoesPage() {
 
       {/* Guia de configuração OAuth */}
       {conexoes.some((c: any) => c.plataforma === "google" && !c.googleAccessToken) && (
-        <Card className="border-amber-500/30 bg-amber-500/5">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2 text-amber-700">
+        <div className="glass-card border-amber-500/30 bg-amber-500/5">
+          <div className="p-6 pb-2 pb-3">
+            <h3 className="font-semibold text-foreground text-sm flex items-center gap-2 text-amber-700">
               <AlertTriangle className="w-4 h-4" />
               Autorização Google Pendente
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+            </h3>
+          </div>
+          <div className="p-6 pt-0 space-y-3">
             <p className="text-xs text-muted-foreground">
               O Client ID do Google está configurado, mas a autorização OAuth ainda não foi concluída.
               Para importar avaliações do Google Business Profile, siga os passos abaixo:
@@ -293,24 +292,24 @@ export default function IntegracoesPage() {
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       <div className="space-y-3">
         {conexoesQuery.isLoading ? (
           [1, 2].map(i => <div key={i} className="h-24 bg-muted/50 rounded-lg animate-pulse" />)
         ) : conexoes.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
+          <div className="glass-card">
+            <div className="p-6 pt-0 py-12 text-center text-muted-foreground">
               <Globe className="w-10 h-10 mx-auto mb-2 opacity-30" />
               <p className="text-sm">Nenhuma integração configurada.</p>
               <p className="text-xs mt-1">Adicione uma integração para importar avaliações automaticamente.</p>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ) : conexoes.map((c: any) => (
-          <Card key={c.id}>
-            <CardContent className="p-4">
+          <div className="glass-card" key={c.id}>
+            <div className="p-6 pt-0 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0">
                   <div className="p-2 rounded-lg bg-primary/10 shrink-0">
@@ -413,8 +412,8 @@ export default function IntegracoesPage() {
                   </p>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
 

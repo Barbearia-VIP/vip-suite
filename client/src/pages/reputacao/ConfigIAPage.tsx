@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -178,12 +177,12 @@ export default function ConfigIAPage() {
       <PageHeader title="Configuração da IA" description="Configure como a IA gera respostas para avaliações" />
 
       {/* ── Prompt Principal da IA ─────────────────────────────────────────── */}
-      <Card className="border-primary/20">
-        <CardHeader>
+      <div className="glass-card border-primary/20">
+        <div className="p-6 pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-primary" />
-              <CardTitle className="text-base">Prompt Principal da IA</CardTitle>
+              <h3 className="font-semibold text-foreground text-base">Prompt Principal da IA</h3>
               <Badge variant="secondary" className="text-xs">Por unidade</Badge>
             </div>
             <Button
@@ -196,15 +195,15 @@ export default function ConfigIAPage() {
               Restaurar padrão
             </Button>
           </div>
-          <CardDescription className="flex items-start gap-2 mt-1">
+          <p className="text-sm text-muted-foreground flex items-start gap-2 mt-1">
             <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />
             <span>
               Este é o prompt completo que a IA usa para gerar respostas às avaliações desta unidade.
               Cada unidade pode ter seu próprio prompt personalizado. O padrão já está otimizado para SEO local e tom premium.
             </span>
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          </p>
+        </div>
+        <div className="p-6 pt-0 space-y-4">
           <Textarea
             value={aiPrompt}
             onChange={(e) => { setAiPrompt(e.target.value); setAiPromptDirty(true); }}
@@ -225,19 +224,19 @@ export default function ConfigIAPage() {
               {salvarPromptMutation.isPending ? "Salvando..." : "Salvar Prompt"}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* ── Configurações de Identidade e Automação ───────────────────────── */}
       <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
+        <div className="glass-card">
+          <div className="p-6 pb-2">
+            <h3 className="font-semibold text-foreground flex items-center gap-2 text-base">
               <Bot className="w-4 h-4 text-primary" />
               Identidade do Estabelecimento
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </h3>
+          </div>
+          <div className="p-6 pt-0 space-y-4">
             <div>
               <Label>Nome do Estabelecimento</Label>
               <Input
@@ -280,17 +279,17 @@ export default function ConfigIAPage() {
                 onCheckedChange={(v) => setForm(f => ({ ...f, incluirAssinatura: v }))}
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
+        <div className="glass-card">
+          <div className="p-6 pb-2">
+            <h3 className="font-semibold text-foreground flex items-center gap-2 text-base">
               <Sparkles className="w-4 h-4 text-primary" />
               Automação de Respostas
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </h3>
+          </div>
+          <div className="p-6 pt-0 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Auto-responder avaliações</p>
@@ -333,8 +332,8 @@ export default function ConfigIAPage() {
                 Instruções extras que complementam o Prompt Principal acima.
               </p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       <div className="flex justify-end">
