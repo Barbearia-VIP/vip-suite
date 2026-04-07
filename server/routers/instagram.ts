@@ -77,12 +77,24 @@ export const igConfigRouter = router({
       const rows = await db.select().from(igConfig).where(eq(igConfig.unitId, input.unitId)).limit(1);
       const config = rows[0];
       if (!config?.accessToken || !config?.instagramUserId) {
-        return { success: false, message: "Credenciais não configuradas" };
+        return { success: false, message: "Credenciais não configuradas. Preencha o Access Token e o ID da Conta em Configurações." };
+      }
+      // Limpar espaços e aspas extras
+      const token = config.accessToken.trim().replace(/^"|"$/g, "");
+      const userId = config.instagramUserId.trim().replace(/^"|"$/g, "");
+      // Detectar token IGAA (curta duração, não suportado pela Graph API)
+      if (token.startsWith("IGAA")) {
+        return {
+          success: false,
+          message: 'Token inválido: tokens que começam com "IGAA" são de curta duração e expiram em 1 hora. Use um token de longa duração que começa com "EAA". Para gerar: acesse developers.facebook.com → Ferramentas → Graph API Explorer → selecione seu App → gere token com permissões instagram_basic, instagram_manage_comments, pages_read_engagement → clique em "Gerar Token de Longa Duração" (válido por 60 dias).',
+        };
       }
       try {
-        const data = await metaGet(`/${config.instagramUserId}`, config.accessToken, {
+        const data = await metaGet(`/${userId}`, token, {
           fields: "id,username,name,followers_count,media_count,profile_picture_url",
         });
+        // Atualizar igConfig com token limpo (sem aspas/espaços)
+        await db.update(igConfig).set({ accessToken: token, instagramUserId: userId }).where(eq(igConfig.unitId, input.unitId));
         return {
           success: true,
           message: "Conexão bem-sucedida",
@@ -90,6 +102,12 @@ export const igConfigRouter = router({
         };
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("190") || msg.includes("OAuthException") || msg.includes("Cannot parse") || msg.includes("Invalid OAuth")) {
+          return { success: false, message: `Token inválido ou expirado. Gere um novo token de longa duração no Meta Developer Portal (deve começar com "EAA"). Detalhe técnico: ${msg}` };
+        }
+        if (msg.includes("100") || msg.includes("Invalid parameter")) {
+          return { success: false, message: `ID da Conta inválido. Verifique o Instagram Business Account ID (número de 17 dígitos). Detalhe técnico: ${msg}` };
+        }
         return { success: false, message: msg };
       }
     }),

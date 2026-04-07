@@ -939,3 +939,8 @@
 - [x] Investigar por que Auto Instagram aparece "não configurado" mesmo com credencial salva
 - [x] Corrigir: saveModuleConfig agora sincroniza igConfig (tabela usada pelo bot) ao salvar auto_instagram
 - [x] Adicionar botão "Testar Conexão" na página de Configurações com feedback visual de erro/sucesso
+
+## Instagram — Token Inválido (2026-04-07)
+
+- [x] Verificar token salvo no banco: token IGAA (curta duração) ao invés de EAA (longa duração)
+- [x] Melhorar testConnection: detecta token IGAA com instruções claras, limpa aspas extras, mensagens de erro enriquecidas
