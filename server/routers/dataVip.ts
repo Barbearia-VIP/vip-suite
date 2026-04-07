@@ -2296,28 +2296,59 @@ export const dataVipRouter = router({
         const placeholders = unitIds.map(() => '?').join(',');
 
         if (meta.tipo === "produto") {
-          const valorMin = Number(config.valorMinProdutos ?? 0);
-          const rows = await queryExternal(
-            `SELECT c.nome AS colaboradorNome, c.id AS colaboradorId,
-               COALESCE(SUM(CASE WHEN i.tipo IN ('probar','proemp','proins') THEN i.valor ELSE 0 END), 0) AS totalProdutos
-             FROM comandas co
-             JOIN colaboradores c ON c.id = co.colaborador_id
-             JOIN itens_comanda i ON i.comanda_id = co.id
-             WHERE co.unidade_id IN (${placeholders})
-               AND co.data_hora >= ? AND co.data_hora < ?
-               AND co.status NOT IN ('cancelado','cancelada')
-             GROUP BY c.id, c.nome
-             HAVING totalProdutos >= ?`,
-            [...unitIds, dataInicio, dataFimExcl, valorMin]
-          );
-          for (const row of rows as any[]) {
-            const key = String(row.colaboradorId);
-            if (!resultados[key]) resultados[key] = { colaboradorId: key, colaboradorNome: row.colaboradorNome, bonusTotal: 0, metasBatidas: [] };
-            const bonus = meta.bonusTipo === "percentual"
-              ? (bonusValor / 100) * Number(row.totalProdutos)
-              : bonusValor;
-            resultados[key].bonusTotal += bonus;
-            resultados[key].metasBatidas.push({ nome: meta.nome, bonus });
+          const criterio = config.criterio ?? "valor";
+
+          if (criterio === "quantidade") {
+            // Critério: quantidade mínima de produtos vendidos
+            const qtdMin = Number(config.qtdMinProdutos ?? 1);
+            const rows = await queryExternal(
+              `SELECT c.nome AS colaboradorNome, c.id AS colaboradorId,
+                 COALESCE(SUM(CASE WHEN i.tipo IN ('probar','proemp','proins') THEN i.quantidade ELSE 0 END), 0) AS qtdProdutos,
+                 COALESCE(SUM(CASE WHEN i.tipo IN ('probar','proemp','proins') THEN i.valor ELSE 0 END), 0) AS totalProdutos
+               FROM comandas co
+               JOIN colaboradores c ON c.id = co.colaborador_id
+               JOIN itens_comanda i ON i.comanda_id = co.id
+               WHERE co.unidade_id IN (${placeholders})
+                 AND co.data_hora >= ? AND co.data_hora < ?
+                 AND co.status NOT IN ('cancelado','cancelada')
+               GROUP BY c.id, c.nome
+               HAVING qtdProdutos >= ?`,
+              [...unitIds, dataInicio, dataFimExcl, qtdMin]
+            );
+            for (const row of rows as any[]) {
+              const key = String(row.colaboradorId);
+              if (!resultados[key]) resultados[key] = { colaboradorId: key, colaboradorNome: row.colaboradorNome, bonusTotal: 0, metasBatidas: [] };
+              const bonus = meta.bonusTipo === "percentual"
+                ? (bonusValor / 100) * Number(row.totalProdutos)
+                : bonusValor;
+              resultados[key].bonusTotal += bonus;
+              resultados[key].metasBatidas.push({ nome: meta.nome, bonus });
+            }
+          } else {
+            // Critério: valor mínimo em produtos (padrão)
+            const valorMin = Number(config.valorMinProdutos ?? 0);
+            const rows = await queryExternal(
+              `SELECT c.nome AS colaboradorNome, c.id AS colaboradorId,
+                 COALESCE(SUM(CASE WHEN i.tipo IN ('probar','proemp','proins') THEN i.valor ELSE 0 END), 0) AS totalProdutos
+               FROM comandas co
+               JOIN colaboradores c ON c.id = co.colaborador_id
+               JOIN itens_comanda i ON i.comanda_id = co.id
+               WHERE co.unidade_id IN (${placeholders})
+                 AND co.data_hora >= ? AND co.data_hora < ?
+                 AND co.status NOT IN ('cancelado','cancelada')
+               GROUP BY c.id, c.nome
+               HAVING totalProdutos >= ?`,
+              [...unitIds, dataInicio, dataFimExcl, valorMin]
+            );
+            for (const row of rows as any[]) {
+              const key = String(row.colaboradorId);
+              if (!resultados[key]) resultados[key] = { colaboradorId: key, colaboradorNome: row.colaboradorNome, bonusTotal: 0, metasBatidas: [] };
+              const bonus = meta.bonusTipo === "percentual"
+                ? (bonusValor / 100) * Number(row.totalProdutos)
+                : bonusValor;
+              resultados[key].bonusTotal += bonus;
+              resultados[key].metasBatidas.push({ nome: meta.nome, bonus });
+            }
           }
         } else if (meta.tipo === "servicos_multiplos") {
           const minServicos = Number(config.minServicosComanda ?? 2);

@@ -972,3 +972,9 @@
 ## Metas — Simplificação (2026-04-07)
 
 - [x] Remover aba "Metas de Faturamento" da página Metas (manter apenas Meta Dinâmica e Comissão Progressiva)
+
+## Meta Dinâmica — Critério por Quantidade (2026-04-07)
+
+- [x] Adicionar seletor "Critério: Valor (R$) ou Quantidade de produtos" no tipo Produto da Meta Dinâmica
+- [x] Atualizar UI do card de meta para exibir o critério correto (valor ou qtd)
+- [x] Atualizar endpoint metaDinamicaCalc para calcular por quantidade de produtos vendidos

@@ -556,7 +556,10 @@ function MetaDinamicaTab() {
                     {/* Config da regra */}
                     {m.tipo === "produto" && (
                       <div className="text-xs text-muted-foreground bg-muted/40 rounded px-2 py-1.5">
-                        Vender ≥ <strong>{fmt(m.config.valorMinProdutos ?? 0)}</strong> em produtos
+                        {(m.config.criterio ?? "valor") === "quantidade"
+                          ? <>Vender ≥ <strong>{m.config.qtdMinProdutos ?? 0} produto(s)</strong> no mês</>
+                          : <>Vender ≥ <strong>{fmt(m.config.valorMinProdutos ?? 0)}</strong> em produtos</>
+                        }
                       </div>
                     )}
                     {m.tipo === "servicos_multiplos" && (
@@ -621,16 +624,54 @@ function MetaDinamicaTab() {
 
             {/* Config por tipo */}
             {editMeta.tipo === "produto" && (
-              <div>
-                <Label className="text-sm">Valor mínimo de produtos vendidos (R$)</Label>
-                <Input
-                  type="number"
-                  value={editMeta.config.valorMinProdutos ?? ""}
-                  onChange={e => setEditMeta(prev => ({ ...prev, config: { ...prev.config, valorMinProdutos: Number(e.target.value) } }))}
-                  placeholder="Ex: 500"
-                  className="mt-1"
-                />
-                <p className="text-xs text-muted-foreground mt-1">O colaborador precisa vender pelo menos esse valor em produtos para ganhar o bônus.</p>
+              <div className="space-y-3">
+                {/* Seletor de critério */}
+                <div>
+                  <Label className="text-sm">Critério da meta</Label>
+                  <Select
+                    value={editMeta.config.criterio ?? "valor"}
+                    onValueChange={v => setEditMeta(prev => ({
+                      ...prev,
+                      config: { criterio: v, valorMinProdutos: undefined, qtdMinProdutos: undefined }
+                    }))}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="valor">Valor mínimo em produtos (R$)</SelectItem>
+                      <SelectItem value="quantidade">Quantidade mínima de produtos vendidos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Campo dinâmico conforme critério */}
+                {(editMeta.config.criterio ?? "valor") === "valor" ? (
+                  <div>
+                    <Label className="text-sm">Valor mínimo (R$)</Label>
+                    <Input
+                      type="number"
+                      value={editMeta.config.valorMinProdutos ?? ""}
+                      onChange={e => setEditMeta(prev => ({ ...prev, config: { ...prev.config, valorMinProdutos: Number(e.target.value) } }))}
+                      placeholder="Ex: 500"
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">O colaborador precisa vender pelo menos esse valor em produtos para ganhar o bônus.</p>
+                  </div>
+                ) : (
+                  <div>
+                    <Label className="text-sm">Quantidade mínima de produtos</Label>
+                    <Input
+                      type="number"
+                      value={editMeta.config.qtdMinProdutos ?? ""}
+                      onChange={e => setEditMeta(prev => ({ ...prev, config: { ...prev.config, qtdMinProdutos: Number(e.target.value) } }))}
+                      placeholder="Ex: 10"
+                      min={1}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">O colaborador precisa vender pelo menos essa quantidade de produtos para ganhar o bônus.</p>
+                  </div>
+                )}
               </div>
             )}
             {editMeta.tipo === "servicos_multiplos" && (
