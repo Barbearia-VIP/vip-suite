@@ -742,7 +742,14 @@ export default function DataVipDashboard() {
                         width={52}
                       />
                       <Tooltip
-                        contentStyle={{ background: "oklch(0.15 0.01 240)", border: "1px solid oklch(0.25 0.02 240)", borderRadius: 8, fontSize: 12 }}
+                        contentStyle={{
+                          background: "oklch(0.14 0.012 260 / 0.97)",
+                          border: "1px solid oklch(0.28 0.015 260 / 0.6)",
+                          backdropFilter: "blur(16px)",
+                          borderRadius: 12,
+                          fontSize: 12,
+                          boxShadow: "0 8px 32px -8px oklch(0 0 0 / 0.6)",
+                        }}
                         formatter={(v: number) => [metricaCfg.format(v), metricaCfg.label]}
                         labelFormatter={l => `Dia ${l}`}
                       />
@@ -847,7 +854,7 @@ export default function DataVipDashboard() {
                 ? <div className="h-52 flex items-center justify-center text-muted-foreground text-sm">Sem dados</div>
                 : (() => {
                     const totalPag = pagamentos.reduce((s, p) => s + p.total, 0);
-                    const PAG_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#3b82f6", "#ec4899", "#8b5cf6"];
+                    const PAG_COLORS = ["oklch(0.76 0.145 72)", "oklch(0.72 0.16 145)", "oklch(0.65 0.15 200)", "oklch(0.65 0.15 280)", "oklch(0.65 0.15 320)", "oklch(0.72 0.14 65)"];
                     return (
                       <div className="flex gap-4 items-center">
                         {/* Donut maior com label central */}

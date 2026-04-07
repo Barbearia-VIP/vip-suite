@@ -119,7 +119,15 @@ function CustomTooltip({ active, payload, metricCfg }: {
   const v = payload[0].value;
 
   return (
-    <div className="bg-card border border-border rounded-xl p-3 shadow-xl min-w-[200px] text-sm">
+    <div
+      className="rounded-xl p-3 min-w-[200px] text-sm"
+      style={{
+        background: "oklch(0.14 0.012 260 / 0.97)",
+        border: "1px solid oklch(0.28 0.015 260 / 0.6)",
+        backdropFilter: "blur(16px)",
+        boxShadow: "0 8px 32px -8px oklch(0 0 0 / 0.6)",
+      }}
+    >
       <div className="flex items-center gap-1.5 mb-2 text-muted-foreground font-medium text-xs">
         <CalendarDays className="w-3.5 h-3.5" />
         {d.mesLabel}
@@ -128,7 +136,7 @@ function CustomTooltip({ active, payload, metricCfg }: {
         {metricCfg.fmt(v)}
       </div>
       <div className="text-xs text-muted-foreground mb-2">{metricCfg.label}</div>
-      <div className="border-t border-border pt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+      <div className="pt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs" style={{ borderTop: "1px solid oklch(0.22 0.014 260 / 0.5)" }}>
         <span className="text-muted-foreground">Atendimentos:</span>
         <span className="text-right font-medium">{fmtNum(d.atendimentos)}</span>
         <span className="text-muted-foreground">Ticket Médio:</span>
@@ -193,7 +201,13 @@ function KpiCard({ kpi }: { kpi: KpiData }) {
       : v.toLocaleString("pt-BR", { maximumFractionDigits: kpi.key === "diasTrabalhados" ? 1 : 0 });
 
   return (
-    <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-2">
+    <div
+      className="rounded-2xl p-4 flex flex-col gap-2 relative overflow-hidden"
+      style={{
+        background: "linear-gradient(135deg, oklch(0.135 0.010 260 / 0.95) 0%, oklch(0.11 0.008 260 / 0.85) 100%)",
+        border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+      }}
+    >
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase leading-tight">
           {kpi.label}
@@ -203,7 +217,7 @@ function KpiCard({ kpi }: { kpi: KpiData }) {
       <span className="text-xl font-bold text-foreground leading-tight">
         {fmt(kpi.valor)}
       </span>
-      <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+      <div className="flex flex-wrap gap-x-2 gap-y-0.5" style={{ borderTop: "1px solid oklch(0.22 0.014 260 / 0.4)", paddingTop: "0.375rem" }}>
         {[
           { label: "SPLY", data: kpi.sply },
           { label: "MOM",  data: kpi.mom  },
@@ -221,7 +235,13 @@ function KpiCard({ kpi }: { kpi: KpiData }) {
 
 function KpiSkeleton() {
   return (
-    <div className="bg-card border border-border rounded-xl p-4 space-y-2">
+    <div
+      className="rounded-2xl p-4 space-y-2"
+      style={{
+        background: "linear-gradient(135deg, oklch(0.135 0.010 260 / 0.95) 0%, oklch(0.11 0.008 260 / 0.85) 100%)",
+        border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+      }}
+    >
       <Skeleton className="h-3 w-24" />
       <Skeleton className="h-7 w-28" />
       <Skeleton className="h-3 w-full" />
@@ -657,47 +677,53 @@ export default function MensalPage() {
               <AlertCircle className="w-4 h-4 mr-2" /> Sem dados para o período selecionado
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
+<ResponsiveContainer width="100%" height={260}>
               {chartType === "bar" ? (
                 <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0)" vertical={false} />
-                  <XAxis dataKey="mesLabel" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <defs>
+                    <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={metricCfg.color} stopOpacity={0.95} />
+                      <stop offset="100%" stopColor={metricCfg.color} stopOpacity={0.55} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.4)" vertical={false} />
+                  <XAxis dataKey="mesLabel" tick={{ fontSize: 11, fill: "oklch(0.55 0.01 260)" }} axisLine={false} tickLine={false} />
                   <YAxis
                     tickFormatter={v => metricCfg.isMoeda ? `R$${(v/1000).toFixed(0)}k` : fmtNum(v)}
-                    tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={55}
+                    tick={{ fontSize: 11, fill: "oklch(0.55 0.01 260)" }} axisLine={false} tickLine={false} width={55}
                   />
                   <Tooltip
                     content={<CustomTooltip metricCfg={metricCfg} />}
-                    cursor={{ fill: "oklch(0.3 0 0 / 0.4)" }}
+                    cursor={{ fill: "oklch(0.76 0.145 72 / 0.06)" }}
                   />
                   {stats && (
                     <ReferenceLine
                       y={stats.avg}
-                      stroke="oklch(0.6 0 0)"
+                      stroke="oklch(0.76 0.145 72 / 0.5)"
                       strokeDasharray="5 3"
-                      label={{ value: "Média", position: "right", fontSize: 10, fill: "oklch(0.6 0 0)" }}
+                      label={{ value: "Média", position: "right", fontSize: 10, fill: "oklch(0.76 0.145 72 / 0.7)" }}
                     />
                   )}
-                  <Bar dataKey={metricKey} fill={metricCfg.color} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey={metricKey} fill="url(#barGrad)" radius={[5, 5, 0, 0]} />
                 </BarChart>
               ) : (
                 <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0)" vertical={false} />
-                  <XAxis dataKey="mesLabel" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.4)" vertical={false} />
+                  <XAxis dataKey="mesLabel" tick={{ fontSize: 11, fill: "oklch(0.55 0.01 260)" }} axisLine={false} tickLine={false} />
                   <YAxis
                     tickFormatter={v => metricCfg.isMoeda ? `R$${(v/1000).toFixed(0)}k` : fmtNum(v)}
-                    tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={55}
+                    tick={{ fontSize: 11, fill: "oklch(0.55 0.01 260)" }} axisLine={false} tickLine={false} width={55}
                   />
                   <Tooltip
                     content={<CustomTooltip metricCfg={metricCfg} />}
-                    cursor={{ stroke: "oklch(0.6 0 0)", strokeWidth: 1 }}
+                    cursor={{ stroke: "oklch(0.76 0.145 72 / 0.3)", strokeWidth: 1, strokeDasharray: "4 2" }}
                   />
                   {stats && (
                     <ReferenceLine
                       y={stats.avg}
-                      stroke="oklch(0.6 0 0)"
+                      stroke="oklch(0.76 0.145 72 / 0.5)"
                       strokeDasharray="5 3"
-                      label={{ value: "Média", position: "right", fontSize: 10, fill: "oklch(0.6 0 0)" }}
+                      label={{ value: "Média", position: "right", fontSize: 10, fill: "oklch(0.76 0.145 72 / 0.7)" }}
                     />
                   )}
                   <Line
@@ -706,7 +732,7 @@ export default function MensalPage() {
                     stroke={metricCfg.color}
                     strokeWidth={2.5}
                     dot={{ fill: metricCfg.color, r: 4, strokeWidth: 0 }}
-                    activeDot={{ r: 6, strokeWidth: 2, stroke: "white" }}
+                    activeDot={{ r: 6, strokeWidth: 2, stroke: "oklch(0.14 0.012 260)" }}
                   />
                 </LineChart>
               )}

@@ -15,9 +15,9 @@ import {
 } from "recharts";
 import { TrendingUp, BarChart2, PieChartIcon, Zap, Target, TrendingDown, Minus } from "lucide-react";
 
-const GOLD = "#EAB308";
-const GOLD_DIM = "rgba(234,179,8,0.18)";
-const PIE_COLORS = ["#EAB308", "#F59E0B", "#D97706", "#B45309", "#92400E", "#78350F", "#451A03", "#FDE047", "#FEF08A"];
+const GOLD = "oklch(0.76 0.145 72)";
+const GOLD_DIM = "oklch(0.76 0.145 72 / 0.18)";
+const PIE_COLORS = ["oklch(0.76 0.145 72)", "oklch(0.72 0.14 65)", "oklch(0.68 0.16 55)", "oklch(0.65 0.15 200)", "oklch(0.72 0.16 145)", "oklch(0.65 0.15 280)", "oklch(0.65 0.15 320)", "oklch(0.82 0.12 80)", "oklch(0.88 0.10 90)"];
 
 type ViewType = "periodo" | "barbeiro" | "grupo" | "item" | "diaSemana" | "pagamento" | "faixaHoraria";
 type ChartType = "barra" | "linha" | "pizza";
@@ -128,9 +128,17 @@ function ChartArea({ data, chartType, media, mediaSply, media6m, height = 280 }:
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     return (
-      <div className="bg-zinc-900 border border-zinc-700 rounded p-2 text-xs">
+      <div
+        className="rounded-xl p-2 text-xs"
+        style={{
+          background: "oklch(0.14 0.012 260 / 0.97)",
+          border: "1px solid oklch(0.28 0.015 260 / 0.6)",
+          backdropFilter: "blur(16px)",
+          boxShadow: "0 8px 32px -8px oklch(0 0 0 / 0.6)",
+        }}
+      >
         <div className="font-semibold mb-1">{label}</div>
-        <div className="text-yellow-400">{fmt(payload[0]?.value ?? 0)}</div>
+        <div style={{ color: GOLD }}>{fmt(payload[0]?.value ?? 0)}</div>
       </div>
     );
   };
@@ -160,13 +168,13 @@ function ChartArea({ data, chartType, media, mediaSply, media6m, height = 280 }:
               <stop offset="95%" stopColor={GOLD} stopOpacity={0.02} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-          <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#888" }} tickLine={false} axisLine={false} />
-          <YAxis tickFormatter={fmtShort} tick={{ fontSize: 10, fill: "#888" }} tickLine={false} axisLine={false} width={48} />
-          <Tooltip content={<CustomTooltip />} />
-          <ReferenceLine y={media} stroke="#888" strokeDasharray="4 3" label={{ value: "Média", position: "right", fontSize: 10, fill: "#888" }} />
-          {mediaSply !== undefined && mediaSply > 0 && <ReferenceLine y={mediaSply} stroke="#F59E0B" strokeDasharray="4 3" label={{ value: "Méd. SPLY", position: "right", fontSize: 9, fill: "#F59E0B" }} />}
-          {media6m !== undefined && media6m > 0 && <ReferenceLine y={media6m} stroke="#3B82F6" strokeDasharray="4 3" label={{ value: "Méd. 6m", position: "right", fontSize: 9, fill: "#3B82F6" }} />}
+          <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.4)" vertical={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 10, fill: "oklch(0.55 0.01 260)" }} tickLine={false} axisLine={false} />
+          <YAxis tickFormatter={fmtShort} tick={{ fontSize: 10, fill: "oklch(0.55 0.01 260)" }} tickLine={false} axisLine={false} width={48} />
+          <Tooltip content={<CustomTooltip />} cursor={{ stroke: "oklch(0.76 0.145 72 / 0.3)", strokeWidth: 1, strokeDasharray: "4 2" }} />
+          <ReferenceLine y={media} stroke="oklch(0.55 0.01 260)" strokeDasharray="4 3" label={{ value: "Média", position: "right", fontSize: 10, fill: "oklch(0.55 0.01 260)" }} />
+          {mediaSply !== undefined && mediaSply > 0 && <ReferenceLine y={mediaSply} stroke="oklch(0.76 0.145 72 / 0.7)" strokeDasharray="4 3" label={{ value: "Méd. SPLY", position: "right", fontSize: 9, fill: "oklch(0.76 0.145 72 / 0.7)" }} />}
+          {media6m !== undefined && media6m > 0 && <ReferenceLine y={media6m} stroke="oklch(0.65 0.15 200 / 0.7)" strokeDasharray="4 3" label={{ value: "Méd. 6m", position: "right", fontSize: 9, fill: "oklch(0.65 0.15 200 / 0.7)" }} />}
           <Area type="monotone" dataKey="valor" stroke={GOLD} strokeWidth={2} fill="url(#areaGold)" dot={false} activeDot={{ r: 4, fill: GOLD }} />
         </AreaChart>
       </ResponsiveContainer>
@@ -176,14 +184,20 @@ function ChartArea({ data, chartType, media, mediaSply, media6m, height = 280 }:
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-        <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#888" }} tickLine={false} axisLine={false} />
-        <YAxis tickFormatter={fmtShort} tick={{ fontSize: 10, fill: "#888" }} tickLine={false} axisLine={false} width={48} />
-        <Tooltip content={<CustomTooltip />} />
-        <ReferenceLine y={media} stroke="#888" strokeDasharray="4 3" label={{ value: "Média", position: "right", fontSize: 10, fill: "#888" }} />
-        {mediaSply !== undefined && mediaSply > 0 && <ReferenceLine y={mediaSply} stroke="#F59E0B" strokeDasharray="4 3" label={{ value: "Méd. SPLY", position: "right", fontSize: 9, fill: "#F59E0B" }} />}
-        {media6m !== undefined && media6m > 0 && <ReferenceLine y={media6m} stroke="#3B82F6" strokeDasharray="4 3" label={{ value: "Méd. 6m", position: "right", fontSize: 9, fill: "#3B82F6" }} />}
-        <Bar dataKey="valor" fill={GOLD} radius={[3, 3, 0, 0]} maxBarSize={48} />
+        <defs>
+          <linearGradient id="barGoldAbert" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={GOLD} stopOpacity={0.95} />
+            <stop offset="100%" stopColor={GOLD} stopOpacity={0.55} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.4)" vertical={false} />
+        <XAxis dataKey="label" tick={{ fontSize: 10, fill: "oklch(0.55 0.01 260)" }} tickLine={false} axisLine={false} />
+        <YAxis tickFormatter={fmtShort} tick={{ fontSize: 10, fill: "oklch(0.55 0.01 260)" }} tickLine={false} axisLine={false} width={48} />
+        <Tooltip content={<CustomTooltip />} cursor={{ fill: "oklch(0.76 0.145 72 / 0.06)" }} />
+        <ReferenceLine y={media} stroke="oklch(0.55 0.01 260)" strokeDasharray="4 3" label={{ value: "Média", position: "right", fontSize: 10, fill: "oklch(0.55 0.01 260)" }} />
+        {mediaSply !== undefined && mediaSply > 0 && <ReferenceLine y={mediaSply} stroke="oklch(0.76 0.145 72 / 0.7)" strokeDasharray="4 3" label={{ value: "Méd. SPLY", position: "right", fontSize: 9, fill: "oklch(0.76 0.145 72 / 0.7)" }} />}
+        {media6m !== undefined && media6m > 0 && <ReferenceLine y={media6m} stroke="oklch(0.65 0.15 200 / 0.7)" strokeDasharray="4 3" label={{ value: "Méd. 6m", position: "right", fontSize: 9, fill: "oklch(0.65 0.15 200 / 0.7)" }} />}
+        <Bar dataKey="valor" fill="url(#barGoldAbert)" radius={[5, 5, 0, 0]} maxBarSize={48} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -217,8 +231,8 @@ function RankingTable({ items, title }: RankingTableProps) {
                   )}
                 </div>
               </div>
-              <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
-                <div className="h-full bg-yellow-500 rounded-full transition-all" style={{ width: `${(item.valor / maxVal) * 100}%` }} />
+              <div className="h-1 rounded-full overflow-hidden" style={{ background: "oklch(0.22 0.014 260 / 0.5)" }}>
+                <div className="h-full rounded-full transition-all" style={{ width: `${(item.valor / maxVal) * 100}%`, background: GOLD }} />
               </div>
             </div>
           </div>

@@ -40,6 +40,7 @@ import {
   Bot,
   BookMarked,
   Package,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -75,7 +76,7 @@ const MODULES: Module[] = [
     shortLabel: "Dashboard",
     icon: LayoutDashboard,
     path: "/dashboard",
-    color: "oklch(0.78 0.12 75)",
+    color: "oklch(0.76 0.145 72)",
     description: "Visão geral consolidada",
   },
   {
@@ -84,7 +85,7 @@ const MODULES: Module[] = [
     shortLabel: "Data VIP",
     icon: BarChart3,
     path: "/data-vip",
-    color: "oklch(0.65 0.15 200)",
+    color: "oklch(0.65 0.16 200)",
     description: "Analytics e faturamento",
   },
   {
@@ -93,7 +94,7 @@ const MODULES: Module[] = [
     shortLabel: "Gestão",
     icon: ClipboardList,
     path: "/gestao-total",
-    color: "oklch(0.65 0.15 145)",
+    color: "oklch(0.65 0.16 145)",
     description: "ERP operacional",
   },
   {
@@ -102,7 +103,7 @@ const MODULES: Module[] = [
     shortLabel: "VIP Cam",
     icon: Camera,
     path: "/vip-cam",
-    color: "oklch(0.65 0.15 280)",
+    color: "oklch(0.65 0.16 280)",
     description: "Reconhecimento facial",
   },
   {
@@ -111,7 +112,7 @@ const MODULES: Module[] = [
     shortLabel: "Reputação",
     icon: Star,
     path: "/reputacao",
-    color: "oklch(0.65 0.15 30)",
+    color: "oklch(0.65 0.16 30)",
     description: "Avaliações e reviews",
   },
   {
@@ -120,7 +121,7 @@ const MODULES: Module[] = [
     shortLabel: "Instagram",
     icon: Instagram,
     path: "/auto-instagram",
-    color: "oklch(0.65 0.15 320)",
+    color: "oklch(0.65 0.16 320)",
     description: "Bot e engajamento",
   },
   {
@@ -129,7 +130,7 @@ const MODULES: Module[] = [
     shortLabel: "WhatsApp",
     icon: MessageSquare,
     path: "/we-send",
-    color: "oklch(0.65 0.15 145)",
+    color: "oklch(0.65 0.16 145)",
     description: "Envio em massa",
   },
 ];
@@ -231,7 +232,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // ── Carregar organizações e unidades do usuário ──────────────────────────
   const orgsQuery = trpc.orgs.list.useQuery(undefined, { enabled: !!user });
   const firstOrgId = orgsQuery.data?.[0]?.id ?? 0;
   const unitsQuery = trpc.orgs.units.useQuery(
@@ -250,8 +250,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
         state: u.state ?? undefined,
       }));
       setAvailableUnits(mapped);
-      // Auto-selecionar a primeira unidade apenas para usuários de unidade específica
-      // Admins e masters começam com "Todas as unidades" (selectedUnit = null)
       const stored = localStorage.getItem("vip_selected_unit");
       const isMasterOrAdmin = userRole === "master" || userRole === "org_admin";
       if (!stored && mapped.length > 0 && !isMasterOrAdmin) {
@@ -260,17 +258,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
     }
   }, [unitsQuery.data]);
 
-  // Quando o userRole for definido como admin/master, limpar seleção automática
-  // para garantir que admins vejam "Todas as unidades" por padrão
-  // Apenas limpa se o localStorage não tiver sido definido manualmente pelo usuário
-  // (ou seja, se o valor salvo veio de uma auto-seleção anterior)
   const [adminDefaultApplied, setAdminDefaultApplied] = useState(false);
   useEffect(() => {
     if (!adminDefaultApplied && userRole && (userRole === "master" || userRole === "org_admin")) {
       const stored = localStorage.getItem("vip_selected_unit");
       const hasManualChoice = localStorage.getItem("vip_unit_manually_chosen");
       if (stored && !hasManualChoice) {
-        // Limpa auto-seleção antiga para admins
         setSelectedUnit(null);
       }
       setAdminDefaultApplied(true);
@@ -285,8 +278,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
   });
 
   const currentModule = MODULES.find((m) => m.id === activeModule) ?? MODULES[0];
-  // Ocultar "Ranking" do Data VIP quando uma unidade específica estiver selecionada
-  // (Ranking só faz sentido no modo "Todas as Unidades", selectedUnit === null)
   const sidebarItems = SIDEBAR_ITEMS[activeModule].filter((item) => {
     if (item.type === "separator" || item.type === "group") return true;
     if ((item as any).path === "/data-vip/ranking" && selectedUnit !== null) return false;
@@ -306,18 +297,55 @@ export default function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* ── TOP NAVIGATION BAR ── */}
-      <header className="h-14 border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50 flex items-center">
+      <header
+        className="h-14 sticky top-0 z-50 flex items-center"
+        style={{
+          background: "oklch(0.075 0.008 260 / 0.92)",
+          backdropFilter: "blur(20px) saturate(180%)",
+          WebkitBackdropFilter: "blur(20px) saturate(180%)",
+          borderBottom: "1px solid oklch(0.22 0.014 260 / 0.6)",
+          boxShadow: "0 1px 0 0 oklch(1 0 0 / 0.03) inset, 0 4px 24px -4px oklch(0 0 0 / 0.4)",
+        }}
+      >
         <div className="flex items-center h-full w-full">
           {/* Logo */}
-          <div className="flex items-center gap-2 px-4 h-full border-r border-border min-w-[200px]">
-            <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-xs">VS</span>
+          <div
+            className="flex items-center gap-2.5 px-4 h-full shrink-0"
+            style={{
+              minWidth: sidebarCollapsed ? "56px" : "208px",
+              borderRight: "1px solid oklch(0.22 0.014 260 / 0.5)",
+              transition: "min-width 0.2s ease",
+            }}
+          >
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+              style={{
+                background: "linear-gradient(135deg, oklch(0.76 0.145 72) 0%, oklch(0.68 0.16 65) 100%)",
+                boxShadow: "0 0 16px oklch(0.76 0.145 72 / 0.35)",
+              }}
+            >
+              <Zap className="w-4 h-4" style={{ color: "oklch(0.08 0.01 260)" }} />
             </div>
-            <span className="font-bold text-sm tracking-wide text-foreground">VIP Suite</span>
+            {!sidebarCollapsed && (
+              <div className="flex flex-col leading-none">
+                <span
+                  className="font-bold text-sm tracking-wide"
+                  style={{
+                    background: "linear-gradient(135deg, oklch(0.84 0.14 80) 0%, oklch(0.70 0.16 60) 100%)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                  }}
+                >
+                  VIP Suite
+                </span>
+                <span className="text-[9px] text-muted-foreground tracking-widest uppercase">Platform</span>
+              </div>
+            )}
           </div>
 
           {/* Module tabs — desktop */}
-          <nav className="hidden lg:flex items-center h-full flex-1 overflow-x-auto">
+          <nav className="hidden lg:flex items-center h-full flex-1 overflow-x-auto px-1">
             {MODULES.map((module) => {
               const Icon = module.icon;
               const isActive = activeModule === module.id;
@@ -326,31 +354,64 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   key={module.id}
                   onClick={() => handleModuleClick(module)}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 h-full text-xs font-medium transition-all border-b-2 whitespace-nowrap",
-                    isActive
-                      ? "border-primary text-primary bg-primary/5"
-                      : "border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                    "relative flex items-center gap-1.5 px-3.5 h-full text-xs font-medium transition-all whitespace-nowrap",
+                    isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                   )}
-                  style={isActive ? { borderBottomColor: module.color, color: module.color } : {}}
+                  style={{
+                    color: isActive ? module.color : undefined,
+                  }}
                 >
-                  <Icon className="w-3.5 h-3.5" />
-                  {module.shortLabel}
+                  {/* Active indicator */}
+                  {isActive && (
+                    <span
+                      className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full"
+                      style={{
+                        background: `linear-gradient(90deg, transparent, ${module.color}, transparent)`,
+                        boxShadow: `0 0 8px ${module.color}`,
+                      }}
+                    />
+                  )}
+                  {/* Hover bg */}
+                  <span
+                    className={cn(
+                      "absolute inset-x-1 inset-y-2 rounded-md transition-all",
+                      isActive
+                        ? "opacity-100"
+                        : "opacity-0 hover:opacity-100"
+                    )}
+                    style={{
+                      background: isActive
+                        ? `${module.color}12`
+                        : "oklch(0.22 0.014 260 / 0.4)",
+                    }}
+                  />
+                  <Icon className="w-3.5 h-3.5 relative z-10" />
+                  <span className="relative z-10">{module.shortLabel}</span>
                 </button>
               );
             })}
           </nav>
 
           {/* Right side */}
-          <div className="flex items-center gap-2 px-3 ml-auto">
+          <div className="flex items-center gap-1.5 px-3 ml-auto">
             {/* Unit selector */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-border bg-secondary/50 hidden sm:flex">
-                  <Building2 className="w-3.5 h-3.5" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs gap-1.5 hidden sm:flex"
+                  style={{
+                    background: "oklch(0.155 0.012 260 / 0.8)",
+                    border: "1px solid oklch(0.28 0.015 260 / 0.6)",
+                    color: "oklch(0.85 0.006 80)",
+                  }}
+                >
+                  <Building2 className="w-3.5 h-3.5 opacity-70" />
                   <span className="max-w-[120px] truncate">
                     {selectedUnit ? selectedUnit.name : "Todas as Unidades"}
                   </span>
-                  <ChevronDown className="w-3 h-3 opacity-60" />
+                  <ChevronDown className="w-3 h-3 opacity-50" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -377,19 +438,35 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </DropdownMenu>
 
             {/* Notifications */}
-            <Button variant="ghost" size="icon" className="h-8 w-8 relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 relative text-muted-foreground hover:text-foreground"
+            >
               <Bell className="w-4 h-4" />
             </Button>
 
             {/* User menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 gap-2 px-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-2 px-2 hover:bg-accent/50"
+                >
                   <Avatar className="h-6 w-6">
-                    <AvatarFallback className="text-xs bg-primary text-primary-foreground">{initials}</AvatarFallback>
+                    <AvatarFallback
+                      className="text-xs font-bold"
+                      style={{
+                        background: "linear-gradient(135deg, oklch(0.76 0.145 72) 0%, oklch(0.68 0.16 65) 100%)",
+                        color: "oklch(0.08 0.01 260)",
+                      }}
+                    >
+                      {initials}
+                    </AvatarFallback>
                   </Avatar>
-                  <span className="text-xs hidden md:block max-w-[100px] truncate">{user?.name ?? "Usuário"}</span>
-                  <ChevronDown className="w-3 h-3 opacity-60" />
+                  <span className="text-xs hidden md:block max-w-[100px] truncate text-foreground/80">{user?.name ?? "Usuário"}</span>
+                  <ChevronDown className="w-3 h-3 opacity-50" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
@@ -417,7 +494,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 lg:hidden"
+              className="h-8 w-8 lg:hidden text-muted-foreground"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
               {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
@@ -428,7 +505,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
       {/* Mobile module menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-card border-b border-border z-40">
+        <div
+          className="lg:hidden z-40"
+          style={{
+            background: "oklch(0.095 0.008 260 / 0.97)",
+            backdropFilter: "blur(16px)",
+            borderBottom: "1px solid oklch(0.22 0.014 260 / 0.5)",
+          }}
+        >
           <div className="grid grid-cols-4 gap-0">
             {MODULES.map((module) => {
               const Icon = module.icon;
@@ -437,11 +521,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 <button
                   key={module.id}
                   onClick={() => handleModuleClick(module)}
-                  className={cn(
-                    "flex flex-col items-center gap-1 p-3 text-xs transition-all",
-                    isActive ? "bg-primary/10 text-primary" : "text-muted-foreground"
-                  )}
-                  style={isActive ? { color: module.color } : {}}
+                  className="flex flex-col items-center gap-1 p-3 text-xs transition-all"
+                  style={{
+                    color: isActive ? module.color : "oklch(0.55 0.012 260)",
+                    background: isActive ? `${module.color}10` : "transparent",
+                  }}
                 >
                   <Icon className="w-5 h-5" />
                   <span className="text-[10px] leading-tight text-center">{module.shortLabel}</span>
@@ -457,21 +541,31 @@ export default function AppLayout({ children }: AppLayoutProps) {
         {/* Sidebar */}
         <aside
           className={cn(
-            "hidden lg:flex flex-col bg-sidebar border-r border-sidebar-border transition-all duration-200 shrink-0",
-            sidebarCollapsed ? "w-14" : "w-52"
+            "hidden lg:flex flex-col shrink-0 transition-all duration-200",
           )}
+          style={{
+            width: sidebarCollapsed ? "56px" : "208px",
+            background: "oklch(0.075 0.008 260)",
+            borderRight: "1px solid oklch(0.175 0.012 260 / 0.8)",
+          }}
         >
           {/* Module header */}
-          <div className="flex items-center gap-2 px-3 py-3 border-b border-sidebar-border">
+          <div
+            className="flex items-center gap-2 px-3 py-3"
+            style={{ borderBottom: "1px solid oklch(0.175 0.012 260 / 0.8)" }}
+          >
             {!sidebarCollapsed && (
               <>
                 <div
-                  className="w-6 h-6 rounded flex items-center justify-center shrink-0"
-                  style={{ background: `${currentModule.color}20` }}
+                  className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+                  style={{
+                    background: `${currentModule.color}18`,
+                    border: `1px solid ${currentModule.color}30`,
+                  }}
                 >
                   <currentModule.icon className="w-3.5 h-3.5" style={{ color: currentModule.color }} />
                 </div>
-                <span className="text-xs font-semibold text-sidebar-foreground truncate flex-1">
+                <span className="text-xs font-semibold truncate flex-1" style={{ color: "oklch(0.88 0.006 80)" }}>
                   {currentModule.label}
                 </span>
               </>
@@ -489,20 +583,28 @@ export default function AppLayout({ children }: AppLayoutProps) {
           {/* Sidebar nav items */}
           <nav className="flex-1 py-2 overflow-y-auto">
             {sidebarItems.map((item, idx) => {
-              // Separator
               if (item.type === "separator") {
-                return <div key={`sep-${idx}`} className="my-1.5 mx-3 border-t border-sidebar-border/50" />;
+                return (
+                  <div
+                    key={`sep-${idx}`}
+                    className="my-1.5 mx-3"
+                    style={{ height: "1px", background: "oklch(0.175 0.012 260 / 0.6)" }}
+                  />
+                );
               }
-              // Group with children
               if (item.type === "group") {
-                const isChildActive = item.children.some(c => location === c.path);
                 const GroupIcon = item.icon;
                 return (
                   <div key={`group-${item.label}`}>
                     {!sidebarCollapsed && (
                       <div className="flex items-center gap-1.5 px-4 py-1.5 mt-1">
-                        <GroupIcon className="w-3 h-3 text-muted-foreground/60" />
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">{item.label}</span>
+                        <GroupIcon className="w-3 h-3" style={{ color: "oklch(0.45 0.01 260)" }} />
+                        <span
+                          className="text-[10px] font-semibold uppercase tracking-wider"
+                          style={{ color: "oklch(0.45 0.01 260)" }}
+                        >
+                          {item.label}
+                        </span>
                       </div>
                     )}
                     {item.children.map((child) => {
@@ -513,13 +615,22 @@ export default function AppLayout({ children }: AppLayoutProps) {
                           key={child.path}
                           href={child.path}
                           className={cn(
-                            "flex items-center gap-2.5 py-2 mx-1 rounded-md text-xs transition-all",
-                            sidebarCollapsed ? "px-3" : "px-5",
-                            isActive
-                              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                              : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                            "flex items-center gap-2.5 py-2 mx-1.5 rounded-lg text-xs transition-all",
+                            sidebarCollapsed ? "px-2.5 justify-center" : "px-3.5",
                           )}
-                          style={isActive ? { color: currentModule.color } : {}}
+                          style={
+                            isActive
+                              ? {
+                                  background: `${currentModule.color}15`,
+                                  color: currentModule.color,
+                                  fontWeight: 500,
+                                  border: `1px solid ${currentModule.color}25`,
+                                }
+                              : {
+                                  color: "oklch(0.55 0.012 260)",
+                                  border: "1px solid transparent",
+                                }
+                          }
                           title={sidebarCollapsed ? child.label : undefined}
                         >
                           <ChildIcon className="w-3.5 h-3.5 shrink-0" />
@@ -530,7 +641,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   </div>
                 );
               }
-              // Regular link
               const Icon = item.icon;
               const isActive = location === item.path;
               return (
@@ -538,12 +648,22 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   key={item.path}
                   href={item.path}
                   className={cn(
-                    "flex items-center gap-2.5 px-3 py-2 mx-1 rounded-md text-xs transition-all",
-                    isActive
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                      : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                    "flex items-center gap-2.5 py-2 mx-1.5 rounded-lg text-xs transition-all",
+                    sidebarCollapsed ? "px-2.5 justify-center" : "px-3",
                   )}
-                  style={isActive ? { color: currentModule.color } : {}}
+                  style={
+                    isActive
+                      ? {
+                          background: `${currentModule.color}15`,
+                          color: currentModule.color,
+                          fontWeight: 500,
+                          border: `1px solid ${currentModule.color}25`,
+                        }
+                      : {
+                          color: "oklch(0.55 0.012 260)",
+                          border: "1px solid transparent",
+                        }
+                  }
                   title={sidebarCollapsed ? item.label : undefined}
                 >
                   <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -554,10 +674,17 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </nav>
 
           {/* Sidebar footer */}
-          <div className="border-t border-sidebar-border p-2">
+          <div
+            className="p-2"
+            style={{ borderTop: "1px solid oklch(0.175 0.012 260 / 0.8)" }}
+          >
             <button
               onClick={() => navigate("/configuracoes")}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-all"
+              className={cn(
+                "w-full flex items-center gap-2.5 py-2 rounded-lg text-xs transition-all",
+                sidebarCollapsed ? "px-2.5 justify-center" : "px-3",
+              )}
+              style={{ color: "oklch(0.50 0.01 260)" }}
               title={sidebarCollapsed ? "Configurações" : undefined}
             >
               <Settings className="w-3.5 h-3.5 shrink-0" />

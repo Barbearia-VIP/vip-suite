@@ -34,30 +34,50 @@ function PctBadge({ value }: { value: number | null }) {
   );
 }
 
-function ProgressBar({ pct, color = "bg-yellow-400" }: { pct: number; color?: string }) {
+function ProgressBar({ pct, color = "oklch(0.76 0.145 72)" }: { pct: number; color?: string }) {
   return (
-    <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden mt-1">
-      <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+    <div className="w-full h-1.5 rounded-full overflow-hidden mt-1" style={{ background: "oklch(0.22 0.014 260 / 0.5)" }}>
+      <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: color }} />
     </div>
   );
 }
 
 function ResumoCard({ label, value, icon: Icon, highlight = false }: { label: string; value: number; icon: any; highlight?: boolean }) {
+  const ambar = "oklch(0.76 0.145 72)";
   return (
-    <div className={`rounded-xl p-4 border ${highlight ? "bg-yellow-500/10 border-yellow-500/30" : "bg-white/5 border-white/10"}`}>
-      <div className="flex items-center gap-2 mb-1">
-        <Icon className={`w-4 h-4 ${highlight ? "text-yellow-400" : "text-muted-foreground"}`} />
+    <div
+      className="rounded-2xl p-4 relative overflow-hidden"
+      style={{
+        background: highlight
+          ? "linear-gradient(135deg, oklch(0.76 0.145 72 / 0.12) 0%, oklch(0.68 0.16 65 / 0.06) 100%)"
+          : "linear-gradient(135deg, oklch(0.135 0.010 260 / 0.9) 0%, oklch(0.11 0.008 260 / 0.8) 100%)",
+        border: `1px solid ${highlight ? "oklch(0.76 0.145 72 / 0.3)" : "oklch(0.22 0.014 260 / 0.5)"}`,
+        boxShadow: highlight ? `0 4px 20px -4px oklch(0.76 0.145 72 / 0.15)` : "none",
+      }}
+    >
+      {highlight && (
+        <div className="absolute top-0 right-0 w-16 h-16 rounded-full pointer-events-none"
+          style={{ background: ambar, filter: "blur(24px)", opacity: 0.08, transform: "translate(30%, -30%)" }} />
+      )}
+      <div className="flex items-center gap-2 mb-2">
+        <Icon className="w-4 h-4" style={{ color: highlight ? ambar : "oklch(0.50 0.01 260)" }} />
         <span className="text-xs text-muted-foreground uppercase tracking-wide">{label}</span>
       </div>
-      <p className={`text-xl font-bold ${highlight ? "text-yellow-400" : "text-foreground"}`}>{fmt(value)}</p>
+      <p className="text-xl font-bold" style={{ color: highlight ? ambar : "oklch(0.92 0.01 260)" }}>{fmt(value)}</p>
     </div>
   );
 }
 
 function ResumoCardDias({ label, value, icon: Icon }: { label: string; value: number; icon: any }) {
   return (
-    <div className="rounded-xl p-4 border bg-white/5 border-white/10">
-      <div className="flex items-center gap-2 mb-1">
+    <div
+      className="rounded-2xl p-4"
+      style={{
+        background: "linear-gradient(135deg, oklch(0.135 0.010 260 / 0.9) 0%, oklch(0.11 0.008 260 / 0.8) 100%)",
+        border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+      }}
+    >
+      <div className="flex items-center gap-2 mb-2">
         <Icon className="w-4 h-4 text-muted-foreground" />
         <span className="text-xs text-muted-foreground uppercase tracking-wide">{label}</span>
       </div>
@@ -138,13 +158,13 @@ export default function FaturamentoPage() {
   };
 
   const composicaoCores: Record<string, string> = {
-    "Serviço Base": "bg-yellow-400",
-    "Serviço Extra": "bg-blue-400",
-    "Prod. Cabelo": "bg-emerald-400",
-    "Prod. Barba": "bg-orange-400",
-    "Prod. Empório": "bg-pink-400",
-    "Prod. Outros": "bg-gray-400",
-    "Outros": "bg-slate-400",
+    "Serviço Base": "oklch(0.76 0.145 72)",
+    "Serviço Extra": "oklch(0.65 0.15 200)",
+    "Prod. Cabelo": "oklch(0.72 0.16 145)",
+    "Prod. Barba": "oklch(0.72 0.14 50)",
+    "Prod. Empório": "oklch(0.65 0.15 320)",
+    "Prod. Outros": "oklch(0.50 0.01 260)",
+    "Outros": "oklch(0.45 0.01 260)",
   };
 
   if (isLoading) {
@@ -169,7 +189,12 @@ export default function FaturamentoPage() {
         <select
           value={periodo}
           onChange={e => setPeriodo(e.target.value)}
-          className="text-sm bg-muted border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+          className="text-sm rounded-xl px-3 py-2 focus:outline-none"
+          style={{
+            background: "oklch(0.155 0.012 260 / 0.8)",
+            border: "1px solid oklch(0.28 0.015 260 / 0.5)",
+            color: "oklch(0.85 0.01 260)",
+          }}
         >
           {periodos.map(p => <option key={p.val} value={p.val}>{p.label}</option>)}
         </select>
@@ -203,15 +228,21 @@ export default function FaturamentoPage() {
       {/* Tabela Comparativa */}
       <section>
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Comparativo de Períodos</h2>
-        <Card className="overflow-hidden">
+        <div
+          className="overflow-hidden rounded-2xl"
+          style={{
+            background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+            border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+          }}
+        >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/10 bg-white/5">
+                <tr style={{ borderBottom: "1px solid oklch(0.22 0.014 260 / 0.5)", background: "oklch(0.155 0.012 260 / 0.5)" }}>
                   <th className="text-left px-4 py-3 text-muted-foreground font-medium min-w-[120px]">Categoria</th>
                   <th className="text-right px-4 py-3 min-w-[110px]">
-                    <div className="text-yellow-400 font-semibold">Atual</div>
-                    <div className="text-yellow-400/70 font-normal text-[10px] mt-0.5">{labelAtual}</div>
+                    <div className="font-semibold" style={{ color: "oklch(0.76 0.145 72)" }}>Atual</div>
+                    <div className="font-normal text-[10px] mt-0.5" style={{ color: "oklch(0.76 0.145 72 / 0.7)" }}>{labelAtual}</div>
                   </th>
                   <th className="text-right px-4 py-3 text-muted-foreground font-medium min-w-[100px]">
                     <div>Per. Anterior</div>
@@ -262,9 +293,18 @@ export default function FaturamentoPage() {
                   return rows.map(row => {
                     const pKey = pctKeys[row.key];
                     return (
-                      <tr key={row.key} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${row.highlight ? "bg-yellow-500/5" : ""}`}>
-                        <td className={`px-4 py-3 font-medium ${row.highlight ? "text-yellow-400" : ""}`}>{row.label}</td>
-                        <td className={`px-4 py-3 text-right font-semibold ${row.highlight ? "text-yellow-400" : ""}`}>
+                      <tr
+                        key={row.key}
+                        className="transition-colors"
+                        style={{
+                          borderBottom: "1px solid oklch(0.22 0.014 260 / 0.3)",
+                          background: row.highlight ? "oklch(0.76 0.145 72 / 0.06)" : "transparent",
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = row.highlight ? "oklch(0.76 0.145 72 / 0.1)" : "oklch(0.18 0.012 260 / 0.4)")}
+                        onMouseLeave={e => (e.currentTarget.style.background = row.highlight ? "oklch(0.76 0.145 72 / 0.06)" : "transparent")}
+                      >
+                        <td className="px-4 py-3 font-medium" style={{ color: row.highlight ? "oklch(0.76 0.145 72)" : undefined }}>{row.label}</td>
+                        <td className="px-4 py-3 text-right font-semibold" style={{ color: row.highlight ? "oklch(0.76 0.145 72)" : undefined }}>
                           {row.isDias ? c.atual[row.key] : fmt(c.atual[row.key] as number)}
                         </td>
                         <td className="px-4 py-2 text-right text-muted-foreground">
@@ -298,20 +338,25 @@ export default function FaturamentoPage() {
               </tbody>
             </table>
           </div>
-        </Card>
+        </div>
       </section>
 
       {/* Três colunas: Composição, Top Barbeiros, Top Itens */}
       <div className="grid lg:grid-cols-3 gap-5">
 
         {/* Composição por grupo */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Scissors className="w-4 h-4 text-yellow-400" /> Composição (grupo)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div
+          className="rounded-2xl p-5"
+          style={{
+            background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+            border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+          }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Scissors className="w-4 h-4" style={{ color: "oklch(0.76 0.145 72)" }} />
+            <h3 className="text-sm font-semibold text-foreground">Composição (grupo)</h3>
+          </div>
+          <div className="space-y-4">
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)
             ) : !d?.composicao.length ? (
@@ -336,17 +381,22 @@ export default function FaturamentoPage() {
                 </div>
               ))
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Top Barbeiros */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Users className="w-4 h-4 text-yellow-400" /> Ranking Colaboradores
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div
+          className="rounded-2xl p-5"
+          style={{
+            background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+            border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+          }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Users className="w-4 h-4" style={{ color: "oklch(0.76 0.145 72)" }} />
+            <h3 className="text-sm font-semibold text-foreground">Ranking Colaboradores</h3>
+          </div>
+          <div className="space-y-4">
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)
             ) : !d?.topBarbeiros.length ? (
@@ -364,21 +414,26 @@ export default function FaturamentoPage() {
                       <p className="text-xs text-muted-foreground">{b.pct.toFixed(1)}%</p>
                     </div>
                   </div>
-                  <ProgressBar pct={b.pct} color="bg-yellow-400" />
+                  <ProgressBar pct={b.pct} color="oklch(0.76 0.145 72)" />
                 </div>
               ))
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Top Itens */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Package className="w-4 h-4 text-yellow-400" /> Top Itens
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div
+          className="rounded-2xl p-5"
+          style={{
+            background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+            border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+          }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Package className="w-4 h-4" style={{ color: "oklch(0.76 0.145 72)" }} />
+            <h3 className="text-sm font-semibold text-foreground">Top Itens</h3>
+          </div>
+          <div className="space-y-4">
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)
             ) : !d?.topItens.length ? (
@@ -401,13 +456,13 @@ export default function FaturamentoPage() {
                   </div>
                   <ProgressBar
                     pct={item.pct}
-                    color={item.grupo === "Serviço Base" ? "bg-yellow-400" : item.grupo === "Serviço Extra" ? "bg-blue-400" : "bg-purple-400"}
+                    color={item.grupo === "Serviço Base" ? "oklch(0.76 0.145 72)" : item.grupo === "Serviço Extra" ? "oklch(0.65 0.15 200)" : "oklch(0.65 0.15 280)"}
                   />
                 </div>
               ))
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Bloco Aberturas */}

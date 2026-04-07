@@ -1,22 +1,22 @@
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import PageHeader from "@/components/PageHeader";
 import {
   TrendingUp, Star, Camera, Instagram, MessageSquare,
   Building2, BarChart3, RefreshCw, ArrowUpRight, AlertCircle,
   CheckSquare, Wifi, WifiOff, Settings, TrendingDown,
-  Users, AlertTriangle, CalendarDays, DollarSign, Smile, Frown, Meh,
-  MessageCircle, ThumbsUp, Clock,
+  Users, AlertTriangle, CalendarDays, DollarSign, Smile,
+  MessageCircle, ThumbsUp, Clock, Zap, Activity,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useOrg } from "@/hooks/useOrg";
 import { useState, useEffect, useMemo } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell,
 } from "recharts";
+import { cn } from "@/lib/utils";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function fmt(value: number) {
@@ -29,58 +29,101 @@ function fmtPct(value: number) {
   return `${value}%`;
 }
 
-// ─── Seletor de Período ──────────────────────────────────────────────────────
+// ─── Período ────────────────────────────────────────────────────────────────
 type PeriodOption = "today" | "week" | "month" | "quarter" | "custom";
 
 function getPeriodDates(option: PeriodOption, customFrom?: string, customTo?: string): { from: string; to: string; label: string } {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-  if (option === "today") {
-    const today = fmt(now);
-    return { from: today, to: today, label: "Hoje" };
-  }
+  if (option === "today") { const t = fmt(now); return { from: t, to: t, label: "Hoje" }; }
   if (option === "week") {
     const day = now.getDay();
-    const monday = new Date(now); monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
-    return { from: fmt(monday), to: fmt(now), label: "Esta semana" };
+    const mon = new Date(now); mon.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+    return { from: fmt(mon), to: fmt(now), label: "Esta semana" };
   }
   if (option === "month") {
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    return { from: fmt(start), to: fmt(now), label: "Este mês" };
+    return { from: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), to: fmt(now), label: "Este mês" };
   }
   if (option === "quarter") {
-    const qStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
-    return { from: fmt(qStart), to: fmt(now), label: "Este trimestre" };
+    return { from: fmt(new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)), to: fmt(now), label: "Este trimestre" };
   }
-  // custom
-  return {
-    from: customFrom ?? fmt(new Date(now.getFullYear(), now.getMonth(), 1)),
-    to: customTo ?? fmt(now),
-    label: `${customFrom ?? "—"} a ${customTo ?? "—"}`,
-  };
+  return { from: customFrom ?? fmt(new Date(now.getFullYear(), now.getMonth(), 1)), to: customTo ?? fmt(now), label: `${customFrom ?? "—"} a ${customTo ?? "—"}` };
 }
 
-// ─── Mini KPI ────────────────────────────────────────────────────────────────
+// ─── KPI Card Premium ────────────────────────────────────────────────────────
+function KpiCard({ label, value, sub, icon: Icon, color, trend }: {
+  label: string; value: string; sub?: string; icon: React.ElementType; color: string; trend?: number | null;
+}) {
+  return (
+    <div
+      className="relative rounded-2xl p-4 overflow-hidden"
+      style={{
+        background: `linear-gradient(135deg, oklch(0.14 0.012 260 / 0.9) 0%, oklch(0.11 0.01 260 / 0.8) 100%)`,
+        border: `1px solid ${color}25`,
+        backdropFilter: "blur(12px)",
+        boxShadow: `0 4px 24px -4px ${color}20, 0 1px 0 0 oklch(1 0 0 / 0.04) inset`,
+      }}
+    >
+      {/* Glow accent */}
+      <div
+        className="absolute top-0 right-0 w-20 h-20 rounded-full opacity-10 pointer-events-none"
+        style={{ background: color, filter: "blur(24px)", transform: "translate(30%, -30%)" }}
+      />
+      <div className="flex items-start justify-between mb-3">
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center"
+          style={{
+            background: `${color}18`,
+            border: `1px solid ${color}30`,
+            boxShadow: `0 0 12px ${color}20`,
+          }}
+        >
+          <Icon className="w-4.5 h-4.5" style={{ color }} />
+        </div>
+        {trend !== null && trend !== undefined && (
+          <div
+            className="flex items-center gap-0.5 text-xs font-medium px-2 py-0.5 rounded-full"
+            style={{
+              background: trend >= 0 ? "oklch(0.55 0.16 145 / 0.15)" : "oklch(0.55 0.16 15 / 0.15)",
+              color: trend >= 0 ? "oklch(0.72 0.16 145)" : "oklch(0.72 0.16 15)",
+              border: `1px solid ${trend >= 0 ? "oklch(0.55 0.16 145 / 0.3)" : "oklch(0.55 0.16 15 / 0.3)"}`,
+            }}
+          >
+            {trend >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {Math.abs(trend)}%
+          </div>
+        )}
+      </div>
+      <p className="text-2xl font-bold tracking-tight text-foreground leading-none mb-1">{value}</p>
+      <p className="text-xs text-muted-foreground leading-none">{label}</p>
+      {sub && <p className="text-xs text-muted-foreground/60 mt-1 leading-none">{sub}</p>}
+    </div>
+  );
+}
+
+// ─── Mini KPI (dentro dos module cards) ─────────────────────────────────────
 function MiniKPI({ label, value, sub, icon: Icon, color }: {
   label: string; value: string; sub?: string; icon: React.ElementType; color: string;
 }) {
   return (
     <div className="flex items-center gap-2.5">
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${color}20` }}>
+      <div
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+        style={{ background: `${color}15`, border: `1px solid ${color}25` }}
+      >
         <Icon className="w-4 h-4" style={{ color }} />
       </div>
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground leading-none mb-0.5">{label}</p>
         <p className="text-sm font-bold text-foreground leading-none">{value}</p>
-        {sub && <p className="text-xs text-muted-foreground mt-0.5 leading-none">{sub}</p>}
+        {sub && <p className="text-xs text-muted-foreground/60 mt-0.5 leading-none">{sub}</p>}
       </div>
     </div>
   );
 }
 
-// ─── Module Card ─────────────────────────────────────────────────────────────
+// ─── Module Card Premium ─────────────────────────────────────────────────────
 function ModuleCard({
   title, icon: Icon, color, badge, configured = true, onConfigure, children, onNavigate,
 }: {
@@ -88,38 +131,57 @@ function ModuleCard({
   configured?: boolean; onConfigure?: () => void; children?: React.ReactNode; onNavigate?: () => void;
 }) {
   return (
-    <Card className="bg-card border-border">
-      <CardContent className="p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${color}20` }}>
-              <Icon className="w-4 h-4" style={{ color }} />
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-foreground leading-none">{title}</h3>
-              {badge && <p className="text-xs text-muted-foreground mt-0.5">{badge}</p>}
-            </div>
+    <div
+      className="rounded-2xl p-5 relative overflow-hidden"
+      style={{
+        background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+        border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+        backdropFilter: "blur(12px)",
+        boxShadow: "0 4px 24px -8px oklch(0 0 0 / 0.4)",
+      }}
+    >
+      {/* Top accent line */}
+      <div
+        className="absolute top-0 left-0 right-0 h-px"
+        style={{ background: `linear-gradient(90deg, transparent, ${color}50, transparent)` }}
+      />
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2.5">
+          <div
+            className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: `${color}18`, border: `1px solid ${color}30` }}
+          >
+            <Icon className="w-4 h-4" style={{ color }} />
           </div>
-          {onNavigate && (
-            <Button variant="ghost" size="sm" className="text-xs h-7 px-2 shrink-0" onClick={onNavigate}>
-              Ver mais <ArrowUpRight className="w-3 h-3 ml-1" />
+          <div>
+            <h3 className="text-sm font-semibold text-foreground leading-none">{title}</h3>
+            {badge && <p className="text-xs text-muted-foreground mt-0.5">{badge}</p>}
+          </div>
+        </div>
+        {onNavigate && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs h-7 px-2 shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={onNavigate}
+          >
+            Ver mais <ArrowUpRight className="w-3 h-3 ml-1" />
+          </Button>
+        )}
+      </div>
+      {configured ? (
+        <div className="space-y-3">{children}</div>
+      ) : (
+        <div className="py-4 text-center">
+          <p className="text-xs text-muted-foreground mb-2">Módulo não configurado</p>
+          {onConfigure && (
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground" onClick={onConfigure}>
+              <Settings className="w-3 h-3" /> Configurar
             </Button>
           )}
         </div>
-        {configured ? (
-          <div className="space-y-3">{children}</div>
-        ) : (
-          <div className="py-4 text-center">
-            <p className="text-xs text-muted-foreground mb-2">Módulo não configurado</p>
-            {onConfigure && (
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground" onClick={onConfigure}>
-                <Settings className="w-3 h-3" /> Configurar
-              </Button>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }
 
@@ -133,15 +195,21 @@ function SatisfactionBar({ satisfeitos, neutros, insatisfeitos, total }: {
   const pI = 100 - pS - pN;
   return (
     <div className="space-y-2">
-      <div className="flex rounded-full overflow-hidden h-2">
-        {pS > 0 && <div className="bg-emerald-500" style={{ width: `${pS}%` }} />}
-        {pN > 0 && <div className="bg-yellow-500" style={{ width: `${pN}%` }} />}
-        {pI > 0 && <div className="bg-red-500" style={{ width: `${pI}%` }} />}
+      <div className="flex rounded-full overflow-hidden h-1.5">
+        {pS > 0 && <div style={{ width: `${pS}%`, background: "oklch(0.72 0.16 145)" }} />}
+        {pN > 0 && <div style={{ width: `${pN}%`, background: "oklch(0.76 0.145 72)" }} />}
+        {pI > 0 && <div style={{ width: `${pI}%`, background: "oklch(0.65 0.16 15)" }} />}
       </div>
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />{pS}% satisfeitos</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-500 inline-block" />{pN}% neutros</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />{pI}% insatisfeitos</span>
+        <span className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "oklch(0.72 0.16 145)" }} />{pS}%
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "oklch(0.76 0.145 72)" }} />{pN}%
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: "oklch(0.65 0.16 15)" }} />{pI}%
+        </span>
       </div>
     </div>
   );
@@ -162,6 +230,31 @@ const MODULE_KPI_MAP: Record<ModuleKey, "dataVip" | "gestaoTotal" | "vipCam" | "
   reputacao: "reputacao", auto_instagram: "autoInstagram", we_send: "weSend",
 };
 
+// ─── Tooltip customizado ─────────────────────────────────────────────────────
+function PremiumTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div
+      className="rounded-xl px-3 py-2.5 text-xs"
+      style={{
+        background: "oklch(0.14 0.012 260 / 0.95)",
+        border: "1px solid oklch(0.28 0.015 260 / 0.6)",
+        backdropFilter: "blur(16px)",
+        boxShadow: "0 8px 32px -8px oklch(0 0 0 / 0.6)",
+      }}
+    >
+      <p className="text-muted-foreground mb-1.5 font-medium">{label}</p>
+      {payload.map((p: any, i: number) => (
+        <p key={i} className="font-bold" style={{ color: p.color ?? "oklch(0.76 0.145 72)" }}>
+          {typeof p.value === "number"
+            ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(p.value)
+            : p.value}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 // ─── Componente Principal ────────────────────────────────────────────────────
 export default function DashboardPage() {
   const { selectedUnit, userRole } = useApp();
@@ -171,7 +264,6 @@ export default function DashboardPage() {
   const orgId = org?.id ?? 0;
   const unitId = selectedUnit?.id;
 
-  // ── Filtro de período ──
   const [periodOption, setPeriodOption] = useState<PeriodOption>("month");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -182,7 +274,6 @@ export default function DashboardPage() {
     [periodOption, customFrom, customTo]
   );
 
-  // ── Queries com refetch automático a cada 2 minutos ──
   const kpisQuery = trpc.dashboard.kpis.useQuery(
     { orgId, unitId, dateFrom: period.from, dateTo: period.to },
     { enabled: orgId > 0, refetchOnWindowFocus: false, refetchInterval: 2 * 60 * 1000 }
@@ -211,18 +302,13 @@ export default function DashboardPage() {
   const rankingRep = rankingRepQuery.data ?? [];
   const isLoading = kpisQuery.isLoading || kpisQuery.isFetching;
 
-
-  // Timestamp da última atualização
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   useEffect(() => {
     if (!kpisQuery.isFetching) setLastUpdated(new Date());
   }, [kpisQuery.isFetching]);
 
   function handleRefresh() {
-    kpisQuery.refetch();
-    modulesQuery.refetch();
-    faturamentoQuery.refetch();
-    rankingQuery.refetch();
+    kpisQuery.refetch(); modulesQuery.refetch(); faturamentoQuery.refetch(); rankingQuery.refetch();
   }
 
   function handlePeriod(opt: PeriodOption) {
@@ -233,385 +319,351 @@ export default function DashboardPage() {
   if (!orgLoading && !org) {
     return (
       <div className="p-6">
-        <PageHeader title="Dashboard" description="Bem-vindo ao VIP Suite" />
-        <Card className="bg-card border-border">
-          <CardContent className="p-10 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-              <Building2 className="w-7 h-7 text-primary" />
-            </div>
-            <h3 className="text-base font-semibold text-foreground mb-2">Configure sua organização</h3>
-            <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
-              Para começar, crie sua organização e adicione as unidades da sua rede.
-            </p>
-            <Button onClick={() => navigate("/unidades")} className="gap-2">
-              <Building2 className="w-4 h-4" /> Criar Organização
-            </Button>
-          </CardContent>
-        </Card>
+        <div
+          className="rounded-2xl p-12 text-center"
+          style={{
+            background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+            border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+          }}
+        >
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5"
+            style={{
+              background: "linear-gradient(135deg, oklch(0.76 0.145 72 / 0.2) 0%, oklch(0.68 0.16 65 / 0.1) 100%)",
+              border: "1px solid oklch(0.76 0.145 72 / 0.3)",
+              boxShadow: "0 0 24px oklch(0.76 0.145 72 / 0.15)",
+            }}
+          >
+            <Building2 className="w-8 h-8" style={{ color: "oklch(0.76 0.145 72)" }} />
+          </div>
+          <h3 className="text-lg font-semibold text-foreground mb-2">Configure sua organização</h3>
+          <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+            Para começar, crie sua organização e adicione as unidades da sua rede.
+          </p>
+          <Button
+            onClick={() => navigate("/unidades")}
+            className="gap-2"
+            style={{
+              background: "linear-gradient(135deg, oklch(0.76 0.145 72) 0%, oklch(0.68 0.16 65) 100%)",
+              color: "oklch(0.08 0.01 260)",
+              border: "none",
+            }}
+          >
+            <Building2 className="w-4 h-4" /> Criar Organização
+          </Button>
+        </div>
       </div>
     );
   }
 
+  const PERIOD_LABELS: Record<PeriodOption, string> = {
+    today: "Hoje", week: "Semana", month: "Mês atual", quarter: "Trimestre", custom: "Personalizado",
+  };
+
   return (
     <div className="p-6 space-y-6">
       {/* ── Header ── */}
-      <PageHeader
-        title="Dashboard"
-        description={
-          selectedUnit
-            ? `Visão consolidada — ${selectedUnit.name}`
-            : isMasterOrAdmin ? "Visão consolidada de toda a rede" : "Visão da sua unidade"
-        }
-        actions={
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground hidden sm:block">
-              Atualizado: {lastUpdated.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-            </span>
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={handleRefresh}>
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-              Atualizar
-            </Button>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center"
+              style={{
+                background: "linear-gradient(135deg, oklch(0.76 0.145 72 / 0.2) 0%, oklch(0.68 0.16 65 / 0.1) 100%)",
+                border: "1px solid oklch(0.76 0.145 72 / 0.3)",
+              }}
+            >
+              <Zap className="w-3.5 h-3.5" style={{ color: "oklch(0.76 0.145 72)" }} />
+            </div>
+            <h1 className="text-xl font-bold text-foreground">Dashboard</h1>
           </div>
-        }
-      />
+          <p className="text-sm text-muted-foreground">
+            {selectedUnit ? `Visão consolidada — ${selectedUnit.name}` : isMasterOrAdmin ? "Visão consolidada de toda a rede" : "Visão da sua unidade"}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-xs text-muted-foreground hidden sm:block">
+            {lastUpdated.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs"
+            onClick={handleRefresh}
+            style={{
+              background: "oklch(0.155 0.012 260 / 0.8)",
+              border: "1px solid oklch(0.28 0.015 260 / 0.6)",
+            }}
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", isLoading && "animate-spin")} />
+            Atualizar
+          </Button>
+        </div>
+      </div>
 
-      {/* ── Banner Modo Consolidado ── */}
+      {/* ── Banner Consolidado ── */}
       {!selectedUnit && isMasterOrAdmin && (
-        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-primary/5 border border-primary/20">
-          <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-            <Building2 className="w-3.5 h-3.5 text-primary" />
+        <div
+          className="flex items-center gap-3 px-4 py-3 rounded-xl"
+          style={{
+            background: "linear-gradient(135deg, oklch(0.76 0.145 72 / 0.08) 0%, oklch(0.68 0.16 65 / 0.04) 100%)",
+            border: "1px solid oklch(0.76 0.145 72 / 0.2)",
+          }}
+        >
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+            style={{ background: "oklch(0.76 0.145 72 / 0.15)", border: "1px solid oklch(0.76 0.145 72 / 0.3)" }}
+          >
+            <Building2 className="w-4 h-4" style={{ color: "oklch(0.76 0.145 72)" }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-foreground">
-              Visão consolidada — {units.length} unidades
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Todos os indicadores abaixo somam os dados de toda a rede
-            </p>
+            <p className="text-xs font-semibold text-foreground">Visão consolidada — {units.length} unidades</p>
+            <p className="text-xs text-muted-foreground">Todos os indicadores somam os dados de toda a rede</p>
           </div>
-          <Badge className="text-xs shrink-0 bg-primary/10 text-primary border-primary/20">
+          <div
+            className="text-xs font-medium px-2.5 py-1 rounded-full shrink-0"
+            style={{
+              background: "oklch(0.76 0.145 72 / 0.15)",
+              color: "oklch(0.84 0.14 80)",
+              border: "1px solid oklch(0.76 0.145 72 / 0.3)",
+            }}
+          >
             Toda a rede
-          </Badge>
+          </div>
         </div>
       )}
 
       {/* ── Seletor de Período ── */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground font-medium">Período:</span>
-        {(["today", "week", "month", "quarter", "custom"] as PeriodOption[]).map((opt) => {
-          const labels: Record<PeriodOption, string> = {
-            today: "Hoje", week: "Semana", month: "Mês atual", quarter: "Trimestre", custom: "Personalizado",
-          };
-          return (
-            <button
-              key={opt}
-              onClick={() => handlePeriod(opt)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
-                periodOption === opt
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
-              }`}
-            >
-              {labels[opt]}
-            </button>
-          );
-        })}
+        {(["today", "week", "month", "quarter", "custom"] as PeriodOption[]).map((opt) => (
+          <button
+            key={opt}
+            onClick={() => handlePeriod(opt)}
+            className="px-3 py-1 rounded-full text-xs font-medium transition-all"
+            style={
+              periodOption === opt
+                ? {
+                    background: "linear-gradient(135deg, oklch(0.76 0.145 72) 0%, oklch(0.68 0.16 65) 100%)",
+                    color: "oklch(0.08 0.01 260)",
+                    border: "1px solid transparent",
+                    boxShadow: "0 0 12px oklch(0.76 0.145 72 / 0.3)",
+                  }
+                : {
+                    background: "oklch(0.155 0.012 260 / 0.6)",
+                    color: "oklch(0.55 0.012 260)",
+                    border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+                  }
+            }
+          >
+            {PERIOD_LABELS[opt]}
+          </button>
+        ))}
         {showCustom && (
           <div className="flex items-center gap-1.5 ml-1">
-            <input
-              type="date"
-              value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)}
-              className="h-7 px-2 text-xs rounded border border-border bg-card text-foreground"
-            />
+            <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
+              className="h-7 px-2 text-xs rounded-lg border bg-card text-foreground"
+              style={{ border: "1px solid oklch(0.22 0.014 260 / 0.5)", background: "oklch(0.155 0.012 260 / 0.8)" }} />
             <span className="text-xs text-muted-foreground">até</span>
-            <input
-              type="date"
-              value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)}
-              className="h-7 px-2 text-xs rounded border border-border bg-card text-foreground"
-            />
+            <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
+              className="h-7 px-2 text-xs rounded-lg border bg-card text-foreground"
+              style={{ border: "1px solid oklch(0.22 0.014 260 / 0.5)", background: "oklch(0.155 0.012 260 / 0.8)" }} />
           </div>
         )}
-        <Badge variant="secondary" className="text-xs ml-auto">{period.label}</Badge>
+        <span
+          className="text-xs font-medium px-2.5 py-1 rounded-full ml-auto"
+          style={{
+            background: "oklch(0.155 0.012 260 / 0.6)",
+            color: "oklch(0.65 0.012 260)",
+            border: "1px solid oklch(0.22 0.014 260 / 0.4)",
+          }}
+        >
+          {period.label}
+        </span>
       </div>
+
+      {/* ── KPIs Principais (Data VIP) ── */}
+      {kpis?.dataVip.hasData && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <KpiCard
+            label="Faturamento"
+            value={fmt(kpis.dataVip.faturamentoMes)}
+            sub={period.label}
+            icon={DollarSign}
+            color="oklch(0.76 0.145 72)"
+            trend={kpis.dataVip.trendFaturamento}
+          />
+          <KpiCard
+            label="Atendimentos"
+            value={fmtNum(kpis.dataVip.atendimentos)}
+            sub={period.label}
+            icon={Users}
+            color="oklch(0.65 0.15 200)"
+            trend={null}
+          />
+          <KpiCard
+            label="Ticket Médio"
+            value={fmt(kpis.dataVip.ticketMedio)}
+            sub="por atendimento"
+            icon={TrendingUp}
+            color="oklch(0.65 0.15 145)"
+            trend={null}
+          />
+          <KpiCard
+            label="Reputação"
+            value={kpis.reputacao.hasData ? `${(kpis.reputacao.totalGoogle > 0 ? kpis.reputacao.mediaGoogle : kpis.reputacao.mediaAvaliacoes).toFixed(1)} ★` : "—"}
+            sub={kpis.reputacao.hasData ? `${fmtNum(kpis.reputacao.totalGoogle > 0 ? kpis.reputacao.totalGoogle : kpis.reputacao.totalAvaliacoes)} avaliações` : "Sem dados"}
+            icon={Star}
+            color="oklch(0.65 0.15 30)"
+            trend={null}
+          />
+        </div>
+      )}
 
       {/* ── Grid de Módulos ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
 
         {/* DATA VIP */}
-        <ModuleCard
-          title="Data VIP"
-          icon={BarChart3}
-          color="oklch(0.65 0.15 200)"
-          badge="Faturamento e atendimentos"
-          configured={modules?.data_vip ?? true}
-          onConfigure={() => navigate("/configuracoes")}
-          onNavigate={() => navigate("/data-vip")}
-        >
+        <ModuleCard title="Data VIP" icon={BarChart3} color="oklch(0.65 0.15 200)"
+          badge="Faturamento e atendimentos" configured={modules?.data_vip ?? true}
+          onConfigure={() => navigate("/configuracoes")} onNavigate={() => navigate("/data-vip")}>
           {kpis?.dataVip.hasData ? (
             <>
-              <MiniKPI
-                label="Faturamento"
-                value={fmt(kpis.dataVip.faturamentoMes)}
-                sub={kpis.dataVip.trendFaturamento !== null
-                  ? `${kpis.dataVip.trendFaturamento >= 0 ? "+" : ""}${kpis.dataVip.trendFaturamento}% vs período anterior`
-                  : undefined}
-                icon={DollarSign}
-                color="oklch(0.65 0.15 200)"
-              />
-              <MiniKPI
-                label="Atendimentos"
-                value={fmtNum(kpis.dataVip.atendimentos)}
-                icon={Users}
-                color="oklch(0.65 0.15 200)"
-              />
-              <MiniKPI
-                label="Ticket Médio"
-                value={fmt(kpis.dataVip.ticketMedio)}
-                icon={TrendingUp}
-                color="oklch(0.65 0.15 200)"
-              />
+              <MiniKPI label="Faturamento" value={fmt(kpis.dataVip.faturamentoMes)}
+                sub={kpis.dataVip.trendFaturamento !== null ? `${kpis.dataVip.trendFaturamento >= 0 ? "+" : ""}${kpis.dataVip.trendFaturamento}% vs anterior` : undefined}
+                icon={DollarSign} color="oklch(0.65 0.15 200)" />
+              <MiniKPI label="Atendimentos" value={fmtNum(kpis.dataVip.atendimentos)} icon={Users} color="oklch(0.65 0.15 200)" />
+              <MiniKPI label="Ticket Médio" value={fmt(kpis.dataVip.ticketMedio)} icon={TrendingUp} color="oklch(0.65 0.15 200)" />
             </>
           ) : (
             <div className="py-2 text-center">
               <p className="text-xs text-muted-foreground">Sem dados no período</p>
-              <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/data-vip")}>
-                Sincronizar Data VIP →
-              </Button>
+              <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/data-vip")}>Sincronizar Data VIP →</Button>
             </div>
           )}
         </ModuleCard>
 
         {/* GESTÃO TOTAL */}
-        <ModuleCard
-          title="Gestão Total"
-          icon={Building2}
-          color="oklch(0.65 0.15 145)"
-          badge="Tarefas, problemas e reuniões"
-          configured={true}
-          onNavigate={() => navigate("/gestao-total")}
-        >
-          <MiniKPI
-            label="Tarefas Pendentes"
-            value={fmtNum(kpis?.gestaoTotal.tarefasAbertas ?? 0)}
+        <ModuleCard title="Gestão Total" icon={Building2} color="oklch(0.65 0.15 145)"
+          badge="Tarefas, problemas e reuniões" configured={true} onNavigate={() => navigate("/gestao-total")}>
+          <MiniKPI label="Tarefas Pendentes" value={fmtNum(kpis?.gestaoTotal.tarefasAbertas ?? 0)}
             sub={kpis?.gestaoTotal.tarefasCriticas ? `${kpis.gestaoTotal.tarefasCriticas} críticas` : undefined}
-            icon={CheckSquare}
-            color="oklch(0.65 0.15 145)"
-          />
-          <MiniKPI
-            label="Problemas Ativos"
-            value={fmtNum(kpis?.gestaoTotal.problemasAbertos ?? 0)}
-            icon={AlertTriangle}
-            color={kpis?.gestaoTotal.problemasAbertos ? "oklch(0.65 0.15 60)" : "oklch(0.65 0.15 145)"}
-          />
-          <MiniKPI
-            label="Reuniões Hoje"
-            value={fmtNum(kpis?.gestaoTotal.reunioesHoje ?? 0)}
-            icon={CalendarDays}
-            color="oklch(0.65 0.15 145)"
-          />
+            icon={CheckSquare} color="oklch(0.65 0.15 145)" />
+          <MiniKPI label="Problemas Ativos" value={fmtNum(kpis?.gestaoTotal.problemasAbertos ?? 0)}
+            icon={AlertTriangle} color={kpis?.gestaoTotal.problemasAbertos ? "oklch(0.65 0.15 60)" : "oklch(0.65 0.15 145)"} />
+          <MiniKPI label="Reuniões Hoje" value={fmtNum(kpis?.gestaoTotal.reunioesHoje ?? 0)}
+            icon={CalendarDays} color="oklch(0.65 0.15 145)" />
           {kpis && (kpis.gestaoTotal.receitasMes > 0 || kpis.gestaoTotal.despesasMes > 0) && (
-            <MiniKPI
-              label="Resultado Financeiro"
-              value={fmt(kpis.gestaoTotal.lucroMes)}
+            <MiniKPI label="Resultado Financeiro" value={fmt(kpis.gestaoTotal.lucroMes)}
               sub={`Receitas: ${fmt(kpis.gestaoTotal.receitasMes)} · Despesas: ${fmt(kpis.gestaoTotal.despesasMes)}`}
-              icon={DollarSign}
-              color={kpis.gestaoTotal.lucroMes >= 0 ? "oklch(0.65 0.15 145)" : "oklch(0.65 0.15 15)"}
-            />
+              icon={DollarSign} color={kpis.gestaoTotal.lucroMes >= 0 ? "oklch(0.65 0.15 145)" : "oklch(0.65 0.15 15)"} />
           )}
         </ModuleCard>
 
         {/* VIP CAM */}
-        <ModuleCard
-          title="VIP Cam"
-          icon={Camera}
-          color="oklch(0.65 0.15 280)"
-          badge="Satisfação de clientes"
-          configured={modules?.vip_cam ?? true}
-          onConfigure={() => navigate("/configuracoes")}
-          onNavigate={() => navigate("/vip-cam")}
-        >
+        <ModuleCard title="VIP Cam" icon={Camera} color="oklch(0.65 0.15 280)"
+          badge="Satisfação de clientes" configured={modules?.vip_cam ?? true}
+          onConfigure={() => navigate("/configuracoes")} onNavigate={() => navigate("/vip-cam")}>
           {kpis?.vipCam.hasData ? (
             <>
-              <MiniKPI
-                label="Clientes Reconhecidos"
-                value={fmtNum(kpis.vipCam.clientesNoPeriodo)}
-                sub="Clientes únicos no período"
-                icon={Users}
-                color="oklch(0.65 0.15 280)"
-              />
-              <MiniKPI
-                label="Taxa de Satisfação"
-                value={fmtPct(kpis.vipCam.satisfacaoPercent)}
-                sub={`${kpis.vipCam.satisfeitosNoPeriodo} satisfeitos · ${kpis.vipCam.neutrosNoPeriodo} neutros · ${kpis.vipCam.insatisfeitosNoPeriodo} insatisfeitos`}
-                icon={Smile}
-                color={kpis.vipCam.satisfacaoPercent >= 70 ? "oklch(0.65 0.15 145)" : kpis.vipCam.satisfacaoPercent >= 40 ? "oklch(0.65 0.15 60)" : "oklch(0.65 0.15 15)"}
-              />
-              <SatisfactionBar
-                satisfeitos={kpis.vipCam.satisfeitosNoPeriodo}
-                neutros={kpis.vipCam.neutrosNoPeriodo}
-                insatisfeitos={kpis.vipCam.insatisfeitosNoPeriodo}
-                total={kpis.vipCam.clientesNoPeriodo}
-              />
+              <MiniKPI label="Clientes Reconhecidos" value={fmtNum(kpis.vipCam.clientesNoPeriodo)}
+                sub="Clientes únicos no período" icon={Users} color="oklch(0.65 0.15 280)" />
+              <MiniKPI label="Taxa de Satisfação" value={fmtPct(kpis.vipCam.satisfacaoPercent)}
+                sub={`${kpis.vipCam.satisfeitosNoPeriodo} satisfeitos · ${kpis.vipCam.neutrosNoPeriodo} neutros`}
+                icon={Smile} color={kpis.vipCam.satisfacaoPercent >= 70 ? "oklch(0.65 0.15 145)" : kpis.vipCam.satisfacaoPercent >= 40 ? "oklch(0.65 0.15 60)" : "oklch(0.65 0.15 15)"} />
+              <SatisfactionBar satisfeitos={kpis.vipCam.satisfeitosNoPeriodo} neutros={kpis.vipCam.neutrosNoPeriodo}
+                insatisfeitos={kpis.vipCam.insatisfeitosNoPeriodo} total={kpis.vipCam.clientesNoPeriodo} />
             </>
           ) : (
             <div className="py-2 text-center">
               <p className="text-xs text-muted-foreground">Sem capturas no período</p>
-              <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/vip-cam")}>
-                Abrir VIP Cam →
-              </Button>
+              <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/vip-cam")}>Abrir VIP Cam →</Button>
             </div>
           )}
         </ModuleCard>
 
-        {/* REPUTAÇÃO / GOOGLE */}
-        <ModuleCard
-          title="Reputação"
-          icon={Star}
-          color="oklch(0.65 0.15 30)"
-          badge="Google e plataformas"
-          configured={modules?.reputacao ?? true}
-          onConfigure={() => navigate("/configuracoes")}
-          onNavigate={() => navigate("/reputacao")}
-        >
+        {/* REPUTAÇÃO */}
+        <ModuleCard title="Reputação" icon={Star} color="oklch(0.65 0.15 30)"
+          badge="Google e plataformas" configured={modules?.reputacao ?? true}
+          onConfigure={() => navigate("/configuracoes")} onNavigate={() => navigate("/reputacao")}>
           {kpis?.reputacao.hasData ? (
             <>
-              {/* KPIs principais */}
               <div className="grid grid-cols-2 gap-2">
-                <MiniKPI
-                  label="Nota Média Google"
+                <MiniKPI label="Nota Média Google"
                   value={kpis.reputacao.totalGoogle > 0 ? `${kpis.reputacao.mediaGoogle.toFixed(1)} ★` : `${kpis.reputacao.mediaAvaliacoes.toFixed(1)} ★`}
                   sub={kpis.reputacao.totalGoogle > 0 ? `${fmtNum(kpis.reputacao.totalGoogle)} Google` : `${fmtNum(kpis.reputacao.totalAvaliacoes)} avaliações`}
-                  icon={Star}
-                  color="oklch(0.65 0.15 30)"
-                />
-                <MiniKPI
-                  label="Avaliações Positivas"
-                  value={fmtPct(kpis.reputacao.positivasPercent)}
+                  icon={Star} color="oklch(0.65 0.15 30)" />
+                <MiniKPI label="Avaliações Positivas" value={fmtPct(kpis.reputacao.positivasPercent)}
                   sub={`${fmtNum(kpis.reputacao.totalAvaliacoes)} total`}
-                  icon={ThumbsUp}
-                  color="oklch(0.65 0.15 145)"
-                />
+                  icon={ThumbsUp} color="oklch(0.65 0.15 145)" />
               </div>
               {kpis.reputacao.semRespostaGoogle > 0 && (
-                <MiniKPI
-                  label="Sem Resposta (Google)"
-                  value={fmtNum(kpis.reputacao.semRespostaGoogle)}
-                  sub="Avaliações aguardando resposta"
-                  icon={MessageCircle}
-                  color="oklch(0.65 0.15 60)"
-                />
+                <MiniKPI label="Sem Resposta (Google)" value={fmtNum(kpis.reputacao.semRespostaGoogle)}
+                  sub="Aguardando resposta" icon={MessageCircle} color="oklch(0.65 0.15 60)" />
               )}
-              {/* Ranking de reputação por unidade (apenas no modo todas as unidades) */}
               {!selectedUnit && rankingRep.length > 0 && (
                 <div className="mt-2">
                   <p className="text-xs font-medium text-muted-foreground mb-1.5">Ranking por nota Google</p>
                   <div className="space-y-1">
                     {rankingRep.slice(0, 5).map((u, i) => (
                       <div key={u.unitId} className="flex items-center gap-2">
-                        <span className={`text-xs font-bold w-4 shrink-0 ${
-                          i === 0 ? 'text-yellow-500' : i === 1 ? 'text-slate-400' : i === 2 ? 'text-amber-600' : 'text-muted-foreground'
-                        }`}>{i + 1}</span>
+                        <span className="text-xs font-bold w-4 shrink-0" style={{
+                          color: i === 0 ? "oklch(0.76 0.145 72)" : i === 1 ? "oklch(0.75 0 0)" : i === 2 ? "oklch(0.65 0.12 60)" : "oklch(0.45 0.01 260)"
+                        }}>{i + 1}</span>
                         <span className="text-xs text-foreground truncate flex-1">{u.name.replace('Barbearia VIP - ', '').replace('Barbearia VIP ', '')}</span>
                         <span className="text-xs font-semibold text-foreground shrink-0">
                           {u.totalGoogle > 0 ? `${u.mediaGoogle.toFixed(1)} ★` : `${u.media.toFixed(1)} ★`}
                         </span>
-                        <span className="text-xs text-muted-foreground shrink-0">
-                          ({fmtNum(u.totalGoogle > 0 ? u.totalGoogle : u.total)})
-                        </span>
                       </div>
                     ))}
                   </div>
-                  {rankingRep.length > 5 && (
-                    <button
-                      onClick={() => navigate("/reputacao")}
-                      className="text-xs text-primary mt-1.5 hover:underline"
-                    >
-                      Ver todas as {rankingRep.length} unidades →
-                    </button>
-                  )}
                 </div>
               )}
             </>
           ) : (
             <div className="py-2 text-center">
               <p className="text-xs text-muted-foreground">Sem avaliações no período</p>
-              <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/reputacao")}>
-                Configurar Reputação →
-              </Button>
+              <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/reputacao")}>Configurar Reputação →</Button>
             </div>
           )}
         </ModuleCard>
 
         {/* AUTO INSTAGRAM */}
-        <ModuleCard
-          title="Auto Instagram"
-          icon={Instagram}
-          color="oklch(0.65 0.15 320)"
-          badge="Seguidores e engajamento"
-          configured={modules?.auto_instagram ?? true}
-          onConfigure={() => navigate("/configuracoes")}
-          onNavigate={() => navigate("/auto-instagram")}
-        >
+        <ModuleCard title="Auto Instagram" icon={Instagram} color="oklch(0.65 0.15 320)"
+          badge="Seguidores e engajamento" configured={modules?.auto_instagram ?? true}
+          onConfigure={() => navigate("/configuracoes")} onNavigate={() => navigate("/auto-instagram")}>
           {kpis?.autoInstagram.hasData ? (
             <>
-              <MiniKPI
-                label="Seguidores"
-                value={fmtNum(kpis.autoInstagram.seguidores)}
+              <MiniKPI label="Seguidores" value={fmtNum(kpis.autoInstagram.seguidores)}
                 sub={kpis.autoInstagram.novosSeguidores > 0 ? `+${kpis.autoInstagram.novosSeguidores} novos` : undefined}
-                icon={Users}
-                color="oklch(0.65 0.15 320)"
-              />
-              <MiniKPI
-                label="Comentários Respondidos"
-                value={fmtNum(kpis.autoInstagram.comentariosRespondidos)}
-                icon={MessageCircle}
-                color="oklch(0.65 0.15 320)"
-              />
+                icon={Users} color="oklch(0.65 0.15 320)" />
+              <MiniKPI label="Comentários Respondidos" value={fmtNum(kpis.autoInstagram.comentariosRespondidos)}
+                icon={MessageCircle} color="oklch(0.65 0.15 320)" />
             </>
           ) : (
             <div className="py-2 text-center">
               <p className="text-xs text-muted-foreground">Sem dados no período</p>
-              <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/auto-instagram")}>
-                Configurar Instagram →
-              </Button>
+              <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/auto-instagram")}>Configurar Instagram →</Button>
             </div>
           )}
         </ModuleCard>
 
         {/* WE SEND */}
-        <ModuleCard
-          title="We Send"
-          icon={MessageSquare}
-          color="oklch(0.65 0.15 100)"
-          badge="WhatsApp em massa"
-          configured={modules?.we_send ?? true}
-          onConfigure={() => navigate("/configuracoes")}
-          onNavigate={() => navigate("/we-send")}
-        >
+        <ModuleCard title="We Send" icon={MessageSquare} color="oklch(0.65 0.15 100)"
+          badge="WhatsApp em massa" configured={modules?.we_send ?? true}
+          onConfigure={() => navigate("/configuracoes")} onNavigate={() => navigate("/we-send")}>
           {kpis?.weSend.hasData ? (
             <>
-              <MiniKPI
-                label="Mensagens Enviadas"
-                value={fmtNum(kpis.weSend.enviados)}
+              <MiniKPI label="Mensagens Enviadas" value={fmtNum(kpis.weSend.enviados)}
                 sub={`${kpis.weSend.campanhas} campanhas no período`}
-                icon={MessageSquare}
-                color="oklch(0.65 0.15 100)"
-              />
-              <MiniKPI
-                label="Contatos Alcançados"
-                value={fmtNum(kpis.weSend.totalContatos)}
-                icon={Users}
-                color="oklch(0.65 0.15 100)"
-              />
+                icon={MessageSquare} color="oklch(0.65 0.15 100)" />
+              <MiniKPI label="Contatos Alcançados" value={fmtNum(kpis.weSend.totalContatos)}
+                icon={Users} color="oklch(0.65 0.15 100)" />
             </>
           ) : (
             <div className="py-2 text-center">
               <p className="text-xs text-muted-foreground">Sem campanhas no período</p>
-              <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/we-send")}>
-                Criar campanha →
-              </Button>
+              <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/we-send")}>Criar campanha →</Button>
             </div>
           )}
         </ModuleCard>
@@ -620,190 +672,234 @@ export default function DashboardPage() {
       {/* ── Gráfico de Faturamento + Status dos Módulos ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
-          <Card className="bg-card border-border h-full">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">Faturamento Mensal</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedUnit ? selectedUnit.name : "Toda a rede"} · Últimos 6 meses
-                  </p>
-                </div>
-                <Badge variant="secondary" className="text-xs">Data VIP</Badge>
+          <div
+            className="rounded-2xl p-5 h-full"
+            style={{
+              background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+              border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+            }}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Faturamento Mensal</h3>
+                <p className="text-xs text-muted-foreground">
+                  {selectedUnit ? selectedUnit.name : "Toda a rede"} · Últimos 6 meses
+                </p>
               </div>
-              {faturamentoData.length > 0 && faturamentoData.some(d => d.faturamento > 0) ? (
-                <ResponsiveContainer width="100%" height={180}>
-                  <AreaChart data={faturamentoData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="gradFat" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="oklch(0.65 0.15 200)" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="oklch(0.65 0.15 200)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0 / 0.3)" />
-                    <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "oklch(0.6 0 0)" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: "oklch(0.6 0 0)" }} axisLine={false} tickLine={false}
-                      tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-                    <Tooltip
-                      contentStyle={{ background: "oklch(0.18 0 0)", border: "1px solid oklch(0.3 0 0)", borderRadius: 8, fontSize: 12 }}
-                      formatter={(value: number) => [fmt(value), "Faturamento"]}
-                    />
-                    <Area type="monotone" dataKey="faturamento" stroke="oklch(0.65 0.15 200)"
-                      strokeWidth={2} fill="url(#gradFat)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[180px] flex flex-col items-center justify-center text-center">
-                  <BarChart3 className="w-8 h-8 text-muted-foreground/30 mb-2" />
-                  <p className="text-sm text-muted-foreground">Sem dados de faturamento</p>
-                  <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/data-vip")}>
-                    Sincronizar Data VIP →
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              <div
+                className="text-xs font-medium px-2.5 py-1 rounded-full"
+                style={{
+                  background: "oklch(0.65 0.15 200 / 0.12)",
+                  color: "oklch(0.65 0.15 200)",
+                  border: "1px solid oklch(0.65 0.15 200 / 0.25)",
+                }}
+              >
+                Data VIP
+              </div>
+            </div>
+            {faturamentoData.length > 0 && faturamentoData.some(d => d.faturamento > 0) ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={faturamentoData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gradFat" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="oklch(0.76 0.145 72)" stopOpacity={0.35} />
+                      <stop offset="60%" stopColor="oklch(0.76 0.145 72)" stopOpacity={0.08} />
+                      <stop offset="100%" stopColor="oklch(0.76 0.145 72)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.4)" vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "oklch(0.50 0.01 260)" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: "oklch(0.50 0.01 260)" }} axisLine={false} tickLine={false}
+                    tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} width={48} />
+                  <Tooltip content={<PremiumTooltip />} />
+                  <Area type="monotone" dataKey="faturamento" stroke="oklch(0.76 0.145 72)"
+                    strokeWidth={2.5} fill="url(#gradFat)" dot={false}
+                    activeDot={{ r: 4, fill: "oklch(0.76 0.145 72)", stroke: "oklch(0.14 0.012 260)", strokeWidth: 2 }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[200px] flex flex-col items-center justify-center text-center">
+                <BarChart3 className="w-8 h-8 text-muted-foreground/20 mb-2" />
+                <p className="text-sm text-muted-foreground">Sem dados de faturamento</p>
+                <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/data-vip")}>
+                  Sincronizar Data VIP →
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div>
-          <Card className="bg-card border-border h-full">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-foreground">Status dos Módulos</h3>
-                <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-              </div>
-              <div className="space-y-2.5">
-                {MODULE_DEFS.map((mod) => {
-                  const isConfigured = modules?.[mod.key as ModuleKey] ?? false;
-                  const kpiKey = MODULE_KPI_MAP[mod.key as ModuleKey];
-                  const hasData = kpis?.[kpiKey]?.hasData ?? false;
-                  const Icon = mod.icon;
-                  return (
-                    <button key={mod.key} onClick={() => navigate(mod.path)}
-                      className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/30 transition-colors text-left">
-                      <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
-                        style={{ background: `${mod.color}20` }}>
-                        <Icon className="w-3.5 h-3.5" style={{ color: mod.color }} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-foreground">{mod.label}</p>
-                        <p className="text-xs text-muted-foreground truncate">{mod.desc}</p>
-                      </div>
-                      <div className="shrink-0">
-                        {isConfigured && hasData
-                          ? <Badge className="text-xs h-5 bg-emerald-500/10 text-emerald-500 border-emerald-500/20">Ativo</Badge>
-                          : isConfigured
-                            ? <Badge className="text-xs h-5 bg-yellow-500/10 text-yellow-500 border-yellow-500/20">Sem dados</Badge>
-                            : <Badge variant="outline" className="text-xs h-5 text-muted-foreground">Configurar</Badge>
-                        }
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+          <div
+            className="rounded-2xl p-5 h-full"
+            style={{
+              background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+              border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-foreground">Status dos Módulos</h3>
+              <Activity className="w-3.5 h-3.5 text-muted-foreground" />
+            </div>
+            <div className="space-y-1.5">
+              {MODULE_DEFS.map((mod) => {
+                const isConfigured = modules?.[mod.key as ModuleKey] ?? false;
+                const kpiKey = MODULE_KPI_MAP[mod.key as ModuleKey];
+                const hasData = kpis?.[kpiKey]?.hasData ?? false;
+                const Icon = mod.icon;
+                return (
+                  <button key={mod.key} onClick={() => navigate(mod.path)}
+                    className="w-full flex items-center gap-2.5 p-2.5 rounded-xl transition-all text-left"
+                    style={{ border: "1px solid transparent" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "oklch(0.18 0.012 260 / 0.6)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ background: `${mod.color}15`, border: `1px solid ${mod.color}25` }}>
+                      <Icon className="w-3.5 h-3.5" style={{ color: mod.color }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground">{mod.label}</p>
+                      <p className="text-xs text-muted-foreground truncate">{mod.desc}</p>
+                    </div>
+                    <div className="shrink-0">
+                      {isConfigured && hasData ? (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full"
+                          style={{ background: "oklch(0.55 0.16 145 / 0.15)", color: "oklch(0.72 0.16 145)", border: "1px solid oklch(0.55 0.16 145 / 0.3)" }}>
+                          Ativo
+                        </span>
+                      ) : isConfigured ? (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full"
+                          style={{ background: "oklch(0.76 0.145 72 / 0.12)", color: "oklch(0.76 0.145 72)", border: "1px solid oklch(0.76 0.145 72 / 0.25)" }}>
+                          Sem dados
+                        </span>
+                      ) : (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full"
+                          style={{ background: "oklch(0.18 0.012 260 / 0.6)", color: "oklch(0.45 0.01 260)", border: "1px solid oklch(0.22 0.014 260 / 0.5)" }}>
+                          Configurar
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* ── Ranking + Unidades (admin) ── */}
       {isMasterOrAdmin && !selectedUnit && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card className="bg-card border-border">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">Ranking de Unidades</h3>
-                  <p className="text-xs text-muted-foreground">Faturamento do mês atual</p>
-                </div>
-                <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={() => navigate("/data-vip")}>
-                  Ver mais <ArrowUpRight className="w-3 h-3 ml-1" />
-                </Button>
+          <div
+            className="rounded-2xl p-5"
+            style={{
+              background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+              border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Ranking de Unidades</h3>
+                <p className="text-xs text-muted-foreground">Faturamento do mês atual</p>
               </div>
-              {ranking.length > 0 && ranking.some(r => r.faturamento > 0) ? (
-                <div className="space-y-2.5">
-                  {ranking.slice(0, 5).map((unit, idx) => (
-                    <div key={unit.unitId} className="flex items-center gap-3">
-                      <span className={`text-xs font-bold w-5 text-center shrink-0 ${
-                        idx === 0 ? "text-yellow-500" : idx === 1 ? "text-slate-400" : idx === 2 ? "text-amber-600" : "text-muted-foreground"
-                      }`}>{idx + 1}°</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <p className="text-xs font-medium text-foreground truncate">{unit.name}</p>
-                          <p className="text-xs font-semibold text-foreground shrink-0 ml-2">{fmt(unit.faturamento)}</p>
-                        </div>
-                        <div className="w-full bg-muted rounded-full h-1">
-                          <div className="h-1 rounded-full bg-primary"
-                            style={{ width: `${ranking[0].faturamento > 0 ? (unit.faturamento / ranking[0].faturamento) * 100 : 0}%` }} />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-8 text-center">
-                  <p className="text-sm text-muted-foreground">Sincronize o Data VIP para ver o ranking</p>
-                  <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/data-vip")}>
-                    Ir para Data VIP →
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">Unidades da Rede</h3>
-                  <p className="text-xs text-muted-foreground">{units.length} unidades cadastradas</p>
-                </div>
-                <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={() => navigate("/unidades")}>
-                  Ver todas <ArrowUpRight className="w-3 h-3 ml-1" />
-                </Button>
-              </div>
-              {orgLoading ? (
-                <div className="space-y-2">
-                  {[1,2,3].map(i => <div key={i} className="h-10 rounded-lg bg-muted animate-pulse" />)}
-                </div>
-              ) : units.length === 0 ? (
-                <div className="py-6 text-center">
-                  <AlertCircle className="w-5 h-5 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">Nenhuma unidade cadastrada.</p>
-                  <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/unidades")}>
-                    Adicionar unidade
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {units.slice(0, 5).map((unit) => (
-                    <div key={unit.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/30 transition-colors">
-                      <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
-                        <Building2 className="w-3.5 h-3.5 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
+              <Button variant="ghost" size="sm" className="text-xs h-7 px-2 text-muted-foreground" onClick={() => navigate("/data-vip")}>
+                Ver mais <ArrowUpRight className="w-3 h-3 ml-1" />
+              </Button>
+            </div>
+            {ranking.length > 0 && ranking.some(r => r.faturamento > 0) ? (
+              <div className="space-y-3">
+                {ranking.slice(0, 5).map((unit, idx) => (
+                  <div key={unit.unitId} className="flex items-center gap-3">
+                    <span className="text-xs font-bold w-5 text-center shrink-0" style={{
+                      color: idx === 0 ? "oklch(0.76 0.145 72)" : idx === 1 ? "oklch(0.75 0 0)" : idx === 2 ? "oklch(0.65 0.12 60)" : "oklch(0.40 0.01 260)"
+                    }}>{idx + 1}°</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
                         <p className="text-xs font-medium text-foreground truncate">{unit.name}</p>
-                        {unit.city && <p className="text-xs text-muted-foreground">{unit.city}{unit.state ? `, ${unit.state}` : ""}</p>}
+                        <p className="text-xs font-semibold text-foreground shrink-0 ml-2">{fmt(unit.faturamento)}</p>
                       </div>
-                      <Badge variant="secondary" className="text-xs h-5 shrink-0">Ativa</Badge>
+                      <div className="w-full rounded-full h-1" style={{ background: "oklch(0.22 0.014 260 / 0.5)" }}>
+                        <div className="h-1 rounded-full"
+                          style={{
+                            width: `${ranking[0].faturamento > 0 ? (unit.faturamento / ranking[0].faturamento) * 100 : 0}%`,
+                            background: idx === 0
+                              ? "linear-gradient(90deg, oklch(0.76 0.145 72), oklch(0.68 0.16 65))"
+                              : "oklch(0.35 0.015 260)",
+                          }} />
+                      </div>
                     </div>
-                  ))}
-                  {units.length > 5 && (
-                    <button onClick={() => navigate("/unidades")}
-                      className="w-full text-xs text-muted-foreground hover:text-foreground py-1.5 transition-colors">
-                      + {units.length - 5} unidades
-                    </button>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-8 text-center">
+                <p className="text-sm text-muted-foreground">Sincronize o Data VIP para ver o ranking</p>
+                <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/data-vip")}>Ir para Data VIP →</Button>
+              </div>
+            )}
+          </div>
+
+          <div
+            className="rounded-2xl p-5"
+            style={{
+              background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+              border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Unidades da Rede</h3>
+                <p className="text-xs text-muted-foreground">{units.length} unidades cadastradas</p>
+              </div>
+              <Button variant="ghost" size="sm" className="text-xs h-7 px-2 text-muted-foreground" onClick={() => navigate("/unidades")}>
+                Ver todas <ArrowUpRight className="w-3 h-3 ml-1" />
+              </Button>
+            </div>
+            {orgLoading ? (
+              <div className="space-y-2">
+                {[1,2,3].map(i => <div key={i} className="h-10 rounded-xl animate-pulse" style={{ background: "oklch(0.18 0.012 260 / 0.5)" }} />)}
+              </div>
+            ) : units.length === 0 ? (
+              <div className="py-6 text-center">
+                <AlertCircle className="w-5 h-5 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Nenhuma unidade cadastrada.</p>
+                <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/unidades")}>Adicionar unidade</Button>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {units.slice(0, 5).map((unit) => (
+                  <div key={unit.id} className="flex items-center gap-3 p-2.5 rounded-xl transition-all"
+                    style={{ border: "1px solid oklch(0.22 0.014 260 / 0.3)" }}>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ background: "oklch(0.76 0.145 72 / 0.12)", border: "1px solid oklch(0.76 0.145 72 / 0.2)" }}>
+                      <Building2 className="w-3.5 h-3.5" style={{ color: "oklch(0.76 0.145 72)" }} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground truncate">{unit.name}</p>
+                      {unit.city && <p className="text-xs text-muted-foreground">{unit.city}{unit.state ? `, ${unit.state}` : ""}</p>}
+                    </div>
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full"
+                      style={{ background: "oklch(0.55 0.16 145 / 0.12)", color: "oklch(0.72 0.16 145)", border: "1px solid oklch(0.55 0.16 145 / 0.25)" }}>
+                      Ativa
+                    </span>
+                  </div>
+                ))}
+                {units.length > 5 && (
+                  <button onClick={() => navigate("/unidades")}
+                    className="w-full text-xs text-muted-foreground hover:text-foreground py-1.5 transition-colors">
+                    + {units.length - 5} unidades
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {/* ── Acesso Rápido ── */}
       <div>
-        <h2 className="text-sm font-semibold text-foreground mb-3">Acesso Rápido aos Módulos</h2>
+        <h2 className="text-sm font-semibold text-foreground mb-3">Acesso Rápido</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {MODULE_DEFS.map((mod) => {
             const isConfigured = modules?.[mod.key as ModuleKey] ?? false;
@@ -812,21 +908,36 @@ export default function DashboardPage() {
             const Icon = mod.icon;
             return (
               <button key={mod.key} onClick={() => navigate(mod.path)}
-                className="rounded-xl border border-border bg-card p-4 text-left hover:border-border/60 hover:bg-card/80 transition-all relative">
+                className="rounded-2xl p-4 text-left relative overflow-hidden transition-all group"
+                style={{
+                  background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+                  border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+                }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.border = `1px solid ${mod.color}40`;
+                  (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 20px -4px ${mod.color}20`;
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.border = "1px solid oklch(0.22 0.014 260 / 0.5)";
+                  (e.currentTarget as HTMLElement).style.boxShadow = "none";
+                }}
+              >
                 <div className="absolute top-2.5 right-2.5">
                   {isConfigured && hasData
-                    ? <Wifi className="w-3 h-3 text-emerald-500" />
+                    ? <span className="w-1.5 h-1.5 rounded-full block" style={{ background: "oklch(0.72 0.16 145)", boxShadow: "0 0 6px oklch(0.72 0.16 145)" }} />
                     : isConfigured
-                      ? <Wifi className="w-3 h-3 text-yellow-500" />
-                      : <WifiOff className="w-3 h-3 text-muted-foreground/40" />}
+                      ? <span className="w-1.5 h-1.5 rounded-full block" style={{ background: "oklch(0.76 0.145 72)" }} />
+                      : <span className="w-1.5 h-1.5 rounded-full block" style={{ background: "oklch(0.30 0.01 260)" }} />
+                  }
                 </div>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-3" style={{ background: `${mod.color}20` }}>
-                  <Icon className="w-4 h-4" style={{ color: mod.color }} />
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3"
+                  style={{ background: `${mod.color}15`, border: `1px solid ${mod.color}25` }}>
+                  <Icon className="w-4.5 h-4.5" style={{ color: mod.color }} />
                 </div>
                 <p className="text-xs font-semibold text-foreground">{mod.label}</p>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{mod.desc}</p>
                 {!isConfigured && (
-                  <span className="text-xs text-muted-foreground/50 mt-1 block">Não configurado</span>
+                  <span className="text-xs text-muted-foreground/40 mt-1 block">Não configurado</span>
                 )}
               </button>
             );

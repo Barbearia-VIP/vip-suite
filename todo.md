@@ -1008,3 +1008,13 @@
 
 - [x] Adicionar banner de loading padronizado na aba Faturamento — agora exibe DataVipLoadingState durante isLoading inicial e timeout
 - [x] Adicionar banner de loading padronizado na aba Mensal — adicionado banner após FiltrosPanel
+
+## Redesign Visual Completo (2026-04-07)
+
+- [x] Novo design system: CSS variables OKLCH grafite+âmbar, glassmorphism, gradientes (index.css)
+- [x] AppLayout e sidebar modernizados com glassmorphism, accent dourado, nav premium
+- [x] Dashboard principal: cards KPI com gradiente e glassmorphism
+- [x] Data VIP Faturamento: cards ResumoCard, tabela comparativa e seções modernizados
+- [x] Data VIP Mensal: KpiCard, tooltip e gráficos com gradiente âmbar
+- [x] AberturasChart: tooltip glass, barras com gradiente, grid sutil, cores OKLCH
+- [x] DataVipDashboard: tooltip glass, PAG_COLORS modernizados
