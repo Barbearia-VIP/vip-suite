@@ -968,3 +968,7 @@
 - [x] Criar endpoints tRPC: metaDinamicaList, metaDinamicaSave, metaDinamicaDelete, metaDinamicaCalc
 - [x] Redesenhar aba "Meta Dinâmica" na página Metas com UI de criação de regras (formulário completo com tipo, config, bônus, vigência)
 - [x] Integrar bônus de meta dinâmica na aba Comissões (badges verdes por meta batida, total incluindo bônus dinâmico)
+
+## Metas — Simplificação (2026-04-07)
+
+- [x] Remover aba "Metas de Faturamento" da página Metas (manter apenas Meta Dinâmica e Comissão Progressiva)
