@@ -18,6 +18,7 @@ import {
 } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DataVipErrorState, DataVipLoadingState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 import {
   Users, UserCheck, UserX, AlertTriangle, TrendingDown, TrendingUp,
   Zap, Activity, Target, Scissors, Search, RefreshCw, Info, ChevronRight, Calendar,
@@ -246,7 +247,10 @@ export default function RaioXPage() {
   const dbConnected = qDbStatus.data?.connected ?? true;
 
   const v = qVisao.data;
-  const isLoading = qVisao.isLoading;
+  // Tratar timeout como loading (retry automático em andamento)
+  const isVisaoTimeoutRetrying = qVisao.isError && isExternalDbTimeoutError(qVisao.error) && (qVisao.failureCount ?? 0) < 3;
+  const isLoading = qVisao.isLoading || isVisaoTimeoutRetrying;
+  const isVisaoError = qVisao.isError && !isVisaoTimeoutRetrying;
 
   // Exportar CSV dos one-shots de um grupo específico
   const exportOneShotCSV = (grupo: "aguardando" | "em_risco" | "perdido", e: MouseEvent) => {
@@ -413,6 +417,8 @@ export default function RaioXPage() {
             <div className="space-y-4">
               <Skeleton className="h-24" /><Skeleton className="h-32" /><Skeleton className="h-40" />
             </div>
+          ) : isVisaoError ? (
+            <DataVipErrorState onRetry={() => qVisao.refetch()} />
           ) : v ? (
             <>
               {/* ── Sinais da base ── */}
@@ -1099,7 +1105,11 @@ export default function RaioXPage() {
           )}
         </TabsContent>
         <TabsContent value="one-shot" className="space-y-4 mt-4">
-          {qOneShot.isLoading ? <Skeleton className="h-40" /> : qOneShot.data ? (
+          {(qOneShot.isLoading || (qOneShot.isError && isExternalDbTimeoutError(qOneShot.error) && (qOneShot.failureCount ?? 0) < 3)) ? (
+            <DataVipLoadingState rows={3} />
+          ) : qOneShot.isError ? (
+            <DataVipErrorState onRetry={() => qOneShot.refetch()} />
+          ) : qOneShot.data ? (
             (() => {
               const os = qOneShot.data.resumo;
               const total = os.total;
@@ -1369,7 +1379,11 @@ export default function RaioXPage() {
 
         {/* ── CADÊNCIA ─────────────────────────────────────────────────────────── */}
         <TabsContent value="cadencia" className="space-y-4 mt-4">
-          {qCadencia.isLoading ? <Skeleton className="h-40" /> : qCadencia.data ? (
+          {(qCadencia.isLoading || (qCadencia.isError && isExternalDbTimeoutError(qCadencia.error) && (qCadencia.failureCount ?? 0) < 3)) ? (
+            <DataVipLoadingState rows={3} />
+          ) : qCadencia.isError ? (
+            <DataVipErrorState onRetry={() => qCadencia.refetch()} />
+          ) : qCadencia.data ? (
             (() => {
               const cd = qCadencia.data;
               const totalBase = (cd.totalComCadencia ?? 0) + (cd.primeiraVez ?? 0);
@@ -1497,7 +1511,11 @@ export default function RaioXPage() {
           </div>
 
           {churnViewMode === "geral" && (
-            <>{qChurn.isLoading ? <Skeleton className="h-40" /> : qChurn.data ? (
+            <>{(qChurn.isLoading || (qChurn.isError && isExternalDbTimeoutError(qChurn.error) && (qChurn.failureCount ?? 0) < 3)) ? (
+              <DataVipLoadingState rows={3} />
+            ) : qChurn.isError ? (
+              <DataVipErrorState onRetry={() => qChurn.refetch()} />
+            ) : qChurn.data ? (
             <>
               {/* 4 KPIs principais */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1705,7 +1723,11 @@ export default function RaioXPage() {
           )}
 
           {churnViewMode === "barbeiros" && (
-            <>{qChurnBarbeiros.isLoading ? <Skeleton className="h-60" /> : qChurnBarbeiros.data ? (
+            <>{(qChurnBarbeiros.isLoading || (qChurnBarbeiros.isError && isExternalDbTimeoutError(qChurnBarbeiros.error) && (qChurnBarbeiros.failureCount ?? 0) < 3)) ? (
+              <DataVipLoadingState rows={3} />
+            ) : qChurnBarbeiros.isError ? (
+              <DataVipErrorState onRetry={() => qChurnBarbeiros.refetch()} />
+            ) : qChurnBarbeiros.data ? (
             <div className="space-y-3">
               {/* Cabeçalho da seção */}
               <div className="flex items-center justify-between">
@@ -1893,7 +1915,11 @@ export default function RaioXPage() {
             )}
           </div>
 
-          {qCohort.isLoading ? (
+          {(qCohort.isLoading || (qCohort.isError && isExternalDbTimeoutError(qCohort.error) && (qCohort.failureCount ?? 0) < 3)) ? (
+            <DataVipLoadingState rows={4} message="Carregando dados de cohort..." />
+          ) : qCohort.isError ? (
+            <DataVipErrorState onRetry={() => qCohort.refetch()} />
+          ) : (qCohort.isLoading) ? (
             <div className="space-y-4">
               <Skeleton className="h-32" />
               <Skeleton className="h-48" />
@@ -2443,7 +2469,11 @@ export default function RaioXPage() {
         </TabsContent>
         {/* ── BARBEIROSS ────────────────────────────────────────────────────────── */}
         <TabsContent value="barbeiros" className="space-y-4 mt-4">
-          {qBarbeiros.isLoading ? <Skeleton className="h-60" /> : qBarbeiros.data && qBarbeiros.data.barbeiros.length > 0 ? (
+          {(qBarbeiros.isLoading || (qBarbeiros.isError && isExternalDbTimeoutError(qBarbeiros.error) && (qBarbeiros.failureCount ?? 0) < 3)) ? (
+            <DataVipLoadingState rows={3} />
+          ) : qBarbeiros.isError ? (
+            <DataVipErrorState onRetry={() => qBarbeiros.refetch()} />
+          ) : qBarbeiros.data && qBarbeiros.data.barbeiros.length > 0 ? (
             <>
               {/* ── Saúde da Base por Barbeiro ── */}
               <Card className="bg-card/60 border-border/50">
@@ -2633,7 +2663,11 @@ export default function RaioXPage() {
           ) : null}
         </TabsContent>
         <TabsContent value="acoes" className="space-y-4 mt-4">
-          {qAcoes.isLoading ? <Skeleton className="h-40" /> : qAcoes.data ? (
+          {(qAcoes.isLoading || (qAcoes.isError && isExternalDbTimeoutError(qAcoes.error) && (qAcoes.failureCount ?? 0) < 3)) ? (
+            <DataVipLoadingState rows={3} />
+          ) : qAcoes.isError ? (
+            <DataVipErrorState onRetry={() => qAcoes.refetch()} />
+          ) : qAcoes.data ? (
             <>
               <div className="grid grid-cols-3 gap-3">
                 <KpiCard label="Prioridade Alta" value={qAcoes.data.resumo.alta.toLocaleString()} icon={AlertTriangle} color="text-red-400" />
@@ -2702,7 +2736,11 @@ export default function RaioXPage() {
 
         {/* ── DIAGNÓSTICO ──────────────────────────────────────────────────────── */}
         <TabsContent value="diagnostico" className="space-y-4 mt-4">
-          {qDiag.isLoading ? <Skeleton className="h-40" /> : qDiag.data ? (
+          {(qDiag.isLoading || (qDiag.isError && isExternalDbTimeoutError(qDiag.error) && (qDiag.failureCount ?? 0) < 3)) ? (
+            <DataVipLoadingState rows={3} />
+          ) : qDiag.isError ? (
+            <DataVipErrorState onRetry={() => qDiag.refetch()} />
+          ) : qDiag.data ? (
             <>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <KpiCard label="Score de qualidade" value={`${qDiag.data.qualidade.score}%`} icon={Activity}

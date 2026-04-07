@@ -24,9 +24,10 @@ import {
 import {
   DollarSign, Users, Scissors, TrendingUp,
   ArrowUpRight, ArrowDownRight, RefreshCw, Trophy, Calendar,
-  Target, BarChart3, UserCheck, ChevronRight, AlertCircle, ChevronDown, X,
+  Target, BarChart3, UserCheck, ChevronRight, ChevronDown, X,
   TrendingDown, Sigma
 } from "lucide-react";
+import { isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 import type { DateRange } from "react-day-picker";
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -390,12 +391,14 @@ export default function DataVipDashboard() {
       </div>
 
       {/* Banner de erro de conexão */}
-      {(dashQ.isError || colaborQ.isError || evolQ.isError || prodQ.isError) && (
+      {[dashQ, colaborQ, evolQ, prodQ].some(q =>
+        q.isError && !isExternalDbTimeoutError(q.error)
+      ) && (
         <div className="flex items-center gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-400">
-          <AlertCircle className="w-4 h-4 shrink-0" />
+          <RefreshCw className="w-4 h-4 shrink-0" />
           <div className="flex-1">
-            <span className="font-medium">Banco de dados temporariamente indisponível.</span>
-            {" "}O sistema está tentando reconectar automaticamente. Aguarde alguns instantes e clique em Atualizar.
+            <span className="font-medium">Banco de dados temporariamente lento.</span>
+            {" "}Tente novamente em alguns instantes.
           </div>
           <Button
             variant="outline"
@@ -411,6 +414,15 @@ export default function DataVipDashboard() {
             <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
             Tentar novamente
           </Button>
+        </div>
+      )}
+      {/* Banner de carregando (timeout em retry) */}
+      {[dashQ, colaborQ, evolQ, prodQ].some(q =>
+        q.isError && isExternalDbTimeoutError(q.error) && (q.failureCount ?? 0) < 3
+      ) && (
+        <div className="flex items-center gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-sm text-blue-300">
+          <RefreshCw className="w-4 h-4 shrink-0 animate-spin" />
+          <span>Carregando dados do banco externo... Aguarde, isso pode levar alguns segundos.</span>
         </div>
       )}
 

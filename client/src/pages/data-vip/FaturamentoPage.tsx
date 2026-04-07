@@ -8,9 +8,9 @@ import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DollarSign, TrendingUp, TrendingDown, Minus, Users, Package, Scissors, Zap, AlertCircle, RefreshCw, CalendarDays } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Minus, Users, Package, Scissors, Zap, CalendarDays } from "lucide-react";
 import { AberturasChart } from "./AberturasChart";
-import { Button } from "@/components/ui/button";
+import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 
 const MESES_LABEL = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -84,12 +84,13 @@ export default function FaturamentoPage() {
 
   const q = trpc.dataVip.faturamentoDetalhado.useQuery(
     { orgId: org?.id, unitId: selectedUnit?.id, periodo },
-    { enabled: !!org?.id, retry: 1 }
+    { enabled: !!org?.id }
   );
 
   const d = q.data;
-  const isLoading = q.isLoading;
-  const isError = q.isError;
+  const isTimeoutRetrying = q.isError && isExternalDbTimeoutError(q.error) && (q.failureCount ?? 0) < 3;
+  const isLoading = q.isLoading || isTimeoutRetrying;
+  const isError = q.isError && !isTimeoutRetrying;
 
   const [ano, mes] = periodo.split("-").map(Number);
   const periodoLabel = `${MESES_FULL[mes - 1]} ${ano}`;
@@ -146,21 +147,12 @@ export default function FaturamentoPage() {
     "Outros": "bg-slate-400",
   };
 
+  if (isTimeoutRetrying) {
+    return <DataVipLoadingState rows={4} message="Carregando dados de faturamento..." attempt={(q.failureCount ?? 0) + 1} />;
+  }
+
   if (isError) {
-    return (
-      <div className="p-6">
-        <div className="flex items-start gap-3 p-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300">
-          <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
-          <div className="flex-1">
-            <p className="font-semibold text-sm">Banco de dados temporariamente indisponível</p>
-            <p className="text-xs mt-1 text-yellow-300/80">O sistema está reconectando automaticamente. Aguarde alguns instantes e tente novamente.</p>
-          </div>
-          <Button size="sm" variant="outline" className="border-yellow-500/40 text-yellow-300 hover:bg-yellow-500/20 shrink-0" onClick={() => q.refetch()}>
-            <RefreshCw className="w-3.5 h-3.5 mr-1" /> Tentar novamente
-          </Button>
-        </div>
-      </div>
-    );
+    return <DataVipErrorState onRetry={() => q.refetch()} />;
   }
 
   return (

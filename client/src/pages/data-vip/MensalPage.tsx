@@ -14,11 +14,12 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import {
-  BarChart3, AlertCircle, DollarSign, Users, TrendingUp,
+  BarChart3, DollarSign, Users, TrendingUp,
   UserPlus, Gift, Scissors, CalendarDays, Activity,
   BarChart2, TrendingDown, Sigma, Minus, Filter, ChevronDown, ChevronUp,
   User, X, Wifi, WifiOff,
 } from "lucide-react";
+import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 
 // ── Formatadores ─────────────────────────────────────────────────────────────
 function fmtMoeda(v: number) {
@@ -474,7 +475,9 @@ export default function MensalPage() {
     return { total, avg, maxVal, minVal, maxMes, minMes };
   }, [chartData, metricKey]);
 
-  const isLoading = qDetalhado.isLoading;
+  const isKpisTimeoutRetrying = qKpis.isError && isExternalDbTimeoutError(qKpis.error) && (qKpis.failureCount ?? 0) < 3;
+  const isDetalhadoTimeoutRetrying = qDetalhado.isError && isExternalDbTimeoutError(qDetalhado.error) && (qDetalhado.failureCount ?? 0) < 3;
+  const isLoading = qDetalhado.isLoading || isDetalhadoTimeoutRetrying;
 
   // Label do período aplicado
   const periodoLabel = useMemo(() => {
@@ -719,11 +722,10 @@ export default function MensalPage() {
           </p>
         </div>
 
-        {qKpis.isError ? (
-          <div className="flex items-center gap-2 text-red-400 text-sm p-4 bg-red-400/10 rounded-lg">
-            <AlertCircle className="w-4 h-4" />
-            Erro ao carregar KPIs. Verifique a conexão com o banco externo.
-          </div>
+        {(qKpis.isLoading || isKpisTimeoutRetrying) ? (
+          <DataVipLoadingState rows={2} message="Carregando KPIs do período..." />
+        ) : qKpis.isError ? (
+          <DataVipErrorState onRetry={() => qKpis.refetch()} />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {qKpis.isLoading

@@ -8,7 +8,31 @@ import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
 
-const queryClient = new QueryClient();
+// Detecta se um erro é de timeout do banco externo
+const isTimeoutError = (error: unknown): boolean => {
+  if (!(error instanceof TRPCClientError)) return false;
+  return (
+    error.message?.includes("maximum statement execution time exceeded") ||
+    error.message?.includes("Query execution was interrupted") ||
+    error.message?.includes("número máximo de tentativas atingido")
+  );
+};
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Retenta automaticamente até 3x em caso de timeout, com backoff
+      retry: (failureCount, error) => {
+        if (isTimeoutError(error)) return failureCount < 3;
+        return false;
+      },
+      retryDelay: (attemptIndex) => Math.min(3000 * (attemptIndex + 1), 15000),
+      // Mantém dados em cache por mais tempo para evitar re-fetches
+      staleTime: 2 * 60 * 1000, // 2 minutos
+      gcTime: 5 * 60 * 1000,    // 5 minutos
+    },
+  },
+});
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
@@ -25,7 +49,12 @@ queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.query.state.error;
     redirectToLoginIfUnauthorized(error);
-    console.error("[API Query Error]", error);
+    // Não logar erros de timeout como erro — são tratados com retry automático
+    if (!isTimeoutError(error)) {
+      console.error("[API Query Error]", error);
+    } else {
+      console.warn("[API Query Timeout] Retentando query...", error?.message?.slice(0, 80));
+    }
   }
 });
 

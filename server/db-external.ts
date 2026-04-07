@@ -244,11 +244,13 @@ export async function getExternalPool(): Promise<Pool> {
 export async function queryExternal<T = Record<string, unknown>>(
   sql: string,
   params: unknown[] = [],
-  retries = 2
+  retries = 3
 ): Promise<T[]> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const p = await getExternalPool();
+      // Aumentar o max_execution_time para esta sessão (MySQL hint)
+      // Algumas versões do MySQL aceitam SET SESSION, outras usam MAX_EXECUTION_TIME hint
       const [rows] = await p.execute(sql, params);
       return rows as T[];
     } catch (err: any) {
@@ -260,16 +262,32 @@ export async function queryExternal<T = Record<string, unknown>>(
         err?.message?.includes("closed state") ||
         err?.message?.includes("Connection lost");
 
+      // Timeout de execução de query — retenta com delay crescente
+      const isTimeoutError =
+        err?.code === "ER_QUERY_INTERRUPTED" ||
+        err?.errno === 3024 ||
+        err?.message?.includes("maximum statement execution time exceeded") ||
+        err?.message?.includes("Query execution was interrupted");
+
       if (isConnectionError && attempt < retries) {
         console.warn(
           `[SSH Tunnel] Erro de conexão na tentativa ${attempt + 1}/${retries + 1}: ${err.message}. Reconectando...`
         );
-        // Forçar reconexão
         destroyTunnel();
         await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
         await createTunnel();
         continue;
       }
+
+      if (isTimeoutError && attempt < retries) {
+        const delay = 2000 * (attempt + 1);
+        console.warn(
+          `[SSH Tunnel] Timeout de query na tentativa ${attempt + 1}/${retries + 1}. Retentando em ${delay}ms...`
+        );
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+
       throw err;
     }
   }
