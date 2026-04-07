@@ -1919,7 +1919,7 @@ export const raioXRouter = router({
         }>(`
           SELECT
             COUNT(*) as total_atendimentos,
-            COALESCE(SUM(v.total), 0) as faturamento_total,
+            COALESCE(SUM(v.valor_total), 0) as faturamento_total,
             COUNT(DISTINCT v.cliente) as clientes_distintos
           FROM vendas v
           WHERE ${unitUserCond}
@@ -1931,7 +1931,7 @@ export const raioXRouter = router({
           atendimentos_sem_cadastro: number;
           faturamento_sem_cadastro: number;
         }>(`
-          SELECT COUNT(*) as atendimentos_sem_cadastro, COALESCE(SUM(v.total), 0) as faturamento_sem_cadastro
+          SELECT COUNT(*) as atendimentos_sem_cadastro, COALESCE(SUM(v.valor_total), 0) as faturamento_sem_cadastro
           FROM vendas v
           WHERE ${unitUserCond}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
