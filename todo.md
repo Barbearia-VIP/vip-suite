@@ -951,3 +951,7 @@
 - [x] Criar endpoints tRPC: metaFaixasList, metaFaixaSave, metaFaixasSaveAll, metaFaixaDelete
 - [x] Redesenhar UI da página Metas com tabela editável de faixas + simulador de ganhos
 - [x] Integrar cálculo de meta na página Comissões (faixa atingida, próxima faixa e comissão efetiva)
+
+## Metas — Bug toFixed (2026-04-07)
+
+- [x] Corrigir TypeError: v.toFixed is not a function no FaixasComissaoTab (valores numéricos chegam como string do banco)

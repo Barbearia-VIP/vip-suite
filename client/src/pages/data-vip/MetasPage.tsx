@@ -18,11 +18,11 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Target, Plus, Trash2, TrendingUp, Save, Info } from "lucide-react";
 
-function fmt(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 }).format(v);
+function fmt(v: number | string) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 }).format(Number(v));
 }
-function fmtPct(v: number) {
-  return `${v.toFixed(1)}%`;
+function fmtPct(v: number | string) {
+  return `${Number(v).toFixed(1)}%`;
 }
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
@@ -70,7 +70,12 @@ function FaixasComissaoTab() {
 
   useEffect(() => {
     if (q.data) {
-      setFaixas(q.data.map((f: any, i: number) => ({ ...f, ordem: i })));
+      setFaixas(q.data.map((f: any, i: number) => ({
+        ...f,
+        ordem: i,
+        valorMinServicos: Number(f.valorMinServicos),
+        pctComissao: Number(f.pctComissao),
+      })));
       setDirty(false);
     }
   }, [q.data]);
