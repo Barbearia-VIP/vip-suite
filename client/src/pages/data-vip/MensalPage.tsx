@@ -17,7 +17,7 @@ import {
   BarChart3, DollarSign, Users, TrendingUp,
   UserPlus, Gift, Scissors, CalendarDays, Activity,
   BarChart2, TrendingDown, Sigma, Minus, Filter, ChevronDown, ChevronUp,
-  User, X, Wifi, WifiOff,
+  User, X, Wifi, WifiOff, AlertCircle,
 } from "lucide-react";
 import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 

@@ -25,7 +25,7 @@ import {
   DollarSign, Users, Scissors, TrendingUp,
   ArrowUpRight, ArrowDownRight, RefreshCw, Trophy, Calendar,
   Target, BarChart3, UserCheck, ChevronRight, ChevronDown, X,
-  TrendingDown, Sigma
+  TrendingDown, Sigma, AlertCircle
 } from "lucide-react";
 import { isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 import type { DateRange } from "react-day-picker";
