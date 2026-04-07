@@ -2293,22 +2293,22 @@ export const dataVipRouter = router({
 
       const resultados: Record<string, { colaboradorId: string; colaboradorNome: string; bonusTotal: number; metasBatidas: { nome: string; bonus: number }[] }> = {};
 
+      // unitCond como literal SQL (sem placeholders) para evitar "Malformed communication packet"
+      const unitLiteral = unitIds.length === 1
+        ? `uu.unidade = ${unitIds[0]}`
+        : `uu.unidade IN (${unitIds.join(',')})`;
+      const unitLiteral2 = unitIds.length === 1
+        ? `uu2.unidade = ${unitIds[0]}`
+        : `uu2.unidade IN (${unitIds.join(',')})`;
+
       for (const meta of metasAtivas) {
         const config = (() => { try { return JSON.parse(meta.config); } catch { return {}; } })();
         const bonusValor = Number(meta.bonusValor);
-        const placeholders = unitIds.map(() => '?').join(',');
-
-        // Schema real do banco externo: vendas, vendas_produtos, usuarios, produtos
-        // unidade -> usuarios.unidade | vendas.colaborador -> usuarios.id | produto tipo: probar/proemp/proins
-        const unitCond = unitIds.length === 1
-          ? `uu.unidade = ${unitIds[0]}`
-          : `uu.unidade IN (${placeholders})`;
 
         if (meta.tipo === "produto") {
           const criterio = config.criterio ?? "valor";
 
           if (criterio === "quantidade") {
-            // Critério: quantidade mínima de produtos vendidos (soma de vp.quantidade)
             const qtdMin = Number(config.qtdMinProdutos ?? 1);
             const rows = await queryExternal(
               `SELECT uu.id AS colaboradorId, uu.nome AS colaboradorNome,
@@ -2318,12 +2318,12 @@ export const dataVipRouter = router({
                JOIN usuarios uu ON uu.id = vp.colaborador
                JOIN vendas v ON v.id = vp.venda
                JOIN produtos p ON p.id = vp.produto
-               WHERE ${unitCond}
+               WHERE ${unitLiteral}
                  AND v.data_criacao >= ? AND v.data_criacao < ?
                  AND v.comanda_temp = 0 AND v.status != 0
                GROUP BY uu.id, uu.nome
                HAVING qtdProdutos >= ?`,
-              [...unitIds, dataInicio, dataFimExcl, qtdMin]
+              [dataInicio, dataFimExcl, qtdMin]
             );
             for (const row of rows as any[]) {
               const key = String(row.colaboradorId);
@@ -2335,7 +2335,6 @@ export const dataVipRouter = router({
               resultados[key].metasBatidas.push({ nome: meta.nome, bonus });
             }
           } else {
-            // Critério: valor mínimo em produtos (padrão)
             const valorMin = Number(config.valorMinProdutos ?? 0);
             const rows = await queryExternal(
               `SELECT uu.id AS colaboradorId, uu.nome AS colaboradorNome,
@@ -2344,12 +2343,12 @@ export const dataVipRouter = router({
                JOIN usuarios uu ON uu.id = vp.colaborador
                JOIN vendas v ON v.id = vp.venda
                JOIN produtos p ON p.id = vp.produto
-               WHERE ${unitCond}
+               WHERE ${unitLiteral}
                  AND v.data_criacao >= ? AND v.data_criacao < ?
                  AND v.comanda_temp = 0 AND v.status != 0
                GROUP BY uu.id, uu.nome
                HAVING totalProdutos >= ?`,
-              [...unitIds, dataInicio, dataFimExcl, valorMin]
+              [dataInicio, dataFimExcl, valorMin]
             );
             for (const row of rows as any[]) {
               const key = String(row.colaboradorId);
@@ -2362,7 +2361,6 @@ export const dataVipRouter = router({
             }
           }
         } else if (meta.tipo === "servicos_multiplos") {
-          // Conta vendas (atendimentos) com >= minServicos itens de serviço por venda
           const minServicos = Number(config.minServicosComanda ?? 2);
           const minComandas = Number(config.minComandas ?? 1);
           const rows = await queryExternal(
@@ -2373,7 +2371,7 @@ export const dataVipRouter = router({
                JOIN vendas v ON v.id = vp.venda
                JOIN produtos p ON p.id = vp.produto
                JOIN usuarios uu2 ON uu2.id = vp.colaborador
-               WHERE ${unitCond.replace('uu.unidade', 'uu2.unidade')}
+               WHERE ${unitLiteral2}
                  AND v.data_criacao >= ? AND v.data_criacao < ?
                  AND v.comanda_temp = 0 AND v.status != 0
                  AND p.tipo = 'ser'
@@ -2383,7 +2381,7 @@ export const dataVipRouter = router({
              JOIN usuarios uu ON uu.id = sub.colaborador
              GROUP BY sub.colaborador, uu.nome
              HAVING totalComandas >= ?`,
-            [...unitIds, dataInicio, dataFimExcl, minServicos, minComandas]
+            [dataInicio, dataFimExcl, minServicos, minComandas]
           );
           for (const row of rows as any[]) {
             const key = String(row.colaboradorId);
