@@ -2408,7 +2408,7 @@ export const dataVipRouter = router({
 
       // Busca todos os produtos distintos do banco externo (tipo != 'ser')
       const extProdutos = await queryExternal<{ nome: string; qtd: number; valorTotal: number }>(`
-        SELECT p.nome, COUNT(*) as qtd, SUM(vp.valorLiquido) as valorTotal
+        SELECT p.nome, COUNT(*) as qtd, COALESCE(SUM(vp.valor_total), 0) as valorTotal
         FROM produtos p
         JOIN vendas_produtos vp ON vp.produto = p.id
         JOIN vendas v ON vp.venda = v.id
