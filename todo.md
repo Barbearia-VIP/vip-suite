@@ -922,3 +922,8 @@
 ## Comissões — Fix Malformed packet (2026-04-07)
 
 - [x] Corrigir erro "Malformed communication packet" na query getColaboradoresComissoes (parâmetros SQL inválidos)
+
+## Data VIP — Menu Lateral (2026-04-07)
+
+- [x] Agrupar Colaboradores, Comissões, Metas, Serviços sob título "Gestão de Colaboradores" com espaçamento
+- [x] Remover Relatórios, Sincronização e Administração do menu lateral do Data VIP
