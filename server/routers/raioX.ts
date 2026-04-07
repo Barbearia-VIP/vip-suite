@@ -2061,15 +2061,59 @@ export const raioXRouter = router({
 
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
+
       // Janela de atividade: 60 dias (cliente ativo = visitou nos últimos 60 dias)
       const janelaAtividade = 60;
 
-      // ── ETAPA 1: IDs dos clientes que visitaram no período (query rápida) ───────────
-      const clientesPeriodo = await queryExternal<{ cliente_id: number }>(`
-        SELECT DISTINCT v.cliente as cliente_id
+      // ── ETAPA 0: Identifica barbeiros executores ─────────────────────────────────────────
+      // Critério combinado (Opção A):
+      //   - visivel_dashboard = 1 (marcado como barbeiro no sistema), OU
+      //   - ≥50 clientes únicos no período (barbeiro ativo sem flag correta)
+      // Isso captura barbeiros como Gabriela (visivel_dashboard=0 mas 844 clientes)
+      // e exclui caixas como Colaborador Caixa (visivel_dashboard=0 e apenas 49 clientes)
+      // Etapa 0a: busca usuários com visivel_dashboard=1 na unidade
+      const barbeirosFlag1Rows = await queryExternal<{ barbeiro_id: number }>(`
+        SELECT DISTINCT uu.id as barbeiro_id
+        FROM usuarios uu
+        WHERE ${unitCondU}
+          AND uu.visivel_dashboard = 1
+          AND uu.status = 1
+      `);
+      const barbeirosFlag1Ids = new Set(barbeirosFlag1Rows.map(r => Number(r.barbeiro_id)));
+
+      // Etapa 0b: busca usuários com ≥50 clientes únicos no período (independente da flag)
+      const barbeirosVolume50Rows = await queryExternal<{ barbeiro_id: number }>(`
+        SELECT v.usuario as barbeiro_id
         FROM vendas v
         JOIN usuarios uu ON uu.id = v.usuario
         WHERE ${unitIn}
+          AND DATE(v.data_criacao) >= '${dataInicio}'
+          AND DATE(v.data_criacao) <= '${dataFim}'
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.cliente IS NOT NULL AND v.cliente != 2
+        GROUP BY v.usuario
+        HAVING COUNT(DISTINCT v.cliente) >= 50
+      `);
+      const barbeirosVolume50Ids = new Set(barbeirosVolume50Rows.map(r => Number(r.barbeiro_id)));
+
+      // União: visivel_dashboard=1 OU ≥50 clientes no período
+      const barbeirosAtivosIds = Array.from(new Set([
+        ...Array.from(barbeirosFlag1Ids),
+        ...Array.from(barbeirosVolume50Ids)
+      ]));
+
+      if (barbeirosAtivosIds.length === 0) {
+        return { kpis: null, barbeiros: [], segmentosGeral: null, evolucao: [] };
+      }
+
+      const barbeirosAtivosStr = barbeirosAtivosIds.join(",");
+
+      // ── ETAPA 1: IDs dos clientes que visitaram no período (query rápida) ───────────
+      // Filtra apenas clientes atendidos por barbeiros executores no período
+      const clientesPeriodo = await queryExternal<{ cliente_id: number }>(`
+        SELECT DISTINCT v.cliente as cliente_id
+        FROM vendas v
+        WHERE v.usuario IN (${barbeirosAtivosStr})
           AND DATE(v.data_criacao) >= '${dataInicio}'
           AND DATE(v.data_criacao) <= '${dataFim}'
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
@@ -2085,6 +2129,7 @@ export const raioXRouter = router({
       const clienteIdsStr = clienteIds.join(",");
 
       // ── ETAPA 2A: Histórico agregado por cliente (sem subquery IN) ──────────────
+      // Conta apenas visitas com barbeiros executores (usuários com vendas no período)
       const clientesRows = await queryExternal<{
         cliente_id: number;
         total_visitas_hist: number;
@@ -2102,6 +2147,7 @@ export const raioXRouter = router({
           MIN(v.data_criacao) as primeira_visita_hist
         FROM vendas v
         WHERE v.cliente IN (${clienteIdsStr})
+          AND v.usuario IN (${barbeirosAtivosStr})
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
           AND v.cliente IS NOT NULL AND v.cliente != 2
         GROUP BY v.cliente
@@ -2133,12 +2179,15 @@ export const raioXRouter = router({
           JOIN (
             SELECT vi.cliente, vi.usuario, COUNT(*) as cnt_barb
             FROM vendas vi
+            JOIN usuarios uui ON uui.id = vi.usuario
             WHERE vi.cliente IN (${clienteIdsStr})
+              AND vi.usuario IN (${barbeirosAtivosStr})
               AND vi.comanda_temp = 0 AND vi.cancelado_motivo IS NULL AND vi.status != 0
               AND vi.cliente IS NOT NULL AND vi.cliente != 2
             GROUP BY vi.cliente, vi.usuario
           ) cnt ON cnt.cliente = v.cliente AND cnt.usuario = v.usuario
           WHERE v.cliente IN (${clienteIdsStr})
+            AND v.usuario IN (${barbeirosAtivosStr})
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
           GROUP BY v.cliente
         ) t
@@ -2153,8 +2202,7 @@ export const raioXRouter = router({
       const barbeirosList = await queryExternal<{ id: number; nome: string }>(`
         SELECT DISTINCT uu.id, uu.nome
         FROM usuarios uu
-        WHERE ${unitCondU}
-          AND uu.visivel_agenda != 'nenhuma'
+        WHERE uu.id IN (${barbeirosAtivosStr})
           AND uu.status = 1
         ORDER BY uu.nome
       `);
@@ -2304,14 +2352,12 @@ export const raioXRouter = router({
             COUNT(DISTINCT v2.usuario) as barbeiros_distintos,
             MIN(v2.data_criacao) as primeira_visita_geral
           FROM vendas v2
-          JOIN usuarios uu2 ON uu2.id = v2.usuario
           WHERE v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
             AND v2.cliente IS NOT NULL AND v2.cliente != 2
-            AND ${unitIn2}
+            AND v2.usuario IN (${barbeirosAtivosStr})
           GROUP BY v2.cliente
         ) hist2 ON hist2.cliente = v.cliente
-        JOIN usuarios uu ON uu.id = v.usuario
-        WHERE ${unitIn}
+        WHERE v.usuario IN (${barbeirosAtivosStr})
           AND DATE(v.data_criacao) >= DATE_SUB('${dataInicio}', INTERVAL 11 MONTH)
           AND DATE(v.data_criacao) <= '${dataFim}'
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
