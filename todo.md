@@ -999,3 +999,7 @@
 
 - [x] Componente DataVipLoadingState já existia e foi reutilizado
 - [x] Aplicar loading padronizado em todas as páginas Data VIP que consultam banco externo (ColaboradoresPage, ClientesPage, ComissoesPage, ServicosPage, ProdutosPage, RankingPage, RelatoriosPage, MetasPage, CalendarioPage, AdministracaoPage, SincronizacaoPage)
+
+## Bug — Loading Raio-X Clientes (2026-04-07)
+
+- [x] Adicionar banner de loading padronizado na aba Visão Geral do Raio-X de Clientes — substituído skeleton genérico pelo DataVipLoadingState

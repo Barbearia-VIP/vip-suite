@@ -416,9 +416,7 @@ export default function RaioXPage() {
         {/* ── VISÃO GERAL ─────────────────────────────────────────────────────── */}
         <TabsContent value="visao-geral" className="space-y-5 mt-4">
           {isLoading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-24" /><Skeleton className="h-32" /><Skeleton className="h-40" />
-            </div>
+            <DataVipLoadingState rows={3} attempt={(qVisao.failureCount ?? 0) + 1} />
           ) : isVisaoError ? (
             <DataVipErrorState onRetry={() => qVisao.refetch()} />
           ) : v ? (
