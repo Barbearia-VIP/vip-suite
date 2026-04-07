@@ -247,7 +247,17 @@ export async function getUsersInOrg(orgId: number) {
 export async function getModuleConfigs(unitId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(moduleConfigs).where(eq(moduleConfigs.unitId, unitId));
+  // Retorna apenas o registro mais recente por módulo (pode haver duplicatas sem UNIQUE constraint)
+  const rows = await db.select().from(moduleConfigs)
+    .where(eq(moduleConfigs.unitId, unitId))
+    .orderBy(sql`${moduleConfigs.id} DESC`);
+  // Deduplica: mantém apenas o primeiro (mais recente) de cada módulo
+  const seen = new Set<string>();
+  return rows.filter(r => {
+    if (seen.has(r.module)) return false;
+    seen.add(r.module);
+    return true;
+  });
 }
 
 export async function upsertModuleConfig(data: {
@@ -258,17 +268,26 @@ export async function upsertModuleConfig(data: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.insert(moduleConfigs).values({
-    unitId: data.unitId,
-    module: data.module,
-    config: data.config,
-    active: data.active ?? true,
-  }).onDuplicateKeyUpdate({
-    set: {
+  // Verifica se já existe um registro para este unitId+module
+  const existing = await db.select({ id: moduleConfigs.id })
+    .from(moduleConfigs)
+    .where(and(eq(moduleConfigs.unitId, data.unitId), eq(moduleConfigs.module, data.module)))
+    .orderBy(sql`${moduleConfigs.id} DESC`)
+    .limit(1);
+  if (existing.length > 0) {
+    // UPDATE no registro mais recente
+    await db.update(moduleConfigs)
+      .set({ config: data.config, active: data.active ?? true })
+      .where(eq(moduleConfigs.id, existing[0].id));
+  } else {
+    // INSERT novo
+    await db.insert(moduleConfigs).values({
+      unitId: data.unitId,
+      module: data.module,
       config: data.config,
       active: data.active ?? true,
-    },
-  });
+    });
+  }
 }
 
 // ── Module Access ─────────────────────────────────────────────────────────────

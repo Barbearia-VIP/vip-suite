@@ -931,3 +931,5 @@
 ## Instagram — Bug Configurações (2026-04-07)
 
 - [x] Corrigir salvamento de configurações do Instagram por unidade (dados não persistem)
+- [x] Corrigir getModuleConfigs para retornar apenas o registro mais recente por módulo (deduplicar)
+- [x] Corrigir upsertModuleConfig para fazer UPDATE quando já existe (não INSERT duplicado)
