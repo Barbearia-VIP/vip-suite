@@ -27,8 +27,47 @@ import {
   getCohortClientes,
 } from "../dataVipQueries";
 
-// ─── Cache em memória para diagnóstico (10 minutos TTL) ──────────────────────
-const diagnosticoCache = new Map<string, { data: unknown; ts: number }>();
+// ─── Cache em memória para diagnóstico (10 minutos TTL) ────────────────────────────────────────────
+interface DiagnosticoResult {
+  total: number;
+  totalAtendimentos: number;
+  faturamentoTotal: number;
+  ticketMedio: number;
+  freqMedia: number;
+  taxaRetencao: number;
+  novos: number;
+  retornaram: number;
+  qualidade: {
+    score: number;
+    semTelefone: number;
+    semNome: number;
+    comTelefone: number;
+    pctSemTelefone: number;
+    pctSemNome: number;
+    pctComTelefone: number;
+  };
+  semCadastro: {
+    atendimentos: number;
+    faturamento: number;
+    pct: number;
+  };
+  saude: {
+    oneShot: number;
+    emRisco: number;
+    perdidos: number;
+    voltaram2x: number;
+    pctOneShot: number;
+    pctEmRisco: number;
+    pctPerdidos: number;
+    pctVoltaram2x: number;
+  };
+  visitasDistribuicao: { visitas: number; clientes: number }[];
+  faixasDias: { faixa: string; total: number; percentual: number }[];
+  horarios: { hora: number; label: string; atendimentos: number }[];
+  diasSemana: { dia: number; label: string; atendimentos: number; clientes: number }[];
+  alertas: { tipo: string; mensagem: string }[];
+}
+const diagnosticoCache = new Map<string, { data: DiagnosticoResult; ts: number }>();
 const DIAGNOSTICO_TTL = 10 * 60 * 1000; // 10 minutos
 
 // ─── Helper: resolve filtro de unidades (banco interno) ──────────────────────
@@ -1864,51 +1903,29 @@ export const raioXRouter = router({
         return cached.data;
       }
 
-      const unitCondV = extIds.length === 0 ? "1=1"
-        : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
-        : `uu.unidade IN (${extIds.join(",")})`;
+      // Usar subquery IN em vez de JOIN para filtrar por unidade (mais rápido)
+      const unitUserCond = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `v.usuario IN (SELECT id FROM usuarios WHERE unidade = ${extIds[0]})`
+        : `v.usuario IN (SELECT id FROM usuarios WHERE unidade IN (${extIds.join(",")}))`;
 
-      // Subquery base: clientes com vendas no período (filtro por unidade via vendas.usuario)
-      // Esta subquery é rápida pois usa índices de vendas (usuario, data_criacao)
-      const baseVendasSubquery = `
-        SELECT v.cliente, COUNT(*) as total_visitas, MAX(v.data_criacao) as ultima_visita_periodo
-        FROM vendas v
-        JOIN usuarios uu ON v.usuario = uu.id
-        WHERE ${unitCondV}
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
-          AND v.cliente IS NOT NULL AND v.cliente != 2
-          AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
-        GROUP BY v.cliente
-      `;
-
-      // Query única: KPIs de saúde + atendimentos + sem cadastro em uma só passagem
-      console.log('[Diagnostico] Iniciando query única...');
-      const [saudeRaw, atendSemCadastroRows] = await Promise.all([
+      // Queries ultra-simples: apenas COUNT sem GROUP BY pesado
+      // KPIs de saúde (total, oneShot, emRisco, perdidos) são passados pelo frontend via Visão Geral
+      console.log('[Diagnostico] Iniciando queries simples (sem JOIN)...');
+      const [atendComCadastroRows, atendSemCadastroRows] = await Promise.all([
         queryExternal<{
-          total_clientes: number;
-          one_shot: number;
-          voltaram_2x: number;
-          freq_media: number;
           total_atendimentos: number;
           faturamento_total: number;
+          clientes_distintos: number;
         }>(`
           SELECT
-            COUNT(*) as total_clientes,
-            SUM(CASE WHEN total_visitas = 1 THEN 1 ELSE 0 END) as one_shot,
-            SUM(CASE WHEN total_visitas >= 2 THEN 1 ELSE 0 END) as voltaram_2x,
-            ROUND(AVG(total_visitas), 2) as freq_media,
-            SUM(total_visitas) as total_atendimentos,
-            COALESCE(SUM(faturamento), 0) as faturamento_total
-          FROM (
-            SELECT v.cliente, COUNT(*) as total_visitas, COALESCE(SUM(v.total), 0) as faturamento
-            FROM vendas v
-            JOIN usuarios uu ON v.usuario = uu.id
-            WHERE ${unitCondV}
-              AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
-              AND v.cliente IS NOT NULL AND v.cliente != 2
-              AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
-            GROUP BY v.cliente
-          ) vpc
+            COUNT(*) as total_atendimentos,
+            COALESCE(SUM(v.total), 0) as faturamento_total,
+            COUNT(DISTINCT v.cliente) as clientes_distintos
+          FROM vendas v
+          WHERE ${unitUserCond}
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.cliente IS NOT NULL AND v.cliente != 2
+            AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
         `),
         queryExternal<{
           atendimentos_sem_cadastro: number;
@@ -1916,15 +1933,24 @@ export const raioXRouter = router({
         }>(`
           SELECT COUNT(*) as atendimentos_sem_cadastro, COALESCE(SUM(v.total), 0) as faturamento_sem_cadastro
           FROM vendas v
-          JOIN usuarios uu ON v.usuario = uu.id
-          WHERE ${unitCondV}
+          WHERE ${unitUserCond}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
             AND (v.cliente IS NULL OR v.cliente = 2)
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
         `)
       ]);
 
-      console.log('[Diagnostico] Query única concluída!');
+      console.log('[Diagnostico] Queries simples concluídas!');
+
+      // Dados derivados (sem GROUP BY pesado)
+      const saudeRaw = [{
+        total_clientes: Number(atendComCadastroRows[0]?.clientes_distintos ?? 0),
+        one_shot: 0,    // frontend usa dados da Visão Geral
+        voltaram_2x: 0, // frontend usa dados da Visão Geral
+        freq_media: 0,
+        total_atendimentos: Number(atendComCadastroRows[0]?.total_atendimentos ?? 0),
+        faturamento_total: Number(atendComCadastroRows[0]?.faturamento_total ?? 0),
+      }];
 
       // Distribuições: retornar arrays vazios por ora
       const horarioRows: { hora: number; atendimentos: number }[] = [];

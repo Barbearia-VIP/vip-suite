@@ -542,7 +542,7 @@
 - [ ] Endpoints tRPC: raioXChurn (perdas e retenção mensal)
 - [ ] Endpoints tRPC: raioXCohort (por coorte de entrada)
 - [ ] Endpoints tRPC: raioXBarbeiros (por colaborador)
-- [ ] Endpoints tRPC: raioXDiagnostico (qualidade de dados)
+- [x] Endpoints tRPC: raioXDiagnostico (qualidade de dados)
 - [ ] Frontend: aba Visão Geral (sinais da base, atividade, saúde, distribuições)
 - [ ] Frontend: aba One-Shot (clientes com 1 visita)
 - [ ] Frontend: aba Cadência (frequência e perfil)
@@ -550,7 +550,7 @@
 - [ ] Frontend: aba Cohort (por coorte de entrada)
 - [ ] Frontend: aba Barbeiros (por colaborador)
 - [ ] Frontend: aba Ações (fila de contato CRM)
-- [ ] Frontend: aba Diagnóstico (qualidade de dados)
+- [x] Frontend: aba Diagnóstico (qualidade de dados)
 
 ## Raio X Clientes — Implementação Completa (Data VIP)
 
