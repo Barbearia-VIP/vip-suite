@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -74,14 +74,13 @@ export default function CalendarioPage() {
         <DataVipErrorState onRetry={() => q.refetch()} />
       )}
 
-      <Card>
-        <CardContent className="p-0">
+      <div className="glass-card overflow-hidden">
           {folgas.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground text-sm">Nenhum registro para este mês</div>
           ) : (
             <div className="divide-y divide-border">
               {folgas.map((f: any) => (
-                <div key={f.id} className="flex items-center gap-3 px-4 py-3">
+                <div key={f.id} className="flex items-center gap-3 px-4 py-3.5 hover:bg-white/5 transition-colors">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{f.colaboradorNome || "Unidade"}</span>
@@ -94,8 +93,7 @@ export default function CalendarioPage() {
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
 
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-sm">

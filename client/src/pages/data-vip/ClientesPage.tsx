@@ -515,7 +515,7 @@ export default function ClientesPage() {
           {/* KPIs */}
           {qKpis.isLoading ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-              {Array.from({ length: 7 }).map((_, i) => <Card key={i}><CardContent className="p-4"><Skeleton className="h-12 w-full" /></CardContent></Card>)}
+              {Array.from({ length: 7 }).map((_, i) => <div key={i} className="glass-card p-4"><Skeleton className="h-12 w-full" /></div>)}
             </div>
           ) : k ? (
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
@@ -528,24 +528,21 @@ export default function ClientesPage() {
                 { lbl: "VALOR TOTAL",          val: fmtMoedaCompact(k.valorTotal), sub: null,                                          icon: <DollarSign className="w-4 h-4" />,   cor: "text-primary" },
                 { lbl: "RET. 30D NOVOS",       val: `${k.retencao30dNovos}%`,      sub: null,                                          icon: <RefreshCw className="w-4 h-4" />,    cor: "text-cyan-400" },
               ].map((kpi, i) => (
-                <Card key={i} className="border-border">
-                  <CardContent className="p-4">
+                <div key={i} className="glass-card glass-card-hover p-4">
                     <div className={`flex items-center gap-1.5 mb-1 ${kpi.cor}`}>{kpi.icon}<span className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">{kpi.lbl}</span></div>
                     <p className="text-xl font-bold text-foreground leading-tight">{kpi.val}</p>
                     {kpi.sub && <p className="text-xs text-muted-foreground mt-0.5">{kpi.sub}</p>}
-                  </CardContent>
-                </Card>
+                </div>
               ))}
             </div>
           ) : null}
 
           {/* Distribuição por status */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Distribuição por Status · Foto atual da carteira</CardTitle>
+          <div className="glass-card p-4 space-y-4">
+            <div>
+              <h3 className="text-base font-semibold">Distribuição por Status · Foto atual da carteira</h3>
               <p className="text-xs text-muted-foreground">Situação calculada com base na última visita de cada cliente</p>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </div>
               {qStatus.isLoading ? <Skeleton className="h-16 w-full" /> : (
                 <>
                   <BarraSegmentada itens={statusItens} total={statusTotal} />
@@ -566,24 +563,20 @@ export default function ClientesPage() {
                   </div>
                 </>
               )}
-            </CardContent>
-          </Card>
+          </div>
 
           {/* Evolução mensal */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Evolução Mensal · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <div className="glass-card p-4">
+            <h3 className="text-base font-semibold mb-3">Evolução Mensal · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</h3>
               {qEvol.isLoading ? <Skeleton className="h-64 w-full" /> : (
                 <ResponsiveContainer width="100%" height={280}>
                   <ComposedChart data={evolData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#888" }} />
-                    <YAxis tick={{ fontSize: 11, fill: "#888" }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.28 0.015 260 / 0.3)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "oklch(0.55 0.01 260)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: "oklch(0.55 0.01 260)" }} axisLine={false} tickLine={false} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="clientesUnicos" name="Clientes únicos" fill="#d4a017" radius={[3, 3, 0, 0]} />
-                    <Line type="monotone" dataKey="novos" name="Novos" stroke="#22c55e" strokeWidth={2} dot={{ r: 4, fill: "#22c55e" }} />
+                    <Bar dataKey="clientesUnicos" name="Clientes únicos" fill="oklch(0.76 0.145 72)" radius={[4, 4, 0, 0]} />
+                    <Line type="monotone" dataKey="novos" name="Novos" stroke="oklch(0.72 0.16 145)" strokeWidth={2} dot={{ r: 4, fill: "oklch(0.72 0.16 145)" }} />
                   </ComposedChart>
                 </ResponsiveContainer>
               )}
@@ -591,15 +584,11 @@ export default function ClientesPage() {
                 <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="w-3 h-3 rounded-sm bg-[#d4a017] inline-block" /> Clientes únicos</span>
                 <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><span className="w-3 h-0.5 bg-green-500 inline-block" /> Novos</span>
               </div>
-            </CardContent>
-          </Card>
+          </div>
 
           {/* Distribuição por dias sem vir */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Distribuição por dias sem vir · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          <div className="glass-card p-4 space-y-3">
+            <h3 className="text-base font-semibold">Distribuição por dias sem vir · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</h3>
               {qDias.isLoading ? <Skeleton className="h-10 w-full" /> : (
                 <>
                   {/* Barra única segmentada */}
@@ -644,15 +633,11 @@ export default function ClientesPage() {
                   )}
                 </>
               )}
-            </CardContent>
-          </Card>
+          </div>
 
           {/* Distribuição por frequência */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Distribuição por frequência de visitas · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          <div className="glass-card p-4 space-y-3">
+            <h3 className="text-base font-semibold">Distribuição por frequência de visitas · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</h3>
               {qFreq.isLoading ? <Skeleton className="h-10 w-full" /> : (
                 <>
                   {/* Barra única segmentada */}
@@ -697,16 +682,14 @@ export default function ClientesPage() {
                   )}
                 </>
               )}
-            </CardContent>
-          </Card>
+          </div>
 
           {/* Composição por status */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Composição por Status · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</CardTitle>
+          <div className="glass-card p-4 space-y-1.5">
+            <div>
+              <h3 className="text-base font-semibold">Composição por Status · {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)}</h3>
               <p className="text-xs text-muted-foreground">Barras proporcionais ao total · Período selecionado</p>
-            </CardHeader>
-            <CardContent className="space-y-1.5">
+            </div>
               {qStatus.isLoading ? <Skeleton className="h-40 w-full" /> : (
                 <>
                   {/* 6 status principais */}
@@ -782,8 +765,7 @@ export default function ClientesPage() {
                   )}
                 </>
               )}
-            </CardContent>
-          </Card>
+          </div>
         </>
       )}
 
@@ -808,14 +790,11 @@ export default function ClientesPage() {
           </div>
 
           {/* KPIs de Churn & Saúde da Base */}
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Churn & Saúde da Base</CardTitle>
-                <span className="text-xs text-muted-foreground">Janela {janelaDias}d</span>
-              </div>
-            </CardHeader>
-            <CardContent>
+          <div className="glass-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold">Churn & Saúde da Base</h3>
+              <span className="text-xs text-muted-foreground">Janela {janelaDias}d</span>
+            </div>
               {qChurnSaude.isLoading ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                   {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}
@@ -877,18 +856,14 @@ export default function ClientesPage() {
                   </div>
                 );
               })() : null}
-            </CardContent>
-          </Card>
+          </div>
 
           {/* Churn por Barbeiro */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Churn por Barbeiro</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)} · Janela {janelaDias}d
-              </p>
-            </CardHeader>
-            <CardContent>
+          <div className="glass-card p-4">
+            <div className="mb-3">
+              <h3 className="text-base font-semibold">Churn por Barbeiro</h3>
+              <p className="text-xs text-muted-foreground">{fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)} · Janela {janelaDias}d</p>
+            </div>
               {qChurnBarbeiro.isLoading ? (
                 <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
               ) : (qChurnBarbeiro.data ?? []).length === 0 ? (
@@ -944,24 +919,22 @@ export default function ClientesPage() {
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
+          </div>
         </div>
       )}
 
       {/* ABA: TOP CLIENTESS                                                  */}
       {/* ═══════════════════════════════════════════════════════════════════ */}
       {aba === "top_clientes" && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <div className="flex items-center gap-2"><Star className="w-4 h-4 text-primary" /><CardTitle className="text-base">Top Clientes por Valor</CardTitle></div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)} · Ordenado por valor total
-                  {colabNome && ` · ${colabNome}`}
-                </p>
-              </div>
+        <div className="glass-card p-4">
+          <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+            <div>
+              <div className="flex items-center gap-2"><Star className="w-4 h-4 text-primary" /><h3 className="text-base font-semibold">Top Clientes por Valor</h3></div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {fmtPeriodo(filtros.iniMes, filtros.iniAno)} – {fmtPeriodo(filtros.fimMes, filtros.fimAno)} · Ordenado por valor total
+                {colabNome && ` · ${colabNome}`}
+              </p>
+            </div>
               <button
                 onClick={() => exportarCSV(qTopExp.data ?? [], `top-clientes-${dataInicio}-${dataFim}.csv`)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted/50 transition-colors"
@@ -989,8 +962,6 @@ export default function ClientesPage() {
                 </button>
               )}
             </div>
-          </CardHeader>
-          <CardContent>
             {qTopExp.isLoading ? (
               <div className="space-y-2">{Array.from({ length: 10 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
             ) : (
@@ -1049,8 +1020,7 @@ export default function ClientesPage() {
                 </div>
               </>
             )}
-          </CardContent>
-        </Card>
+        </div>
       )}
 
       {/* ── Modal de Envio em Massa WhatsApp ──────────────────────────────────── */}

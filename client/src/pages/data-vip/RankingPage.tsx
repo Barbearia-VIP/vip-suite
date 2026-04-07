@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Trophy, Medal, Lock } from "lucide-react";
@@ -61,7 +61,7 @@ export default function RankingPage() {
         <select
           value={periodo}
           onChange={e => setPeriodo(e.target.value)}
-          className="text-sm bg-muted border border-border rounded px-2 py-1.5"
+          className="text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-foreground backdrop-blur-sm"
         >
           {periodos.map(p => <option key={p.val} value={p.val}>{p.label}</option>)}
         </select>
@@ -82,8 +82,7 @@ export default function RankingPage() {
         </div>
       )}
 
-      <Card>
-        <CardContent className="p-0">
+      <div className="glass-card overflow-hidden">
           {q.isLoading ? (
             <div className="p-4 space-y-3">
               {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
@@ -94,7 +93,7 @@ export default function RankingPage() {
                 const MedalIcon = i < 3 ? medalIcons[i] : null;
                 const isMe = r.isMyUnit;
                 return (
-                  <div key={r.unitId} className={`flex items-center gap-4 px-4 py-3 ${isMe ? "bg-primary/5 border-l-2 border-primary" : ""}`}>
+                  <div key={r.unitId} className={`flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-white/5 ${isMe ? "bg-amber-500/10 border-l-2 border-amber-500" : ""}`}>
                     <div className="w-8 flex items-center justify-center">
                       {MedalIcon
                         ? <MedalIcon className={`w-5 h-5 ${medalColors[i]}`} />
@@ -124,8 +123,7 @@ export default function RankingPage() {
               })}
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
     </div>
   );
 }

@@ -6,7 +6,6 @@ import { useState, useMemo, type MouseEvent } from "react";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -54,8 +53,8 @@ function KpiCard({ label, value, sub, color, icon: Icon }: {
   color?: string; icon?: React.ElementType;
 }) {
   return (
-    <Card className="bg-card/60 border-border/50">
-      <CardContent className="pt-4 pb-4">
+    <div className="glass-card bg-card/60 border-border/50">
+      <div className="pt-4 pb-4">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide">{label}</p>
@@ -64,8 +63,8 @@ function KpiCard({ label, value, sub, color, icon: Icon }: {
           </div>
           {Icon && <Icon className={`w-5 h-5 mt-1 ${color || "text-muted-foreground"}`} />}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -477,8 +476,8 @@ export default function RaioXPage() {
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Saúde da Base · 12m</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                   {/* Em Risco */}
-                  <Card className="bg-card/60 border-border/50">
-                    <CardContent className="pt-4 pb-4">
+                  <div className="glass-card bg-card/60 border-border/50">
+                    <div className="pt-4 pb-4">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center">
@@ -499,11 +498,11 @@ export default function RaioXPage() {
                         </div>
                         <AlertTriangle className="w-5 h-5 mt-1 text-orange-400" />
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                   {/* Em Risco Total (totalizador: Em Risco + One-shot urgente) */}
-                  <Card className="bg-orange-500/10 border-orange-500/30">
-                    <CardContent className="pt-4 pb-4">
+                  <div className="glass-card bg-orange-500/10 border-orange-500/30">
+                    <div className="pt-4 pb-4">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <p className="text-xs text-orange-400/80 uppercase tracking-wide flex items-center font-medium">
@@ -529,11 +528,11 @@ export default function RaioXPage() {
                         </div>
                         <AlertTriangle className="w-5 h-5 mt-1 text-orange-300" />
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                   {/* Perdidos */}
-                  <Card className="bg-card/60 border-border/50">
-                    <CardContent className="pt-4 pb-4">
+                  <div className="glass-card bg-card/60 border-border/50">
+                    <div className="pt-4 pb-4">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center">
@@ -554,11 +553,11 @@ export default function RaioXPage() {
                         </div>
                         <UserX className="w-5 h-5 mt-1 text-red-400" />
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                   {/* One-shot risco */}
-                  <Card className="bg-card/60 border-border/50">
-                    <CardContent className="pt-4 pb-4">
+                  <div className="glass-card bg-card/60 border-border/50">
+                    <div className="pt-4 pb-4">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center">
@@ -579,11 +578,11 @@ export default function RaioXPage() {
                         </div>
                         <Zap className="w-5 h-5 mt-1 text-yellow-400" />
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                   {/* One-shot perdido */}
-                  <Card className="bg-card/60 border-border/50">
-                    <CardContent className="pt-4 pb-4">
+                  <div className="glass-card bg-card/60 border-border/50">
+                    <div className="pt-4 pb-4">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center">
@@ -604,8 +603,8 @@ export default function RaioXPage() {
                         </div>
                         <TrendingDown className="w-5 h-5 mt-1 text-red-400" />
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -614,9 +613,9 @@ export default function RaioXPage() {
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Distribuições da Base</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                   {/* Por Perfil */}
-                  <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-1">
-                      <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
+                  <div className="glass-card bg-card/60 border-border/50">
+                    <div className="pb-1">
+                      <h3 className="text-xs text-muted-foreground flex items-center gap-1">
                         Por Perfil
                         <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold">12</span>
                         <InfoPopover
@@ -629,9 +628,9 @@ export default function RaioXPage() {
                           regra={v.contexto?.distribuicoes?.porPerfil?.regras}
                           nota={v.contexto?.distribuicoes?.porPerfil?.nota}
                         />
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-1 pt-1">
+                      </h3>
+                    </div>
+                    <div className="space-y-1 pt-1">
                       <p className="text-xs text-muted-foreground">universo: {(v.sinais.totalBase).toLocaleString()} clientes</p>
                       {[
                         { label: "Ocasional", val: v.distribuicoes.porPerfil.ocasional, color: "bg-gray-400" },
@@ -643,12 +642,12 @@ export default function RaioXPage() {
                         <DotBadge key={item.label} color={item.color} label={item.label} count={item.val}
                           pct={v.sinais.totalBase > 0 ? Math.round(item.val / v.sinais.totalBase * 100) : 0} />
                       ))}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                   {/* Por Cadência */}
-                  <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-1">
-                      <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
+                  <div className="glass-card bg-card/60 border-border/50">
+                    <div className="pb-1">
+                      <h3 className="text-xs text-muted-foreground flex items-center gap-1">
                         Por Cadência
                         <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold">12</span>
                         <InfoPopover
@@ -661,9 +660,9 @@ export default function RaioXPage() {
                           regra={v.contexto?.distribuicoes?.porCadencia?.regras}
                           nota={v.contexto?.distribuicoes?.porCadencia?.nota}
                         />
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-1 pt-1">
+                      </h3>
+                    </div>
+                    <div className="space-y-1 pt-1">
                       <p className="text-xs text-muted-foreground">universo: {(v.distribuicoes.porCadencia?.total ?? 0).toLocaleString()} clientes (≥3 visitas)</p>
                       {[
                         { label: "Perdido", val: v.distribuicoes.porCadencia?.perdido ?? 0, color: "bg-red-500" },
@@ -675,12 +674,12 @@ export default function RaioXPage() {
                         <DotBadge key={item.label} color={item.color} label={item.label} count={item.val}
                           pct={(v.distribuicoes.porCadencia?.total ?? 0) > 0 ? Math.round(item.val / (v.distribuicoes.porCadencia?.total ?? 1) * 100) : 0} />
                       ))}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                   {/* Status 12m */}
-                  <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-1">
-                      <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
+                  <div className="glass-card bg-card/60 border-border/50">
+                    <div className="pb-1">
+                      <h3 className="text-xs text-muted-foreground flex items-center gap-1">
                         Status 12m
                         <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-bold">12</span>
                         <InfoPopover
@@ -693,9 +692,9 @@ export default function RaioXPage() {
                           regra={v.contexto?.distribuicoes?.status12m?.regras}
                           nota={v.contexto?.distribuicoes?.status12m?.nota}
                         />
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-1 pt-1">
+                      </h3>
+                    </div>
+                    <div className="space-y-1 pt-1">
                       <p className="text-xs text-muted-foreground">universo: {v.sinais.totalBase.toLocaleString()} clientes</p>
                       {[
                         { label: "Perdido", val: v.distribuicoes.status12m.perdido, color: "bg-red-500" },
@@ -705,12 +704,12 @@ export default function RaioXPage() {
                         <DotBadge key={item.label} color={item.color} label={item.label} count={item.val}
                           pct={v.sinais.totalBase > 0 ? Math.round(item.val / v.sinais.totalBase * 100) : 0} />
                       ))}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                   {/* One-Shot */}
-                  <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-1">
-                      <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
+                  <div className="glass-card bg-card/60 border-border/50">
+                    <div className="pb-1">
+                      <h3 className="text-xs text-muted-foreground flex items-center gap-1">
                         One-Shot
                         <InfoPopover
                           title="One-Shot - 1a visita unica"
@@ -722,9 +721,9 @@ export default function RaioXPage() {
                           regra={v.contexto?.distribuicoes?.oneShot?.regras}
                           nota={v.contexto?.distribuicoes?.oneShot?.nota}
                         />
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-1 pt-1">
+                      </h3>
+                    </div>
+                    <div className="space-y-1 pt-1">
                       <p className="text-xs text-muted-foreground">universo: {v.distribuicoes.oneShot.total.toLocaleString()} com 1ª visita única</p>
                       {[
                         { label: "Aguardando", val: v.distribuicoes.oneShot.aguardando, color: "bg-blue-500" },
@@ -734,17 +733,17 @@ export default function RaioXPage() {
                         <DotBadge key={item.label} color={item.color} label={item.label} count={item.val}
                           pct={v.distribuicoes.oneShot.total > 0 ? Math.round(item.val / v.distribuicoes.oneShot.total * 100) : 0} />
                       ))}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* ── Cadência Individual ── */}
               {v.cadenciaIndividual && (
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2">
+                <div className="glass-card bg-card/60 border-border/50">
+                  <div className="pb-2">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm flex items-center gap-2">
+                      <h3 className="text-sm flex items-center gap-2">
                         <Activity className="w-4 h-4 text-muted-foreground" />
                         Cadência Individual
                         <InfoPopover
@@ -758,13 +757,13 @@ export default function RaioXPage() {
                           usadaEm="Cadência Individual (6 status) · Score de saúde (dim. cadência)"
                           nota="Universo: clientes com ≥2 visitas históricas que visitaram nos últimos 24m. Cadência habitual = média de todos os intervalos históricos. 1ª Vez = clientes com exatamente 1 visita histórica (one-shots)."
                         />
-                      </CardTitle>
+                      </h3>
                       <span className="text-xs text-muted-foreground">
                         {v.cadenciaIndividual.total.toLocaleString()} clientes · 24m de histórico · ≥2 visitas hist.
                       </span>
                     </div>
-                  </CardHeader>
-                  <CardContent>
+                  </div>
+                  <div>
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                       {[
                         { label: "ASSÍDUO", val: v.cadenciaIndividual.assiduo, sub: "ratio ≤80%", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/30" },
@@ -781,22 +780,22 @@ export default function RaioXPage() {
                         </div>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )}
 
               {/* ── Clientes Novos no período ── */}
-              <Card className="bg-card/60 border-border/50">
-                <CardHeader className="pb-2">
+              <div className="glass-card bg-card/60 border-border/50">
+                <div className="pb-2">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm flex items-center gap-2">
+                    <h3 className="text-sm flex items-center gap-2">
                       <UserCheck className="w-4 h-4 text-muted-foreground" />
                       Clientes Novos no período
-                    </CardTitle>
+                    </h3>
                     <span className="text-xs text-muted-foreground">1ª visita histórica em {v.periodo.dataInicio} → {v.periodo.dataFim}</span>
                   </div>
-                </CardHeader>
-                <CardContent>
+                </div>
+                <div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div>
                       <p className="text-xs text-muted-foreground">TOTAL NOVOS</p>
@@ -823,8 +822,8 @@ export default function RaioXPage() {
                       </p>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
               {/* ── Movimento da Base ── */}
               {v.movimentoMensal && v.movimentoMensal.length > 0 && (() => {
@@ -836,12 +835,12 @@ export default function RaioXPage() {
                   .reduce((s, r) => s + r.atendidos, 0);
                 const ultimos6m = v.movimentoMensal.slice(-6).reduce((s, r) => s + r.atendidos, 0);
                 return (
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2">
+                <div className="glass-card bg-card/60 border-border/50">
+                  <div className="pb-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <CardTitle className="text-sm">Movimento da base</CardTitle>
+                          <h3 className="text-sm">Movimento da base</h3>
                           <span className="text-xs text-muted-foreground">· <span className="text-foreground font-medium">{totalAtend.toLocaleString()}</span> atendidos</span>
                           <InfoPopover
                             title="Movimento da Base — Mensal"
@@ -865,8 +864,8 @@ export default function RaioXPage() {
                         </p>
                       </div>
                     </div>
-                  </CardHeader>
-                  <CardContent>
+                  </div>
+                  <div>
                     <ResponsiveContainer width="100%" height={220}>
                       <ComposedChart data={v.movimentoMensal} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
@@ -891,8 +890,8 @@ export default function RaioXPage() {
                       <span className="flex items-center gap-1"><span className="inline-block w-5 h-0.5 bg-orange-500" />Em risco</span>
                       <span className="flex items-center gap-1"><span className="inline-block w-5 h-0.5 bg-green-500" />Resgatados</span>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
                 );
               })()}
 
@@ -904,12 +903,12 @@ export default function RaioXPage() {
                 const anoNovos = v.entradasMensais.filter(r => r.mes.startsWith(String(anoAtual))).reduce((s, r) => s + r.novos, 0);
                 const ultimos6mNovos = v.entradasMensais.slice(-6).reduce((s, r) => s + r.novos, 0);
                 return (
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2">
+                <div className="glass-card bg-card/60 border-border/50">
+                  <div className="pb-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <CardTitle className="text-sm">Entradas na base</CardTitle>
+                          <h3 className="text-sm">Entradas na base</h3>
                           <span className="text-xs text-muted-foreground">· <span className="text-foreground font-medium">{totalNovos.toLocaleString()}</span> novos + <span className="text-blue-400 font-medium">{totalResgatados.toLocaleString()}</span> resgatados</span>
                           <InfoPopover
                             title="Entradas na Base — Mensal"
@@ -932,8 +931,8 @@ export default function RaioXPage() {
                         </p>
                       </div>
                     </div>
-                  </CardHeader>
-                  <CardContent>
+                  </div>
+                  <div>
                     <ResponsiveContainer width="100%" height={200}>
                       <BarChart data={v.entradasMensais} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
@@ -955,8 +954,8 @@ export default function RaioXPage() {
                       <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-500 inline-block" />Novos (1ª visita)</span>
                       <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-blue-500 inline-block" />Resgatados (voltaram após +90d)</span>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
                 );
               })()}
 
@@ -971,12 +970,12 @@ export default function RaioXPage() {
                   ? Math.round(v.riscoMensal.reduce((s, r) => s + r.emRiscoPct, 0) / v.riscoMensal.length)
                   : 0;
                 return (
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2">
+                <div className="glass-card bg-card/60 border-border/50">
+                  <div className="pb-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <CardTitle className="text-sm">Risco & Retenção</CardTitle>
+                          <h3 className="text-sm">Risco & Retenção</h3>
                           <span className="text-xs text-muted-foreground">· <span className="text-orange-400 font-medium">{totalEmRisco.toLocaleString()}</span> em risco + <span className="text-red-400 font-medium">{totalChurn.toLocaleString()}</span> churn</span>
                           <InfoPopover
                             title="Risco & Retenção — Mensal"
@@ -999,8 +998,8 @@ export default function RaioXPage() {
                         </p>
                       </div>
                     </div>
-                  </CardHeader>
-                  <CardContent>
+                  </div>
+                  <div>
                     <ResponsiveContainer width="100%" height={230}>
                       <ComposedChart data={v.riscoMensal} margin={{ top: 5, right: 40, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
@@ -1029,28 +1028,28 @@ export default function RaioXPage() {
                       <span className="flex items-center gap-1"><span className="inline-block w-5 h-0.5 bg-orange-400" style={{borderTop:'2px dashed #fb923c', background:'transparent'}} />Em risco %</span>
                       <span className="flex items-center gap-1"><span className="inline-block w-5 h-0.5 bg-red-400" />Churn %</span>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
                 );
               })()}
 
               {/* ── Saúde por Barbeiro ── */}
               {v.saudeBarbeiros && v.saudeBarbeiros.length > 0 && (
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2">
+                <div className="glass-card bg-card/60 border-border/50">
+                  <div className="pb-2">
                     <div className="flex items-center justify-between">
                       <div>
-                        <CardTitle className="text-sm flex items-center gap-2">
+                        <h3 className="text-sm flex items-center gap-2">
                           <Scissors className="w-4 h-4 text-muted-foreground" />
                           Saúde por Barbeiro
-                        </CardTitle>
+                        </h3>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {v.sinais.totalBase.toLocaleString()} clientes · Ordenado por % risco+perdido
                         </p>
                       </div>
                     </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
+                  </div>
+                  <div className="space-y-3">
                     {(() => {
                       const media = v.saudeBarbeiros.length > 0
                         ? Math.round(v.saudeBarbeiros.reduce((acc, b) => acc + b.pctEmRisco + b.pctPerdido, 0) / v.saudeBarbeiros.length)
@@ -1093,8 +1092,8 @@ export default function RaioXPage() {
                         </div>
                       ));
                     })()}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )}
             </>
           ) : (
@@ -1128,22 +1127,22 @@ export default function RaioXPage() {
 
                 {/* KPIs principais */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <Card className="bg-card/60 border-border/50 p-4">
+                  <div className="glass-card bg-card/60 border-border/50 p-4">
                     <p className="text-xs text-muted-foreground mb-1">Total one-shots</p>
                     <p className="text-2xl font-bold">{total.toLocaleString()}</p>
-                  </Card>
-                  <Card className="bg-card/60 border-border/50 p-4">
+                  </div>
+                  <div className="glass-card bg-card/60 border-border/50 p-4">
                     <p className="text-xs text-muted-foreground mb-1">% da base</p>
                     <p className="text-2xl font-bold">{os.pctDaBase}%</p>
-                  </Card>
-                  <Card className="bg-card/60 border-border/50 p-4">
+                  </div>
+                  <div className="glass-card bg-card/60 border-border/50 p-4">
                     <p className="text-xs text-muted-foreground mb-1">Em risco + perdido</p>
                     <p className="text-2xl font-bold text-orange-400">{os.emRiscoPerdido.toLocaleString()}</p>
-                  </Card>
-                  <Card className="bg-card/60 border-border/50 p-4">
+                  </div>
+                  <div className="glass-card bg-card/60 border-border/50 p-4">
                     <p className="text-xs text-muted-foreground mb-1">Aguardando</p>
                     <p className="text-2xl font-bold text-blue-400">{os.aguardando.toLocaleString()}</p>
-                  </Card>
+                  </div>
                 </div>
 
                 {/* Alertas automáticos */}
@@ -1186,11 +1185,11 @@ export default function RaioXPage() {
                       const pct = total > 0 ? Math.round(os.aguardando / total * 100) : 0;
                       const active = oneShotFiltro === "aguardando";
                       return (
-                        <Card
-                          className={`bg-card/60 cursor-pointer transition-all ${active ? "border-blue-400 ring-1 ring-blue-400/40" : "border-blue-500/20 hover:border-blue-400/50"}`}
+                        <div
+                          className={`glass-card cursor-pointer transition-all ${active ? "border-blue-400 ring-1 ring-blue-400/40" : "border-blue-500/20 hover:border-blue-400/50"}`}
                           onClick={() => setOneShotFiltro(active ? "todos" : "aguardando")}
                         >
-                          <CardContent className="p-4">
+                          <div className="p-4">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />
                               <span className="text-xs font-semibold text-blue-400 uppercase tracking-wide">AGUARDANDO RETORNO</span>
@@ -1216,8 +1215,8 @@ export default function RaioXPage() {
                                 <Download className="w-3 h-3" /> CSV
                               </button>
                             </div>
-                          </CardContent>
-                        </Card>
+                          </div>
+                        </div>
                       );
                     })()}
                     {/* Em Risco */}
@@ -1225,11 +1224,11 @@ export default function RaioXPage() {
                       const pct = total > 0 ? Math.round(os.emRisco / total * 100) : 0;
                       const active = oneShotFiltro === "em_risco";
                       return (
-                        <Card
-                          className={`bg-card/60 cursor-pointer transition-all ${active ? "border-orange-400 ring-1 ring-orange-400/40" : "border-orange-500/20 hover:border-orange-400/50"}`}
+                        <div
+                          className={`glass-card cursor-pointer transition-all ${active ? "border-orange-400 ring-1 ring-orange-400/40" : "border-orange-500/20 hover:border-orange-400/50"}`}
                           onClick={() => setOneShotFiltro(active ? "todos" : "em_risco")}
                         >
-                          <CardContent className="p-4">
+                          <div className="p-4">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
                               <span className="text-xs font-semibold text-orange-400 uppercase tracking-wide">EM RISCO DE PERDA</span>
@@ -1255,8 +1254,8 @@ export default function RaioXPage() {
                                 <Download className="w-3 h-3" /> CSV
                               </button>
                             </div>
-                          </CardContent>
-                        </Card>
+                          </div>
+                        </div>
                       );
                     })()}
                     {/* Provavelmente Perdido */}
@@ -1264,11 +1263,11 @@ export default function RaioXPage() {
                       const pct = total > 0 ? Math.round(os.perdido / total * 100) : 0;
                       const active = oneShotFiltro === "perdido";
                       return (
-                        <Card
-                          className={`bg-card/60 cursor-pointer transition-all ${active ? "border-pink-500 ring-1 ring-pink-500/40" : "border-pink-500/20 hover:border-pink-400/50"}`}
+                        <div
+                          className={`glass-card cursor-pointer transition-all ${active ? "border-pink-500 ring-1 ring-pink-500/40" : "border-pink-500/20 hover:border-pink-400/50"}`}
                           onClick={() => setOneShotFiltro(active ? "todos" : "perdido")}
                         >
-                          <CardContent className="p-4">
+                          <div className="p-4">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="w-2 h-2 rounded-full bg-pink-500 inline-block" />
                               <span className="text-xs font-semibold text-pink-400 uppercase tracking-wide">PROVAVELMENTE PERDIDO</span>
@@ -1294,8 +1293,8 @@ export default function RaioXPage() {
                                 <Download className="w-3 h-3" /> CSV
                               </button>
                             </div>
-                          </CardContent>
-                        </Card>
+                          </div>
+                        </div>
                       );
                     })()}
                   </div>
@@ -1329,8 +1328,8 @@ export default function RaioXPage() {
                         value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
                   </div>
-                  <Card className="bg-card/60 border-border/50">
-                    <CardContent className="p-0">
+                  <div className="glass-card bg-card/60 border-border/50">
+                    <div className="p-0">
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead><tr className="border-b border-border/50 text-xs text-muted-foreground">
@@ -1368,8 +1367,8 @@ export default function RaioXPage() {
                           <div className="text-center py-8 text-muted-foreground text-sm">Nenhum cliente encontrado.</div>
                         )}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 </div>
               </>
               );
@@ -1412,30 +1411,30 @@ export default function RaioXPage() {
                     { label: "Em Risco", val: grupos.em_risco, sub: `${pct(grupos.em_risco)}% de ${totalCad.toLocaleString()}`, color: "text-orange-400", icon: AlertTriangle },
                     { label: "Perdido", val: grupos.perdido, sub: `${pct(grupos.perdido)}% de ${totalCad.toLocaleString()}`, color: "text-red-400", icon: UserX },
                   ].map(k => (
-                    <Card key={k.label} className="bg-card/60 border-border/50">
-                      <CardContent className="p-4">
+                    <div key={k.label} className="glass-card">
+                      <div className="p-4">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-xs text-muted-foreground">{k.label}</span>
                           <k.icon className={`w-3.5 h-3.5 ${k.color}`} />
                         </div>
                         <p className={`text-2xl font-bold ${k.color}`}>{k.val.toLocaleString()}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{k.sub}</p>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   ))}
                 </div>
 
                 {/* Gráfico de evolução por status */}
                 {cd.evolucao && cd.evolucao.length > 0 && (
-                  <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
+                  <div className="glass-card bg-card/60 border-border/50">
+                    <div className="pb-2">
+                      <h3 className="text-sm flex items-center gap-2">
                         <Activity className="w-4 h-4 text-blue-400" />
                         Evolução por status
                         <span className="text-xs font-normal text-muted-foreground">{cd.evolucao.length} períodos · composição %</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                      </h3>
+                    </div>
+                    <div>
                       <ResponsiveContainer width="100%" height={220}>
                         <AreaChart data={cd.evolucao.map(e => ({
                           ...e,
@@ -1459,8 +1458,8 @@ export default function RaioXPage() {
                           <Area type="monotone" dataKey="assiduoPct" name="Assíduo" stackId="1" stroke="#10b981" fill="#10b981" fillOpacity={0.7} />
                         </AreaChart>
                       </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 )}
 
                 {/* Análises automáticas */}
@@ -1926,11 +1925,11 @@ export default function RaioXPage() {
               <Skeleton className="h-40" />
             </div>
           ) : !qCohort.data || (!qCohort.data.analiseNovos && qCohort.data.cohortMensal.length === 0) ? (
-            <Card className="bg-card/60 border-border/50">
-              <CardContent className="py-12 text-center text-muted-foreground text-sm">
+            <div className="glass-card bg-card/60 border-border/50">
+              <div className="py-12 text-center text-muted-foreground text-sm">
                 Sem dados de cohort para o período selecionado.
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ) : (
             <>
               {/* ── MODO COMPARAÇÃO LADO A LADO ── */}
@@ -1958,8 +1957,8 @@ export default function RaioXPage() {
                       { label: "Ticket 1ª visita", icon: "$", vA: dA?.ticketMedio1aVisita, vB: dB?.ticketMedio1aVisita, fmt: (v: number) => fmtMoeda(v), higherIsBetter: true },
                     ];
                     return (
-                      <Card className="bg-card/60 border-amber-500/20">
-                        <CardContent className="p-0">
+                      <div className="glass-card bg-card/60 border-amber-500/20">
+                        <div className="p-0">
                           <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                               <thead>
@@ -2007,8 +2006,8 @@ export default function RaioXPage() {
                               </tbody>
                             </table>
                           </div>
-                        </CardContent>
-                      </Card>
+                        </div>
+                      </div>
                     );
                   })()}
                 </div>
@@ -2023,28 +2022,28 @@ export default function RaioXPage() {
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     {/* Novos */}
-                    <Card className="bg-card/60 border-border/50">
-                      <CardContent className="p-4">
+                    <div className="glass-card bg-card/60 border-border/50">
+                      <div className="p-4">
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
                           <span>👤</span> Novos
                         </p>
                         <p className="text-2xl font-bold text-foreground">{qCohort.data.analiseNovos.novos}</p>
                         <p className="text-xs text-muted-foreground mt-1">Primeira visita no período</p>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                     {/* % Novos */}
-                    <Card className="bg-card/60 border-border/50">
-                      <CardContent className="p-4">
+                    <div className="glass-card bg-card/60 border-border/50">
+                      <div className="p-4">
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
                           <span>%</span> % Novos
                         </p>
                         <p className="text-2xl font-bold text-foreground">{qCohort.data.analiseNovos.pctNovos}%</p>
                         <p className="text-xs text-muted-foreground mt-1">{qCohort.data.analiseNovos.novos} novos em base do período</p>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                     {/* Retenção 30d */}
-                    <Card className="bg-card/60 border-border/50">
-                      <CardContent className="p-4">
+                    <div className="glass-card bg-card/60 border-border/50">
+                      <div className="p-4">
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
                           <span>🔄</span> Retenção 30d
                         </p>
@@ -2052,11 +2051,11 @@ export default function RaioXPage() {
                           {qCohort.data.analiseNovos.pctRetencao30}%
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">{qCohort.data.analiseNovos.retencao30} de {qCohort.data.analiseNovos.novos} voltaram em 30d</p>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                     {/* % Recorrentes 60d */}
-                    <Card className="bg-card/60 border-border/50">
-                      <CardContent className="p-4">
+                    <div className="glass-card bg-card/60 border-border/50">
+                      <div className="p-4">
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
                           <span>⏱</span> % Recorrentes 60d
                         </p>
@@ -2064,11 +2063,11 @@ export default function RaioXPage() {
                           {qCohort.data.analiseNovos.pctRecorrentes60}%
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">{qCohort.data.analiseNovos.recorrentes60} vieram 2+ vezes em 60d</p>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                     {/* Tempo mediano 2ª visita */}
-                    <Card className="bg-card/60 border-border/50">
-                      <CardContent className="p-4">
+                    <div className="glass-card bg-card/60 border-border/50">
+                      <div className="p-4">
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
                           <span>⏱</span> Tempo mediano 2ª visita
                         </p>
@@ -2076,31 +2075,31 @@ export default function RaioXPage() {
                           {qCohort.data.analiseNovos.mediana2aVisita !== null ? `${qCohort.data.analiseNovos.mediana2aVisita}d` : "—"}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">Metade voltou em até {qCohort.data.analiseNovos.mediana2aVisita ?? "?"}d</p>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                     {/* Ticket 1ª visita */}
-                    <Card className="bg-card/60 border-border/50">
-                      <CardContent className="p-4">
+                    <div className="glass-card bg-card/60 border-border/50">
+                      <div className="p-4">
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
                           <span>$</span> Ticket 1ª visita
                         </p>
                         <p className="text-2xl font-bold text-foreground">{fmtMoeda(qCohort.data.analiseNovos.ticketMedio1aVisita)}</p>
                         <p className="text-xs text-muted-foreground mt-1">Gasto médio na 1ª visita</p>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* ── Distribuição de Retenção de Novos ── */}
               {qCohort.data.distribuicao && (
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center gap-2">
+                <div className="glass-card bg-card/60 border-border/50">
+                  <div className="pb-3">
+                    <h3 className="text-sm flex items-center gap-2">
                       Distribuição de Retenção de Novos
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+                    </h3>
+                  </div>
+                  <div className="space-y-4">
                     {/* Barra proporcional colorida */}
                     {(() => {
                       const d = qCohort.data!.distribuicao!;
@@ -2170,20 +2169,20 @@ export default function RaioXPage() {
                         </>
                       );
                     })()}
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )}
 
               {/* ── Cohort Mensal — Retenção por Dias Corridos ── */}
               {qCohort.data.cohortMensal.length > 0 && (
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-3">
+                <div className="glass-card bg-card/60 border-border/50">
+                  <div className="pb-3">
                     <div>
-                      <CardTitle className="text-sm">Cohort Mensal — Retenção de Clientes Novos (dias corridos)</CardTitle>
+                      <h3 className="text-sm">Cohort Mensal — Retenção de Clientes Novos (dias corridos)</h3>
                       <p className="text-xs text-muted-foreground mt-1">% de novos que retornaram em 30/60/90 dias · {fmtDate(dataInicio)} – {fmtDate(dataFim)}</p>
                     </div>
-                  </CardHeader>
-                  <CardContent className="p-0">
+                  </div>
+                  <div className="p-0">
                     {/* Nota metodológica */}
                     <div className="mx-4 mb-3 p-3 rounded-lg bg-blue-950/40 border border-blue-800/30 text-xs text-blue-300 space-y-1">
                       <p><strong>Metodologia:</strong> Mesmos clientes novos do período. Retenção medida por <strong>dias corridos</strong> (30d = voltou em até 30 dias da 1ª visita, independente do mês).</p>
@@ -2234,8 +2233,8 @@ export default function RaioXPage() {
                         </p>
                       </details>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )}
 
               {/* ── Cohort Histórico (grade M+1..M+6) ── */}
@@ -2258,18 +2257,18 @@ export default function RaioXPage() {
                   return Array.from(setMeses).sort();
                 })();
                 return (
-                  <Card className={`bg-card/60 ${cohortModoComparacao && nomeA && nomeB ? "border-amber-500/20" : "border-border/50"}`}>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm flex items-center gap-2">
+                  <div className={`glass-card ${cohortModoComparacao && nomeA && nomeB ? "border-amber-500/20" : ""}`}>
+                    <div className="pb-3">
+                      <h3 className="text-sm flex items-center gap-2">
                         <TrendingUp className="w-4 h-4 text-muted-foreground" />
                         Retenção por Mês de 1ª Visita (Cohort Histórico)
                         {cohortModoComparacao && nomeA && nomeB && (
                           <span className="ml-2 text-xs font-normal text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">⚖ Comparando A vs B</span>
                         )}
-                      </CardTitle>
+                      </h3>
                       <p className="text-xs text-muted-foreground">% que voltou em M+1, M+2… M+6 (mês-calendário após a 1ª visita)</p>
-                    </CardHeader>
-                    <CardContent className="p-0">
+                    </div>
+                    <div className="p-0">
                       <div className="p-3 mx-4 mb-3 rounded-lg bg-blue-950/40 border border-blue-800/30 text-xs text-blue-300 space-y-1">
                         <p><strong>Metodologia:</strong> Clientes novos agrupados pelo mês da 1ª visita. Retenção medida por <strong>meses-calendário</strong> (M+1 = visitou no mês seguinte, M+2 = dois meses depois, etc.).</p>
                         {cohortModoComparacao && nomeA && nomeB ? (
@@ -2386,22 +2385,22 @@ export default function RaioXPage() {
                           </tbody>
                         </table>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 );
               })()}
 
               {/* ── Por Barbeiro ── */}
               {qCohort.data?.cohortPorBarbeiro && qCohort.data.cohortPorBarbeiro.length > 0 && (
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center gap-2">
+                <div className="glass-card bg-card/60 border-border/50">
+                  <div className="pb-3">
+                    <h3 className="text-sm flex items-center gap-2">
                       <Users className="w-4 h-4 text-muted-foreground" />
                       Por Barbeiro
-                    </CardTitle>
+                    </h3>
                     <p className="text-xs text-muted-foreground">Retenção de clientes novos por colaborador — identifica quem converte melhor a 1ª visita</p>
-                  </CardHeader>
-                  <CardContent className="p-0">
+                  </div>
+                  <div className="p-0">
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
@@ -2461,8 +2460,8 @@ export default function RaioXPage() {
                         </tfoot>
                       </table>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )}
             </>
           )}
@@ -2499,43 +2498,43 @@ export default function RaioXPage() {
                 {/* ── KPIs globais ── */}
                 {kpis && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                    <Card className="bg-card/60 border-border/50 p-3">
+                    <div className="glass-card bg-card/60 border-border/50 p-3">
                       <p className="text-xs text-muted-foreground">Total clientes</p>
                       <p className="text-2xl font-bold mt-1">{kpis.totalClientes.toLocaleString()}</p>
-                    </Card>
-                    <Card className="bg-card/60 border-border/50 p-3">
+                    </div>
+                    <div className="glass-card bg-card/60 border-border/50 p-3">
                       <p className="text-xs text-muted-foreground">Só 1 barbeiro</p>
                       <p className="text-2xl font-bold mt-1 text-emerald-400">{kpis.so1Barbeiro.toLocaleString()}</p>
                       <p className="text-[10px] text-muted-foreground">{kpis.pctSo1Barbeiro}% do total</p>
-                    </Card>
-                    <Card className="bg-card/60 border-border/50 p-3">
+                    </div>
+                    <div className="glass-card bg-card/60 border-border/50 p-3">
                       <p className="text-xs text-muted-foreground">Multi-barbeiro</p>
                       <p className="text-2xl font-bold mt-1 text-blue-400">{kpis.multiBarbeiro.toLocaleString()}</p>
                       <p className="text-[10px] text-muted-foreground">{kpis.pctMultiBarbeiro}% do total</p>
-                    </Card>
-                    <Card className="bg-card/60 border-border/50 p-3">
+                    </div>
+                    <div className="glass-card bg-card/60 border-border/50 p-3">
                       <p className="text-xs text-muted-foreground">Voltaram 2x+</p>
                       <p className="text-2xl font-bold mt-1 text-yellow-400">{kpis.voltaram2x.toLocaleString()}</p>
                       <p className="text-[10px] text-muted-foreground">{kpis.pctVoltaram2x}% do total</p>
-                    </Card>
-                    <Card className="bg-card/60 border-border/50 p-3">
+                    </div>
+                    <div className="glass-card bg-card/60 border-border/50 p-3">
                       <p className="text-xs text-muted-foreground">Média barb./cliente</p>
                       <p className="text-2xl font-bold mt-1">{kpis.mediaBarb.toFixed(2)}</p>
                       <p className="text-[10px] text-muted-foreground">ideal: 1.0 (fidelizado)</p>
-                    </Card>
-                    <Card className="bg-card/60 border-border/50 p-3">
+                    </div>
+                    <div className="glass-card bg-card/60 border-border/50 p-3">
                       <p className="text-xs text-muted-foreground">Perdidos</p>
                       <p className="text-2xl font-bold mt-1 text-red-400">{kpis.perdidos.toLocaleString()}</p>
                       <p className="text-[10px] text-muted-foreground">{kpis.pctPerdidos}% · fora janela {kpis.janelaAtividade}d</p>
-                    </Card>
+                    </div>
                   </div>
                 )}
 
                 {/* ── Gráfico de evolução ── */}
                 {evolucaoChart.length > 0 && (
-                  <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Evolução de clientes</CardTitle>
+                  <div className="glass-card bg-card/60 border-border/50">
+                    <div className="pb-2">
+                      <h3 className="text-sm">Evolução de clientes</h3>
                       <div className="flex flex-wrap gap-3 text-[10px] text-muted-foreground mt-1">
                         <span><span className="inline-block w-3 h-2 rounded-sm bg-blue-500 mr-1" />Novos</span>
                         <span><span className="inline-block w-3 h-2 rounded-sm bg-emerald-500 mr-1" />Rec. Fiéis</span>
@@ -2543,8 +2542,8 @@ export default function RaioXPage() {
                         <span><span className="inline-block w-3 h-2 rounded-sm bg-purple-400 mr-1" />Rec. Rotativos</span>
                         <span><span className="inline-block w-3 h-2 rounded-sm bg-white/20 mr-1" />Total único</span>
                       </div>
-                    </CardHeader>
-                    <CardContent>
+                    </div>
+                    <div>
                       <ResponsiveContainer width="100%" height={220}>
                         <BarChart data={evolucaoChart} barSize={18} barGap={2}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -2564,8 +2563,8 @@ export default function RaioXPage() {
                           <Line type="monotone" dataKey="totalClientes" stroke="rgba(255,255,255,0.4)" strokeWidth={1.5} dot={false} />
                         </BarChart>
                       </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 )}
 
                 {/* ── Cards por barbeiro ── */}
@@ -2590,7 +2589,7 @@ export default function RaioXPage() {
                         const so1Total = b.so1Barb || 1;
                         const multiTotal = b.multiBarb || 1;
                         return (
-                          <Card key={b.id} className="bg-card/60 border-border/50 p-4 space-y-3">
+                          <div key={b.id} className="glass-card p-4 space-y-3">
                             {/* Cabeçalho do card */}
                             <div className="flex items-start justify-between">
                               <div>
@@ -2709,7 +2708,7 @@ export default function RaioXPage() {
                                 </div>
                               </div>
                             )}
-                          </Card>
+                          </div>
                         );
                       })}
                     </div>
@@ -2718,12 +2717,12 @@ export default function RaioXPage() {
 
                 {/* ── Segmentos — Visão Geral ── */}
                 {seg && (
-                  <Card className="bg-card/60 border-border/50">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm">Segmentos — Visão Geral</CardTitle>
+                  <div className="glass-card bg-card/60 border-border/50">
+                    <div className="pb-2">
+                      <h3 className="text-sm">Segmentos — Visão Geral</h3>
                       <p className="text-xs text-muted-foreground">Cada cliente classificado pelo seu barbeiro principal. Total: {(qRouting.data?.kpis?.totalClientes ?? 0).toLocaleString()} clientes.</p>
-                    </CardHeader>
-                    <CardContent>
+                    </div>
+                    <div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                         {[
                           { label: "Fiel", desc: "3x+ consecutivamente com este barbeiro", value: seg.fiel, pct: seg.pctFiel, color: "text-emerald-400", bg: "bg-emerald-400" },
@@ -2745,8 +2744,8 @@ export default function RaioXPage() {
                           </div>
                         ))}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 )}
               </>
             );
@@ -2777,8 +2776,8 @@ export default function RaioXPage() {
                   </Button>
                 ))}
               </div>
-              <Card className="bg-card/60 border-border/50">
-                <CardContent className="p-0">
+              <div className="glass-card bg-card/60 border-border/50">
+                <div className="p-0">
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead><tr className="border-b border-border/50 text-xs text-muted-foreground">
@@ -2818,8 +2817,8 @@ export default function RaioXPage() {
                       <div className="text-center py-8 text-muted-foreground text-sm">Nenhum cliente na fila de ações.</div>
                     )}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </>
           ) : null}
         </TabsContent>
@@ -2990,12 +2989,12 @@ export default function RaioXPage() {
               {/* ── Bloco 5: Gráficos lado a lado ── */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Distribuição por número de visitas */}
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Distribuição por número de visitas</CardTitle>
+                <div className="glass-card bg-card/60 border-border/50">
+                  <div className="pb-2">
+                    <h3 className="text-sm">Distribuição por número de visitas</h3>
                     <p className="text-xs text-muted-foreground">Quantos clientes visitaram X vezes no período</p>
-                  </CardHeader>
-                  <CardContent>
+                  </div>
+                  <div>
                     <ResponsiveContainer width="100%" height={180}>
                       <BarChart data={(qDiag.data?.visitasDistribuicao ?? []).slice(0, 12)} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
@@ -3005,16 +3004,16 @@ export default function RaioXPage() {
                         <Bar dataKey="clientes" fill={CORES.roxo} radius={[3, 3, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
 
                 {/* Distribuição por dias de ausência */}
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Ausência desde última visita</CardTitle>
+                <div className="glass-card bg-card/60 border-border/50">
+                  <div className="pb-2">
+                    <h3 className="text-sm">Ausência desde última visita</h3>
                     <p className="text-xs text-muted-foreground">Distribuição dos clientes por tempo sem visitar</p>
-                  </CardHeader>
-                  <CardContent>
+                  </div>
+                  <div>
                     <div className="space-y-2 mt-1">
                       {(qDiag.data?.faixasDias ?? []).map((f: { faixa: string; total: number; percentual: number }, i: number) => {
                         const color = i === 0 ? "bg-green-500" : i === 1 ? "bg-blue-500" : i === 2 ? "bg-yellow-500" : i === 3 ? "bg-orange-500" : "bg-red-500";
@@ -3032,19 +3031,19 @@ export default function RaioXPage() {
                         );
                       })}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </div>
 
               {/* ── Bloco 6: Horários e dias da semana ── */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Horários de pico */}
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Horários de pico</CardTitle>
+                <div className="glass-card bg-card/60 border-border/50">
+                  <div className="pb-2">
+                    <h3 className="text-sm">Horários de pico</h3>
                     <p className="text-xs text-muted-foreground">Atendimentos por hora do dia</p>
-                  </CardHeader>
-                  <CardContent>
+                  </div>
+                  <div>
                     <ResponsiveContainer width="100%" height={160}>
                       <BarChart data={qDiag.data?.horarios ?? []} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
@@ -3054,16 +3053,16 @@ export default function RaioXPage() {
                         <Bar dataKey="atendimentos" fill={CORES.azul} radius={[2, 2, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
 
                 {/* Dias da semana */}
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Movimento por dia da semana</CardTitle>
+                <div className="glass-card bg-card/60 border-border/50">
+                  <div className="pb-2">
+                    <h3 className="text-sm">Movimento por dia da semana</h3>
                     <p className="text-xs text-muted-foreground">Atendimentos e clientes únicos por dia</p>
-                  </CardHeader>
-                  <CardContent>
+                  </div>
+                  <div>
                     <ResponsiveContainer width="100%" height={160}>
                       <BarChart data={qDiag.data?.diasSemana ?? []} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
@@ -3075,8 +3074,8 @@ export default function RaioXPage() {
                         <Bar dataKey="clientes" fill={CORES.roxo} radius={[2, 2, 0, 0]} name="clientes" />
                       </BarChart>
                     </ResponsiveContainer>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </div>
             </>
           ) : null}

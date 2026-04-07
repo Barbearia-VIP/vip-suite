@@ -105,7 +105,7 @@ export default function ServicosPage() {
       )}
 
       {/* Info box */}
-      <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40 border border-border text-sm text-muted-foreground">
+      <div className="glass-card flex items-start gap-3 p-3 text-sm text-muted-foreground">
         <Info className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
         <p>
           Marque cada serviço como <strong className="text-foreground">Base</strong> (corte, barba, etc.) ou{" "}
@@ -126,15 +126,14 @@ export default function ServicosPage() {
       </div>
 
       {/* Tabela */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Clique na categoria para alternar entre Base e Extra</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
+      <div className="glass-card overflow-hidden">
+        <div className="px-4 py-3" style={{ borderBottom: "1px solid oklch(0.28 0.015 260 / 0.5)" }}>
+          <p className="text-sm font-medium text-muted-foreground">Clique na categoria para alternar entre Base e Extra</p>
+        </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border text-muted-foreground text-xs">
+                <tr className="text-xs" style={{ borderBottom: "1px solid oklch(0.28 0.015 260 / 0.5)", background: "oklch(0.12 0.010 260 / 0.6)" }}>
                   <th className="text-left px-4 py-2">Nome do Serviço</th>
                   <th className="text-right px-4 py-2">Qtd. Vendas</th>
                   <th className="text-center px-4 py-2 w-36">Categoria</th>
@@ -163,7 +162,10 @@ export default function ServicosPage() {
                         return (
                           <tr
                             key={s.nome}
-                            className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${isPending ? "bg-amber-500/5" : ""}`}
+                            className="transition-colors"
+                            style={{ borderBottom: "1px solid oklch(0.28 0.015 260 / 0.3)", background: isPending ? "oklch(0.76 0.145 72 / 0.04)" : undefined }}
+                            onMouseEnter={e => (e.currentTarget.style.background = "oklch(0.18 0.010 260 / 0.4)")}
+                            onMouseLeave={e => (e.currentTarget.style.background = isPending ? "oklch(0.76 0.145 72 / 0.04)" : "")}
                           >
                             <td className="px-4 py-2 font-medium">
                               {s.nome}
@@ -202,8 +204,7 @@ export default function ServicosPage() {
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
+      </div>
     </div>
   );
 }

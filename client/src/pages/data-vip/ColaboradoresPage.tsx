@@ -116,12 +116,11 @@ export default function ColaboradoresPage() {
       )}
 
       {/* Tabela */}
-      <Card>
-        <CardContent className="p-0">
+      <div className="glass-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border text-muted-foreground text-xs">
+                <tr className="text-xs" style={{ borderBottom: "1px solid oklch(0.28 0.015 260 / 0.5)", background: "oklch(0.12 0.010 260 / 0.6)" }}>
                   <th className="text-left px-4 py-2">#</th>
                   <th className="text-left px-4 py-2">Nome</th>
                   {!isRangeMode && <th className="text-left px-4 py-2">Tipo</th>}
@@ -164,7 +163,7 @@ export default function ColaboradoresPage() {
                           editComissao[c.colaboradorId]?.pctProdutos !== undefined;
 
                         return (
-                          <tr key={c.colaboradorId} className="border-b border-border/50 hover:bg-muted/30">
+                          <tr key={c.colaboradorId} className="transition-colors" style={{ borderBottom: "1px solid oklch(0.28 0.015 260 / 0.3)" }} onMouseEnter={e => (e.currentTarget.style.background = "oklch(0.18 0.010 260 / 0.4)")} onMouseLeave={e => (e.currentTarget.style.background = "")}>
                             <td className="px-4 py-2 text-muted-foreground">{i + 1}</td>
                             <td className="px-4 py-2 font-medium">{c.colaboradorNome}</td>
                             {!isRangeMode && (
@@ -253,8 +252,7 @@ export default function ColaboradoresPage() {
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
+      </div>
 
       {isAdmin && (
         <p className="text-xs text-muted-foreground text-center">

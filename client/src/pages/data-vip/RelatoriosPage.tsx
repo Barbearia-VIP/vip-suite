@@ -4,7 +4,7 @@
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
-import { Card, CardContent } from "@/components/ui/card";
+
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileText } from "lucide-react";
@@ -40,15 +40,14 @@ export default function RelatoriosPage() {
         <DataVipErrorState onRetry={() => q.refetch()} />
       )}
 
-      <Card>
-        <CardContent className="p-0">
+      <div className="glass-card overflow-hidden">
           {q.isLoading
             ? <div className="p-4 space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
             : relatorios.length === 0
               ? <div className="p-8 text-center text-muted-foreground text-sm">Nenhum relatório disponível. Os relatórios são gerados automaticamente após a sincronização.</div>
               : <div className="divide-y divide-border">
                   {relatorios.map((r: any) => (
-                    <div key={r.id} className="flex items-center gap-4 px-4 py-3">
+                    <div key={r.id} className="flex items-center gap-4 px-4 py-3.5 hover:bg-white/5 transition-colors">
                       <div className="flex-1">
                         <p className="font-medium">{r.unitName || "Rede"}</p>
                         <p className="text-xs text-muted-foreground">{fmtDate(r.semanaInicio)} a {fmtDate(r.semanaFim)}</p>
@@ -61,8 +60,7 @@ export default function RelatoriosPage() {
                   ))}
                 </div>
           }
-        </CardContent>
-      </Card>
+      </div>
     </div>
   );
 }

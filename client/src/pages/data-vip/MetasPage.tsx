@@ -781,17 +781,17 @@ export default function MetasPage() {
     <div className="p-6 space-y-5">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Target className="w-6 h-6 text-red-400" /> Metas
+          <Target className="w-6 h-6" style={{ color: "oklch(0.76 0.145 72)" }} /> Metas
         </h1>
         <p className="text-sm text-muted-foreground">{selectedUnit ? selectedUnit.name : "Todas as unidades"}</p>
       </div>
 
       <Tabs defaultValue="dinamica">
-        <TabsList>
-          <TabsTrigger value="dinamica" className="gap-1.5">
+        <TabsList className="glass-card border-0">
+          <TabsTrigger value="dinamica" className="gap-1.5 data-[state=active]:text-amber-400">
             <Zap className="w-4 h-4" /> Meta Dinâmica
           </TabsTrigger>
-          <TabsTrigger value="faixas" className="gap-1.5">
+          <TabsTrigger value="faixas" className="gap-1.5 data-[state=active]:text-amber-400">
             <TrendingUp className="w-4 h-4" /> Comissão Progressiva
           </TabsTrigger>
         </TabsList>

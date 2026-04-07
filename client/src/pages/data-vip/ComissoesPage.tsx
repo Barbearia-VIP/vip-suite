@@ -91,7 +91,7 @@ export default function ComissoesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <DollarSign className="w-6 h-6 text-orange-400" /> Comissões
+            <DollarSign className="w-6 h-6" style={{ color: "oklch(0.76 0.145 72)" }} /> Comissões
           </h1>
           <p className="text-sm text-muted-foreground">
             {selectedUnit ? selectedUnit.name : "Todas as unidades"} · {colabs.length} colaboradores
@@ -148,81 +148,48 @@ export default function ComissoesPage() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <TrendingUp className="w-3 h-3" /> Faturamento
+        {[
+          { icon: <TrendingUp className="w-3.5 h-3.5" />, label: "Faturamento", color: "oklch(0.72 0.16 145)",
+            value: q.isLoading ? null : fmt(totalFat), sub: null },
+          { icon: <DollarSign className="w-3.5 h-3.5" />, label: "Comissões", color: "oklch(0.76 0.145 72)",
+            value: q.isLoading ? null : fmt(totalComissoes),
+            sub: (temBonus || temBonusDinamico) ? `incl. ${fmt(totalBonus + totalBonusDinamico)} de bônus` : null },
+          { icon: <TrendingUp className="w-3.5 h-3.5" />, label: "% Médio", color: "oklch(0.65 0.15 200)",
+            value: q.isLoading ? null : fmtPct(pctMedio), sub: null },
+          { icon: <Users className="w-3.5 h-3.5" />, label: "Colaboradores", color: "oklch(0.65 0.15 280)",
+            value: q.isLoading ? null : String(colabs.length),
+            sub: totalFat > 0 && colabs.length > 0 ? `Média: ${fmt(totalFat / colabs.length)}` : null },
+        ].map((kpi, idx) => (
+          <div key={idx} className="glass-card p-4 space-y-1">
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5" style={{ color: kpi.color }}>
+              {kpi.icon} {kpi.label}
             </p>
-            {q.isLoading ? <Skeleton className="h-7 w-28 mt-1" /> : (
-              <p className="text-xl font-bold mt-1 text-green-400">{fmt(totalFat)}</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <DollarSign className="w-3 h-3" /> Comissões
-            </p>
-            {q.isLoading ? <Skeleton className="h-7 w-28 mt-1" /> : (
-              <>
-                <p className="text-xl font-bold mt-1 text-orange-400">{fmt(totalComissoes)}</p>
-                {(temBonus || temBonusDinamico) && (
-                  <p className="text-[10px] text-amber-400 mt-0.5">
-                    incl. {fmt(totalBonus + totalBonusDinamico)} de bônus
-                  </p>
-                )}
-              </>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <TrendingUp className="w-3 h-3" /> % Médio
-            </p>
-            {q.isLoading ? <Skeleton className="h-7 w-20 mt-1" /> : (
-              <p className="text-xl font-bold mt-1">{fmtPct(pctMedio)}</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <Users className="w-3 h-3" /> Colaboradores
-            </p>
-            {q.isLoading ? <Skeleton className="h-7 w-12 mt-1" /> : (
-              <>
-                <p className="text-xl font-bold mt-1">{colabs.length}</p>
-                {totalFat > 0 && colabs.length > 0 && (
-                  <p className="text-xs text-muted-foreground mt-0.5">Média: {fmt(totalFat / colabs.length)}</p>
-                )}
-              </>
-            )}
-          </CardContent>
-        </Card>
+            {kpi.value === null
+              ? <Skeleton className="h-7 w-28 mt-1" />
+              : <p className="text-xl font-bold mt-1" style={{ color: kpi.color }}>{kpi.value}</p>
+            }
+            {kpi.sub && <p className="text-[10px] text-amber-400">{kpi.sub}</p>}
+          </div>
+        ))}
       </div>
 
       {/* Cards por colaborador */}
       {q.isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-4 space-y-3">
+            <div key={i} className="glass-card p-4 space-y-3">
                 <Skeleton className="h-5 w-40" />
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-6 w-32" />
-              </CardContent>
-            </Card>
+            </div>
           ))}
         </div>
       ) : colabs.length === 0 ? (
-        <Card>
-          <CardContent className="p-8 text-center text-muted-foreground text-sm">
+        <div className="glass-card p-8 text-center text-muted-foreground text-sm">
             Nenhum dado encontrado para o período selecionado
-          </CardContent>
-        </Card>
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {colabs.map((c: any, i: number) => {
@@ -244,8 +211,7 @@ export default function ComissoesPage() {
             const comissaoFinal = c.comissao + bonusDinamico;
 
             return (
-              <Card key={c.colaboradorId} className={`border-border/60 ${temFaixaAtingida || temBonusDin ? "ring-1 ring-amber-500/30" : ""}`}>
-                <CardContent className="p-4 space-y-3">
+              <div key={c.colaboradorId} className={`glass-card glass-card-hover p-4 space-y-3`} style={temFaixaAtingida || temBonusDin ? { borderColor: "oklch(0.76 0.145 72 / 0.4)", boxShadow: "0 0 0 1px oklch(0.76 0.145 72 / 0.25), 0 4px 24px -4px oklch(0 0 0 / 0.45)" } : {}}>
                   {/* Header do card */}
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2">
@@ -380,19 +346,18 @@ export default function ComissoesPage() {
                   </div>
 
                   {/* Total comissão */}
-                  <div className="flex justify-between items-center pt-1 border-t border-border/40">
+                  <div className="flex justify-between items-center pt-2 mt-1" style={{ borderTop: "1px solid oklch(0.28 0.015 260 / 0.5)" }}>
                     <span className="text-sm text-muted-foreground">
                       Total Comissão{" "}
                       <span className="text-xs">
                         ({c.faturamento > 0 ? fmtPct((comissaoFinal / c.faturamento) * 100) : "0.0%"})
                       </span>
                     </span>
-                    <span className={`text-base font-bold ${comissaoFinal > 0 ? "text-orange-400" : "text-muted-foreground"}`}>
+                    <span className="text-base font-bold" style={{ color: comissaoFinal > 0 ? "oklch(0.76 0.145 72)" : undefined }}>
                       {fmt(comissaoFinal)}
                     </span>
                   </div>
-                </CardContent>
-              </Card>
+              </div>
             );
           })}
         </div>
@@ -400,22 +365,18 @@ export default function ComissoesPage() {
 
       {/* Aviso quando não há unidade selecionada */}
       {!selectedUnit && !q.isLoading && colabs.length > 0 && (
-        <Card className="border-amber-500/20 bg-amber-500/5">
-          <CardContent className="p-4 text-sm text-amber-400 flex items-center gap-2">
-            <Star className="w-4 h-4 flex-shrink-0" />
-            Selecione uma unidade específica para ativar o cálculo de bônus de meta progressiva e dinâmica.
-          </CardContent>
-        </Card>
+        <div className="glass-card p-4 text-sm flex items-center gap-2" style={{ borderColor: "oklch(0.76 0.145 72 / 0.3)", color: "oklch(0.76 0.145 72)" }}>
+          <Star className="w-4 h-4 flex-shrink-0" />
+          Selecione uma unidade específica para ativar o cálculo de bônus de meta progressiva e dinâmica.
+        </div>
       )}
 
       {/* Aviso quando em modo range (metas dinâmicas não disponíveis) */}
       {isRangeMode && selectedUnit && !q.isLoading && (
-        <Card className="border-blue-500/20 bg-blue-500/5">
-          <CardContent className="p-4 text-sm text-blue-400 flex items-center gap-2">
-            <Zap className="w-4 h-4 flex-shrink-0" />
-            Bônus de metas dinâmicas disponível apenas para períodos mensais completos.
-          </CardContent>
-        </Card>
+        <div className="glass-card p-4 text-sm flex items-center gap-2" style={{ borderColor: "oklch(0.65 0.15 200 / 0.3)", color: "oklch(0.65 0.15 200)" }}>
+          <Zap className="w-4 h-4 flex-shrink-0" />
+          Bônus de metas dinâmicas disponível apenas para períodos mensais completos.
+        </div>
       )}
     </div>
   );
