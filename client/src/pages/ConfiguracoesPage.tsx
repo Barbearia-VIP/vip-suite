@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PageHeader from "@/components/PageHeader";
-import { Settings, Key, BarChart3, ClipboardList, Camera, Star, Instagram, MessageSquare, Save, CheckCircle, Building2, Users } from "lucide-react";
+import { Settings, Key, BarChart3, ClipboardList, Camera, Star, Instagram, MessageSquare, Save, CheckCircle, Building2, Users, Wifi, WifiOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useOrg } from "@/hooks/useOrg";
 import { useApp } from "@/contexts/AppContext";
@@ -33,6 +33,7 @@ function ModuleConfigCard({ mod, unitId, orgId }: { mod: typeof MODULES[number];
   const [values, setValues] = useState<Record<string, string>>({});
   const [initialized, setInitialized] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; account?: { username?: string } } | null>(null);
 
   const configsQuery = trpc.orgs.moduleConfigs.useQuery(
     { unitId, orgId },
@@ -84,12 +85,31 @@ function ModuleConfigCard({ mod, unitId, orgId }: { mod: typeof MODULES[number];
     onError: (e: { message: string }) => toast.error(e.message),
   });
 
+  // Teste de conexão (apenas para auto_instagram)
+  const testConnectionMut = trpc.ig.testConnection.useMutation({
+    onSuccess: (r) => {
+      setTestResult(r);
+      if (r.success) toast.success(r.message);
+      else toast.error(`Erro de conexão: ${r.message}`);
+    },
+    onError: (e: { message: string }) => {
+      setTestResult({ success: false, message: e.message });
+      toast.error(`Erro: ${e.message}`);
+    },
+  });
+
   const handleSave = () => {
     if (!unitId || !orgId) {
       toast.error("Selecione uma unidade antes de salvar.");
       return;
     }
+    setTestResult(null);
     saveConfig.mutate({ orgId, unitId, module: mod.key, config: values, active: isEnabled });
+  };
+
+  const handleTest = () => {
+    setTestResult(null);
+    testConnectionMut.mutate({ unitId });
   };
 
   return (
@@ -127,16 +147,50 @@ function ModuleConfigCard({ mod, unitId, orgId }: { mod: typeof MODULES[number];
             </div>
           ))
         )}
-        <Button
-          size="sm"
-          className="w-full gap-1.5 text-xs h-8 mt-2"
-          disabled={saveConfig.isPending || configsQuery.isLoading}
-          onClick={handleSave}
-        >
-          {saved
-            ? <><CheckCircle className="w-3.5 h-3.5" />Salvo!</>
-            : <><Save className="w-3.5 h-3.5" />{saveConfig.isPending ? "Salvando..." : "Salvar"}</>}
-        </Button>
+        <div className="flex gap-2 mt-2">
+          <Button
+            size="sm"
+            className="flex-1 gap-1.5 text-xs h-8"
+            disabled={saveConfig.isPending || configsQuery.isLoading}
+            onClick={handleSave}
+          >
+            {saved
+              ? <><CheckCircle className="w-3.5 h-3.5" />Salvo!</>
+              : <><Save className="w-3.5 h-3.5" />{saveConfig.isPending ? "Salvando..." : "Salvar"}</>}
+          </Button>
+          {mod.key === "auto_instagram" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-xs h-8 px-3"
+              disabled={testConnectionMut.isPending}
+              onClick={handleTest}
+            >
+              {testConnectionMut.isPending
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <Wifi className="w-3.5 h-3.5" />}
+              Testar
+            </Button>
+          )}
+        </div>
+        {mod.key === "auto_instagram" && testResult && (
+          <div className={`mt-2 p-2.5 rounded-md text-xs flex items-start gap-2 ${
+            testResult.success ? "bg-green-500/10 border border-green-500/30" : "bg-red-500/10 border border-red-500/30"
+          }`}>
+            {testResult.success
+              ? <Wifi className="w-3.5 h-3.5 text-green-400 shrink-0 mt-0.5" />
+              : <WifiOff className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />}
+            <div>
+              <p className={`font-medium ${testResult.success ? "text-green-400" : "text-red-400"}`}>
+                {testResult.success ? "Conexão OK" : "Falha na conexão"}
+              </p>
+              <p className="text-muted-foreground">{testResult.message}</p>
+              {testResult.account?.username && (
+                <p className="text-muted-foreground">Conta: @{testResult.account.username}</p>
+              )}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

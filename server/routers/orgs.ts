@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
+import { eq } from "drizzle-orm";
+import { igConfig } from "../../drizzle/schema";
 import {
   getOrgsByOwner,
   getOrgsByMember,
@@ -236,12 +238,36 @@ export const orgsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await requireMasterOrOrgAdmin(ctx.user.id, input.orgId, ctx.user.role === "admin");
-      return upsertModuleConfig({
+      await upsertModuleConfig({
         unitId: input.unitId,
         module: input.module,
         config: input.config,
         active: input.active ?? true,
       });
+      // Se for auto_instagram, sincroniza também com igConfig (tabela usada pelo bot)
+      if (input.module === "auto_instagram") {
+        const cfg = input.config as Record<string, string>;
+        const token = cfg.instagramToken;
+        const accountId = cfg.instagramAccountId;
+        if (token || accountId) {
+          const db = await (await import("../db")).getDb();
+          if (db) {
+            const existing = await db.select({ id: igConfig.id })
+              .from(igConfig)
+              .where(eq(igConfig.unitId, input.unitId))
+              .limit(1);
+            const updateData: Record<string, unknown> = {};
+            if (token) updateData.accessToken = token;
+            if (accountId) updateData.instagramUserId = accountId;
+            if (existing.length > 0) {
+              await db.update(igConfig).set(updateData).where(eq(igConfig.unitId, input.unitId));
+            } else {
+              await db.insert(igConfig).values({ unitId: input.unitId, ...updateData });
+            }
+          }
+        }
+      }
+      return null;
     }),
 
   moduleAccess: protectedProcedure

@@ -933,3 +933,9 @@
 - [x] Corrigir salvamento de configurações do Instagram por unidade (dados não persistem)
 - [x] Corrigir getModuleConfigs para retornar apenas o registro mais recente por módulo (deduplicar)
 - [x] Corrigir upsertModuleConfig para fazer UPDATE quando já existe (não INSERT duplicado)
+
+## Auto Instagram — Status "Não Configurado" (2026-04-07)
+
+- [x] Investigar por que Auto Instagram aparece "não configurado" mesmo com credencial salva
+- [x] Corrigir: saveModuleConfig agora sincroniza igConfig (tabela usada pelo bot) ao salvar auto_instagram
+- [x] Adicionar botão "Testar Conexão" na página de Configurações com feedback visual de erro/sucesso
