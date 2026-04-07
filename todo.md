@@ -955,3 +955,9 @@
 ## Metas — Bug toFixed (2026-04-07)
 
 - [x] Corrigir TypeError: v.toFixed is not a function no FaixasComissaoTab (valores numéricos chegam como string do banco)
+
+## Comissões — Bônus de Meta (2026-04-07)
+
+- [x] Atualizar endpoint comissoes para buscar faixas de meta e calcular bônus por colaborador
+- [x] Lógica: faturamento total (serviços + produtos) determina a faixa atingida; bônus = (pctFaixa - pctBase) * valorServicos
+- [x] Atualizar UI da página Comissões para exibir linha de Bônus Meta e Total Comissão com bônus incluído

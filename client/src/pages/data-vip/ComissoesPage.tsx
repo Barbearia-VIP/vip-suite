@@ -1,6 +1,6 @@
 /**
  * ComissoesPage.tsx — Cálculo de comissões por colaborador
- * Layout: cards por colaborador com breakdown S.Base / S.Extra / Produtos
+ * Layout: cards por colaborador com breakdown S.Base / S.Extra / Produtos / Bônus Meta
  * Percentuais gerenciados na aba Colaboradores
  * Faixas progressivas gerenciadas na aba Metas → Comissão Progressiva
  */
@@ -13,20 +13,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DateRangePicker, buildPeriodos, type DateFilter } from "@/components/ui/DateRangePicker";
-import { DollarSign, Calendar, TrendingUp, Users, Scissors, Package, Star } from "lucide-react";
+import { DollarSign, Calendar, TrendingUp, Users, Scissors, Package, Star, Trophy } from "lucide-react";
 
 function fmt(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
 }
 function fmtPct(v: number) {
-  return `${v.toFixed(1)}%`;
-}
-
-// Dado um valor de serviços e lista de faixas, retorna a faixa atingida
-function getFaixaAtingida(faixas: any[], valorServicos: number) {
-  if (!faixas || faixas.length === 0) return null;
-  const sorted = [...faixas].sort((a, b) => b.valorMinServicos - a.valorMinServicos);
-  return sorted.find(f => valorServicos >= f.valorMinServicos) ?? null;
+  return `${Number(v).toFixed(1)}%`;
 }
 
 export default function ComissoesPage() {
@@ -51,32 +44,14 @@ export default function ComissoesPage() {
 
   const q = trpc.dataVip.comissoes.useQuery(queryParams, { enabled: !!org?.id });
 
-  // Busca faixas de meta da unidade selecionada
-  const faixasQ = trpc.dataVip.metaFaixasList.useQuery(
-    { orgId: org?.id, unitId: selectedUnit?.id },
-    { enabled: !!org?.id && !!selectedUnit?.id }
-  );
-  const faixas = faixasQ.data ?? [];
-
   const colabs = q.data ?? [];
 
   const totalFat = colabs.reduce((s, c) => s + c.faturamento, 0);
   const totalComissoes = colabs.reduce((s, c) => s + c.comissao, 0);
-  // Se há faixas, recalcula o total de comissões considerando o bônus de meta
-  const totalComissoesComMeta = useMemo(() => {
-    if (faixas.length === 0) return totalComissoes;
-    return colabs.reduce((s, c) => {
-      const faixaAtingida = getFaixaAtingida(faixas, c.servicosBaseValor + c.extraValor);
-      if (!faixaAtingida) return s + c.comissao;
-      // Recalcula comissão de serviços com o percentual da faixa
-      const comissaoServFaixa = (c.servicosBaseValor + c.extraValor) * (faixaAtingida.pctComissao / 100);
-      return s + comissaoServFaixa + c.comissaoProdutos;
-    }, 0);
-  }, [colabs, faixas, totalComissoes]);
-
-  const pctMedio = totalFat > 0 ? (totalComissoesComMeta / totalFat) * 100 : 0;
+  const totalBonus = colabs.reduce((s, c) => s + (c.bonusMeta ?? 0), 0);
+  const pctMedio = totalFat > 0 ? (totalComissoes / totalFat) * 100 : 0;
   const isRangeMode = filter.mode === "range";
-  const temFaixas = faixas.length > 0;
+  const temBonus = totalBonus > 0;
 
   return (
     <div className="p-6 space-y-5">
@@ -103,25 +78,27 @@ export default function ComissoesPage() {
         />
       </div>
 
-      {/* Badge modo range */}
-      {isRangeMode && (
-        <div className="flex items-center gap-2">
+      {/* Badges de contexto */}
+      <div className="flex flex-wrap items-center gap-2">
+        {isRangeMode && (
           <Badge variant="secondary" className="text-xs gap-1.5">
             <Calendar className="w-3 h-3" />
             Período personalizado — dados em tempo real
           </Badge>
-        </div>
-      )}
-
-      {/* Badge faixas ativas */}
-      {temFaixas && (
-        <div className="flex items-center gap-2">
-          <Badge className="text-xs gap-1.5 bg-amber-500/20 text-amber-400 border-amber-500/30">
-            <Star className="w-3 h-3" />
-            {faixas.length} faixas de comissão progressiva ativas
+        )}
+        {temBonus && (
+          <Badge className="text-xs gap-1.5 bg-amber-500/20 text-amber-400 border border-amber-500/30">
+            <Trophy className="w-3 h-3" />
+            Bônus de meta aplicado — {fmt(totalBonus)} em bônus no período
           </Badge>
-        </div>
-      )}
+        )}
+        {!selectedUnit && (
+          <Badge variant="outline" className="text-xs text-muted-foreground">
+            <Star className="w-3 h-3 mr-1" />
+            Selecione uma unidade para ver bônus de meta
+          </Badge>
+        )}
+      </div>
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -141,7 +118,12 @@ export default function ComissoesPage() {
               <DollarSign className="w-3 h-3" /> Comissões
             </p>
             {q.isLoading ? <Skeleton className="h-7 w-28 mt-1" /> : (
-              <p className="text-xl font-bold mt-1 text-orange-400">{fmt(totalComissoesComMeta)}</p>
+              <>
+                <p className="text-xl font-bold mt-1 text-orange-400">{fmt(totalComissoes)}</p>
+                {temBonus && (
+                  <p className="text-[10px] text-amber-400 mt-0.5">incl. {fmt(totalBonus)} de bônus</p>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -199,26 +181,13 @@ export default function ComissoesPage() {
             const rank = i + 1;
             const rankColor = rank === 1 ? "text-yellow-400" : rank === 2 ? "text-slate-300" : rank === 3 ? "text-amber-600" : "text-muted-foreground";
             const fatDia = c.diasTrabalhados > 0 ? c.faturamentoDia : 0;
-
-            // Calcula faixa atingida para este colaborador
-            const valorServicos = c.servicosBaseValor + c.extraValor;
-            const faixaAtingida = temFaixas ? getFaixaAtingida(faixas, valorServicos) : null;
-            const pctFaixa = faixaAtingida ? faixaAtingida.pctComissao : null;
-
-            // Recalcula comissão de serviços com a faixa (se houver)
-            const pctServicosEfetivo = pctFaixa ?? c.percentual;
-            const comissaoServFaixa = temFaixas && faixaAtingida
-              ? valorServicos * (faixaAtingida.pctComissao / 100)
-              : c.comissaoServicosBase + c.comissaoServicosExtra;
-            const comissaoTotalEfetiva = comissaoServFaixa + c.comissaoProdutos;
-
-            // Próxima faixa
-            const proxFaixa = temFaixas
-              ? [...faixas].sort((a, b) => a.valorMinServicos - b.valorMinServicos).find(f => f.valorMinServicos > valorServicos)
-              : null;
+            const bonusMeta = Number(c.bonusMeta ?? 0);
+            const pctBonus = Number(c.pctBonus ?? 0);
+            const pctFaixaMeta = Number(c.pctFaixaMeta ?? 0);
+            const temFaixaAtingida = pctFaixaMeta > 0 && pctBonus > 0;
 
             return (
-              <Card key={c.colaboradorId} className={`border-border/60 ${faixaAtingida ? "ring-1 ring-amber-500/20" : ""}`}>
+              <Card key={c.colaboradorId} className={`border-border/60 ${temFaixaAtingida ? "ring-1 ring-amber-500/30" : ""}`}>
                 <CardContent className="p-4 space-y-3">
                   {/* Header do card */}
                   <div className="flex items-start justify-between">
@@ -239,19 +208,14 @@ export default function ComissoesPage() {
                     )}
                   </div>
 
-                  {/* Faixa de meta atingida */}
-                  {temFaixas && (
-                    <div className={`rounded-md px-2.5 py-1.5 text-xs flex items-center justify-between ${faixaAtingida ? "bg-amber-500/10 border border-amber-500/30" : "bg-muted/40 border border-border/40"}`}>
-                      <span className={faixaAtingida ? "text-amber-400 font-medium" : "text-muted-foreground"}>
-                        {faixaAtingida
-                          ? `🏆 ${faixaAtingida.descricao || `Faixa ${faixaAtingida.pctComissao}%`}`
-                          : "Sem faixa atingida"}
+                  {/* Badge de faixa atingida */}
+                  {temFaixaAtingida && (
+                    <div className="rounded-md px-2.5 py-1.5 text-xs flex items-center justify-between bg-amber-500/10 border border-amber-500/30">
+                      <span className="text-amber-400 font-medium flex items-center gap-1">
+                        <Trophy className="w-3 h-3" />
+                        Meta atingida — {pctFaixaMeta}% sobre serviços
                       </span>
-                      {proxFaixa && (
-                        <span className="text-muted-foreground text-[10px]">
-                          Próx: {fmt(proxFaixa.valorMinServicos - valorServicos)} p/ {proxFaixa.pctComissao}%
-                        </span>
-                      )}
+                      <span className="text-amber-300 font-semibold">{fmt(bonusMeta)}</span>
                     </div>
                   )}
 
@@ -272,12 +236,10 @@ export default function ComissoesPage() {
                         <span className="text-muted-foreground">{fmt(c.servicosBaseValor)}</span>
                         <span className="text-muted-foreground">→</span>
                         <span className={c.comissaoServicosBase > 0 ? "text-orange-400 font-semibold" : "text-muted-foreground"}>
-                          {fmt(temFaixas && faixaAtingida
-                            ? c.servicosBaseValor * (faixaAtingida.pctComissao / 100)
-                            : c.comissaoServicosBase)}
+                          {fmt(c.comissaoServicosBase)}
                         </span>
-                        <Badge variant="outline" className={`text-[10px] px-1 py-0 h-4 ${temFaixas && faixaAtingida ? "border-amber-500/50 text-amber-400" : ""}`}>
-                          {pctServicosEfetivo}%
+                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                          {c.percentual}%
                         </Badge>
                       </div>
                     </div>
@@ -291,12 +253,10 @@ export default function ComissoesPage() {
                         <span className="text-muted-foreground">{fmt(c.extraValor)}</span>
                         <span className="text-muted-foreground">→</span>
                         <span className={c.comissaoServicosExtra > 0 ? "text-orange-400 font-semibold" : "text-muted-foreground"}>
-                          {fmt(temFaixas && faixaAtingida
-                            ? c.extraValor * (faixaAtingida.pctComissao / 100)
-                            : c.comissaoServicosExtra)}
+                          {fmt(c.comissaoServicosExtra)}
                         </span>
-                        <Badge variant="outline" className={`text-[10px] px-1 py-0 h-4 ${temFaixas && faixaAtingida ? "border-amber-500/50 text-amber-400" : ""}`}>
-                          {pctServicosEfetivo}%
+                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                          {c.percentual}%
                         </Badge>
                       </div>
                     </div>
@@ -317,6 +277,23 @@ export default function ComissoesPage() {
                         </Badge>
                       </div>
                     </div>
+
+                    {/* Bônus de Meta (só mostra se houver bônus) */}
+                    {bonusMeta > 0 && (
+                      <div className="flex items-center justify-between text-xs bg-amber-500/5 rounded px-1.5 py-1 border border-amber-500/20">
+                        <span className="flex items-center gap-1.5 text-amber-400">
+                          <Trophy className="w-3 h-3" /> Bônus Meta
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">{fmt(c.totalServicos)}</span>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="text-amber-400 font-semibold">{fmt(bonusMeta)}</span>
+                          <Badge className="text-[10px] px-1 py-0 h-4 bg-amber-500/20 text-amber-400 border-amber-500/30">
+                            +{pctBonus.toFixed(1)}%
+                          </Badge>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Total comissão */}
@@ -324,11 +301,11 @@ export default function ComissoesPage() {
                     <span className="text-sm text-muted-foreground">
                       Total Comissão{" "}
                       <span className="text-xs">
-                        ({c.faturamento > 0 ? fmtPct((comissaoTotalEfetiva / c.faturamento) * 100) : "0.0%"})
+                        ({c.faturamento > 0 ? fmtPct((c.comissao / c.faturamento) * 100) : "0.0%"})
                       </span>
                     </span>
-                    <span className={`text-base font-bold ${comissaoTotalEfetiva > 0 ? "text-orange-400" : "text-muted-foreground"}`}>
-                      {fmt(comissaoTotalEfetiva)}
+                    <span className={`text-base font-bold ${c.comissao > 0 ? "text-orange-400" : "text-muted-foreground"}`}>
+                      {fmt(c.comissao)}
                     </span>
                   </div>
                 </CardContent>
@@ -338,11 +315,14 @@ export default function ComissoesPage() {
         </div>
       )}
 
-      {/* Nota sobre edição */}
-      {isAdmin && (
-        <p className="text-xs text-muted-foreground text-center">
-          Para editar os percentuais base, acesse <strong>Colaboradores</strong>. Para configurar faixas progressivas, acesse <strong>Metas → Comissão Progressiva</strong>.
-        </p>
+      {/* Aviso quando não há unidade selecionada */}
+      {!selectedUnit && !q.isLoading && colabs.length > 0 && (
+        <Card className="border-amber-500/20 bg-amber-500/5">
+          <CardContent className="p-4 text-sm text-amber-400 flex items-center gap-2">
+            <Star className="w-4 h-4 flex-shrink-0" />
+            Selecione uma unidade específica para ativar o cálculo de bônus de meta progressiva.
+          </CardContent>
+        </Card>
       )}
     </div>
   );

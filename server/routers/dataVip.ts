@@ -733,6 +733,30 @@ export const dataVipRouter = router({
       let rWhere = sql`ativo = 1`;
       if (orgFilter) rWhere = sql`${rWhere} AND orgId = ${orgFilter}`;
       const [regras] = await db.execute(sql`SELECT * FROM regras_comissao WHERE ${rWhere}`) as any;
+
+      // Busca faixas de meta da unidade (ou org) para calcular bônus
+      let faixasMeta: any[] = [];
+      if (input.unitId) {
+        const [fRows] = await db.execute(sql`
+          SELECT valorMinServicos, pctComissao FROM meta_faixas
+          WHERE unitId = ${input.unitId} AND orgId = ${orgFilter ?? 0}
+          ORDER BY valorMinServicos ASC
+        `) as any;
+        faixasMeta = (fRows as any[]).map((f: any) => ({
+          valorMinServicos: Number(f.valorMinServicos),
+          pctComissao: Number(f.pctComissao),
+        }));
+      }
+
+      // Função para encontrar a faixa atingida com base no faturamento total
+      function getFaixaAtingida(fatTotal: number): { pctFaixa: number } | null {
+        if (faixasMeta.length === 0) return null;
+        // Ordena decrescente e pega a maior faixa cujo valorMin <= fatTotal
+        const sorted = [...faixasMeta].sort((a, b) => b.valorMinServicos - a.valorMinServicos);
+        const faixa = sorted.find(f => fatTotal >= f.valorMinServicos);
+        return faixa ? { pctFaixa: faixa.pctComissao } : null;
+      }
+
       return colabs.map(c => {
         const regra = (regras as any[]).find((r: any) => r.colaboradorId === String(c.colaborador_id));
         const pctServicos = regra ? Number(regra.percentual) : 0;
@@ -743,11 +767,17 @@ export const dataVipRouter = router({
         const servicosBaseValor = Number((c as any).servicos_base_valor ?? 0);
         const extraValor = Number(c.extra_valor ?? 0);
         const produtosValor = Number(c.produtos_valor ?? 0);
+        const totalServicos = servicosBaseValor + extraValor;
         // Calcular comissões separadas
         const comissaoServicosBase = Math.round(servicosBaseValor * (pctServicos / 100) * 100) / 100;
         const comissaoServicosExtra = Math.round(extraValor * (pctServicos / 100) * 100) / 100;
         const comissaoProdutos = Math.round(produtosValor * (pctProdutos / 100) * 100) / 100;
-        const comissaoTotal = Math.round((comissaoServicosBase + comissaoServicosExtra + comissaoProdutos) * 100) / 100;
+        // Calcular bônus de meta: diferença entre % da faixa e % base, aplicada sobre total de serviços
+        const faixaAtingida = getFaixaAtingida(fatTotal);
+        const pctFaixa = faixaAtingida ? faixaAtingida.pctFaixa : 0;
+        const pctBonus = Math.max(0, pctFaixa - pctServicos); // diferença positiva
+        const bonusMeta = Math.round(totalServicos * (pctBonus / 100) * 100) / 100;
+        const comissaoTotal = Math.round((comissaoServicosBase + comissaoServicosExtra + comissaoProdutos + bonusMeta) * 100) / 100;
         return {
           colaboradorId: String(c.colaborador_id),
           colaboradorNome: c.colaborador_nome,
@@ -759,9 +789,14 @@ export const dataVipRouter = router({
           servicosBaseValor,
           extraValor,
           produtosValor,
+          totalServicos,
           // Percentuais
           percentual: pctServicos,
           pctComissaoProdutos: pctProdutos,
+          // Faixa de meta atingida
+          pctFaixaMeta: pctFaixa,
+          pctBonus,
+          bonusMeta,
           // Comissões calculadas
           comissaoServicosBase,
           comissaoServicosExtra,
