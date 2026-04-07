@@ -982,3 +982,7 @@
 ## Bug — metaDinamicaCalc (2026-04-07)
 
 - [x] Corrigir erro "Table 'franquia_producao.comandas' doesn't exist" no metaDinamicaCalc — reescrito com schema real: vendas, vendas_produtos, usuarios, produtos
+
+## Bug — metaDinamicaCalc Malformed packet (2026-04-07)
+
+- [x] Corrigir "Malformed communication packet" no metaDinamicaCalc — datas convertidas para strings ISO (YYYY-MM-DD) antes de passar ao queryExternal

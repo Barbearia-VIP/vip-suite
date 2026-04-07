@@ -2285,8 +2285,11 @@ export const dataVipRouter = router({
       const unitIds = extInfo.extIds;
       const { queryExternal } = await import("../db-external");
 
-      const dataInicio = new Date(input.ano, input.mes - 1, 1);
-      const dataFimExcl = new Date(input.ano, input.mes, 1);
+      // Usar strings ISO para evitar "Malformed communication packet" no MySQL externo
+      const dataInicio = `${input.ano}-${String(input.mes).padStart(2, '0')}-01`;
+      const dataFimExcl = input.mes === 12
+        ? `${input.ano + 1}-01-01`
+        : `${input.ano}-${String(input.mes + 1).padStart(2, '0')}-01`;
 
       const resultados: Record<string, { colaboradorId: string; colaboradorNome: string; bonusTotal: number; metasBatidas: { nome: string; bonus: number }[] }> = {};
 
