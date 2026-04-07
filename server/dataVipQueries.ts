@@ -2663,3 +2663,78 @@ export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, 
   }
   return results;
 }
+
+// ─── Colaboradores para comissões (com breakdown base/extra/produtos) ─────────
+/**
+ * Busca colaboradores com breakdown correto de faturamento por tipo de serviço.
+ * Usa nomesBase (da tabela servico_categorias) para classificar serviços base vs extra.
+ * Se nomesBase fornecido: base = nome IN (nomesBase), extra = tipo='ser' AND nome NOT IN (nomesBase).
+ * Se nomesBase vazio: base = categoria='base', extra = categoria='extra' OR categoria IS NULL.
+ * Produtos = tipo IN ('probar','proemp','proins').
+ */
+export async function getColaboradoresComissoes(
+  extIds: number[],
+  dataInicio: string,
+  dataFim: string,
+  nomesBase: string[] = []
+) {
+  const unitCond = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `colab.unidade = ${extIds[0]}`
+    : `colab.unidade IN (${extIds.join(",")})`;
+  const unitCondV2 = extIds.length === 0 ? "1=1"
+    : extIds.length === 1 ? `uu2.unidade = ${extIds[0]}`
+    : `uu2.unidade IN (${extIds.join(",")})`;
+  const dataFimExcl = new Date(new Date(dataFim + "T12:00:00Z").getTime() + 86400000).toISOString().slice(0, 10);
+
+  let baseCond: string;
+  let extraCond: string;
+  let params: unknown[];
+
+  if (nomesBase.length > 0) {
+    const placeholders = nomesBase.map(() => "?").join(",");
+    baseCond = `p.tipo = 'ser' AND p.nome IN (${placeholders})`;
+    extraCond = `p.tipo = 'ser' AND p.nome NOT IN (${placeholders})`;
+    params = [...nomesBase, ...nomesBase, dataInicio, dataInicio, dataFimExcl];
+  } else {
+    baseCond = `p.tipo = 'ser' AND p.categoria = 'base'`;
+    extraCond = `p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL)`;
+    params = [dataInicio, dataInicio, dataFimExcl];
+  }
+
+  return queryExternal<{
+    colaborador_id: number;
+    colaborador_nome: string;
+    faturamento: number;
+    atendimentos: number;
+    dias_trabalhados: number;
+    faturamento_dia: number;
+    servicos_base_valor: number;
+    extra_valor: number;
+    produtos_valor: number;
+    clientes: number;
+  }>(`
+    SELECT
+      colab.id as colaborador_id,
+      colab.nome as colaborador_nome,
+      COALESCE(SUM(vp.valor_total), 0) as faturamento,
+      COUNT(DISTINCT v.id) as atendimentos,
+      COUNT(DISTINCT DATE(v.data_criacao)) as dias_trabalhados,
+      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT DATE(v.data_criacao)), 0), 0) as faturamento_dia,
+      COALESCE(SUM(CASE WHEN ${baseCond} THEN vp.valor_total END), 0) as servicos_base_valor,
+      COALESCE(SUM(CASE WHEN ${extraCond} THEN vp.valor_total END), 0) as extra_valor,
+      COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.valor_total END), 0) as produtos_valor,
+      COUNT(DISTINCT v.cliente) as clientes
+    FROM vendas_produtos vp
+    JOIN usuarios colab ON colab.id = vp.colaborador
+    JOIN vendas v ON v.id = vp.venda
+    JOIN produtos p ON p.id = vp.produto
+    WHERE ${unitCond}
+      AND colab.visivel_agenda != 'nenhuma'
+      AND v.data_criacao >= ?
+      AND v.data_criacao < ?
+      AND v.comanda_temp = 0
+      AND v.status != 0
+    GROUP BY colab.id, colab.nome
+    ORDER BY faturamento DESC
+  `, params);
+}

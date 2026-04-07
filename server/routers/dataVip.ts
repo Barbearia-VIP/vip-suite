@@ -20,6 +20,7 @@ import {
   getEvolucaoDiaria,
   getColaboradores,
   getColaboradoresByRange,
+  getColaboradoresComissoes,
   getRankingUnidades,
   getDiasTrabalhados,
   getDiasTrabalhadosMedia,
@@ -699,16 +700,35 @@ export const dataVipRouter = router({
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
       const now = new Date();
-      // Modo range livre
-      const colabs = input.dataInicio && input.dataFim
-        ? await getColaboradoresByRange(extIds, input.dataInicio, input.dataFim)
-        : await (async () => {
-            const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-            const [ano, mes] = periodo.split("-").map(Number);
-            return getColaboradores(extIds, ano, mes);
-          })();
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Busca nomesBase da tabela servico_categorias para classificar base vs extra
+      let nomesBase: string[] = [];
+      if (orgFilter) {
+        const [catRows] = await db.execute(sql`
+          SELECT nomeServico FROM servico_categorias WHERE orgId = ${orgFilter} AND categoria = 'base'
+        `) as any;
+        nomesBase = (catRows as any[]).map((r: any) => r.nomeServico);
+      }
+      // Sempre usa tempo real com breakdown correto (base/extra/produtos)
+      let dataInicio: string;
+      let dataFim: string;
+      if (input.dataInicio && input.dataFim) {
+        dataInicio = input.dataInicio;
+        dataFim = input.dataFim;
+      } else {
+        const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        const [ano, mes] = periodo.split("-").map(Number);
+        dataInicio = `${ano}-${String(mes).padStart(2, "0")}-01`;
+        const proximoMes = mes === 12 ? 1 : mes + 1;
+        const anoProximo = mes === 12 ? ano + 1 : ano;
+        // dataFim inclusivo (getColaboradoresComissoes adiciona +1 dia internamente)
+        const dataFimExcl = `${anoProximo}-${String(proximoMes).padStart(2, "0")}-01`;
+        const d = new Date(dataFimExcl + "T12:00:00Z");
+        d.setDate(d.getDate() - 1);
+        dataFim = d.toISOString().slice(0, 10);
+      }
+      const colabs = await getColaboradoresComissoes(extIds, dataInicio, dataFim, nomesBase);
       let rWhere = sql`ativo = 1`;
       if (orgFilter) rWhere = sql`${rWhere} AND orgId = ${orgFilter}`;
       const [regras] = await db.execute(sql`SELECT * FROM regras_comissao WHERE ${rWhere}`) as any;
@@ -716,14 +736,12 @@ export const dataVipRouter = router({
         const regra = (regras as any[]).find((r: any) => r.colaboradorId === String(c.colaborador_id));
         const pctServicos = regra ? Number(regra.percentual) : 0;
         const pctProdutos = regra ? Number(regra.pctComissaoProdutos ?? 0) : 0;
-        // Suporta tanto getColaboradoresByRange (faturamento) quanto getColaboradores (total_vendas)
-        const fatTotal = Number((c as any).faturamento ?? (c as any).total_vendas ?? 0);
-        const atend = Number((c as any).atendimentos ?? (c as any).total_servicos_realizados ?? 0);
-        // Breakdown por tipo (disponível em getColaboradoresByRange)
-        const extraValor = Number((c as any).extra_valor ?? 0);
-        const produtosValor = Number((c as any).produtos_valor ?? 0);
-        // Serviços base = faturamento total - extras - produtos
-        const servicosBaseValor = Math.max(0, fatTotal - extraValor - produtosValor);
+        const fatTotal = Number(c.faturamento ?? 0);
+        const atend = Number(c.atendimentos ?? 0);
+        // Breakdown direto da query (getColaboradoresComissoes retorna campos separados)
+        const servicosBaseValor = Number((c as any).servicos_base_valor ?? 0);
+        const extraValor = Number(c.extra_valor ?? 0);
+        const produtosValor = Number(c.produtos_valor ?? 0);
         // Calcular comissões separadas
         const comissaoServicosBase = Math.round(servicosBaseValor * (pctServicos / 100) * 100) / 100;
         const comissaoServicosExtra = Math.round(extraValor * (pctServicos / 100) * 100) / 100;

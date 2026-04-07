@@ -913,3 +913,8 @@
 - [x] Adicionar campo de comissão de produtos na UI da aba Colaboradores
 - [x] Corrigir endpoint comissoes para buscar percentuais da tabela de colaboradores (serviços e produtos)
 - [x] Redesenhar UI da página Comissões com cards por colaborador (S.Base, S.Extra, Produtos)
+
+## Comissões — Correção Breakdown (2026-04-07)
+
+- [x] Investigar por que extra_valor e produtos_valor chegam zerados no endpoint comissoes
+- [x] Corrigir query para separar corretamente S.Base, S.Extra e Produtos
