@@ -890,3 +890,11 @@
 - [ ] Endpoint raioX.diagnostico com KPIs de qualidade de dados e saúde da base
 - [ ] UI: cards de KPIs (total clientes, sem telefone, sem cadastro, etc.)
 - [ ] UI: gráficos e tabelas de diagnóstico da base de clientes
+
+## Diagnóstico — Correções (2026-04-07)
+
+- [x] Corrigir dados ausentes: freq. média, telefone, atendimentos sem cadastro, saúde da base
+- [x] Corrigir atendimentos sem cadastro: mostrar tabela com cadastrados vs sem cadastro
+- [x] Remover card "Sem Nome" do diagnóstico
+- [x] Corrigir distribuições: visitas, ausência, horários de pico, dias da semana
+- [x] Corrigir clientes com/sem telefone (query na tabela clientes)

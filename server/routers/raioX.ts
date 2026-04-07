@@ -1903,91 +1903,191 @@ export const raioXRouter = router({
         return cached.data;
       }
 
-      // Usar subquery IN em vez de JOIN para filtrar por unidade (mais rápido)
+      // Subquery para filtrar por unidade (mais rápido que JOIN)
       const unitUserCond = extIds.length === 0 ? "1=1"
         : extIds.length === 1 ? `v.usuario IN (SELECT id FROM usuarios WHERE unidade = ${extIds[0]})`
         : `v.usuario IN (SELECT id FROM usuarios WHERE unidade IN (${extIds.join(",")}))`;
 
-      // Queries ultra-simples: apenas COUNT sem GROUP BY pesado
-      // KPIs de saúde (total, oneShot, emRisco, perdidos) são passados pelo frontend via Visão Geral
-      console.log('[Diagnostico] Iniciando queries simples (sem JOIN)...');
-      const [atendComCadastroRows, atendSemCadastroRows] = await Promise.all([
-        queryExternal<{
-          total_atendimentos: number;
-          faturamento_total: number;
-          clientes_distintos: number;
-        }>(`
+      console.log('[Diagnostico] Iniciando queries sequenciais...');
+
+      // Query 1: Atendimentos COM cadastro (cliente != 2 e não nulo)
+      const atendComCadastroRows = await queryExternal<{
+        total_atendimentos: number;
+        faturamento_total: number;
+        clientes_distintos: number;
+      }>(`
+        SELECT
+          COUNT(*) as total_atendimentos,
+          COALESCE(SUM(v.valor_total), 0) as faturamento_total,
+          COUNT(DISTINCT v.cliente) as clientes_distintos
+        FROM vendas v
+        WHERE ${unitUserCond}
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.cliente IS NOT NULL AND v.cliente != 2
+          AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+      `);
+      console.log('[Diagnostico] Query 1 OK (atend com cadastro)');
+
+      // Query 2: Atendimentos SEM cadastro (cliente = 2 ou nulo = "sem cadastro" do sistema)
+      const atendSemCadastroRows = await queryExternal<{
+        atendimentos_sem_cadastro: number;
+        faturamento_sem_cadastro: number;
+      }>(`
+        SELECT COUNT(*) as atendimentos_sem_cadastro, COALESCE(SUM(v.valor_total), 0) as faturamento_sem_cadastro
+        FROM vendas v
+        WHERE ${unitUserCond}
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND (v.cliente IS NULL OR v.cliente = 2)
+          AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+      `);
+      console.log('[Diagnostico] Query 2 OK (atend sem cadastro)');
+
+      // Query 3: Saúde da base — one-shot, freq média, em risco, perdidos
+      const saudeRows2 = await queryExternal<{
+        total_clientes: number;
+        one_shot: number;
+        voltaram_2x: number;
+        freq_media: number;
+        em_risco: number;
+        perdidos: number;
+      }>(`
+        SELECT
+          COUNT(*) as total_clientes,
+          SUM(CASE WHEN total_visitas = 1 THEN 1 ELSE 0 END) as one_shot,
+          SUM(CASE WHEN total_visitas >= 2 THEN 1 ELSE 0 END) as voltaram_2x,
+          ROUND(AVG(total_visitas), 1) as freq_media,
+          SUM(CASE WHEN dias_desde_ultima BETWEEN 45 AND 90 THEN 1 ELSE 0 END) as em_risco,
+          SUM(CASE WHEN dias_desde_ultima > 90 THEN 1 ELSE 0 END) as perdidos
+        FROM (
           SELECT
-            COUNT(*) as total_atendimentos,
-            COALESCE(SUM(v.valor_total), 0) as faturamento_total,
-            COUNT(DISTINCT v.cliente) as clientes_distintos
+            v.cliente,
+            COUNT(*) as total_visitas,
+            DATEDIFF(CURDATE(), MAX(DATE(v.data_criacao))) as dias_desde_ultima
           FROM vendas v
           WHERE ${unitUserCond}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
             AND v.cliente IS NOT NULL AND v.cliente != 2
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
-        `),
-        queryExternal<{
-          atendimentos_sem_cadastro: number;
-          faturamento_sem_cadastro: number;
-        }>(`
-          SELECT COUNT(*) as atendimentos_sem_cadastro, COALESCE(SUM(v.valor_total), 0) as faturamento_sem_cadastro
+          GROUP BY v.cliente
+        ) sub
+      `);
+      console.log('[Diagnostico] Query 3 OK (saude base)');
+
+      // Query 4: Qualidade de cadastro — telefone (via tabela clientes)
+      const qualidadeRows2 = await queryExternal<{
+        com_telefone: number;
+        sem_telefone: number;
+      }>(`
+        SELECT
+          SUM(CASE WHEN c.telefone IS NOT NULL AND c.telefone != '' THEN 1 ELSE 0 END) as com_telefone,
+          SUM(CASE WHEN c.telefone IS NULL OR c.telefone = '' THEN 1 ELSE 0 END) as sem_telefone
+        FROM clientes c
+        WHERE c.id IN (
+          SELECT DISTINCT v.cliente
           FROM vendas v
           WHERE ${unitUserCond}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
-            AND (v.cliente IS NULL OR v.cliente = 2)
+            AND v.cliente IS NOT NULL AND v.cliente != 2
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
-        `)
-      ]);
+        )
+      `);
+      console.log('[Diagnostico] Query 4 OK (qualidade cadastro)');
 
-      console.log('[Diagnostico] Queries simples concluídas!');
+      // Query 5: Distribuição de visitas (1x, 2x, 3x, 4x, 5+)
+      const visitasDistRows = await queryExternal<{ total_visitas: number; clientes: number }>(`
+        SELECT
+          CASE WHEN cnt >= 5 THEN 5 ELSE cnt END as total_visitas,
+          COUNT(*) as clientes
+        FROM (
+          SELECT v.cliente, COUNT(*) as cnt
+          FROM vendas v
+          WHERE ${unitUserCond}
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.cliente IS NOT NULL AND v.cliente != 2
+            AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+          GROUP BY v.cliente
+        ) sub
+        GROUP BY CASE WHEN cnt >= 5 THEN 5 ELSE cnt END
+        ORDER BY total_visitas
+      `);
+      console.log('[Diagnostico] Query 5 OK (dist visitas)');
 
-      // Dados derivados (sem GROUP BY pesado)
-      const saudeRaw = [{
-        total_clientes: Number(atendComCadastroRows[0]?.clientes_distintos ?? 0),
-        one_shot: 0,    // frontend usa dados da Visão Geral
-        voltaram_2x: 0, // frontend usa dados da Visão Geral
-        freq_media: 0,
+      // Query 6: Horários de pico
+      const horarioRows = await queryExternal<{ hora: number; atendimentos: number }>(`
+        SELECT HOUR(v.data_criacao) as hora, COUNT(*) as atendimentos
+        FROM vendas v
+        WHERE ${unitUserCond}
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+        GROUP BY HOUR(v.data_criacao)
+        ORDER BY hora
+      `);
+      console.log('[Diagnostico] Query 6 OK (horarios pico)');
+
+      // Query 7: Movimento por dia da semana
+      const diaSemanaRows = await queryExternal<{ dia_semana: number; atendimentos: number; clientes: number }>(`
+        SELECT
+          DAYOFWEEK(v.data_criacao) as dia_semana,
+          COUNT(*) as atendimentos,
+          COUNT(DISTINCT v.cliente) as clientes
+        FROM vendas v
+        WHERE ${unitUserCond}
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+        GROUP BY DAYOFWEEK(v.data_criacao)
+        ORDER BY dia_semana
+      `);
+      console.log('[Diagnostico] Query 7 OK (dias semana)');
+
+      // Query 8: Ausência desde última visita (faixas de dias)
+      const faixasDiasRows = await queryExternal<{ faixa_dias: string; total: number }>(`
+        SELECT
+          CASE
+            WHEN dias_desde_ultima <= 30 THEN '0-30 dias'
+            WHEN dias_desde_ultima <= 60 THEN '31-60 dias'
+            WHEN dias_desde_ultima <= 90 THEN '61-90 dias'
+            WHEN dias_desde_ultima <= 180 THEN '91-180 dias'
+            ELSE '180+ dias'
+          END as faixa_dias,
+          COUNT(*) as total
+        FROM (
+          SELECT v.cliente, DATEDIFF(CURDATE(), MAX(DATE(v.data_criacao))) as dias_desde_ultima
+          FROM vendas v
+          WHERE ${unitUserCond}
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.cliente IS NOT NULL AND v.cliente != 2
+            AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
+          GROUP BY v.cliente
+        ) sub
+        GROUP BY faixa_dias
+        ORDER BY MIN(dias_desde_ultima)
+      `);
+      console.log('[Diagnostico] Query 8 OK (faixas dias)');
+
+      // Montar dados consolidados
+      const saudeRaw = saudeRows2[0] ?? { total_clientes: 0, one_shot: 0, voltaram_2x: 0, freq_media: 0, em_risco: 0, perdidos: 0 };
+      const qualRaw = qualidadeRows2[0] ?? { com_telefone: 0, sem_telefone: 0 };
+
+      const kpiRows = [{
+        total: Number(saudeRaw.total_clientes ?? 0),
+        sem_telefone: Number(qualRaw.sem_telefone ?? 0),
+        sem_nome: 0,
+        com_telefone: Number(qualRaw.com_telefone ?? 0),
+        one_shot: Number(saudeRaw.one_shot ?? 0),
+        em_risco: Number(saudeRaw.em_risco ?? 0),
+        perdidos: Number(saudeRaw.perdidos ?? 0),
+        voltaram_2x: Number(saudeRaw.voltaram_2x ?? 0),
+        freq_media: Number(saudeRaw.freq_media ?? 0),
+      }];
+      const vendaRows = [{
         total_atendimentos: Number(atendComCadastroRows[0]?.total_atendimentos ?? 0),
+        atendimentos_sem_cadastro: Number(atendSemCadastroRows[0]?.atendimentos_sem_cadastro ?? 0),
+        faturamento_sem_cadastro: Number(atendSemCadastroRows[0]?.faturamento_sem_cadastro ?? 0),
+        ticket_medio: Number(atendComCadastroRows[0]?.total_atendimentos ?? 0) > 0
+          ? Number(atendComCadastroRows[0]?.faturamento_total ?? 0) / Number(atendComCadastroRows[0]?.total_atendimentos ?? 1)
+          : 0,
         faturamento_total: Number(atendComCadastroRows[0]?.faturamento_total ?? 0),
       }];
-
-      // Distribuições: retornar arrays vazios por ora
-      const horarioRows: { hora: number; atendimentos: number }[] = [];
-      const diaSemanaRows: { dia_semana: number; atendimentos: number; clientes: number }[] = [];
-      const visitasDistRows: { total_visitas: number; clientes: number }[] = [];
-      const faixasDiasRows: { faixa_dias: string; total: number; percentual: number }[] = [];
-
-      const vendaRows = [{
-        total_atendimentos: saudeRaw[0]?.total_atendimentos ?? 0,
-        atendimentos_sem_cadastro: atendSemCadastroRows[0]?.atendimentos_sem_cadastro ?? 0,
-        faturamento_sem_cadastro: atendSemCadastroRows[0]?.faturamento_sem_cadastro ?? 0,
-        ticket_medio: (saudeRaw[0]?.total_atendimentos ?? 0) > 0
-          ? (saudeRaw[0]?.faturamento_total ?? 0) / (saudeRaw[0]?.total_atendimentos ?? 1)
-          : 0,
-        faturamento_total: saudeRaw[0]?.faturamento_total ?? 0,
-      }];
-      // Qualidade: sem dados de JOIN com clientes por ora (evitar timeout)
-      const qualidadeRaw = [{
-        total: saudeRaw[0]?.total_clientes ?? 0,
-        sem_telefone: 0,
-        sem_nome: 0,
-        com_telefone: 0,
-      }];
-
-      // Alias para compatibilidade com o código abaixo
-      const kpiRows = [{
-        total: saudeRaw[0]?.total_clientes ?? 0,
-        sem_telefone: 0,
-        sem_nome: 0,
-        com_telefone: 0,
-        one_shot: saudeRaw[0]?.one_shot ?? 0,
-        em_risco: 0,
-        perdidos: 0,
-        voltaram_2x: saudeRaw[0]?.voltaram_2x ?? 0,
-        freq_media: saudeRaw[0]?.freq_media ?? 0,
-      }];
-
       console.log('[Diagnostico] Todas as queries concluídas!');
       // Mapear resultados
       const totalRows = kpiRows;
@@ -2014,9 +2114,9 @@ export const raioXRouter = router({
       const novos = Number(retencaoRows[0]?.novos ?? 0);
       const retornaram = Number(retencaoRows[0]?.retornaram ?? 0);
 
-      // Score de qualidade: penaliza sem telefone (peso 60%) e sem nome (peso 40%)
+      // Score de qualidade: baseado na cobertura de telefone
       const scoreQualidade = total > 0
-        ? Math.round(Math.max(0, 100 - (semTelefone / total) * 60 - (semNome / total) * 40))
+        ? Math.round(Math.max(0, 100 - (semTelefone / total) * 100))
         : 0;
 
       // Taxa de retenção = clientes que voltaram 2x+ / total
@@ -2078,11 +2178,14 @@ export const raioXRouter = router({
           visitas: Number(r.total_visitas),
           clientes: Number(r.clientes),
         })),
-        faixasDias: faixasDiasRows.map(r => ({
-          faixa: r.faixa_dias,
-          total: Number(r.total),
-          percentual: Number(r.percentual),
-        })),
+        faixasDias: (() => {
+          const totalFaixas = faixasDiasRows.reduce((s, r) => s + Number(r.total), 0);
+          return faixasDiasRows.map(r => ({
+            faixa: r.faixa_dias,
+            total: Number(r.total),
+            percentual: totalFaixas > 0 ? Math.round((Number(r.total) / totalFaixas) * 100) : 0,
+          }));
+        })(),
         horarios: horarioRows.map(r => ({
           hora: Number(r.hora),
           label: `${String(Number(r.hora)).padStart(2, '0')}h`,

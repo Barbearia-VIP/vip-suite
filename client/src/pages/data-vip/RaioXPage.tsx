@@ -2864,7 +2864,7 @@ export default function RaioXPage() {
               {/* ── Bloco 2: Qualidade de dados ── */}
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Qualidade de Dados</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className={`rounded-xl p-4 border flex flex-col gap-1 ${
                     qDiag.data.qualidade.score >= 80 ? "bg-green-500/10 border-green-500/30"
                     : qDiag.data.qualidade.score >= 60 ? "bg-yellow-500/10 border-yellow-500/30"
@@ -2876,6 +2876,7 @@ export default function RaioXPage() {
                       : qDiag.data.qualidade.score >= 60 ? "text-yellow-400"
                       : "text-red-400"
                     }`}>{qDiag.data.qualidade.score}%</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Baseado na cobertura de telefone</p>
                     <div className="w-full bg-white/10 rounded-full h-1.5 mt-1">
                       <div className={`h-1.5 rounded-full ${
                         qDiag.data.qualidade.score >= 80 ? "bg-green-400"
@@ -2888,48 +2889,87 @@ export default function RaioXPage() {
                     sub={`${qDiag.data.qualidade.pctComTelefone}% da base`} />
                   <KpiCard label="Sem telefone" value={qDiag.data.qualidade.semTelefone.toLocaleString()} icon={AlertTriangle} color="text-yellow-400"
                     sub={`${qDiag.data.qualidade.pctSemTelefone}% da base`} />
-                  <KpiCard label="Sem nome" value={qDiag.data.qualidade.semNome.toLocaleString()} icon={UserX} color="text-orange-400"
-                    sub={`${qDiag.data.qualidade.pctSemNome}% da base`} />
                 </div>
               </div>
 
-              {/* ── Bloco 3: Atendimentos sem cadastro ── */}
+              {/* ── Bloco 3: Atendimentos com/sem cadastro ── */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Atendimentos Sem Cadastro</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className={`rounded-xl p-4 border col-span-1 md:col-span-1 ${
-                    qDiag.data.semCadastro.pct > 15 ? "bg-red-500/10 border-red-500/30" : "bg-card/60 border-border/50"
-                  }`}>
-                    <p className="text-xs text-muted-foreground mb-1">Atendimentos sem cadastro</p>
-                    <p className={`text-3xl font-bold ${
-                      qDiag.data.semCadastro.pct > 15 ? "text-red-400" : "text-foreground"
-                    }`}>{qDiag.data.semCadastro.atendimentos.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{qDiag.data.semCadastro.pct}% do total de atendimentos</p>
-                    <p className="text-xs text-muted-foreground">Faturamento: {fmtMoeda(qDiag.data.semCadastro.faturamento)}</p>
-                    <p className="text-xs text-muted-foreground mt-2 italic">Clientes atendidos sem nome/telefone registrado — oportunidade perdida de retenção</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Registro de Atendimentos</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Tabela comparativa */}
+                  <div className="rounded-xl border bg-card/60 border-border/50 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border/50 bg-muted/20">
+                          <th className="text-left px-4 py-2.5 text-xs text-muted-foreground font-semibold uppercase tracking-wider">Tipo</th>
+                          <th className="text-right px-4 py-2.5 text-xs text-muted-foreground font-semibold uppercase tracking-wider">Atendimentos</th>
+                          <th className="text-right px-4 py-2.5 text-xs text-muted-foreground font-semibold uppercase tracking-wider">Faturamento</th>
+                          <th className="text-right px-4 py-2.5 text-xs text-muted-foreground font-semibold uppercase tracking-wider">%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="border-b border-border/30 hover:bg-muted/10">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                              <span className="text-green-400 font-medium">Com cadastro</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5 pl-4">Cliente identificado no sistema</p>
+                          </td>
+                          <td className="px-4 py-3 text-right font-semibold text-green-400">{qDiag.data.totalAtendimentos.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right text-xs text-muted-foreground">{fmtMoeda(qDiag.data.faturamentoTotal)}</td>
+                          <td className="px-4 py-3 text-right">
+                            <span className="text-xs font-semibold text-green-400">{100 - qDiag.data.semCadastro.pct}%</span>
+                          </td>
+                        </tr>
+                        <tr className="hover:bg-muted/10">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
+                              <span className="text-orange-400 font-medium">Sem cadastro</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5 pl-4">Usou "cliente sem cadastro" do sistema</p>
+                          </td>
+                          <td className={`px-4 py-3 text-right font-semibold ${
+                            qDiag.data.semCadastro.pct > 15 ? "text-red-400" : "text-orange-400"
+                          }`}>{qDiag.data.semCadastro.atendimentos.toLocaleString()}</td>
+                          <td className="px-4 py-3 text-right text-xs text-muted-foreground">{fmtMoeda(qDiag.data.semCadastro.faturamento)}</td>
+                          <td className="px-4 py-3 text-right">
+                            <span className={`text-xs font-semibold ${
+                              qDiag.data.semCadastro.pct > 15 ? "text-red-400" : "text-orange-400"
+                            }`}>{qDiag.data.semCadastro.pct}%</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
-                  <div className="rounded-xl p-4 border bg-card/60 border-border/50 col-span-1 md:col-span-2 flex flex-col justify-between">
-                    <p className="text-xs text-muted-foreground mb-3">Composição dos atendimentos no período</p>
-                    <div className="space-y-2">
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-green-400">Com cadastro</span>
-                          <span className="text-green-400">{qDiag.data.totalAtendimentos.toLocaleString()} ({100 - qDiag.data.semCadastro.pct}%)</span>
-                        </div>
-                        <div className="w-full bg-white/10 rounded-full h-2">
-                          <div className="h-2 rounded-full bg-green-500" style={{ width: `${100 - qDiag.data.semCadastro.pct}%` }} />
-                        </div>
+                  {/* Barra visual */}
+                  <div className="rounded-xl p-4 border bg-card/60 border-border/50 flex flex-col justify-center gap-4">
+                    <div>
+                      <div className="flex justify-between text-xs mb-1.5">
+                        <span className="text-green-400 font-medium">Com cadastro</span>
+                        <span className="text-green-400">{qDiag.data.totalAtendimentos.toLocaleString()} ({100 - qDiag.data.semCadastro.pct}%)</span>
                       </div>
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-red-400">Sem cadastro</span>
-                          <span className="text-red-400">{qDiag.data.semCadastro.atendimentos.toLocaleString()} ({qDiag.data.semCadastro.pct}%)</span>
-                        </div>
-                        <div className="w-full bg-white/10 rounded-full h-2">
-                          <div className="h-2 rounded-full bg-red-500" style={{ width: `${qDiag.data.semCadastro.pct}%` }} />
-                        </div>
+                      <div className="w-full bg-white/10 rounded-full h-3">
+                        <div className="h-3 rounded-full bg-green-500" style={{ width: `${100 - qDiag.data.semCadastro.pct}%` }} />
                       </div>
                     </div>
+                    <div>
+                      <div className="flex justify-between text-xs mb-1.5">
+                        <span className={qDiag.data.semCadastro.pct > 15 ? "text-red-400 font-medium" : "text-orange-400 font-medium"}>
+                          Sem cadastro
+                        </span>
+                        <span className={qDiag.data.semCadastro.pct > 15 ? "text-red-400" : "text-orange-400"}>
+                          {qDiag.data.semCadastro.atendimentos.toLocaleString()} ({qDiag.data.semCadastro.pct}%)
+                        </span>
+                      </div>
+                      <div className="w-full bg-white/10 rounded-full h-3">
+                        <div className={`h-3 rounded-full ${qDiag.data.semCadastro.pct > 15 ? "bg-red-500" : "bg-orange-500"}`} style={{ width: `${qDiag.data.semCadastro.pct}%` }} />
+                      </div>
+                    </div>
+                    {qDiag.data.semCadastro.pct > 15 && (
+                      <p className="text-xs text-red-400 mt-1">⚠ Acima de 15% — recomenda-se cadastro obrigatório no PDV</p>
+                    )}
                   </div>
                 </div>
               </div>
