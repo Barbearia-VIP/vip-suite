@@ -876,3 +876,8 @@
 - [ ] Validar que limiar <=60d para Ativos produz 767 (ref) vs 557 atual
 - [ ] Backend: ajustar limiar Ativos de <=45d para <=60d em raioX.ts (sinais, status12m, saude barbeiro)
 - [ ] Frontend: atualizar label "Ativos (<=45d)" para "Ativos (<=60d)" e InfoPopovers
+
+## Melhorias Cohort (Filtro de Colaborador)
+- [x] Cohort: filtrar cohort histórico (grid M+1…M+6) pelo colaboradorId selecionado
+- [x] Cohort: badge visual na aba "Cohort" quando filtro de colaborador estiver ativo
+- [x] Cohort: modo de comparação lado a lado de dois colaboradores nos KPIs

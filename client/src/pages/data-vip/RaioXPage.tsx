@@ -216,6 +216,8 @@ export default function RaioXPage() {
   const [churnViewMode, setChurnViewMode] = useState<"geral" | "barbeiros">("geral");
   const qChurnBarbeiros = trpc.raioX.churnPorBarbeiro.useQuery(baseInput, { enabled: !!org?.id && tab === "churn" });
   const [cohortColaboradorId, setCohortColaboradorId] = useState<number | undefined>(undefined);
+  const [cohortComparacaoId, setCohortComparacaoId] = useState<number | undefined>(undefined);
+  const [cohortModoComparacao, setCohortModoComparacao] = useState(false);
   const cohortInput = useMemo(() => ({
     ...baseInput,
     colaboradorId: cohortColaboradorId,
@@ -223,6 +225,13 @@ export default function RaioXPage() {
   const qCohort = trpc.raioX.cohort.useQuery(cohortInput, { enabled: !!org?.id && tab === "cohort" });
   // Query sem filtro de colaborador para popular o seletor (usa dados já carregados)
   const qCohortBase = trpc.raioX.cohort.useQuery(baseInput, { enabled: !!org?.id && tab === "cohort" });
+  const cohortComparacaoInput = useMemo(() => ({
+    ...baseInput,
+    colaboradorId: cohortComparacaoId,
+  }), [baseInput, cohortComparacaoId]);
+  const qCohortComparacao = trpc.raioX.cohort.useQuery(cohortComparacaoInput, {
+    enabled: !!org?.id && tab === "cohort" && cohortModoComparacao && cohortComparacaoId !== undefined,
+  });
   const qBarbeiros = trpc.raioX.barbeiros.useQuery(baseInput, { enabled: !!org?.id && tab === "barbeiros" });
   const qAcoes = trpc.raioX.acoes.useQuery(
     { ...baseInput, tipo: acoesTipo, page: 1, pageSize: 100 },
@@ -382,7 +391,12 @@ export default function RaioXPage() {
             { id: "one-shot", label: "One-Shot" },
             { id: "cadencia", label: "Cadência" },
             { id: "churn", label: "Churn" },
-            { id: "cohort", label: "Cohort" },
+            { id: "cohort", label: cohortColaboradorId !== undefined ? (
+              <span className="flex items-center gap-1.5">
+                Cohort
+                <span className="inline-flex items-center justify-center w-2 h-2 rounded-full bg-amber-400 animate-pulse" title="Filtro de colaborador ativo" />
+              </span>
+            ) : "Cohort" },
             { id: "barbeiros", label: "Barbeiros" },
             { id: "acoes", label: "Ações" },
             { id: "diagnostico", label: "Diagnóstico" },
@@ -1807,15 +1821,16 @@ export default function RaioXPage() {
               <span className="text-yellow-400">📅</span>
               <span>Período: {fmtDate(dataInicio)} – {fmtDate(dataFim)} · Cohort = clientes agrupados pelo mês da 1ª visita</span>
             </div>
-            {/* Seletor de colaborador */}
+            {/* Controles de filtro + comparação */}
             {qCohortBase.data?.cohortPorBarbeiro && qCohortBase.data.cohortPorBarbeiro.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Filtrar por:</span>
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Seletor A */}
+                <span className="text-xs text-muted-foreground">{cohortModoComparacao ? "A:" : "Filtrar por:"}</span>
                 <Select
                   value={cohortColaboradorId !== undefined ? String(cohortColaboradorId) : "all"}
                   onValueChange={(v) => setCohortColaboradorId(v === "all" ? undefined : Number(v))}
                 >
-                  <SelectTrigger className="w-48 h-8 text-xs">
+                  <SelectTrigger className="w-44 h-8 text-xs">
                     <SelectValue placeholder="Todos os barbeiros" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1828,10 +1843,48 @@ export default function RaioXPage() {
                       ))}
                   </SelectContent>
                 </Select>
-                {cohortColaboradorId !== undefined && (
+                {/* Seletor B — só aparece no modo comparação */}
+                {cohortModoComparacao && (
+                  <>
+                    <span className="text-xs text-muted-foreground">vs B:</span>
+                    <Select
+                      value={cohortComparacaoId !== undefined ? String(cohortComparacaoId) : "none"}
+                      onValueChange={(v) => setCohortComparacaoId(v === "none" ? undefined : Number(v))}
+                    >
+                      <SelectTrigger className="w-44 h-8 text-xs">
+                        <SelectValue placeholder="Selecionar barbeiro" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Selecionar barbeiro</SelectItem>
+                        {(qCohortBase.data.cohortPorBarbeiro as Array<{barbeiroId: number; barbeiroNome: string; novos: number}>)
+                          .filter(b => b.barbeiroId !== cohortColaboradorId)
+                          .map(b => (
+                            <SelectItem key={b.barbeiroId} value={String(b.barbeiroId)}>
+                              {b.barbeiroNome} ({b.novos})
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </>
+                )}
+                {/* Toggle modo comparação */}
+                <button
+                  className={`text-xs px-2.5 py-1 rounded border transition-colors ${
+                    cohortModoComparacao
+                      ? "bg-amber-500/20 border-amber-500/50 text-amber-300"
+                      : "border-border/50 text-muted-foreground hover:text-foreground hover:border-border"
+                  }`}
+                  onClick={() => {
+                    setCohortModoComparacao(v => !v);
+                    if (cohortModoComparacao) setCohortComparacaoId(undefined);
+                  }}
+                >
+                  ⚖ Comparar
+                </button>
+                {(cohortColaboradorId !== undefined || cohortComparacaoId !== undefined) && (
                   <button
                     className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={() => setCohortColaboradorId(undefined)}
+                    onClick={() => { setCohortColaboradorId(undefined); setCohortComparacaoId(undefined); }}
                   >
                     ✕ Limpar
                   </button>
@@ -1854,6 +1907,87 @@ export default function RaioXPage() {
             </Card>
           ) : (
             <>
+              {/* ── MODO COMPARAÇÃO LADO A LADO ── */}
+              {cohortModoComparacao && cohortColaboradorId !== undefined && cohortComparacaoId !== undefined && (
+                <div className="space-y-3">
+                  {/* Título */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-amber-300">⚖ Comparação de Colaboradores</span>
+                    <span className="text-xs text-muted-foreground">KPIs lado a lado</span>
+                  </div>
+                  {/* Nomes dos colaboradores */}
+                  {(() => {
+                    const nomeA = (qCohortBase.data?.cohortPorBarbeiro as Array<{barbeiroId: number; barbeiroNome: string}> | undefined)
+                      ?.find(b => b.barbeiroId === cohortColaboradorId)?.barbeiroNome ?? "Colaborador A";
+                    const nomeB = (qCohortBase.data?.cohortPorBarbeiro as Array<{barbeiroId: number; barbeiroNome: string}> | undefined)
+                      ?.find(b => b.barbeiroId === cohortComparacaoId)?.barbeiroNome ?? "Colaborador B";
+                    const dA = qCohort.data?.analiseNovos;
+                    const dB = qCohortComparacao.data?.analiseNovos;
+                    const metricas = [
+                      { label: "Novos", icon: "👤", vA: dA?.novos, vB: dB?.novos, fmt: (v: number) => String(v), higherIsBetter: true },
+                      { label: "% Novos", icon: "%", vA: dA?.pctNovos, vB: dB?.pctNovos, fmt: (v: number) => `${v}%`, higherIsBetter: true },
+                      { label: "Ret. 30d", icon: "🔄", vA: dA?.pctRetencao30, vB: dB?.pctRetencao30, fmt: (v: number) => `${v}%`, higherIsBetter: true },
+                      { label: "Recorrentes 60d", icon: "⏱", vA: dA?.pctRecorrentes60, vB: dB?.pctRecorrentes60, fmt: (v: number) => `${v}%`, higherIsBetter: true },
+                      { label: "Mediana 2ª visita", icon: "📆", vA: dA?.mediana2aVisita, vB: dB?.mediana2aVisita, fmt: (v: number) => `${v}d`, higherIsBetter: false },
+                      { label: "Ticket 1ª visita", icon: "$", vA: dA?.ticketMedio1aVisita, vB: dB?.ticketMedio1aVisita, fmt: (v: number) => fmtMoeda(v), higherIsBetter: true },
+                    ];
+                    return (
+                      <Card className="bg-card/60 border-amber-500/20">
+                        <CardContent className="p-0">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-border/50">
+                                  <th className="text-left p-3 pl-4 text-xs text-muted-foreground w-36">Métrica</th>
+                                  <th className="text-center p-3 text-xs font-semibold text-blue-300">🔵 {nomeA}</th>
+                                  <th className="text-center p-3 text-xs font-semibold text-orange-300">🟠 {nomeB}</th>
+                                  <th className="text-center p-3 text-xs text-muted-foreground">Diferença</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {metricas.map((m) => {
+                                  const vA = m.vA ?? null;
+                                  const vB = m.vB ?? null;
+                                  const diff = vA !== null && vB !== null ? vA - vB : null;
+                                  const aWins = diff !== null && (m.higherIsBetter ? diff > 0 : diff < 0);
+                                  const bWins = diff !== null && (m.higherIsBetter ? diff < 0 : diff > 0);
+                                  return (
+                                    <tr key={m.label} className="border-b border-border/20 hover:bg-muted/10">
+                                      <td className="p-3 pl-4 text-xs text-muted-foreground">
+                                        <span className="mr-1">{m.icon}</span>{m.label}
+                                      </td>
+                                      <td className={`p-3 text-center font-bold ${
+                                        aWins ? "text-blue-300" : bWins ? "text-muted-foreground" : "text-foreground"
+                                      }`}>
+                                        {vA !== null ? m.fmt(vA) : "—"}
+                                        {aWins && <span className="ml-1 text-xs">▲</span>}
+                                      </td>
+                                      <td className={`p-3 text-center font-bold ${
+                                        bWins ? "text-orange-300" : aWins ? "text-muted-foreground" : "text-foreground"
+                                      }`}>
+                                        {vB !== null ? m.fmt(vB) : "—"}
+                                        {bWins && <span className="ml-1 text-xs">▲</span>}
+                                      </td>
+                                      <td className="p-3 text-center text-xs text-muted-foreground">
+                                        {diff !== null ? (
+                                          <span className={diff === 0 ? "" : (m.higherIsBetter ? diff > 0 : diff < 0) ? "text-green-400" : "text-red-400"}>
+                                            {diff > 0 ? "+" : ""}{m.label.includes("Ticket") || m.label.includes("Mediana") ? m.fmt(Math.abs(diff)) : `${diff > 0 ? "+" : ""}${diff.toFixed(1)}`}
+                                          </span>
+                                        ) : "—"}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })()}
+                </div>
+              )}
+
               {/* ── Análise de Clientes Novos ── */}
               {qCohort.data.analiseNovos && (
                 <div className="space-y-3">
