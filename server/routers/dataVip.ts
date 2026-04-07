@@ -2295,23 +2295,30 @@ export const dataVipRouter = router({
         const bonusValor = Number(meta.bonusValor);
         const placeholders = unitIds.map(() => '?').join(',');
 
+        // Schema real do banco externo: vendas, vendas_produtos, usuarios, produtos
+        // unidade -> usuarios.unidade | vendas.colaborador -> usuarios.id | produto tipo: probar/proemp/proins
+        const unitCond = unitIds.length === 1
+          ? `uu.unidade = ${unitIds[0]}`
+          : `uu.unidade IN (${placeholders})`;
+
         if (meta.tipo === "produto") {
           const criterio = config.criterio ?? "valor";
 
           if (criterio === "quantidade") {
-            // Critério: quantidade mínima de produtos vendidos
+            // Critério: quantidade mínima de produtos vendidos (soma de vp.quantidade)
             const qtdMin = Number(config.qtdMinProdutos ?? 1);
             const rows = await queryExternal(
-              `SELECT c.nome AS colaboradorNome, c.id AS colaboradorId,
-                 COALESCE(SUM(CASE WHEN i.tipo IN ('probar','proemp','proins') THEN i.quantidade ELSE 0 END), 0) AS qtdProdutos,
-                 COALESCE(SUM(CASE WHEN i.tipo IN ('probar','proemp','proins') THEN i.valor ELSE 0 END), 0) AS totalProdutos
-               FROM comandas co
-               JOIN colaboradores c ON c.id = co.colaborador_id
-               JOIN itens_comanda i ON i.comanda_id = co.id
-               WHERE co.unidade_id IN (${placeholders})
-                 AND co.data_hora >= ? AND co.data_hora < ?
-                 AND co.status NOT IN ('cancelado','cancelada')
-               GROUP BY c.id, c.nome
+              `SELECT uu.id AS colaboradorId, uu.nome AS colaboradorNome,
+                 COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.quantidade ELSE 0 END), 0) AS qtdProdutos,
+                 COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.valor_total ELSE 0 END), 0) AS totalProdutos
+               FROM vendas_produtos vp
+               JOIN usuarios uu ON uu.id = vp.colaborador
+               JOIN vendas v ON v.id = vp.venda
+               JOIN produtos p ON p.id = vp.produto
+               WHERE ${unitCond}
+                 AND v.data_criacao >= ? AND v.data_criacao < ?
+                 AND v.comanda_temp = 0 AND v.status != 0
+               GROUP BY uu.id, uu.nome
                HAVING qtdProdutos >= ?`,
               [...unitIds, dataInicio, dataFimExcl, qtdMin]
             );
@@ -2328,15 +2335,16 @@ export const dataVipRouter = router({
             // Critério: valor mínimo em produtos (padrão)
             const valorMin = Number(config.valorMinProdutos ?? 0);
             const rows = await queryExternal(
-              `SELECT c.nome AS colaboradorNome, c.id AS colaboradorId,
-                 COALESCE(SUM(CASE WHEN i.tipo IN ('probar','proemp','proins') THEN i.valor ELSE 0 END), 0) AS totalProdutos
-               FROM comandas co
-               JOIN colaboradores c ON c.id = co.colaborador_id
-               JOIN itens_comanda i ON i.comanda_id = co.id
-               WHERE co.unidade_id IN (${placeholders})
-                 AND co.data_hora >= ? AND co.data_hora < ?
-                 AND co.status NOT IN ('cancelado','cancelada')
-               GROUP BY c.id, c.nome
+              `SELECT uu.id AS colaboradorId, uu.nome AS colaboradorNome,
+                 COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.valor_total ELSE 0 END), 0) AS totalProdutos
+               FROM vendas_produtos vp
+               JOIN usuarios uu ON uu.id = vp.colaborador
+               JOIN vendas v ON v.id = vp.venda
+               JOIN produtos p ON p.id = vp.produto
+               WHERE ${unitCond}
+                 AND v.data_criacao >= ? AND v.data_criacao < ?
+                 AND v.comanda_temp = 0 AND v.status != 0
+               GROUP BY uu.id, uu.nome
                HAVING totalProdutos >= ?`,
               [...unitIds, dataInicio, dataFimExcl, valorMin]
             );
@@ -2351,23 +2359,26 @@ export const dataVipRouter = router({
             }
           }
         } else if (meta.tipo === "servicos_multiplos") {
+          // Conta vendas (atendimentos) com >= minServicos itens de serviço por venda
           const minServicos = Number(config.minServicosComanda ?? 2);
           const minComandas = Number(config.minComandas ?? 1);
           const rows = await queryExternal(
-            `SELECT c.nome AS colaboradorNome, c.id AS colaboradorId, COUNT(*) AS totalComandas
+            `SELECT uu.id AS colaboradorId, uu.nome AS colaboradorNome, COUNT(*) AS totalComandas
              FROM (
-               SELECT co.colaborador_id, co.id AS comanda_id
-               FROM comandas co
-               JOIN itens_comanda i ON i.comanda_id = co.id
-               WHERE co.unidade_id IN (${placeholders})
-                 AND co.data_hora >= ? AND co.data_hora < ?
-                 AND co.status NOT IN ('cancelado','cancelada')
-                 AND i.tipo IN ('serbar','serext')
-               GROUP BY co.id, co.colaborador_id
+               SELECT vp.colaborador, vp.venda
+               FROM vendas_produtos vp
+               JOIN vendas v ON v.id = vp.venda
+               JOIN produtos p ON p.id = vp.produto
+               JOIN usuarios uu2 ON uu2.id = vp.colaborador
+               WHERE ${unitCond.replace('uu.unidade', 'uu2.unidade')}
+                 AND v.data_criacao >= ? AND v.data_criacao < ?
+                 AND v.comanda_temp = 0 AND v.status != 0
+                 AND p.tipo = 'ser'
+               GROUP BY vp.colaborador, vp.venda
                HAVING COUNT(*) >= ?
              ) sub
-             JOIN colaboradores c ON c.id = sub.colaborador_id
-             GROUP BY sub.colaborador_id, c.nome
+             JOIN usuarios uu ON uu.id = sub.colaborador
+             GROUP BY sub.colaborador, uu.nome
              HAVING totalComandas >= ?`,
             [...unitIds, dataInicio, dataFimExcl, minServicos, minComandas]
           );

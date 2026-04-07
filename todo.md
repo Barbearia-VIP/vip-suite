@@ -978,3 +978,7 @@
 - [x] Adicionar seletor "Critério: Valor (R$) ou Quantidade de produtos" no tipo Produto da Meta Dinâmica
 - [x] Atualizar UI do card de meta para exibir o critério correto (valor ou qtd)
 - [x] Atualizar endpoint metaDinamicaCalc para calcular por quantidade de produtos vendidos
+
+## Bug — metaDinamicaCalc (2026-04-07)
+
+- [x] Corrigir erro "Table 'franquia_producao.comandas' doesn't exist" no metaDinamicaCalc — reescrito com schema real: vendas, vendas_produtos, usuarios, produtos
