@@ -544,6 +544,14 @@ export default function MensalPage() {
         loadingColabs={qColabs.isLoading}
       />
 
+      {/* Banner de carregando banco externo */}
+      {(isLoading || (qDetalhado.isError && isExternalDbTimeoutError(qDetalhado.error) && (qDetalhado.failureCount ?? 0) < 3)) && (
+        <DataVipLoadingState rows={3} attempt={(qDetalhado.failureCount ?? 0) + 1} />
+      )}
+      {qDetalhado.isError && !isExternalDbTimeoutError(qDetalhado.error) && (
+        <DataVipErrorState onRetry={() => qDetalhado.refetch()} />
+      )}
+
       {/* ── Gráfico Evolução Mensal ─────────────────────────────────────────── */}
       <Card className="overflow-hidden">
         <CardHeader className="pb-3">

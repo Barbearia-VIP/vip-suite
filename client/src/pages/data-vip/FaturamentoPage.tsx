@@ -147,14 +147,12 @@ export default function FaturamentoPage() {
     "Outros": "bg-slate-400",
   };
 
-  if (isTimeoutRetrying) {
+  if (isLoading) {
     return <DataVipLoadingState rows={4} message="Carregando dados de faturamento..." attempt={(q.failureCount ?? 0) + 1} />;
   }
-
-  if (isError) {
+   if (isError) {
     return <DataVipErrorState onRetry={() => q.refetch()} />;
   }
-
   return (
     <div className="p-6 space-y-6">
       {/* Cabeçalho */}

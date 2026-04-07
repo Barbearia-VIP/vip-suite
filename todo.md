@@ -1003,3 +1003,8 @@
 ## Bug — Loading Raio-X Clientes (2026-04-07)
 
 - [x] Adicionar banner de loading padronizado na aba Visão Geral do Raio-X de Clientes — substituído skeleton genérico pelo DataVipLoadingState
+
+## Bug — Loading Faturamento e Mensal (2026-04-07)
+
+- [x] Adicionar banner de loading padronizado na aba Faturamento — agora exibe DataVipLoadingState durante isLoading inicial e timeout
+- [x] Adicionar banner de loading padronizado na aba Mensal — adicionado banner após FiltrosPanel
