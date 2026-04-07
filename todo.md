@@ -961,3 +961,10 @@
 - [x] Atualizar endpoint comissoes para buscar faixas de meta e calcular bônus por colaborador
 - [x] Lógica: faturamento total (serviços + produtos) determina a faixa atingida; bônus = (pctFaixa - pctBase) * valorServicos
 - [x] Atualizar UI da página Comissões para exibir linha de Bônus Meta e Total Comissão com bônus incluído
+
+## Meta Dinâmica (2026-04-07)
+
+- [x] Criar tabela metas_dinamicas (id, orgId, unitId, nome, tipo: produto|servicos_multiplos, mesEspecifico, ativo)
+- [x] Criar endpoints tRPC: metaDinamicaList, metaDinamicaSave, metaDinamicaDelete, metaDinamicaCalc
+- [x] Redesenhar aba "Meta Dinâmica" na página Metas com UI de criação de regras (formulário completo com tipo, config, bônus, vigência)
+- [x] Integrar bônus de meta dinâmica na aba Comissões (badges verdes por meta batida, total incluindo bônus dinâmico)

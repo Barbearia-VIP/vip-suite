@@ -16,7 +16,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Target, Plus, Trash2, TrendingUp, Save, Info } from "lucide-react";
+import { Target, Plus, Trash2, TrendingUp, Save, Info, Zap, Package, Users, Edit2, CheckCircle2, Clock } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 function fmt(v: number | string) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 }).format(Number(v));
@@ -498,7 +499,354 @@ function MetasFaturamentoTab() {
   );
 }
 
-// ─── Página Principal ─────────────────────────────────────────────────────────
+// // ─── Meta Dinâmica ──────────────────────────────────────────────────────────
+
+const TIPO_LABELS: Record<string, string> = {
+  produto: "Venda de Produtos",
+  servicos_multiplos: "Serviços Múltiplos por Comanda",
+};
+const TIPO_ICONS: Record<string, React.ReactNode> = {
+  produto: <Package className="w-4 h-4" />,
+  servicos_multiplos: <Users className="w-4 h-4" />,
+};
+
+interface MetaDinamica {
+  id?: number;
+  nome: string;
+  tipo: "produto" | "servicos_multiplos";
+  config: Record<string, any>;
+  bonusTipo: "fixo" | "percentual";
+  bonusValor: number;
+  mesVigencia: string | null;
+}
+
+const META_VAZIA: MetaDinamica = {
+  nome: "",
+  tipo: "produto",
+  config: {},
+  bonusTipo: "fixo",
+  bonusValor: 0,
+  mesVigencia: null,
+};
+
+function MetaDinamicaTab() {
+  const { selectedUnit, userRole } = useApp();
+  const { org, units } = useOrg();
+  const { user } = useAuth();
+  const isAdmin = userRole === "master" || userRole === "org_admin" || user?.role === "admin";
+
+  const [editUnitId, setEditUnitId] = useState<number | null>(null);
+  const unitId = editUnitId ?? selectedUnit?.id ?? null;
+  const unitObj = (units ?? []).find((u: any) => u.id === unitId);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editMeta, setEditMeta] = useState<MetaDinamica>(META_VAZIA);
+  const [editId, setEditId] = useState<number | null>(null);
+
+  const now = new Date();
+  const mesAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  const q = trpc.dataVip.metaDinamicaList.useQuery(
+    { unitId: unitId!, orgId: org?.id! },
+    { enabled: !!unitId && !!org?.id }
+  );
+  const utils = trpc.useUtils();
+
+  const saveMutation = trpc.dataVip.metaDinamicaSave.useMutation({
+    onSuccess: () => {
+      toast.success(editId ? "Meta atualizada" : "Meta criada");
+      setModalOpen(false);
+      utils.dataVip.metaDinamicaList.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const deleteMutation = trpc.dataVip.metaDinamicaDelete.useMutation({
+    onSuccess: () => { toast.success("Meta removida"); utils.dataVip.metaDinamicaList.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  function openNew() {
+    setEditId(null);
+    setEditMeta({ ...META_VAZIA });
+    setModalOpen(true);
+  }
+
+  function openEdit(m: any) {
+    setEditId(m.id);
+    setEditMeta({
+      nome: m.nome,
+      tipo: m.tipo,
+      config: m.config ?? {},
+      bonusTipo: m.bonusTipo,
+      bonusValor: Number(m.bonusValor),
+      mesVigencia: m.mesVigencia ?? null,
+    });
+    setModalOpen(true);
+  }
+
+  function handleSave() {
+    if (!unitId || !org?.id) return toast.error("Selecione uma unidade");
+    if (!editMeta.nome.trim()) return toast.error("Informe o nome da meta");
+    saveMutation.mutate({
+      id: editId ?? undefined,
+      unitId,
+      orgId: org.id,
+      ...editMeta,
+    });
+  }
+
+  const metas = q.data ?? [];
+
+  return (
+    <div className="space-y-5">
+      {/* Seletor de unidade */}
+      {isAdmin && (units ?? []).length > 1 && (
+        <div className="flex items-center gap-3">
+          <Label className="text-sm whitespace-nowrap">Unidade:</Label>
+          <Select value={String(unitId ?? "")} onValueChange={v => setEditUnitId(Number(v))}>
+            <SelectTrigger className="w-56">
+              <SelectValue placeholder="Selecione a unidade..." />
+            </SelectTrigger>
+            <SelectContent>
+              {(units ?? []).map((u: any) => (
+                <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {!unitId ? (
+        <Card>
+          <CardContent className="p-8 text-center text-muted-foreground text-sm">
+            Selecione uma unidade para gerenciar as metas dinâmicas.
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold">Metas Dinâmicas — {unitObj?.name ?? "Unidade"}</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Crie metas com regras flexíveis. Ao bater a meta, o bônus aparece automaticamente na aba Comissões.
+              </p>
+            </div>
+            {isAdmin && (
+              <Button size="sm" onClick={openNew} className="gap-1.5">
+                <Plus className="w-4 h-4" /> Nova Meta
+              </Button>
+            )}
+          </div>
+
+          {q.isLoading ? (
+            <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>
+          ) : metas.length === 0 ? (
+            <Card>
+              <CardContent className="p-10 text-center">
+                <Zap className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">Nenhuma meta dinâmica cadastrada.</p>
+                <p className="text-xs text-muted-foreground mt-1">Clique em <strong>Nova Meta</strong> para criar a primeira.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {metas.map((m: any) => (
+                <Card key={m.id} className="relative">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                          {TIPO_ICONS[m.tipo]}
+                        </div>
+                        <div>
+                          <CardTitle className="text-sm">{m.nome}</CardTitle>
+                          <CardDescription className="text-xs">{TIPO_LABELS[m.tipo]}</CardDescription>
+                        </div>
+                      </div>
+                      {isAdmin && (
+                        <div className="flex gap-1">
+                          <button onClick={() => openEdit(m)} className="text-muted-foreground hover:text-foreground transition-colors p-1">
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => deleteMutation.mutate({ id: m.id })} className="text-muted-foreground hover:text-red-400 transition-colors p-1">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2 pt-0">
+                    {/* Config da regra */}
+                    {m.tipo === "produto" && (
+                      <div className="text-xs text-muted-foreground bg-muted/40 rounded px-2 py-1.5">
+                        Vender ≥ <strong>{fmt(m.config.valorMinProdutos ?? 0)}</strong> em produtos
+                      </div>
+                    )}
+                    {m.tipo === "servicos_multiplos" && (
+                      <div className="text-xs text-muted-foreground bg-muted/40 rounded px-2 py-1.5">
+                        ≥ <strong>{m.config.minComandas ?? 1}</strong> comanda(s) com ≥ <strong>{m.config.minServicosComanda ?? 2}</strong> serviços cada
+                      </div>
+                    )}
+                    {/* Bônus */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Bônus ao bater:</span>
+                      <Badge variant="outline" className="text-green-400 border-green-500/40 text-xs">
+                        {m.bonusTipo === "fixo" ? fmt(m.bonusValor) : `${Number(m.bonusValor).toFixed(1)}% sobre produtos`}
+                      </Badge>
+                    </div>
+                    {/* Vigência */}
+                    <div className="flex items-center gap-1.5 text-xs">
+                      {m.mesVigencia ? (
+                        <><Clock className="w-3 h-3 text-yellow-400" /><span className="text-yellow-400">Válida apenas em {m.mesVigencia}</span></>
+                      ) : (
+                        <><CheckCircle2 className="w-3 h-3 text-green-400" /><span className="text-green-400">Recorrente (todos os meses)</span></>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Modal de criação/edição */}
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editId ? "Editar Meta" : "Nova Meta Dinâmica"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {/* Nome */}
+            <div>
+              <Label className="text-sm">Nome da meta</Label>
+              <Input
+                value={editMeta.nome}
+                onChange={e => setEditMeta(prev => ({ ...prev, nome: e.target.value }))}
+                placeholder="Ex: Meta Produto Novembro"
+                className="mt-1"
+              />
+            </div>
+
+            {/* Tipo */}
+            <div>
+              <Label className="text-sm">Tipo de regra</Label>
+              <Select value={editMeta.tipo} onValueChange={v => setEditMeta(prev => ({ ...prev, tipo: v as any, config: {} }))}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="produto">Venda de Produtos</SelectItem>
+                  <SelectItem value="servicos_multiplos">Serviços Múltiplos por Comanda</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Config por tipo */}
+            {editMeta.tipo === "produto" && (
+              <div>
+                <Label className="text-sm">Valor mínimo de produtos vendidos (R$)</Label>
+                <Input
+                  type="number"
+                  value={editMeta.config.valorMinProdutos ?? ""}
+                  onChange={e => setEditMeta(prev => ({ ...prev, config: { ...prev.config, valorMinProdutos: Number(e.target.value) } }))}
+                  placeholder="Ex: 500"
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">O colaborador precisa vender pelo menos esse valor em produtos para ganhar o bônus.</p>
+              </div>
+            )}
+            {editMeta.tipo === "servicos_multiplos" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-sm">Mín. serviços por comanda</Label>
+                  <Input
+                    type="number"
+                    value={editMeta.config.minServicosComanda ?? 2}
+                    onChange={e => setEditMeta(prev => ({ ...prev, config: { ...prev.config, minServicosComanda: Number(e.target.value) } }))}
+                    min={2}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Qtd. de serviços na mesma comanda.</p>
+                </div>
+                <div>
+                  <Label className="text-sm">Mín. de comandas assim</Label>
+                  <Input
+                    type="number"
+                    value={editMeta.config.minComandas ?? 1}
+                    onChange={e => setEditMeta(prev => ({ ...prev, config: { ...prev.config, minComandas: Number(e.target.value) } }))}
+                    min={1}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Qtd. mínima de comandas no mês.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Bônus */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-sm">Tipo de bônus</Label>
+                <Select value={editMeta.bonusTipo} onValueChange={v => setEditMeta(prev => ({ ...prev, bonusTipo: v as any }))}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fixo">Valor fixo (R$)</SelectItem>
+                    {editMeta.tipo === "produto" && <SelectItem value="percentual">Percentual sobre produtos (%)</SelectItem>}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-sm">{editMeta.bonusTipo === "fixo" ? "Valor do bônus (R$)" : "Percentual (%)"}</Label>
+                <Input
+                  type="number"
+                  value={editMeta.bonusValor}
+                  onChange={e => setEditMeta(prev => ({ ...prev, bonusValor: Number(e.target.value) }))}
+                  min={0}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            {/* Vigência */}
+            <div>
+              <Label className="text-sm">Vigência</Label>
+              <Select
+                value={editMeta.mesVigencia ?? "recorrente"}
+                onValueChange={v => setEditMeta(prev => ({ ...prev, mesVigencia: v === "recorrente" ? null : v }))}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recorrente">Recorrente (todos os meses)</SelectItem>
+                  {Array.from({ length: 12 }, (_, i) => {
+                    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+                    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    return <SelectItem key={val} value={val}>{d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                "Recorrente" aplica a meta em todos os meses. Escolha um mês específico para uma meta temporária.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={saveMutation.isPending}>
+              {saveMutation.isPending ? "Salvando..." : "Salvar Meta"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Página Principal ─────────────────────────────────────────────────────
 
 export default function MetasPage() {
   const { selectedUnit } = useApp();
@@ -512,8 +860,11 @@ export default function MetasPage() {
         <p className="text-sm text-muted-foreground">{selectedUnit ? selectedUnit.name : "Todas as unidades"}</p>
       </div>
 
-      <Tabs defaultValue="faixas">
+      <Tabs defaultValue="dinamica">
         <TabsList>
+          <TabsTrigger value="dinamica" className="gap-1.5">
+            <Zap className="w-4 h-4" /> Meta Dinâmica
+          </TabsTrigger>
           <TabsTrigger value="faixas" className="gap-1.5">
             <TrendingUp className="w-4 h-4" /> Comissão Progressiva
           </TabsTrigger>
@@ -521,6 +872,9 @@ export default function MetasPage() {
             <Target className="w-4 h-4" /> Metas de Faturamento
           </TabsTrigger>
         </TabsList>
+        <TabsContent value="dinamica" className="mt-5">
+          <MetaDinamicaTab />
+        </TabsContent>
         <TabsContent value="faixas" className="mt-5">
           <FaixasComissaoTab />
         </TabsContent>

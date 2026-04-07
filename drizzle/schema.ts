@@ -1326,3 +1326,34 @@ export const metaFaixas = mysqlTable("meta_faixas", {
 
 export type MetaFaixa = typeof metaFaixas.$inferSelect;
 export type InsertMetaFaixa = typeof metaFaixas.$inferInsert;
+
+// ─────────────────────────────────────────────
+// DATA VIP — Metas Dinâmicas
+// Metas com regras flexíveis (produtos, serviços múltiplos por comanda)
+// Bônus aplicado por colaborador da unidade ao bater a meta no período
+// ─────────────────────────────────────────────
+export const metasDinamicas = mysqlTable("metas_dinamicas", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId").notNull(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  // tipo: 'produto' | 'servicos_multiplos'
+  tipo: varchar("tipo", { length: 50 }).notNull(),
+  // JSON com parâmetros da regra:
+  // produto: { valorMinProdutos: number }
+  // servicos_multiplos: { minServicosComanda: number, minComandas: number }
+  config: text("config").notNull().default("{}"),
+  // Bônus ao bater a meta (por colaborador da unidade)
+  bonusTipo: varchar("bonusTipo", { length: 20 }).notNull().default("fixo"), // 'fixo' | 'percentual'
+  bonusValor: decimal("bonusValor", { precision: 10, scale: 2 }).notNull().default("0"),
+  // Vigência: null = recorrente (todos os meses), ou 'YYYY-MM' para mês específico
+  mesVigencia: varchar("mesVigencia", { length: 7 }),
+  ativo: int("ativo").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_metas_dinamicas_unit").on(t.unitId),
+  index("idx_metas_dinamicas_org").on(t.orgId),
+]);
+export type MetaDinamica = typeof metasDinamicas.$inferSelect;
+export type InsertMetaDinamica = typeof metasDinamicas.$inferInsert;

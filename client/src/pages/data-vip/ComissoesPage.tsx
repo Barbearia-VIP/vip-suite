@@ -1,8 +1,9 @@
 /**
  * ComissoesPage.tsx — Cálculo de comissões por colaborador
- * Layout: cards por colaborador com breakdown S.Base / S.Extra / Produtos / Bônus Meta
+ * Layout: cards por colaborador com breakdown S.Base / S.Extra / Produtos / Bônus Meta / Bônus Dinâmico
  * Percentuais gerenciados na aba Colaboradores
  * Faixas progressivas gerenciadas na aba Metas → Comissão Progressiva
+ * Metas dinâmicas gerenciadas na aba Metas → Meta Dinâmica
  */
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
@@ -13,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DateRangePicker, buildPeriodos, type DateFilter } from "@/components/ui/DateRangePicker";
-import { DollarSign, Calendar, TrendingUp, Users, Scissors, Package, Star, Trophy } from "lucide-react";
+import { DollarSign, Calendar, TrendingUp, Users, Scissors, Package, Star, Trophy, Zap } from "lucide-react";
 
 function fmt(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
@@ -42,16 +43,46 @@ export default function ComissoesPage() {
     return { orgId: org?.id, unitId: selectedUnit?.id, periodo: filter.periodo };
   }, [filter, org?.id, selectedUnit?.id]);
 
+  // Calcular mês/ano para metaDinamicaCalc (só funciona em modo "month")
+  const mesDinamicoParams = useMemo(() => {
+    if (!selectedUnit?.id || !org?.id) return null;
+    if (filter.mode === "range") return null; // metas dinâmicas só para mês completo
+    const [ano, mes] = (filter.periodo ?? "").split("-").map(Number);
+    if (!ano || !mes) return null;
+    return { unitId: selectedUnit.id, orgId: org.id, mes, ano };
+  }, [filter, selectedUnit?.id, org?.id]);
+
   const q = trpc.dataVip.comissoes.useQuery(queryParams, { enabled: !!org?.id });
 
+  // Query de bônus dinâmicos (por colaborador, para o mês selecionado)
+  const qDinamico = trpc.dataVip.metaDinamicaCalc.useQuery(
+    mesDinamicoParams!,
+    { enabled: !!mesDinamicoParams }
+  );
+
   const colabs = q.data ?? [];
+  const bonusDinamicoMap = useMemo(() => {
+    const map: Record<string, { bonusTotal: number; metasBatidas: { nome: string; bonus: number }[] }> = {};
+    for (const item of (qDinamico.data ?? [])) {
+      map[String(item.colaboradorId)] = {
+        bonusTotal: Number(item.bonusTotal ?? 0),
+        metasBatidas: item.metasBatidas ?? [],
+      };
+    }
+    return map;
+  }, [qDinamico.data]);
 
   const totalFat = colabs.reduce((s, c) => s + c.faturamento, 0);
-  const totalComissoes = colabs.reduce((s, c) => s + c.comissao, 0);
+  const totalComissoes = colabs.reduce((s, c) => {
+    const bonusDin = Number(bonusDinamicoMap[String(c.colaboradorId)]?.bonusTotal ?? 0);
+    return s + c.comissao + bonusDin;
+  }, 0);
   const totalBonus = colabs.reduce((s, c) => s + (c.bonusMeta ?? 0), 0);
+  const totalBonusDinamico = Object.values(bonusDinamicoMap).reduce((s, b) => s + b.bonusTotal, 0);
   const pctMedio = totalFat > 0 ? (totalComissoes / totalFat) * 100 : 0;
   const isRangeMode = filter.mode === "range";
   const temBonus = totalBonus > 0;
+  const temBonusDinamico = totalBonusDinamico > 0;
 
   return (
     <div className="p-6 space-y-5">
@@ -65,7 +96,7 @@ export default function ComissoesPage() {
             {selectedUnit ? selectedUnit.name : "Todas as unidades"} · {colabs.length} colaboradores
             {isAdmin && (
               <span className="ml-2 text-xs text-muted-foreground/70">
-                — Percentuais na aba <strong>Colaboradores</strong> · Faixas na aba <strong>Metas</strong>
+                — Percentuais na aba <strong>Colaboradores</strong> · Faixas e Metas na aba <strong>Metas</strong>
               </span>
             )}
           </p>
@@ -89,7 +120,13 @@ export default function ComissoesPage() {
         {temBonus && (
           <Badge className="text-xs gap-1.5 bg-amber-500/20 text-amber-400 border border-amber-500/30">
             <Trophy className="w-3 h-3" />
-            Bônus de meta aplicado — {fmt(totalBonus)} em bônus no período
+            Bônus progressivo — {fmt(totalBonus)} no período
+          </Badge>
+        )}
+        {temBonusDinamico && (
+          <Badge className="text-xs gap-1.5 bg-green-500/20 text-green-400 border border-green-500/30">
+            <Zap className="w-3 h-3" />
+            Bônus dinâmico — {fmt(totalBonusDinamico)} no período
           </Badge>
         )}
         {!selectedUnit && (
@@ -120,8 +157,10 @@ export default function ComissoesPage() {
             {q.isLoading ? <Skeleton className="h-7 w-28 mt-1" /> : (
               <>
                 <p className="text-xl font-bold mt-1 text-orange-400">{fmt(totalComissoes)}</p>
-                {temBonus && (
-                  <p className="text-[10px] text-amber-400 mt-0.5">incl. {fmt(totalBonus)} de bônus</p>
+                {(temBonus || temBonusDinamico) && (
+                  <p className="text-[10px] text-amber-400 mt-0.5">
+                    incl. {fmt(totalBonus + totalBonusDinamico)} de bônus
+                  </p>
                 )}
               </>
             )}
@@ -186,8 +225,17 @@ export default function ComissoesPage() {
             const pctFaixaMeta = Number(c.pctFaixaMeta ?? 0);
             const temFaixaAtingida = pctFaixaMeta > 0 && pctBonus > 0;
 
+            // Bônus dinâmico para este colaborador
+            const dinInfo = bonusDinamicoMap[String(c.colaboradorId)];
+            const bonusDinamico = dinInfo ? dinInfo.bonusTotal : 0;
+            const metasBatidas = dinInfo ? dinInfo.metasBatidas : [];
+            const temBonusDin = bonusDinamico > 0;
+
+            // Total final incluindo bônus dinâmico
+            const comissaoFinal = c.comissao + bonusDinamico;
+
             return (
-              <Card key={c.colaboradorId} className={`border-border/60 ${temFaixaAtingida ? "ring-1 ring-amber-500/30" : ""}`}>
+              <Card key={c.colaboradorId} className={`border-border/60 ${temFaixaAtingida || temBonusDin ? "ring-1 ring-amber-500/30" : ""}`}>
                 <CardContent className="p-4 space-y-3">
                   {/* Header do card */}
                   <div className="flex items-start justify-between">
@@ -208,16 +256,27 @@ export default function ComissoesPage() {
                     )}
                   </div>
 
-                  {/* Badge de faixa atingida */}
+                  {/* Badge de faixa atingida (meta progressiva) */}
                   {temFaixaAtingida && (
                     <div className="rounded-md px-2.5 py-1.5 text-xs flex items-center justify-between bg-amber-500/10 border border-amber-500/30">
                       <span className="text-amber-400 font-medium flex items-center gap-1">
                         <Trophy className="w-3 h-3" />
-                        Meta atingida — {pctFaixaMeta}% sobre serviços
+                        Meta progressiva — {pctFaixaMeta}% sobre serviços
                       </span>
                       <span className="text-amber-300 font-semibold">{fmt(bonusMeta)}</span>
                     </div>
                   )}
+
+                  {/* Badge de metas dinâmicas batidas */}
+                  {temBonusDin && metasBatidas.map((mb, idx) => (
+                    <div key={idx} className="rounded-md px-2.5 py-1.5 text-xs flex items-center justify-between bg-green-500/10 border border-green-500/30">
+                      <span className="text-green-400 font-medium flex items-center gap-1">
+                        <Zap className="w-3 h-3" />
+                        {mb.nome}
+                      </span>
+                      <span className="text-green-300 font-semibold">{fmt(mb.bonus)}</span>
+                    </div>
+                  ))}
 
                   {/* Faturamento total */}
                   <div className="flex justify-between text-sm border-b border-border/40 pb-2">
@@ -278,11 +337,11 @@ export default function ComissoesPage() {
                       </div>
                     </div>
 
-                    {/* Bônus de Meta (só mostra se houver bônus) */}
+                    {/* Bônus de Meta Progressiva (só mostra se houver bônus) */}
                     {bonusMeta > 0 && (
                       <div className="flex items-center justify-between text-xs bg-amber-500/5 rounded px-1.5 py-1 border border-amber-500/20">
                         <span className="flex items-center gap-1.5 text-amber-400">
-                          <Trophy className="w-3 h-3" /> Bônus Meta
+                          <Trophy className="w-3 h-3" /> Bônus Progressivo
                         </span>
                         <div className="flex items-center gap-2">
                           <span className="text-muted-foreground">{fmt(c.totalServicos)}</span>
@@ -294,6 +353,21 @@ export default function ComissoesPage() {
                         </div>
                       </div>
                     )}
+
+                    {/* Bônus Dinâmico (linha por meta batida) */}
+                    {temBonusDin && (
+                      <div className="flex items-center justify-between text-xs bg-green-500/5 rounded px-1.5 py-1 border border-green-500/20">
+                        <span className="flex items-center gap-1.5 text-green-400">
+                          <Zap className="w-3 h-3" /> Bônus Dinâmico
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-400 font-semibold">{fmt(bonusDinamico)}</span>
+                          <Badge className="text-[10px] px-1 py-0 h-4 bg-green-500/20 text-green-400 border-green-500/30">
+                            {metasBatidas.length} meta{metasBatidas.length > 1 ? "s" : ""}
+                          </Badge>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Total comissão */}
@@ -301,11 +375,11 @@ export default function ComissoesPage() {
                     <span className="text-sm text-muted-foreground">
                       Total Comissão{" "}
                       <span className="text-xs">
-                        ({c.faturamento > 0 ? fmtPct((c.comissao / c.faturamento) * 100) : "0.0%"})
+                        ({c.faturamento > 0 ? fmtPct((comissaoFinal / c.faturamento) * 100) : "0.0%"})
                       </span>
                     </span>
-                    <span className={`text-base font-bold ${c.comissao > 0 ? "text-orange-400" : "text-muted-foreground"}`}>
-                      {fmt(c.comissao)}
+                    <span className={`text-base font-bold ${comissaoFinal > 0 ? "text-orange-400" : "text-muted-foreground"}`}>
+                      {fmt(comissaoFinal)}
                     </span>
                   </div>
                 </CardContent>
@@ -320,7 +394,17 @@ export default function ComissoesPage() {
         <Card className="border-amber-500/20 bg-amber-500/5">
           <CardContent className="p-4 text-sm text-amber-400 flex items-center gap-2">
             <Star className="w-4 h-4 flex-shrink-0" />
-            Selecione uma unidade específica para ativar o cálculo de bônus de meta progressiva.
+            Selecione uma unidade específica para ativar o cálculo de bônus de meta progressiva e dinâmica.
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Aviso quando em modo range (metas dinâmicas não disponíveis) */}
+      {isRangeMode && selectedUnit && !q.isLoading && (
+        <Card className="border-blue-500/20 bg-blue-500/5">
+          <CardContent className="p-4 text-sm text-blue-400 flex items-center gap-2">
+            <Zap className="w-4 h-4 flex-shrink-0" />
+            Bônus de metas dinâmicas disponível apenas para períodos mensais completos.
           </CardContent>
         </Card>
       )}

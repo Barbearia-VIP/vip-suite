@@ -9,7 +9,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
 import { sql, eq, and, asc } from "drizzle-orm";
-import { metaFaixas } from "../../drizzle/schema";
+import { metaFaixas, metasDinamicas } from "../../drizzle/schema";
 import { getSyncStatus, getAllSyncStatuses, startAutoSyncScheduler } from "../vipDataSync";
 import {
   getDashboardKpis,
@@ -2180,5 +2180,174 @@ export const dataVipRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.delete(metaFaixas).where(eq(metaFaixas.id, input.id));
       return { success: true };
+    }),
+
+  // ── Metas Dinâmicas ──────────────────────────────────────────────────────────
+  metaDinamicaList: protectedProcedure
+    .input(z.object({ unitId: z.number(), orgId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const rows = await db.select().from(metasDinamicas).where(
+        and(
+          eq(metasDinamicas.unitId, input.unitId),
+          eq(metasDinamicas.orgId, input.orgId),
+          eq(metasDinamicas.ativo, 1),
+        )
+      ).orderBy(asc(metasDinamicas.createdAt));
+      return rows.map(r => ({
+        ...r,
+        config: (() => { try { return JSON.parse(r.config); } catch { return {}; } })(),
+        bonusValor: Number(r.bonusValor),
+      }));
+    }),
+
+  metaDinamicaSave: protectedProcedure
+    .input(z.object({
+      id: z.number().optional(),
+      unitId: z.number(),
+      orgId: z.number(),
+      nome: z.string().min(1),
+      tipo: z.enum(["produto", "servicos_multiplos"]),
+      config: z.record(z.string(), z.any()),
+      bonusTipo: z.enum(["fixo", "percentual"]),
+      bonusValor: z.number().min(0),
+      mesVigencia: z.string().nullable().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const configStr = JSON.stringify(input.config);
+      if (input.id) {
+        await db.update(metasDinamicas).set({
+          nome: input.nome,
+          tipo: input.tipo,
+          config: configStr,
+          bonusTipo: input.bonusTipo,
+          bonusValor: String(input.bonusValor),
+          mesVigencia: input.mesVigencia ?? null,
+          updatedAt: new Date(),
+        }).where(eq(metasDinamicas.id, input.id));
+        return { success: true, id: input.id };
+      } else {
+        const [result] = await db.insert(metasDinamicas).values({
+          unitId: input.unitId,
+          orgId: input.orgId,
+          nome: input.nome,
+          tipo: input.tipo,
+          config: configStr,
+          bonusTipo: input.bonusTipo,
+          bonusValor: String(input.bonusValor),
+          mesVigencia: input.mesVigencia ?? null,
+          ativo: 1,
+        });
+        return { success: true, id: (result as any).insertId };
+      }
+    }),
+
+  metaDinamicaDelete: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(metasDinamicas).set({ ativo: 0 }).where(eq(metasDinamicas.id, input.id));
+      return { success: true };
+    }),
+
+  // Calcula o atingimento das metas dinâmicas para um período
+  metaDinamicaCalc: protectedProcedure
+    .input(z.object({
+      unitId: z.number(),
+      orgId: z.number(),
+      mes: z.number(),
+      ano: z.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const mesStr = `${input.ano}-${String(input.mes).padStart(2, '0')}`;
+      const metas = await db.select().from(metasDinamicas).where(
+        and(
+          eq(metasDinamicas.unitId, input.unitId),
+          eq(metasDinamicas.orgId, input.orgId),
+          eq(metasDinamicas.ativo, 1),
+        )
+      );
+      const metasAtivas = metas.filter(m =>
+        m.mesVigencia === null || m.mesVigencia === mesStr
+      );
+      if (metasAtivas.length === 0) return [];
+
+      const extInfo = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
+      if (!extInfo || extInfo.extIds.length === 0) return [];
+      const unitIds = extInfo.extIds;
+      const { queryExternal } = await import("../db-external");
+
+      const dataInicio = new Date(input.ano, input.mes - 1, 1);
+      const dataFimExcl = new Date(input.ano, input.mes, 1);
+
+      const resultados: Record<string, { colaboradorId: string; colaboradorNome: string; bonusTotal: number; metasBatidas: { nome: string; bonus: number }[] }> = {};
+
+      for (const meta of metasAtivas) {
+        const config = (() => { try { return JSON.parse(meta.config); } catch { return {}; } })();
+        const bonusValor = Number(meta.bonusValor);
+        const placeholders = unitIds.map(() => '?').join(',');
+
+        if (meta.tipo === "produto") {
+          const valorMin = Number(config.valorMinProdutos ?? 0);
+          const rows = await queryExternal(
+            `SELECT c.nome AS colaboradorNome, c.id AS colaboradorId,
+               COALESCE(SUM(CASE WHEN i.tipo IN ('probar','proemp','proins') THEN i.valor ELSE 0 END), 0) AS totalProdutos
+             FROM comandas co
+             JOIN colaboradores c ON c.id = co.colaborador_id
+             JOIN itens_comanda i ON i.comanda_id = co.id
+             WHERE co.unidade_id IN (${placeholders})
+               AND co.data_hora >= ? AND co.data_hora < ?
+               AND co.status NOT IN ('cancelado','cancelada')
+             GROUP BY c.id, c.nome
+             HAVING totalProdutos >= ?`,
+            [...unitIds, dataInicio, dataFimExcl, valorMin]
+          );
+          for (const row of rows as any[]) {
+            const key = String(row.colaboradorId);
+            if (!resultados[key]) resultados[key] = { colaboradorId: key, colaboradorNome: row.colaboradorNome, bonusTotal: 0, metasBatidas: [] };
+            const bonus = meta.bonusTipo === "percentual"
+              ? (bonusValor / 100) * Number(row.totalProdutos)
+              : bonusValor;
+            resultados[key].bonusTotal += bonus;
+            resultados[key].metasBatidas.push({ nome: meta.nome, bonus });
+          }
+        } else if (meta.tipo === "servicos_multiplos") {
+          const minServicos = Number(config.minServicosComanda ?? 2);
+          const minComandas = Number(config.minComandas ?? 1);
+          const rows = await queryExternal(
+            `SELECT c.nome AS colaboradorNome, c.id AS colaboradorId, COUNT(*) AS totalComandas
+             FROM (
+               SELECT co.colaborador_id, co.id AS comanda_id
+               FROM comandas co
+               JOIN itens_comanda i ON i.comanda_id = co.id
+               WHERE co.unidade_id IN (${placeholders})
+                 AND co.data_hora >= ? AND co.data_hora < ?
+                 AND co.status NOT IN ('cancelado','cancelada')
+                 AND i.tipo IN ('serbar','serext')
+               GROUP BY co.id, co.colaborador_id
+               HAVING COUNT(*) >= ?
+             ) sub
+             JOIN colaboradores c ON c.id = sub.colaborador_id
+             GROUP BY sub.colaborador_id, c.nome
+             HAVING totalComandas >= ?`,
+            [...unitIds, dataInicio, dataFimExcl, minServicos, minComandas]
+          );
+          for (const row of rows as any[]) {
+            const key = String(row.colaboradorId);
+            if (!resultados[key]) resultados[key] = { colaboradorId: key, colaboradorNome: row.colaboradorNome, bonusTotal: 0, metasBatidas: [] };
+            resultados[key].bonusTotal += bonusValor;
+            resultados[key].metasBatidas.push({ nome: meta.nome, bonus: bonusValor });
+          }
+        }
+      }
+      return Object.values(resultados);
     }),
 });
