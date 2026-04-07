@@ -881,3 +881,6 @@
 - [x] Cohort: filtrar cohort histórico (grid M+1…M+6) pelo colaboradorId selecionado
 - [x] Cohort: badge visual na aba "Cohort" quando filtro de colaborador estiver ativo
 - [x] Cohort: modo de comparação lado a lado de dois colaboradores nos KPIs
+
+## Cohort Histórico — Comparação Lado a Lado
+- [x] Cohort Histórico: exibir linhas de A e B sobrepostas na grade M+1…M+6 quando modo comparação ativo

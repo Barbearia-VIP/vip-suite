@@ -2213,58 +2213,157 @@ export default function RaioXPage() {
               )}
 
               {/* ── Cohort Histórico (grade M+1..M+6) ── */}
-              {qCohort.data?.cohortHistorico && qCohort.data.cohortHistorico.length > 0 && (
-                <Card className="bg-card/60 border-border/50">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-muted-foreground" />
-                      Retenção por Mês de 1ª Visita (Cohort Histórico)
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground">% que voltou em M+1, M+2… M+6 (mês-calendário após a 1ª visita)</p>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <div className="p-3 mx-4 mb-3 rounded-lg bg-blue-950/40 border border-blue-800/30 text-xs text-blue-300 space-y-1">
-                      <p><strong>Metodologia:</strong> Clientes novos agrupados pelo mês da 1ª visita. Retenção medida por <strong>meses-calendário</strong> (M+1 = visitou no mês seguinte, M+2 = dois meses depois, etc.).</p>
-                      <p className="text-blue-400/70">O que observar: Tendência entre cohorts — se M+1 cai mês a mês, a primeira impressão está piorando. Se M+6 é muito menor que M+1, clientes experimentam mas não ficam.</p>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-border/50 text-xs text-muted-foreground">
-                            <th className="text-left p-3 pl-4">Mês</th>
-                            <th className="text-right p-3">Novos</th>
-                            {[1,2,3,4,5,6].map(m => (
-                              <th key={m} className="text-right p-3">M+{m}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {qCohort.data.cohortHistorico.map((row: Record<string, unknown>) => (
-                            <tr key={String(row.mes)} className="border-b border-border/30 hover:bg-muted/20">
-                              <td className="p-3 pl-4 font-medium">{fmtMes(String(row.mes))}</td>
-                              <td className="p-3 text-right text-foreground">{Number(row.novos)}</td>
-                              {[1,2,3,4,5,6].map(m => {
-                                const val = row[`m${m}`];
-                                if (val === null || val === undefined) return <td key={m} className="p-3 text-right text-muted-foreground/40 text-xs">—</td>;
-                                const pct = Number(val);
-                                return (
-                                  <td key={m} className="p-3 text-right">
-                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                      pct >= 30 ? "bg-green-900/50 text-green-300" :
-                                      pct >= 15 ? "bg-yellow-900/50 text-yellow-300" :
-                                      "bg-red-900/50 text-red-300"
-                                    }`}>{pct}%</span>
-                                  </td>
-                                );
-                              })}
+              {qCohort.data?.cohortHistorico && qCohort.data.cohortHistorico.length > 0 && (() => {
+                const nomeA = cohortModoComparacao && cohortColaboradorId !== undefined
+                  ? ((qCohortBase.data?.cohortPorBarbeiro as Array<{barbeiroId: number; barbeiroNome: string}> | undefined)
+                      ?.find(b => b.barbeiroId === cohortColaboradorId)?.barbeiroNome ?? "Colaborador A")
+                  : null;
+                const nomeB = cohortModoComparacao && cohortComparacaoId !== undefined
+                  ? ((qCohortBase.data?.cohortPorBarbeiro as Array<{barbeiroId: number; barbeiroNome: string}> | undefined)
+                      ?.find(b => b.barbeiroId === cohortComparacaoId)?.barbeiroNome ?? "Colaborador B")
+                  : null;
+                const historicoB = cohortModoComparacao && cohortComparacaoId !== undefined
+                  ? (qCohortComparacao.data?.cohortHistorico as Array<Record<string, unknown>> | undefined)
+                  : undefined;
+                const mesesUnion = (() => {
+                  const setMeses = new Set<string>();
+                  (qCohort.data!.cohortHistorico as Array<Record<string, unknown>>).forEach(r => setMeses.add(String(r.mes)));
+                  if (historicoB) historicoB.forEach(r => setMeses.add(String(r.mes)));
+                  return Array.from(setMeses).sort();
+                })();
+                return (
+                  <Card className={`bg-card/60 ${cohortModoComparacao && nomeA && nomeB ? "border-amber-500/20" : "border-border/50"}`}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                        Retenção por Mês de 1ª Visita (Cohort Histórico)
+                        {cohortModoComparacao && nomeA && nomeB && (
+                          <span className="ml-2 text-xs font-normal text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">⚖ Comparando A vs B</span>
+                        )}
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground">% que voltou em M+1, M+2… M+6 (mês-calendário após a 1ª visita)</p>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="p-3 mx-4 mb-3 rounded-lg bg-blue-950/40 border border-blue-800/30 text-xs text-blue-300 space-y-1">
+                        <p><strong>Metodologia:</strong> Clientes novos agrupados pelo mês da 1ª visita. Retenção medida por <strong>meses-calendário</strong> (M+1 = visitou no mês seguinte, M+2 = dois meses depois, etc.).</p>
+                        {cohortModoComparacao && nomeA && nomeB ? (
+                          <p className="text-blue-400/70">Linhas <span className="text-blue-300 font-semibold">🔵 A</span> e <span className="text-orange-300 font-semibold">🟠 B</span> sobrepostas por mês — compare a evolução de retenção de cada colaborador ao longo do tempo.</p>
+                        ) : (
+                          <p className="text-blue-400/70">O que observar: Tendência entre cohorts — se M+1 cai mês a mês, a primeira impressão está piorando. Se M+6 é muito menor que M+1, clientes experimentam mas não ficam.</p>
+                        )}
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border/50 text-xs text-muted-foreground">
+                              <th className="text-left p-3 pl-4">Mês</th>
+                              {cohortModoComparacao && nomeA && nomeB && (
+                                <th className="text-center p-3 text-xs text-muted-foreground">Colaborador</th>
+                              )}
+                              <th className="text-right p-3">Novos</th>
+                              {[1,2,3,4,5,6].map(m => (
+                                <th key={m} className="text-right p-3">M+{m}</th>
+                              ))}
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                          </thead>
+                          <tbody>
+                            {cohortModoComparacao && nomeA && nomeB ? (
+                              // Modo comparação: para cada mês, exibir linha A e linha B
+                              mesesUnion.map(mes => {
+                                const rowA = (qCohort.data!.cohortHistorico as Array<Record<string, unknown>>).find(r => String(r.mes) === mes);
+                                const rowB = historicoB?.find(r => String(r.mes) === mes);
+                                return (
+                                  <>
+                                    {/* Linha A */}
+                                    <tr key={`${mes}-A`} className="border-b border-border/20 hover:bg-blue-950/10 bg-blue-950/5">
+                                      <td className="p-2 pl-4 font-medium text-xs" rowSpan={rowB ? 1 : 2}>{fmtMes(mes)}</td>
+                                      <td className="p-2 text-center">
+                                        <span className="text-xs font-semibold text-blue-300 bg-blue-900/30 px-1.5 py-0.5 rounded">
+                                          🔵 {nomeA.split(" ")[0]}
+                                        </span>
+                                      </td>
+                                      <td className="p-2 text-right text-foreground text-xs">{rowA ? Number(rowA.novos) : "—"}</td>
+                                      {[1,2,3,4,5,6].map(m => {
+                                        const val = rowA?.[`m${m}`];
+                                        if (val === null || val === undefined) return <td key={m} className="p-2 text-right text-muted-foreground/40 text-xs">—</td>;
+                                        const pct = Number(val);
+                                        const valB = rowB?.[`m${m}`];
+                                        const pctB = valB !== null && valB !== undefined ? Number(valB) : null;
+                                        const aWins = pctB !== null && pct > pctB;
+                                        return (
+                                          <td key={m} className="p-2 text-right">
+                                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                              aWins ? "bg-blue-900/60 text-blue-200 ring-1 ring-blue-500/40" :
+                                              pct >= 30 ? "bg-green-900/50 text-green-300" :
+                                              pct >= 15 ? "bg-yellow-900/50 text-yellow-300" :
+                                              "bg-red-900/50 text-red-300"
+                                            }`}>{pct}%{aWins && " ▲"}</span>
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                    {/* Linha B */}
+                                    {rowB && (
+                                      <tr key={`${mes}-B`} className="border-b border-border/30 hover:bg-orange-950/10 bg-orange-950/5">
+                                        <td className="p-2 text-center">
+                                          <span className="text-xs font-semibold text-orange-300 bg-orange-900/30 px-1.5 py-0.5 rounded">
+                                            🟠 {nomeB.split(" ")[0]}
+                                          </span>
+                                        </td>
+                                        <td className="p-2 text-right text-foreground text-xs">{Number(rowB.novos)}</td>
+                                        {[1,2,3,4,5,6].map(m => {
+                                          const val = rowB[`m${m}`];
+                                          if (val === null || val === undefined) return <td key={m} className="p-2 text-right text-muted-foreground/40 text-xs">—</td>;
+                                          const pct = Number(val);
+                                          const valA = rowA?.[`m${m}`];
+                                          const pctA = valA !== null && valA !== undefined ? Number(valA) : null;
+                                          const bWins = pctA !== null && pct > pctA;
+                                          return (
+                                            <td key={m} className="p-2 text-right">
+                                              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                                bWins ? "bg-orange-900/60 text-orange-200 ring-1 ring-orange-500/40" :
+                                                pct >= 30 ? "bg-green-900/50 text-green-300" :
+                                                pct >= 15 ? "bg-yellow-900/50 text-yellow-300" :
+                                                "bg-red-900/50 text-red-300"
+                                              }`}>{pct}%{bWins && " ▲"}</span>
+                                            </td>
+                                          );
+                                        })}
+                                      </tr>
+                                    )}
+                                  </>
+                                );
+                              })
+                            ) : (
+                              // Modo normal: uma linha por mês
+                              (qCohort.data!.cohortHistorico as Array<Record<string, unknown>>).map((row) => (
+                                <tr key={String(row.mes)} className="border-b border-border/30 hover:bg-muted/20">
+                                  <td className="p-3 pl-4 font-medium">{fmtMes(String(row.mes))}</td>
+                                  <td className="p-3 text-right text-foreground">{Number(row.novos)}</td>
+                                  {[1,2,3,4,5,6].map(m => {
+                                    const val = row[`m${m}`];
+                                    if (val === null || val === undefined) return <td key={m} className="p-3 text-right text-muted-foreground/40 text-xs">—</td>;
+                                    const pct = Number(val);
+                                    return (
+                                      <td key={m} className="p-3 text-right">
+                                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                          pct >= 30 ? "bg-green-900/50 text-green-300" :
+                                          pct >= 15 ? "bg-yellow-900/50 text-yellow-300" :
+                                          "bg-red-900/50 text-red-300"
+                                        }`}>{pct}%</span>
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
 
               {/* ── Por Barbeiro ── */}
               {qCohort.data?.cohortPorBarbeiro && qCohort.data.cohortPorBarbeiro.length > 0 && (
