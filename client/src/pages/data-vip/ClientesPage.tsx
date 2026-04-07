@@ -21,6 +21,7 @@ import {
   MessageSquare, Phone,
 } from "lucide-react";
 
+import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 // ── Formatadores ──────────────────────────────────────────────────────────────
 function fmtMoeda(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 }).format(v);
@@ -480,6 +481,14 @@ export default function ClientesPage() {
           <PeriodoSelector filtros={filtros} onChange={setFiltros} />
         </div>
       </div>
+
+      {/* Banner de carregando banco externo */}
+      {(qKpis.isLoading || (qKpis.isError && isExternalDbTimeoutError(qKpis.error) && (qKpis.failureCount ?? 0) < 3)) && (
+        <DataVipLoadingState rows={3} attempt={(qKpis.failureCount ?? 0) + 1} />
+      )}
+      {qKpis.isError && !isExternalDbTimeoutError(qKpis.error) && (
+        <DataVipErrorState onRetry={() => qKpis.refetch()} />
+      )}
 
       {/* ── Abas ───────────────────────────────────────────────────────────── */}
       <div className="flex gap-1 border-b border-border pb-0">

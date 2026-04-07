@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Trophy, Medal, Lock } from "lucide-react";
+import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
@@ -65,6 +66,14 @@ export default function RankingPage() {
           {periodos.map(p => <option key={p.val} value={p.val}>{p.label}</option>)}
         </select>
       </div>
+
+      {/* Banner de carregando banco externo */}
+      {(q.isLoading || (q.isError && isExternalDbTimeoutError(q.error) && (q.failureCount ?? 0) < 3)) && (
+        <DataVipLoadingState rows={3} attempt={(q.failureCount ?? 0) + 1} />
+      )}
+      {q.isError && !isExternalDbTimeoutError(q.error) && (
+        <DataVipErrorState onRetry={() => q.refetch()} />
+      )}
 
       {!isAdmin && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">

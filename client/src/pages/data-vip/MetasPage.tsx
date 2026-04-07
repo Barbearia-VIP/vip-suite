@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Target, Plus, Trash2, TrendingUp, Save, Info, Zap, Package, Users, Edit2, CheckCircle2, Clock } from "lucide-react";
+import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 
 function fmt(v: number | string) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 }).format(Number(v));
@@ -514,6 +515,14 @@ function MetaDinamicaTab() {
               </Button>
             )}
           </div>
+
+          {/* Banner de carregando banco externo */}
+          {(q.isLoading || (q.isError && isExternalDbTimeoutError(q.error) && (q.failureCount ?? 0) < 3)) && (
+            <DataVipLoadingState rows={2} attempt={(q.failureCount ?? 0) + 1} />
+          )}
+          {q.isError && !isExternalDbTimeoutError(q.error) && (
+            <DataVipErrorState onRetry={() => q.refetch()} />
+          )}
 
           {q.isLoading ? (
             <div className="space-y-3">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>

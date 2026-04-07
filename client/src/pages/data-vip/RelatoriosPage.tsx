@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileText } from "lucide-react";
+import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 
 function fmt(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
@@ -31,6 +32,14 @@ export default function RelatoriosPage() {
         <h1 className="text-2xl font-bold flex items-center gap-2"><FileText className="w-6 h-6 text-primary" /> Relatórios Semanais</h1>
         <p className="text-sm text-muted-foreground">{selectedUnit ? selectedUnit.name : "Todas as unidades"}</p>
       </div>
+      {/* Banner de carregando banco externo */}
+      {(q.isLoading || (q.isError && isExternalDbTimeoutError(q.error) && (q.failureCount ?? 0) < 3)) && (
+        <DataVipLoadingState rows={3} attempt={(q.failureCount ?? 0) + 1} />
+      )}
+      {q.isError && !isExternalDbTimeoutError(q.error) && (
+        <DataVipErrorState onRetry={() => q.refetch()} />
+      )}
+
       <Card>
         <CardContent className="p-0">
           {q.isLoading

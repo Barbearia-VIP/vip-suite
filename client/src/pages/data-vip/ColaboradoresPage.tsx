@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DateRangePicker, buildPeriodos, type DateFilter } from "@/components/ui/DateRangePicker";
 import { toast } from "sonner";
 import { Scissors, Calendar, Save } from "lucide-react";
+import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 
 function fmt(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
@@ -95,6 +96,14 @@ export default function ColaboradoresPage() {
           align="end"
         />
       </div>
+
+      {/* Banner de carregando banco externo */}
+      {(q.isLoading || (q.isError && isExternalDbTimeoutError(q.error) && (q.failureCount ?? 0) < 3)) && (
+        <DataVipLoadingState rows={3} attempt={(q.failureCount ?? 0) + 1} />
+      )}
+      {q.isError && !isExternalDbTimeoutError(q.error) && (
+        <DataVipErrorState onRetry={() => q.refetch()} />
+      )}
 
       {/* Badge de modo range */}
       {isRangeMode && (

@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { Settings, CheckCircle2, XCircle, AlertCircle, ExternalLink } from "lucide-react";
+import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 
 export default function AdministracaoPage() {
   const { userRole } = useApp();
@@ -58,6 +59,14 @@ export default function AdministracaoPage() {
           </CardContent></Card>
         ))}
       </div>
+
+      {/* Banner de carregando banco externo */}
+      {(q.isLoading || (q.isError && isExternalDbTimeoutError(q.error) && (q.failureCount ?? 0) < 3)) && (
+        <DataVipLoadingState rows={2} attempt={(q.failureCount ?? 0) + 1} />
+      )}
+      {q.isError && !isExternalDbTimeoutError(q.error) && (
+        <DataVipErrorState onRetry={() => q.refetch()} />
+      )}
 
       <Card>
         <CardHeader className="pb-2">

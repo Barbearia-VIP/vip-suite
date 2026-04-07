@@ -994,3 +994,8 @@
 - [x] Criar ProdutosPage com listagem, busca, classificação por tipo e editor de categoria (clique para alternar Cabelo → Barba → Outros)
 - [x] Adicionar botão de exportar CSV dos produtos com categoria
 - [x] Registrar rota /data-vip/produtos e link de navegação abaixo de Serviços
+
+## Loading padronizado Data VIP (2026-04-07)
+
+- [x] Componente DataVipLoadingState já existia e foi reutilizado
+- [x] Aplicar loading padronizado em todas as páginas Data VIP que consultam banco externo (ColaboradoresPage, ClientesPage, ComissoesPage, ServicosPage, ProdutosPage, RankingPage, RelatoriosPage, MetasPage, CalendarioPage, AdministracaoPage, SincronizacaoPage)

@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Calendar, Plus, Trash2 } from "lucide-react";
+import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 
 const TIPO_COLORS: Record<string, string> = {
   folga: "bg-blue-500/20 text-blue-400 border-blue-500/30",
@@ -64,6 +65,14 @@ export default function CalendarioPage() {
           )}
         </div>
       </div>
+
+      {/* Banner de carregando banco externo */}
+      {(q.isLoading || (q.isError && isExternalDbTimeoutError(q.error) && (q.failureCount ?? 0) < 3)) && (
+        <DataVipLoadingState rows={2} attempt={(q.failureCount ?? 0) + 1} />
+      )}
+      {q.isError && !isExternalDbTimeoutError(q.error) && (
+        <DataVipErrorState onRetry={() => q.refetch()} />
+      )}
 
       <Card>
         <CardContent className="p-0">

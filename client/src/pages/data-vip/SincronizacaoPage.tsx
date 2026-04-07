@@ -17,6 +17,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { RefreshCw, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, KeyRound, ExternalLink, PlaySquare } from "lucide-react";
+import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 import { Link } from "wouter";
 
 function fmtDt(d: string | null) {
@@ -111,6 +112,14 @@ export default function SincronizacaoPage() {
         </h1>
         <p className="text-sm text-muted-foreground">Importar dados da API externa para o VIP Suite</p>
       </div>
+
+      {/* Banner de carregando banco externo */}
+      {(logsQ.isLoading || (logsQ.isError && isExternalDbTimeoutError(logsQ.error) && (logsQ.failureCount ?? 0) < 3)) && (
+        <DataVipLoadingState rows={2} attempt={(logsQ.failureCount ?? 0) + 1} />
+      )}
+      {logsQ.isError && !isExternalDbTimeoutError(logsQ.error) && (
+        <DataVipErrorState onRetry={() => logsQ.refetch()} />
+      )}
 
       {/* Sincronização em lote (apenas quando "Todas as Unidades" selecionado) */}
       {isAdmin && !selectedUnit && (
