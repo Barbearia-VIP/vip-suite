@@ -2089,18 +2089,16 @@ export const raioXRouter = router({
 
       const barbeirosAtivosStr = barbeirosAtivosIds.join(",");
 
-      // ── ETAPA 1: IDs dos clientes atendidos no período (via vendas_produtos.colaborador) ──
+      // ── ETAPA 1: IDs dos clientes atendidos no período ─────────────────────────────────────────────
+      // Usa vendas.usuario filtrado pelos IDs dos barbeiros executores (mais rápido que JOIN vendas_produtos)
       const clientesPeriodo = await queryExternal<{ cliente_id: number }>(`
         SELECT DISTINCT v.cliente as cliente_id
-        FROM vendas_produtos vp
-        JOIN vendas v ON v.id = vp.venda
-        JOIN usuarios uu ON uu.id = vp.colaborador
-        WHERE ${unitCondU}
+        FROM vendas v
+        WHERE v.usuario IN (${barbeirosAtivosStr})
           AND DATE(v.data_criacao) >= '${dataInicio}'
           AND DATE(v.data_criacao) <= '${dataFim}'
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
           AND v.cliente IS NOT NULL AND v.cliente != 2
-          AND vp.colaborador IN (${barbeirosAtivosStr})
       `);
 
       if (clientesPeriodo.length === 0) {
@@ -2111,8 +2109,8 @@ export const raioXRouter = router({
       const clienteIds = clientesPeriodo.map(r => Number(r.cliente_id)).slice(0, 2000);
       const clienteIdsStr = clienteIds.join(",");
 
-      // ── ETAPA 2A: Histórico agregado por cliente via vendas_produtos.colaborador ──────────
-      // Conta visitas distintas por colaborador executor (não por usuário do caixa)
+      // ── ETAPA 2A: Histórico agregado por cliente ─────────────────────────────────────────────
+      // Usa vendas.usuario (rápido) para contar visitas e barbeiros distintos
       const clientesRows = await queryExternal<{
         cliente_id: number;
         total_visitas_hist: number;
@@ -2123,22 +2121,22 @@ export const raioXRouter = router({
       }>(`
         SELECT
           v.cliente as cliente_id,
-          COUNT(DISTINCT v.id) as total_visitas_hist,
-          COUNT(DISTINCT vp.colaborador) as barbeiros_distintos,
+          COUNT(v.id) as total_visitas_hist,
+          COUNT(DISTINCT v.usuario) as barbeiros_distintos,
           MAX(v.data_criacao) as ultima_visita,
           DATEDIFF(NOW(), MAX(v.data_criacao)) as dias_desde_ultima,
           MIN(v.data_criacao) as primeira_visita_hist
-        FROM vendas_produtos vp
-        JOIN vendas v ON v.id = vp.venda
+        FROM vendas v
         WHERE v.cliente IN (${clienteIdsStr})
-          AND vp.colaborador IN (${barbeirosAtivosStr})
+          AND v.usuario IN (${barbeirosAtivosStr})
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
           AND v.cliente IS NOT NULL AND v.cliente != 2
         GROUP BY v.cliente
       `);
 
       // ── ETAPA 2B: Barbeiro principal e último barbeiro por cliente ──────────────────────
-      // Usa vendas_produtos.colaborador como executor real
+      // Usa vendas_produtos.colaborador para atribuir o executor real por cliente
+      // (query mais leve pois já temos os IDs dos clientes e barbeiros)
       const barbeirosPorCliente = await queryExternal<{
         cliente_id: number;
         ultimo_barbeiro_id: number;
@@ -2309,7 +2307,7 @@ export const raioXRouter = router({
       const segComOutro = classificados.filter(c => c.segmento === "com_outro").length;
 
       // ── 7. Evolução mensal (novos, rec. fiéis, rec. exclusivos, rec. rotativos, total) ──
-      // Usa vendas_produtos.colaborador para contar barbeiros distintos por cliente
+      // Usa vendas.usuario (rápido) para evitar JOIN pesado com vendas_produtos
       const evolucaoRows = await queryExternal<{
         mes: string;
         novos: number;
@@ -2325,26 +2323,22 @@ export const raioXRouter = router({
           COUNT(DISTINCT CASE WHEN hist2.total_visitas_hist >= 3 AND hist2.barbeiros_distintos = 1 THEN v.cliente END) as rec_fieis,
           COUNT(DISTINCT CASE WHEN hist2.total_visitas_hist = 2 AND hist2.barbeiros_distintos = 1 THEN v.cliente END) as rec_exclusivos,
           COUNT(DISTINCT CASE WHEN hist2.barbeiros_distintos > 1 THEN v.cliente END) as rec_rotativos,
-          COUNT(DISTINCT vp.id) as total_atendimentos,
+          COUNT(v.id) as total_atendimentos,
           COUNT(DISTINCT v.cliente) as total_clientes
-        FROM vendas_produtos vp
-        JOIN vendas v ON v.id = vp.venda
-        JOIN usuarios uu ON uu.id = vp.colaborador
+        FROM vendas v
         JOIN (
           SELECT
             v2.cliente,
-            COUNT(DISTINCT v2.id) as total_visitas_hist,
-            COUNT(DISTINCT vp2.colaborador) as barbeiros_distintos,
+            COUNT(v2.id) as total_visitas_hist,
+            COUNT(DISTINCT v2.usuario) as barbeiros_distintos,
             MIN(v2.data_criacao) as primeira_visita_geral
-          FROM vendas_produtos vp2
-          JOIN vendas v2 ON v2.id = vp2.venda
+          FROM vendas v2
           WHERE v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
             AND v2.cliente IS NOT NULL AND v2.cliente != 2
-            AND vp2.colaborador IN (${barbeirosAtivosStr})
+            AND v2.usuario IN (${barbeirosAtivosStr})
           GROUP BY v2.cliente
         ) hist2 ON hist2.cliente = v.cliente
-        WHERE ${unitCondU}
-          AND vp.colaborador IN (${barbeirosAtivosStr})
+        WHERE v.usuario IN (${barbeirosAtivosStr})
           AND DATE(v.data_criacao) >= DATE_SUB('${dataInicio}', INTERVAL 11 MONTH)
           AND DATE(v.data_criacao) <= '${dataFim}'
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
