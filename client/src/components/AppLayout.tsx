@@ -39,6 +39,7 @@ import {
   ShoppingCart,
   Bot,
   BookMarked,
+  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -159,6 +160,7 @@ const SIDEBAR_ITEMS: Record<ModuleId, SidebarItem[]> = {
       { label: "Comissões", path: "/data-vip/comissoes", icon: DollarSign },
       { label: "Metas", path: "/data-vip/metas", icon: Target },
       { label: "Serviços", path: "/data-vip/servicos", icon: Scissors },
+      { label: "Produtos", path: "/data-vip/produtos", icon: Package },
     ] },
   ],
   gestao_total: [

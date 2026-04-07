@@ -986,3 +986,11 @@
 ## Bug — metaDinamicaCalc Malformed packet (2026-04-07)
 
 - [x] Corrigir "Malformed communication packet" no metaDinamicaCalc — datas convertidas para strings ISO (YYYY-MM-DD) antes de passar ao queryExternal
+
+## Aba Produtos na Data VIP (2026-04-07)
+
+- [x] Criar tabela produto_categorias (orgId, nomeProduto, categoria: cabelo|barba|outros)
+- [x] Criar endpoints tRPC: dataVip.listProdutosExterno e dataVip.saveProdutoCategorias
+- [x] Criar ProdutosPage com listagem, busca, classificação por tipo e editor de categoria (clique para alternar Cabelo → Barba → Outros)
+- [x] Adicionar botão de exportar CSV dos produtos com categoria
+- [x] Registrar rota /data-vip/produtos e link de navegação abaixo de Serviços

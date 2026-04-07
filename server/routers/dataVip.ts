@@ -2391,6 +2391,75 @@ export const dataVipRouter = router({
           }
         }
       }
-      return Object.values(resultados);
+        return Object.values(resultados);
+    }),
+
+  /** Lista produtos do banco externo com categorias salvas localmente */
+  listProdutosExterno: protectedProcedure
+    .input(z.object({ orgId: z.number().optional(), unitId: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      const { extIds, orgFilter } = await resolveExternalIds(
+        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+      );
+      const { queryExternal } = await import("../db-external");
+      const unitCond = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
+        : `uu.unidade IN (${extIds.join(",")})`;
+
+      // Busca todos os produtos distintos do banco externo (tipo != 'ser')
+      const extProdutos = await queryExternal<{ nome: string; qtd: number; valorTotal: number }>(`
+        SELECT p.nome, COUNT(*) as qtd, SUM(vp.valorLiquido) as valorTotal
+        FROM produtos p
+        JOIN vendas_produtos vp ON vp.produto = p.id
+        JOIN vendas v ON vp.venda = v.id
+        JOIN usuarios uu ON v.usuario = uu.id
+        WHERE ${unitCond}
+          AND p.tipo != 'ser'
+          AND v.comanda_temp = 0
+          AND v.status != 0
+        GROUP BY p.nome
+        ORDER BY qtd DESC
+      `, []);
+
+      // Busca categorias salvas no banco local
+      const db = await getDb();
+      let catMap: Record<string, string> = {};
+      if (db && orgFilter) {
+        const [catRows] = await db.execute(sql`
+          SELECT nomeProduto, categoria FROM produto_categorias WHERE orgId = ${orgFilter}
+        `) as any;
+        for (const r of catRows as any[]) {
+          catMap[r.nomeProduto] = r.categoria;
+        }
+      }
+
+      return extProdutos.map(p => ({
+        nome: p.nome,
+        qtd: Number(p.qtd),
+        valorTotal: Number(p.valorTotal ?? 0),
+        categoria: (catMap[p.nome] as "cabelo" | "barba" | "outros" | null) ?? null,
+      }));
+    }),
+
+  /** Salva (upsert) a categoria de um ou mais produtos */
+  saveProdutoCategorias: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      produtos: z.array(z.object({
+        nome: z.string(),
+        categoria: z.enum(["cabelo", "barba", "outros"]),
+      })),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      for (const p of input.produtos) {
+        await db.execute(sql`
+          INSERT INTO produto_categorias (orgId, nomeProduto, categoria)
+          VALUES (${input.orgId}, ${p.nome}, ${p.categoria})
+          ON DUPLICATE KEY UPDATE categoria = ${p.categoria}, updatedAt = NOW()
+        `);
+      }
+      return { success: true, count: input.produtos.length };
     }),
 });

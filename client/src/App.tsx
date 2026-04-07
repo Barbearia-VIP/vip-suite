@@ -33,6 +33,7 @@ import RaioXPage from "./pages/data-vip/RaioXPage";
 import ComissoesPage from "./pages/data-vip/ComissoesPage";
 import SincronizacaoPage from "./pages/data-vip/SincronizacaoPage";
 import ServicosPage from "./pages/data-vip/ServicosPage";
+import ProdutosPage from "./pages/data-vip/ProdutosPage";
 import CalendarioPage from "./pages/data-vip/CalendarioPage";
 import RelatoriosPage from "./pages/data-vip/RelatoriosPage";
 import AdministracaoPage from "./pages/data-vip/AdministracaoPage";
@@ -202,6 +203,9 @@ function Router() {
       </Route>
       <Route path="/data-vip/servicos">
         <ProtectedLayout><ServicosPage /></ProtectedLayout>
+      </Route>
+      <Route path="/data-vip/produtos">
+        <ProtectedLayout><ProdutosPage /></ProtectedLayout>
       </Route>
       <Route path="/data-vip/calendario">
         <ProtectedLayout><CalendarioPage /></ProtectedLayout>

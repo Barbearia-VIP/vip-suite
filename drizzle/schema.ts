@@ -1357,3 +1357,23 @@ export const metasDinamicas = mysqlTable("metas_dinamicas", {
 ]);
 export type MetaDinamica = typeof metasDinamicas.$inferSelect;
 export type InsertMetaDinamica = typeof metasDinamicas.$inferInsert;
+
+// ─────────────────────────────────────────────
+// DATA VIP — Categorias de Produtos
+// Classificação manual de produtos do banco externo (cabelo | barba | outros)
+// Chave: orgId + nomeProduto (nome único por org)
+// ─────────────────────────────────────────────
+export const produtoCategorias = mysqlTable("produto_categorias", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  nomeProduto: varchar("nomeProduto", { length: 255 }).notNull(),
+  // categoria: 'cabelo' | 'barba' | 'outros'
+  categoria: varchar("categoria", { length: 50 }).notNull().default("outros"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_produto_categorias_org").on(t.orgId),
+  uniqueIndex("uq_produto_cat_org_nome").on(t.orgId, t.nomeProduto),
+]);
+export type ProdutoCategoria = typeof produtoCategorias.$inferSelect;
+export type InsertProdutoCategoria = typeof produtoCategorias.$inferInsert;
