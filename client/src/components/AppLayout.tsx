@@ -234,7 +234,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [location, navigate] = useLocation();
   const { activeModule, setActiveModule, selectedUnit, setSelectedUnit, availableUnits, setAvailableUnits, sidebarCollapsed, setSidebarCollapsed, userRole } = useApp();
   const { user, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, themeSource, toggleTheme } = useTheme();
   const ct = useChartTheme();
   const isDark = theme === "dark";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -449,14 +449,27 @@ export default function AppLayout({ children }: AppLayoutProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground relative"
               onClick={toggleTheme}
-              title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+              title={
+                themeSource === 'system'
+                  ? `Seguindo o sistema (${theme === 'dark' ? 'escuro' : 'claro'}) — clique para fixar`
+                  : theme === 'dark'
+                  ? 'Tema escuro (fixo) — clique para claro'
+                  : 'Tema claro (fixo) — clique para escuro'
+              }
             >
               {theme === 'dark' ? (
                 <Sun className="w-4 h-4" />
               ) : (
                 <Moon className="w-4 h-4" />
+              )}
+              {/* Ponto indicando que o tema segue o sistema */}
+              {themeSource === 'system' && (
+                <span
+                  className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full"
+                  style={{ background: "oklch(0.76 0.145 72)" }}
+                />
               )}
             </Button>
 

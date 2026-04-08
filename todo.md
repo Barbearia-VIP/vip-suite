@@ -1117,3 +1117,4 @@
 - [x] AppLayout.tsx atualizado — sidebar e header respondem ao tema
 - [x] glass-card e kpi-card atualizados no CSS para tema claro
 - [x] Transição suave 0.3s ease em body, glass-card, kpi-card, header e sidebar
+- [x] Sincronizar tema com prefers-color-scheme do SO (localStorage como override manual, ponto âmbar no botão quando seguindo o sistema)
