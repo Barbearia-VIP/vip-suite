@@ -890,11 +890,11 @@ export default function RaioXPage() {
 
               {/* ── Entradas na base ── */}
               {v.entradasMensais && v.entradasMensais.length > 0 && (() => {
-                const totalNovos = v.entradasMensais.reduce((s, r) => s + r.novos, 0);
-                const totalResgatados = v.entradasMensais.reduce((s, r) => s + r.resgatados, 0);
+                const totalNovos = v.entradasMensais.reduce((s: number, r: (typeof v.entradasMensais)[0]) => s + r.novos, 0);
+                const totalResgatados = v.entradasMensais.reduce((s: number, r: (typeof v.entradasMensais)[0]) => s + r.resgatados, 0);
                 const anoAtual = new Date().getFullYear();
-                const anoNovos = v.entradasMensais.filter(r => r.mes.startsWith(String(anoAtual))).reduce((s, r) => s + r.novos, 0);
-                const ultimos6mNovos = v.entradasMensais.slice(-6).reduce((s, r) => s + r.novos, 0);
+                const anoNovos = v.entradasMensais.filter((r: (typeof v.entradasMensais)[0]) => r.mes.startsWith(String(anoAtual))).reduce((s: number, r: (typeof v.entradasMensais)[0]) => s + r.novos, 0);
+                const ultimos6mNovos = v.entradasMensais.slice(-6).reduce((s: number, r: (typeof v.entradasMensais)[0]) => s + r.novos, 0);
                 return (
                 <div className="glass-card bg-card/60 border-border/50">
                   <div className="pb-2">
