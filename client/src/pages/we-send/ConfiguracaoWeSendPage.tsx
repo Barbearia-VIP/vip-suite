@@ -93,7 +93,7 @@ export default function ConfiguracaoWeSendPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <PageHeader
         title="Configurações WAHA"
         description="Configure o servidor WhatsApp HTTP API"

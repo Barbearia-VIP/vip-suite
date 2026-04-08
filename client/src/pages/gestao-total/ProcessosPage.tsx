@@ -304,7 +304,7 @@ export default function ProcessosPage() {
   const apoio = filtered.filter(p => p.tipo === "apoio");
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground">Processos</h1>

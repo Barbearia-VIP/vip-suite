@@ -78,7 +78,7 @@ export default function CamConfigPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <PageHeader title="Configurações VIP Cam" description="Configure a câmera de reconhecimento facial" />
 
       <div className="glass-card">

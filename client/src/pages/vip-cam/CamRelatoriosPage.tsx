@@ -39,7 +39,7 @@ export default function CamRelatoriosPage() {
   const totals = metricas?.totals;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <PageHeader title="Métricas VIP Cam" description="Relatórios e análises de satisfação" />
       <div className="flex gap-3 flex-wrap items-center">
         <div className="flex items-center gap-2">

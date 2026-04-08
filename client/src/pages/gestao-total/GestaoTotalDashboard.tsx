@@ -80,7 +80,7 @@ export default function GestaoTotalDashboard() {
   const tarefas = tarefasQ.data ?? [];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

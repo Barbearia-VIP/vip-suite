@@ -52,7 +52,7 @@ export default function GestaoTotalPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <PageHeader
         title="Gestão Total"
         description={selectedUnit ? `ERP Operacional — ${selectedUnit.name}` : "ERP operacional da rede"}

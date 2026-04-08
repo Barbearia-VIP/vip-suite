@@ -25,7 +25,7 @@ export default function CamHistoricoPage() {
   });
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <PageHeader title="Histórico de Detecções" description="Todas as capturas registradas pela câmera" />
       <div className="flex gap-3 flex-wrap items-center">
         <div className="flex items-center gap-2">

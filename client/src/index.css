@@ -375,3 +375,41 @@
     pointer-events: none;
   }
 }
+
+/* ── Micro-animações de entrada ─────────────────────────────────────────── */
+@keyframes vip-fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes vip-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes vip-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes vip-slide-right {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Classes utilitárias de animação */
+.animate-fade-up   { animation: vip-fade-up   0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-fade-in   { animation: vip-fade-in   0.3s  ease both; }
+.animate-scale-in  { animation: vip-scale-in  0.3s  cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-slide-right { animation: vip-slide-right 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Delays escalonados para grids de cards */
+.delay-50  { animation-delay: 50ms; }
+.delay-100 { animation-delay: 100ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-250 { animation-delay: 250ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+
+/* glass-card com animação padrão */
+.glass-card {
+  animation: vip-fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}

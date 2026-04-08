@@ -53,7 +53,7 @@ export default function CampanhasPage() {
   const campanhas = campanhasQuery.data || [];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <PageHeader
         title="Campanhas"
         description="Histórico e acompanhamento de campanhas WhatsApp"

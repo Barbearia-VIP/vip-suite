@@ -78,7 +78,7 @@ export default function PromptsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <PageHeader
         title="Editor de Prompts"
         description="Configure a personalidade do bot para comentários e stories"

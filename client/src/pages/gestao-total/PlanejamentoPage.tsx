@@ -174,7 +174,7 @@ export default function PlanejamentoPage() {
   const hasContent = missao || visao || valores || forcas.length > 0 || objetivos.length > 0;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground">Planejamento Estratégico</h1>

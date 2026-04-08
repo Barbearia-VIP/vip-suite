@@ -1039,3 +1039,10 @@
 - [x] Modernizar Reputação com glassmorphism e gradientes âmbar
 - [x] Modernizar Auto Instagram com glassmorphism e gradientes âmbar
 - [x] Modernizar We Send WhatsApp com glassmorphism e gradientes âmbar
+
+## Micro-animações de Entrada (2026-04-08)
+
+- [x] Definir keyframes vip-fade-up, vip-fade-in, vip-scale-in, vip-slide-right no index.css
+- [x] glass-card tem animação vip-fade-up embutida por padrão (todas as páginas)
+- [x] Aplicar animate-fade-in nos wrappers principais de 32 páginas do sistema
+- [x] Classes utilitárias delay-50 a delay-400 para grids escalonados

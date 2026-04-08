@@ -27,7 +27,7 @@ export default function RelatoriosWeSendPage() {
     .slice(0, 5);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <PageHeader
         title="Relatórios"
         description="Análise de desempenho das campanhas WhatsApp"

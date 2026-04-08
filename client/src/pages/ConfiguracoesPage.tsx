@@ -246,7 +246,7 @@ export default function ConfiguracoesPage() {
   );
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <PageHeader title="Configurações" description="Configure as chaves de API e módulos por unidade" />
       <Tabs defaultValue="modulos">
         <TabsList className="h-8">

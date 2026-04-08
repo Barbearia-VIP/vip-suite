@@ -38,7 +38,7 @@ export default function CamClientesPage() {
   );
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <PageHeader title="Clientes VIP Cam" description="Clientes reconhecidos pela câmera" />
 
       <div className="flex gap-3 flex-wrap">

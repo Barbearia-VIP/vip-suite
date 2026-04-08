@@ -90,7 +90,7 @@ export default function UnidadesPage() {
   const isMasterOrAdmin = userRole === "master" || userRole === "org_admin";
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <PageHeader title="Unidades" description="Gerencie as unidades da sua rede"
         actions={isMasterOrAdmin ? (org ? <CreateUnitDialog orgId={org.id} onCreated={() => utils.orgs.units.invalidate()} /> : <CreateOrgDialog onCreated={() => utils.orgs.list.invalidate()} />) : null}
       />

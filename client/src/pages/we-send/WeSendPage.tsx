@@ -153,7 +153,7 @@ export default function WeSendPage() {
   const currentStatusLabel = statusLabel[sessionStatus] || sessionStatus;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <PageHeader
         title="We Send WhatsApp"
         description="Envio em massa via WhatsApp com WAHA API"

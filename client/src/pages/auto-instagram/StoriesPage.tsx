@@ -55,7 +55,7 @@ export default function StoriesPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <PageHeader
         title="Respostas a Stories"
         description="Configure e monitore as respostas automáticas a menções em stories"

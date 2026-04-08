@@ -107,7 +107,7 @@ export default function GuiaSistemaPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <div>
         <h1 className="text-xl font-bold text-foreground">Guia do Sistema</h1>
         <p className="text-sm text-muted-foreground">Como usar cada seção do módulo Gestão Total</p>

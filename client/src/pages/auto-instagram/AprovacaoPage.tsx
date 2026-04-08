@@ -54,7 +54,7 @@ export default function AprovacaoPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       <PageHeader
         title="Fila de Aprovação"
         description={`${queue.length} resposta${queue.length !== 1 ? "s" : ""} aguardando aprovação`}

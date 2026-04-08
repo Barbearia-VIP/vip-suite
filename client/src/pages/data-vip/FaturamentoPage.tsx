@@ -174,7 +174,7 @@ export default function FaturamentoPage() {
     return <DataVipErrorState onRetry={() => q.refetch()} />;
   }
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 animate-fade-in">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -356,7 +356,7 @@ export default function FaturamentoPage() {
             <Scissors className="w-4 h-4" style={{ color: "oklch(0.76 0.145 72)" }} />
             <h3 className="text-sm font-semibold text-foreground">Composição (grupo)</h3>
           </div>
-          <div className="space-y-4">
+          <div className="animate-fade-in space-y-4">
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)
             ) : !d?.composicao.length ? (
