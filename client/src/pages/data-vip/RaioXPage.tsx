@@ -824,9 +824,9 @@ export default function RaioXPage() {
                 const mediaAtend = v.movimentoMensal.length > 0 ? Math.round(totalAtend / v.movimentoMensal.length) : 0;
                 const anoAtual = new Date().getFullYear();
                 const anoAtendidos = v.movimentoMensal
-                  .filter(r => r.mes.startsWith(String(anoAtual)))
-                  .reduce((s, r) => s + r.atendidos, 0);
-                const ultimos6m = v.movimentoMensal.slice(-6).reduce((s, r) => s + r.atendidos, 0);
+                  .filter((r: (typeof v.movimentoMensal)[0]) => r.mes.startsWith(String(anoAtual)))
+                  .reduce((s: number, r: (typeof v.movimentoMensal)[0]) => s + r.atendidos, 0);
+                const ultimos6m = v.movimentoMensal.slice(-6).reduce((s: number, r: (typeof v.movimentoMensal)[0]) => s + r.atendidos, 0);
                 return (
                 <div className="glass-card bg-card/60 border-border/50">
                   <div className="pb-2">
