@@ -261,19 +261,30 @@ export const dashboardRouter = router({
       const nps = totalRep > 0 ? Math.round(((promotores - detratores) / totalRep) * 100) : 0;
 
       // ── AUTO INSTAGRAM: comentários e stories respondidos no período ──
-      // igBotStats.date é tipo DATE (sem hora) — usar strings YYYY-MM-DD para comparação correta
-      const igDateStart = mesStartStr.slice(0, 10);
-      const igDateEnd = mesEndStr.slice(0, 10);
+      // ig_replied_comments usa timestamp UTC — converter período BRT para UTC adicionando 3h
+      // Ex: 2026-04-01 00:00 BRT = 2026-04-01 03:00 UTC; 2026-04-07 23:59 BRT = 2026-04-08 02:59 UTC
+      const igUtcStart = new Date(mesStart.getTime() + 3 * 60 * 60 * 1000);
+      const igUtcEnd = new Date(mesEnd.getTime() + 3 * 60 * 60 * 1000);
+      const igStartStr = igUtcStart.toISOString().replace('T', ' ').slice(0, 19);
+      const igEndStr = igUtcEnd.toISOString().replace('T', ' ').slice(0, 19);
       const igUnitWhere = unitId ? `AND unitId = ${unitId}` : `AND unitId IN (SELECT id FROM units WHERE orgId = ${orgId})`;
-      const igRaw = await db.execute(sql.raw(
-        `SELECT COALESCE(SUM(repliesCount), 0) as comentariosRespondidos, COALESCE(SUM(storiesReplied), 0) as storiesRespondidos
-         FROM ig_bot_stats
-         WHERE date >= '${igDateStart}' AND date <= '${igDateEnd}' ${igUnitWhere}`
+      // Comentários respondidos: contar de ig_replied_comments (timestamp preciso)
+      const igCommentsRaw = await db.execute(sql.raw(
+        `SELECT COUNT(*) as comentariosRespondidos
+         FROM ig_replied_comments
+         WHERE repliedAt >= '${igStartStr}' AND repliedAt <= '${igEndStr}' ${igUnitWhere}`
       ));
-      const igRow = execRow(igRaw);
+      const igCommentsRow = execRow(igCommentsRaw);
+      // Stories respondidos: contar de ig_story_reply_log (status=success)
+      const igStoriesRaw = await db.execute(sql.raw(
+        `SELECT COUNT(*) as storiesRespondidos
+         FROM ig_story_reply_log
+         WHERE createdAt >= '${igStartStr}' AND createdAt <= '${igEndStr}' AND status = 'success' ${igUnitWhere}`
+      ));
+      const igStoriesRow = execRow(igStoriesRaw);
       const igTotals = {
-        comentariosRespondidos: Number(igRow.comentariosRespondidos ?? 0),
-        storiesRespondidos: Number(igRow.storiesRespondidos ?? 0),
+        comentariosRespondidos: Number(igCommentsRow.comentariosRespondidos ?? 0),
+        storiesRespondidos: Number(igStoriesRow.storiesRespondidos ?? 0),
       };
 
       return {

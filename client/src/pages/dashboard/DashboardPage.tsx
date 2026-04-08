@@ -34,29 +34,33 @@ type PeriodOption = "today" | "week" | "month" | "quarter" | "custom";
 
 function getPeriodDates(option: PeriodOption, customFrom?: string, customTo?: string): { from: string; to: string; label: string } {
   // Usa fuso Brasil (UTC-3) para calcular a data atual corretamente
+  // Aplica offset BRT apenas para determinar o dia/mês/ano atual
   const nowUtc = new Date();
-  const brtOffset = -3 * 60 * 60 * 1000;
-  const now = new Date(nowUtc.getTime() + brtOffset);
+  const brtMs = nowUtc.getTime() - 3 * 60 * 60 * 1000; // UTC-3
+  const brt = new Date(brtMs);
   const pad = (n: number) => String(n).padStart(2, "0");
-  // fmt usa UTC do objeto ajustado para BRT
-  const fmt = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-  const todayStr = fmt(now);
+  const y = brt.getUTCFullYear();
+  const m = brt.getUTCMonth();
+  const d = brt.getUTCDate();
+  const todayStr = `${y}-${pad(m + 1)}-${pad(d)}`;
+  const firstOfMonth = `${y}-${pad(m + 1)}-01`;
+  const firstOfQuarter = `${y}-${pad(Math.floor(m / 3) * 3 + 1)}-01`;
   if (option === "today") { return { from: todayStr, to: todayStr, label: "Hoje" }; }
   if (option === "week") {
-    const day = now.getUTCDay();
-    const mon = new Date(now.getTime() - (day === 0 ? 6 : day - 1) * 86400000);
-    return { from: fmt(mon), to: todayStr, label: "Esta semana" };
+    const dow = brt.getUTCDay(); // 0=Dom
+    const daysBack = dow === 0 ? 6 : dow - 1;
+    const monMs = brtMs - daysBack * 86400000;
+    const mon = new Date(monMs);
+    const monStr = `${mon.getUTCFullYear()}-${pad(mon.getUTCMonth() + 1)}-${pad(mon.getUTCDate())}`;
+    return { from: monStr, to: todayStr, label: "Esta semana" };
   }
   if (option === "month") {
-    const firstDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) + brtOffset);
-    return { from: fmt(firstDay), to: todayStr, label: "Este mês" };
+    return { from: firstOfMonth, to: todayStr, label: "Este mês" };
   }
   if (option === "quarter") {
-    const firstDay = new Date(Date.UTC(now.getUTCFullYear(), Math.floor(now.getUTCMonth() / 3) * 3, 1) + brtOffset);
-    return { from: fmt(firstDay), to: todayStr, label: "Este trimestre" };
+    return { from: firstOfQuarter, to: todayStr, label: "Este trimestre" };
   }
-  const firstDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) + brtOffset);
-  return { from: customFrom ?? fmt(firstDay), to: customTo ?? todayStr, label: `${customFrom ?? "—"} a ${customTo ?? "—"}` };
+  return { from: customFrom ?? firstOfMonth, to: customTo ?? todayStr, label: `${customFrom ?? "—"} a ${customTo ?? "—"}` };
 }
 
 // ─── KPI Card Premium ────────────────────────────────────────────────────────
