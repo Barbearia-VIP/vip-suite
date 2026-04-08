@@ -1131,3 +1131,6 @@
 
 ## Correção Seletor de Período Data VIP
 - [x] Reorganizar popover do DateRangePicker: calendário de 2 meses em destaque no topo, atalhos e meses em painel inferior
+
+## Auditoria de Dados Data VIP (Joinville como referência)
+- [x] Corrigir faturamento: substituir status != 0 por status = 1 em todas as queries (69+ ocorrências em dataVipQueries.ts, dataVip.ts, raioX.ts, dashboard.ts, vipDataSync.ts) — exclui comandas em aberto (status=2) e mantém apenas fechadas/pagas (status=1)

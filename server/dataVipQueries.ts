@@ -57,7 +57,7 @@ async function getKpisRealtime(extIds: number[], ano: number, mes: number) {
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
   `, [dataInicio, dataFim]);
 
   // Clientes novos = primeira visita nesta unidade no período
@@ -69,7 +69,7 @@ async function getKpisRealtime(extIds: number[], ano: number, mes: number) {
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.cliente IS NOT NULL
       AND v.cliente NOT IN (
         SELECT DISTINCT v2.cliente
@@ -78,7 +78,7 @@ async function getKpisRealtime(extIds: number[], ano: number, mes: number) {
         WHERE uu2.unidade ${extIds.length === 1 ? `= ${extIds[0]}` : extIds.length > 1 ? `IN (${extIds.join(',')})` : '> 0'}
           AND v2.data_criacao < ?
           AND v2.comanda_temp = 0
-          AND v2.status != 0
+          AND v2.status = 1
           AND v2.cliente IS NOT NULL
       )
   `, [dataInicio, dataFim, dataInicio]);
@@ -105,7 +105,7 @@ async function getKpisRealtime(extIds: number[], ano: number, mes: number) {
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
   `, [dataInicio, dataFim]);
 
   const totalClientes = Number(rows[0]?.total_clientes_unicos ?? 0);
@@ -157,7 +157,7 @@ export async function getKpisRealtimeByRange(
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       ${colabCond}
   `, [dataInicio, dataFimExcl]);
 
@@ -171,7 +171,7 @@ export async function getKpisRealtimeByRange(
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.cliente IS NOT NULL
       ${colabCond}
       AND v.cliente NOT IN (
@@ -181,7 +181,7 @@ export async function getKpisRealtimeByRange(
         WHERE uu2.unidade ${extIds.length === 1 ? `= ${extIds[0]}` : extIds.length > 1 ? `IN (${extIds.join(',')})` : '> 0'}
           AND v2.data_criacao < ?
           AND v2.comanda_temp = 0
-          AND v2.status != 0
+          AND v2.status = 1
           AND v2.cliente IS NOT NULL
       )
   `, [dataInicio, dataFimExcl, dataInicio]);
@@ -208,7 +208,7 @@ export async function getKpisRealtimeByRange(
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       ${colabCond}
   `, [dataInicio, dataFimExcl]);
 
@@ -313,7 +313,7 @@ export async function getDiasTrabalhados(
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
   `, [dataInicio, dataFim]);
 
   return {
@@ -346,7 +346,7 @@ export async function getDiasTrabalhadosMedia(
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY DATE_FORMAT(v.data_criacao, '%Y-%m')
   `, [dataInicio, dataFim]);
 
@@ -397,7 +397,7 @@ export async function getServicosExtra(
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
   `, params);
 
   return {
@@ -474,7 +474,7 @@ export async function getFaturamentoMensal(extIds: number[], meses: number = 12)
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
-      AND v.status != 0
+      AND v.status = 1
   `, [dataInicio, dataInicio, dataInicio, dataFim]);
 
   const rt = realtimeRows[0];
@@ -547,7 +547,7 @@ export async function getFaturamentoMensalDetalhado(extIds: number[], meses: num
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY YEAR(v.data_criacao), MONTH(v.data_criacao)
     ORDER BY ano DESC, mes DESC
     LIMIT ${Number(meses)}
@@ -626,7 +626,7 @@ export async function getFaturamentoMensalDetalhadoFiltrado(
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY YEAR(v.data_criacao), MONTH(v.data_criacao)
     ORDER BY ano ASC, mes ASC
   `, [dataInicioStr, dataFimStr]);
@@ -677,7 +677,7 @@ export async function getListaColaboradoresMensal(
     JOIN vendas v ON v.id = vp.venda
     WHERE ${unitCond}
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.cancelado_motivo IS NULL
       AND uu.nome IS NOT NULL
       AND uu.nome != ''
@@ -713,7 +713,7 @@ export async function getFaturamentoPorPagamento(extIds: number[], dataInicio: s
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY fp.id, fp.nome, fp.tipo
     ORDER BY total DESC
   `, [dataInicio, dataFim]);
@@ -756,7 +756,7 @@ export async function getEvolucaoDiaria(
             AND ${unitCond.replace(/uu\.unidade/g, 'uu2.unidade')}
             AND v2.data_criacao < DATE(v.data_criacao)
             AND v2.comanda_temp = 0
-            AND v2.status != 0
+            AND v2.status = 1
         ) THEN v.cliente
       END) as clientes_novos,
       COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
@@ -772,7 +772,7 @@ export async function getEvolucaoDiaria(
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY DATE_FORMAT(v.data_criacao, '%Y-%m-%d')
     ORDER BY dia ASC
   `, [dataInicio, dataFimExcl]);
@@ -802,7 +802,7 @@ export async function getFaturamentoDiario(extIds: number[], dataInicio: string,
       AND v.data_criacao >= ?
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY DATE_FORMAT(v.data_criacao, '%Y-%m-%d')
     ORDER BY dia ASC
   `, [dataInicio, dataFim]);
@@ -837,7 +837,7 @@ export async function getFaturamentoPorProduto(extIds: number[], dataInicio: str
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY LOWER(TRIM(p.nome)), p.tipo
     ORDER BY total DESC
     LIMIT 50
@@ -942,7 +942,7 @@ export async function getColaboradoresByRange(extIds: number[], dataInicio: stri
             AND ${unitCondV2}
             AND v2.data_criacao < ?
             AND v2.comanda_temp = 0
-            AND v2.status != 0
+            AND v2.status = 1
         ) THEN v.cliente
       END) as clientes_novos,
       COUNT(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN 1 END) as produtos_qtd,
@@ -956,7 +956,7 @@ export async function getColaboradoresByRange(extIds: number[], dataInicio: stri
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY colab.id, colab.nome
     ORDER BY faturamento DESC
   `, [dataInicio, dataInicio, dataFimExcl]);
@@ -1048,13 +1048,13 @@ export async function getClientesPerdidosRecentes(
        JOIN usuarios u2 ON v2.usuario = u2.id 
        WHERE v2.cliente = c.id 
          AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u2.unidade = ${extIds[0]}` : `u2.unidade IN (${extIds.join(",")})`})
-         AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0) as total_visitas,
+         AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1) as total_visitas,
       (SELECT COALESCE(SUM(vp2.valor_total), 0) FROM vendas v2 
        JOIN usuarios u2 ON v2.usuario = u2.id 
        JOIN vendas_produtos vp2 ON vp2.venda = v2.id
        WHERE v2.cliente = c.id 
          AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u2.unidade = ${extIds[0]}` : `u2.unidade IN (${extIds.join(",")})`})
-         AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0) as total_gasto
+         AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1) as total_gasto
     FROM clientes c
     WHERE ${unitCond}
       AND c.status = 1
@@ -1103,7 +1103,7 @@ export async function getRaioXVisaoGeral(extIds: number[]) {
         JOIN usuarios u ON v.usuario = u.id 
         WHERE v.cliente = c.id 
           AND (${extIds.length === 0 ? "1=1" : extIds.length === 1 ? `u.unidade = ${extIds[0]}` : `u.unidade IN (${extIds.join(",")})`})
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
       ) = 1
   `);
 
@@ -1146,7 +1146,7 @@ export async function getCadenciaVisitas(extIds: number[]) {
       WHERE ${unitCond}
         AND v.comanda_temp = 0
         AND v.cancelado_motivo IS NULL
-        AND v.status != 0
+        AND v.status = 1
         AND v.cliente IS NOT NULL
         AND v.cliente != 2
       GROUP BY v.cliente
@@ -1215,7 +1215,7 @@ export async function getCohortClientes(extIds: number[]) {
       FROM vendas v
       JOIN usuarios uu ON v.usuario = uu.id
       WHERE ${unitCond}
-        AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+        AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
         AND v.cliente IS NOT NULL AND v.cliente != 2
         AND v.data_criacao >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
       GROUP BY v.cliente
@@ -1225,7 +1225,7 @@ export async function getCohortClientes(extIds: number[]) {
       FROM vendas v2
       JOIN usuarios uu2 ON v2.usuario = uu2.id
       WHERE (${unitCond.replace(/uu\./g, "uu2.")})
-        AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
+        AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
         AND v2.cliente IS NOT NULL AND v2.cliente != 2
       GROUP BY v2.cliente
       HAVING COUNT(*) > 1
@@ -1330,7 +1330,7 @@ export async function getTopBarbeiros(extIds: number[], dataInicio: string, data
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY colab.id, colab.nome
     ORDER BY faturamento DESC
   `, [dataInicio, dataFimExcl]);
@@ -1365,7 +1365,7 @@ export async function getTopItens(extIds: number[], dataInicio: string, dataFim:
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY LOWER(TRIM(p.nome)), p.tipo, p.categoria
     ORDER BY total DESC
     LIMIT 20
@@ -1405,7 +1405,7 @@ export async function getComposicaoGrupo(extIds: number[], dataInicio: string, d
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY
       CASE
         WHEN p.tipo = 'ser' AND p.categoria = 'base' THEN 'Serviço Base'
@@ -1451,7 +1451,7 @@ export async function getKpisPeriodo(extIds: number[], dataInicio: string, dataF
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
-      AND v.status != 0
+      AND v.status = 1
   `, [dataInicio, dataFim]);
 
   const r = rows[0];
@@ -1490,7 +1490,7 @@ export async function getFaturamentoPorDiaSemana(extIds: number[], dataInicio: s
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY DAYOFWEEK(v.data_criacao)
     ORDER BY dia_semana ASC
   `, [dataInicio, dataFimExcl]);
@@ -1541,7 +1541,7 @@ export async function getFaturamentoPorFaixaHoraria(extIds: number[], dataInicio
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY
       CASE
         WHEN HOUR(v.data_criacao) BETWEEN 7 AND 8 THEN '07-09'
@@ -1599,7 +1599,7 @@ export async function getClientesKpis(extIds: number[], dataInicio: string, data
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.cliente IS NOT NULL
       ${colaboradorId ? `AND vp.colaborador = ${Number(colaboradorId)}` : ""}
   `, [dataInicio, dataFimExcl]);
@@ -1613,7 +1613,7 @@ export async function getClientesKpis(extIds: number[], dataInicio: string, data
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.cliente IS NOT NULL
       ${colabCond}
       AND v.cliente NOT IN (
@@ -1623,7 +1623,7 @@ export async function getClientesKpis(extIds: number[], dataInicio: string, data
         WHERE uu2.unidade ${extIds.length === 1 ? `= ${extIds[0]}` : extIds.length > 1 ? `IN (${extIds.join(',')})` : '> 0'}
           AND v2.data_criacao < ?
           AND v2.comanda_temp = 0
-          AND v2.status != 0
+          AND v2.status = 1
           AND v2.cliente IS NOT NULL
       )
   `, [dataInicio, dataFimExcl, dataInicio]);
@@ -1639,7 +1639,7 @@ export async function getClientesKpis(extIds: number[], dataInicio: string, data
         AND v.data_criacao >= ?
         AND v.data_criacao < ?
         AND v.comanda_temp = 0
-        AND v.status != 0
+        AND v.status = 1
         AND v.cliente IS NOT NULL
         ${colabCond}
         AND v.cliente NOT IN (
@@ -1649,7 +1649,7 @@ export async function getClientesKpis(extIds: number[], dataInicio: string, data
           WHERE uu2.unidade ${extIds.length === 1 ? `= ${extIds[0]}` : extIds.length > 1 ? `IN (${extIds.join(',')})` : '> 0'}
             AND v2.data_criacao < ?
             AND v2.comanda_temp = 0
-            AND v2.status != 0
+            AND v2.status = 1
             AND v2.cliente IS NOT NULL
         )
       GROUP BY v.cliente
@@ -1670,12 +1670,12 @@ export async function getClientesKpis(extIds: number[], dataInicio: string, data
       AND v2.data_criacao > v.data_criacao
       AND v2.data_criacao <= DATE_ADD(v.data_criacao, INTERVAL 30 DAY)
       AND v2.comanda_temp = 0
-      AND v2.status != 0
+      AND v2.status = 1
     WHERE ${unitCond}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.cliente IS NOT NULL
       ${colabCond}
       AND v.cliente NOT IN (
@@ -1685,7 +1685,7 @@ export async function getClientesKpis(extIds: number[], dataInicio: string, data
         WHERE uu3.unidade ${extIds.length === 1 ? `= ${extIds[0]}` : extIds.length > 1 ? `IN (${extIds.join(',')})` : '> 0'}
           AND v3.data_criacao < ?
           AND v3.comanda_temp = 0
-          AND v3.status != 0
+          AND v3.status = 1
           AND v3.cliente IS NOT NULL
       )
   `, [dataInicio, dataFimExcl, dataInicio]);
@@ -1767,7 +1767,7 @@ export async function getClientesDistribuicaoStatus(extIds: number[], colaborado
         AND v.data_criacao >= ?
         AND v.data_criacao < ?
         AND v.comanda_temp = 0
-        AND v.status != 0
+        AND v.status = 1
         AND v.cliente IS NOT NULL
       GROUP BY v.cliente
     ) sub
@@ -1786,7 +1786,7 @@ export async function getClientesDistribuicaoStatus(extIds: number[], colaborado
         AND v.data_criacao >= ?
         AND v.data_criacao < ?
         AND v.comanda_temp = 0
-        AND v.status != 0
+        AND v.status = 1
         AND v.cliente IS NOT NULL
       GROUP BY v.cliente
       HAVING COUNT(DISTINCT v.id) = 1
@@ -1805,7 +1805,7 @@ export async function getClientesDistribuicaoStatus(extIds: number[], colaborado
         AND v.data_criacao >= ?
         AND v.data_criacao < ?
         AND v.comanda_temp = 0
-        AND v.status != 0
+        AND v.status = 1
         AND v.cliente IS NOT NULL
       GROUP BY v.cliente
       HAVING COUNT(DISTINCT v.id) >= 3
@@ -1825,7 +1825,7 @@ export async function getClientesDistribuicaoStatus(extIds: number[], colaborado
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.cliente IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM vendas v2
@@ -1834,7 +1834,7 @@ export async function getClientesDistribuicaoStatus(extIds: number[], colaborado
           AND ${unitCondNovos}
           AND v2.data_criacao < ?
           AND v2.comanda_temp = 0
-          AND v2.status != 0
+          AND v2.status = 1
       )
   `, [ini, fimExcl, ini]);
 
@@ -1882,7 +1882,7 @@ export async function getClientesEvolucaoMensal(extIds: number[], dataInicio: st
             AND uu2.unidade ${extIds.length === 1 ? `= ${extIds[0]}` : extIds.length > 1 ? `IN (${extIds.join(',')})` : '> 0'}
             AND v2.data_criacao < DATE_FORMAT(v.data_criacao, '%Y-%m-01')
             AND v2.comanda_temp = 0
-            AND v2.status != 0
+            AND v2.status = 1
         ) THEN v.cliente
       END) as novos
     FROM vendas v
@@ -1892,7 +1892,7 @@ export async function getClientesEvolucaoMensal(extIds: number[], dataInicio: st
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.cliente IS NOT NULL
     GROUP BY YEAR(v.data_criacao), MONTH(v.data_criacao)
     ORDER BY ano ASC, mes ASC
@@ -1954,7 +1954,7 @@ export async function getClientesDistribuicaoFrequencia(extIds: number[], dataIn
         AND v.data_criacao >= ?
         AND v.data_criacao < ?
         AND v.comanda_temp = 0
-        AND v.status != 0
+        AND v.status = 1
         AND v.cliente IS NOT NULL
       GROUP BY v.cliente
     ) sub
@@ -1995,7 +1995,7 @@ export async function getClientesDistribuicaoDiasSemVir(extIds: number[], dataIn
         AND v.data_criacao >= ?
         AND v.data_criacao < ?
         AND v.comanda_temp = 0
-        AND v.status != 0
+        AND v.status = 1
         AND v.cliente IS NOT NULL
       GROUP BY v.cliente
     ) sub
@@ -2044,7 +2044,7 @@ export async function getClientesTop(extIds: number[], dataInicio: string, dataF
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.cliente IS NOT NULL
     GROUP BY v.cliente, c.nome
     ORDER BY valor_total DESC
@@ -2111,7 +2111,7 @@ export async function getClientesChurnRisco(
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.cliente IS NOT NULL
       ${colabCond}
     GROUP BY v.cliente, c.nome, c.telefone
@@ -2178,7 +2178,7 @@ export async function getClientesTopExpandido(
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.cliente IS NOT NULL
       ${colabCond}
       ${searchCond}
@@ -2223,7 +2223,7 @@ export async function getListaColaboradoresClientes(extIds: number[], dataInicio
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.cliente IS NOT NULL
     GROUP BY colab.id, colab.nome
     ORDER BY total DESC
@@ -2264,7 +2264,7 @@ export async function getClienteDetalhes(extIds: number[], clienteId: number) {
     WHERE ${unitCond}
       AND v.cliente = ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
   `, [clienteId]);
 
   if (!kpiRows.length || !kpiRows[0].total_visitas) return null;
@@ -2291,7 +2291,7 @@ export async function getClienteDetalhes(extIds: number[], clienteId: number) {
     WHERE ${unitCond}
       AND v.cliente = ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY v.id, v.data_criacao, u.nome
     ORDER BY v.data_criacao DESC
     LIMIT 20
@@ -2313,7 +2313,7 @@ export async function getClienteDetalhes(extIds: number[], clienteId: number) {
     WHERE ${unitCond}
       AND v.cliente = ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY vp.descricao
     ORDER BY quantidade DESC
     LIMIT 5
@@ -2335,7 +2335,7 @@ export async function getClienteDetalhes(extIds: number[], clienteId: number) {
     WHERE ${unitCond}
       AND v.cliente = ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.data_criacao >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
     GROUP BY DATE_FORMAT(v.data_criacao, '%Y-%m')
     ORDER BY periodo ASC
@@ -2419,7 +2419,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
       AND DATEDIFF(?, DATE(v.data_criacao)) <= ?
       AND DATE(v.data_criacao) <= ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.cliente IS NOT NULL
       AND v.cliente != 2
   `, [dataFim, janelaDias, dataFim]);
@@ -2439,7 +2439,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
         AND DATE(v.data_criacao) >= ?
         AND DATE(v.data_criacao) < ?
         AND v.comanda_temp = 0
-        AND v.status != 0
+        AND v.status = 1
         AND v.cliente IS NOT NULL
         AND v.cliente != 2
     ) base
@@ -2453,7 +2453,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
         AND DATE(v2.data_criacao) >= ?
         AND DATE(v2.data_criacao) <= ?
         AND v2.comanda_temp = 0
-        AND v2.status != 0
+        AND v2.status = 1
     )
   `, [dataInicioJanela, dataInicio, dataInicio, dataFim]);
   const perdidos = Number(rowsPerdidos[0]?.total ?? 0);
@@ -2484,7 +2484,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
         AND DATE(v.data_criacao) >= ?
         AND DATE(v.data_criacao) <= ?
         AND v.comanda_temp = 0
-        AND v.status != 0
+        AND v.status = 1
         AND v.cliente IS NOT NULL
         AND v.cliente != 2
     ) base
@@ -2497,7 +2497,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
         AND DATE(v2.data_criacao) >= ?
         AND DATE(v2.data_criacao) < ?
         AND v2.comanda_temp = 0
-        AND v2.status != 0
+        AND v2.status = 1
     )
     AND EXISTS (
       SELECT 1 FROM vendas v3
@@ -2507,7 +2507,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
         AND v3.cliente = base.cliente
         AND DATE(v3.data_criacao) < ?
         AND v3.comanda_temp = 0
-        AND v3.status != 0
+        AND v3.status = 1
     )
     AND EXISTS (
       SELECT 1 FROM vendas v4
@@ -2518,7 +2518,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
         AND DATE(v4.data_criacao) >= ?
         AND DATE(v4.data_criacao) <= ?
         AND v4.comanda_temp = 0
-        AND v4.status != 0
+        AND v4.status = 1
     )
   `, [dataInicio, dataFim, dataInicioJanela, dataInicio, dataInicioJanela, dataFimBaseAtiva, dataFim]);
   const resgatados = Number(rowsResgatados[0]?.total ?? 0);
@@ -2576,7 +2576,7 @@ export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, 
       AND DATEDIFF(?, DATE(v.data_criacao)) <= ?
       AND DATE(v.data_criacao) <= ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
       AND v.cliente IS NOT NULL
       AND v.cliente != 2
       AND vp.colaborador IS NOT NULL
@@ -2603,7 +2603,7 @@ export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, 
           AND DATE(v.data_criacao) >= ?
           AND DATE(v.data_criacao) < ?
           AND v.comanda_temp = 0
-          AND v.status != 0
+          AND v.status = 1
           AND v.cliente IS NOT NULL
           AND v.cliente != 2
       ) base
@@ -2616,7 +2616,7 @@ export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, 
           AND DATE(v2.data_criacao) >= ?
           AND DATE(v2.data_criacao) <= ?
           AND v2.comanda_temp = 0
-          AND v2.status != 0
+          AND v2.status = 1
       )
     `, [colabId, dataInicioJanela, dataInicio, dataInicio, dataFim]);
     // Exclusivos: clientes atendidos SOMENTE por este barbeiro no período
@@ -2630,7 +2630,7 @@ export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, 
         AND DATE(v.data_criacao) >= ?
         AND DATE(v.data_criacao) <= ?
         AND v.comanda_temp = 0
-        AND v.status != 0
+        AND v.status = 1
         AND v.cliente IS NOT NULL
         AND v.cliente != 2
         AND NOT EXISTS (
@@ -2644,7 +2644,7 @@ export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, 
             AND DATE(v2.data_criacao) >= ?
             AND DATE(v2.data_criacao) <= ?
             AND v2.comanda_temp = 0
-            AND v2.status != 0
+            AND v2.status = 1
         )
     `, [colabId, dataInicio, dataFim, colabId, dataInicio, dataFim]);
     const perdidos = Number(rowsPerd[0]?.total ?? 0);
@@ -2735,7 +2735,7 @@ export async function getColaboradoresComissoes(
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
-      AND v.status != 0
+      AND v.status = 1
     GROUP BY colab.id, colab.nome
     ORDER BY faturamento DESC
   `, params);

@@ -135,7 +135,7 @@ function classificarStatus(dias: number): "ativo" | "em_risco" | "perdido" {
 // ─── Subquery de visitas por cliente ─────────────────────────────────────────
 const visitasSubquery = `(
   SELECT cliente, COUNT(*) as total_visitas
-  FROM vendas WHERE comanda_temp = 0 AND cancelado_motivo IS NULL AND status != 0
+  FROM vendas WHERE comanda_temp = 0 AND cancelado_motivo IS NULL AND status = 1
   GROUP BY cliente
 )`;
 
@@ -177,7 +177,7 @@ export const raioXRouter = router({
         FROM vendas v
         JOIN usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
         GROUP BY v.cliente
       )`;
@@ -197,7 +197,7 @@ export const raioXRouter = router({
         FROM vendas v
         JOIN usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
           AND DATE(v.data_criacao) >= '${dataInicio24m}'
       )`;
@@ -208,7 +208,7 @@ export const raioXRouter = router({
         FROM vendas v
         JOIN usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
         GROUP BY v.cliente
       )`;
@@ -219,7 +219,7 @@ export const raioXRouter = router({
         FROM vendas v
         JOIN usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
           AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
       )`;
@@ -364,7 +364,7 @@ export const raioXRouter = router({
             FROM vendas v2
             JOIN usuarios uu2 ON v2.usuario = uu2.id
             WHERE uu2.unidade IN (${extIds.length > 0 ? extIds.join(",") : "0"})
-              AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
+              AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
               AND v2.cliente IS NOT NULL AND v2.cliente != 2
               AND DATE(v2.data_criacao) < '${dataInicio}'
             GROUP BY v2.cliente
@@ -405,7 +405,7 @@ export const raioXRouter = router({
               FROM vendas v
               JOIN usuarios uu ON v.usuario = uu.id
               WHERE ${unitCondV}
-                AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+                AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
                 AND v.cliente IS NOT NULL AND v.cliente != 2
                 AND DATE(v.data_criacao) >= '${dataInicio24m}' AND DATE(v.data_criacao) <= '${dataFim}'
             ) bs
@@ -415,7 +415,7 @@ export const raioXRouter = router({
               FROM vendas v
               JOIN usuarios uu ON v.usuario = uu.id
               WHERE ${unitCondV}
-                AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+                AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
                 AND v.cliente IS NOT NULL AND v.cliente != 2
               GROUP BY v.cliente
               HAVING COUNT(*) >= 2
@@ -429,7 +429,7 @@ export const raioXRouter = router({
                 FROM vendas v
                 JOIN usuarios uu ON v.usuario = uu.id
                 WHERE ${unitCondV}
-                  AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+                  AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
                   AND v.cliente IS NOT NULL AND v.cliente != 2
               ) sub
               WHERE sub.diff IS NOT NULL AND sub.diff > 0
@@ -440,7 +440,7 @@ export const raioXRouter = router({
               FROM vendas v
               JOIN usuarios uu ON v.usuario = uu.id
               WHERE ${unitCondV}
-                AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+                AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
                 AND v.cliente IS NOT NULL AND v.cliente != 2
               GROUP BY v.cliente
             ) uvc ON uvc.cliente = bs.cliente
@@ -468,13 +468,13 @@ export const raioXRouter = router({
             FROM vendas v2
             JOIN usuarios uu2 ON v2.usuario = uu2.id
             WHERE ${unitCondV.replace(/\buu\./g, 'uu2.')}
-              AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
+              AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
               AND v2.cliente IS NOT NULL AND v2.cliente != 2
               AND DATE(v2.data_criacao) < '${dataInicio}'
             GROUP BY v2.cliente
           ) ult_antes ON ult_antes.cliente = v.cliente
           WHERE ${unitCondV}
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
             AND v.cliente IS NOT NULL AND v.cliente != 2
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
           GROUP BY mes ORDER BY mes
@@ -498,13 +498,13 @@ export const raioXRouter = router({
             FROM vendas v2
             JOIN usuarios uu2 ON v2.usuario = uu2.id
             WHERE ${unitCondV.replace(/\buu\./g, 'uu2.')}
-              AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
+              AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
               AND v2.cliente IS NOT NULL AND v2.cliente != 2
               AND DATE(v2.data_criacao) < '${dataInicio}'
             GROUP BY v2.cliente
           ) ult_antes_em ON ult_antes_em.cliente = v.cliente
           WHERE ${unitCondV}
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
             AND v.cliente IS NOT NULL AND v.cliente != 2
             AND c.status = 1
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
@@ -535,7 +535,7 @@ export const raioXRouter = router({
             FROM vendas v
             JOIN usuarios uu ON v.usuario = uu.id
             WHERE ${unitCondV}
-              AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+              AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
               AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
           ) meses
           JOIN ${baseS12mSubquery} bs ON 1=1
@@ -554,11 +554,11 @@ export const raioXRouter = router({
               FROM vendas v3
               JOIN usuarios uu3 ON v3.usuario = uu3.id
               WHERE ${unitCondV.replace(/\buu\./g, 'uu3.')}
-                AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL AND v3.status != 0
+                AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL AND v3.status = 1
                 AND DATE(v3.data_criacao) >= '${dataInicio}' AND DATE(v3.data_criacao) <= '${dataFim}'
             ) m2 ON DATE(all_v.data_criacao) <= m2.fim_mes
             WHERE ${unitCondV.replace(/\buu\./g, 'uu_av.')}
-              AND all_v.comanda_temp = 0 AND all_v.cancelado_motivo IS NULL AND all_v.status != 0
+              AND all_v.comanda_temp = 0 AND all_v.cancelado_motivo IS NULL AND all_v.status = 1
               AND all_v.cliente IS NOT NULL AND all_v.cliente != 2
               AND DATE(all_v.data_criacao) >= '${dataInicio12m}'
             GROUP BY all_v.cliente, DATE_FORMAT(m2.data_criacao, '%Y-%m')
@@ -581,7 +581,7 @@ export const raioXRouter = router({
           LEFT JOIN ${ultimaVendaSubquery} uv4 ON uv4.cliente = v.cliente
           LEFT JOIN ${visitasHistoricasSubquery} vh4 ON vh4.cliente = v.cliente
           WHERE ${unitCondV}
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
             AND v.cliente IS NOT NULL AND v.cliente != 2
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
             AND (uu.visivel_agenda IS NULL OR uu.visivel_agenda != 'nenhuma')
@@ -816,7 +816,7 @@ export const raioXRouter = router({
         FROM vendas v
         JOIN usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
         GROUP BY v.cliente
       )`;
@@ -830,7 +830,7 @@ export const raioXRouter = router({
         FROM vendas v
         JOIN usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
         GROUP BY v.cliente
       )`;
@@ -856,7 +856,7 @@ export const raioXRouter = router({
                    JOIN usuarios uu2 ON v2.usuario = uu2.id
                    WHERE uu2.unidade IN (${extIds.length > 0 ? extIds.join(",") : "0"})
                      AND v2.cliente = c.id AND v2.comanda_temp = 0
-                     AND v2.cancelado_motivo IS NULL AND v2.status != 0
+                     AND v2.cancelado_motivo IS NULL AND v2.status = 1
                  ), 0) as total_gasto
           FROM ${baseS12mSubquery} bs
           JOIN clientes c ON c.id = bs.cliente
@@ -1825,7 +1825,7 @@ export const raioXRouter = router({
             COUNT(*) as total_visitas_hist,
             MIN(v2.data_criacao) as primeira_visita_geral
           FROM vendas v2
-          WHERE v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
+          WHERE v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
             AND v2.cliente IS NOT NULL AND v2.cliente != 2
           GROUP BY v2.cliente
         ) hist ON hist.cliente = v.cliente
@@ -1835,7 +1835,7 @@ export const raioXRouter = router({
           AND DATE(v.data_criacao) <= '${dataFim}'
           AND v.comanda_temp = 0
           AND v.cancelado_motivo IS NULL
-          AND v.status != 0
+          AND v.status = 1
           AND v.cliente IS NOT NULL
           AND v.cliente != 2
           AND c.status = 1
@@ -1922,7 +1922,7 @@ export const raioXRouter = router({
           COUNT(DISTINCT v.cliente) as clientes_distintos
         FROM vendas v
         WHERE ${unitUserCond}
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
           AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
       `);
@@ -1936,7 +1936,7 @@ export const raioXRouter = router({
         SELECT COUNT(*) as atendimentos_sem_cadastro, COALESCE(SUM(v.valor_total), 0) as faturamento_sem_cadastro
         FROM vendas v
         WHERE ${unitUserCond}
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND (v.cliente IS NULL OR v.cliente = 2)
           AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
       `);
@@ -1965,7 +1965,7 @@ export const raioXRouter = router({
             DATEDIFF(CURDATE(), MAX(DATE(v.data_criacao))) as dias_desde_ultima
           FROM vendas v
           WHERE ${unitUserCond}
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
             AND v.cliente IS NOT NULL AND v.cliente != 2
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
           GROUP BY v.cliente
@@ -1986,7 +1986,7 @@ export const raioXRouter = router({
           SELECT DISTINCT v.cliente
           FROM vendas v
           WHERE ${unitUserCond}
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
             AND v.cliente IS NOT NULL AND v.cliente != 2
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
         )
@@ -2002,7 +2002,7 @@ export const raioXRouter = router({
           SELECT v.cliente, COUNT(*) as cnt
           FROM vendas v
           WHERE ${unitUserCond}
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
             AND v.cliente IS NOT NULL AND v.cliente != 2
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
           GROUP BY v.cliente
@@ -2017,7 +2017,7 @@ export const raioXRouter = router({
         SELECT HOUR(v.data_criacao) as hora, COUNT(*) as atendimentos
         FROM vendas v
         WHERE ${unitUserCond}
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
         GROUP BY HOUR(v.data_criacao)
         ORDER BY hora
@@ -2032,7 +2032,7 @@ export const raioXRouter = router({
           COUNT(DISTINCT v.cliente) as clientes
         FROM vendas v
         WHERE ${unitUserCond}
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
         GROUP BY DAYOFWEEK(v.data_criacao)
         ORDER BY dia_semana
@@ -2054,7 +2054,7 @@ export const raioXRouter = router({
           SELECT v.cliente, DATEDIFF(CURDATE(), MAX(DATE(v.data_criacao))) as dias_desde_ultima
           FROM vendas v
           WHERE ${unitUserCond}
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
             AND v.cliente IS NOT NULL AND v.cliente != 2
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
           GROUP BY v.cliente
@@ -2252,7 +2252,7 @@ export const raioXRouter = router({
           FROM vendas v
           JOIN usuarios uu ON v.usuario = uu.id
           WHERE ${unitCondV}
-            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+            AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
             AND v.cliente IS NOT NULL AND v.cliente != 2
             AND DATE(v.data_criacao) >= ? AND DATE(v.data_criacao) <= ?
           GROUP BY v.cliente
@@ -2330,7 +2330,7 @@ export const raioXRouter = router({
         WHERE ${unitCondU}
           AND DATE(v.data_criacao) >= '${dataInicio}'
           AND DATE(v.data_criacao) <= '${dataFim}'
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
           AND vp.colaborador IS NOT NULL
       `);
@@ -2351,7 +2351,7 @@ export const raioXRouter = router({
         WHERE v.usuario IN (${barbeirosAtivosStr})
           AND DATE(v.data_criacao) >= '${dataInicio}'
           AND DATE(v.data_criacao) <= '${dataFim}'
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
       `);
 
@@ -2383,7 +2383,7 @@ export const raioXRouter = router({
         FROM vendas v
         WHERE v.cliente IN (${clienteIdsStr})
           AND v.usuario IN (${barbeirosAtivosStr})
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
         GROUP BY v.cliente
       `);
@@ -2419,7 +2419,7 @@ export const raioXRouter = router({
             JOIN vendas v ON v.id = vp.venda
             WHERE v.cliente IN (${clienteIdsStr})
               AND vp.colaborador IN (${barbeirosAtivosStr})
-              AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+              AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
               AND v.cliente IS NOT NULL AND v.cliente != 2
             GROUP BY v.cliente, vp.colaborador
           ) sub
@@ -2587,7 +2587,7 @@ export const raioXRouter = router({
             COUNT(DISTINCT v2.usuario) as barbeiros_distintos,
             MIN(v2.data_criacao) as primeira_visita_geral
           FROM vendas v2
-          WHERE v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status != 0
+          WHERE v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
             AND v2.cliente IS NOT NULL AND v2.cliente != 2
             AND v2.usuario IN (${barbeirosAtivosStr})
           GROUP BY v2.cliente
@@ -2595,7 +2595,7 @@ export const raioXRouter = router({
         WHERE v.usuario IN (${barbeirosAtivosStr})
           AND DATE(v.data_criacao) >= DATE_SUB('${dataInicio}', INTERVAL 11 MONTH)
           AND DATE(v.data_criacao) <= '${dataFim}'
-          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status != 0
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
         GROUP BY DATE_FORMAT(v.data_criacao, '%Y-%m')
         ORDER BY mes ASC

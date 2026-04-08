@@ -402,7 +402,7 @@ export const dataVipRouter = router({
         WHERE ${unitCond}
           AND c.status = 1
           AND v.comanda_temp = 0
-          AND v.status != 0${searchCond}
+          AND v.status = 1${searchCond}
         GROUP BY c.id, c.nome, c.telefone, c.data_criacao
         ORDER BY ultima_visita DESC
         LIMIT ${input.pageSize} OFFSET ${offset}
@@ -415,7 +415,7 @@ export const dataVipRouter = router({
         WHERE ${unitCond}
           AND c.status = 1
           AND v.comanda_temp = 0
-          AND v.status != 0${searchCond}
+          AND v.status = 1${searchCond}
       `, params);
       return {
         clientes: rows.map(r => ({
@@ -1153,7 +1153,7 @@ export const dataVipRouter = router({
         WHERE ${unitCond}
           AND p.tipo = 'ser'
           AND v.comanda_temp = 0
-          AND v.status != 0
+          AND v.status = 1
         GROUP BY p.nome
         ORDER BY qtd DESC
       `, []);
@@ -2320,7 +2320,7 @@ export const dataVipRouter = router({
                JOIN produtos p ON p.id = vp.produto
                WHERE ${unitLiteral}
                  AND v.data_criacao >= ? AND v.data_criacao < ?
-                 AND v.comanda_temp = 0 AND v.status != 0
+                 AND v.comanda_temp = 0 AND v.status = 1
                GROUP BY uu.id, uu.nome
                HAVING qtdProdutos >= ?`,
               [dataInicio, dataFimExcl, qtdMin]
@@ -2345,7 +2345,7 @@ export const dataVipRouter = router({
                JOIN produtos p ON p.id = vp.produto
                WHERE ${unitLiteral}
                  AND v.data_criacao >= ? AND v.data_criacao < ?
-                 AND v.comanda_temp = 0 AND v.status != 0
+                 AND v.comanda_temp = 0 AND v.status = 1
                GROUP BY uu.id, uu.nome
                HAVING totalProdutos >= ?`,
               [dataInicio, dataFimExcl, valorMin]
@@ -2373,7 +2373,7 @@ export const dataVipRouter = router({
                JOIN usuarios uu2 ON uu2.id = vp.colaborador
                WHERE ${unitLiteral2}
                  AND v.data_criacao >= ? AND v.data_criacao < ?
-                 AND v.comanda_temp = 0 AND v.status != 0
+                 AND v.comanda_temp = 0 AND v.status = 1
                  AND p.tipo = 'ser'
                GROUP BY vp.colaborador, vp.venda
                HAVING COUNT(*) >= ?
@@ -2416,7 +2416,7 @@ export const dataVipRouter = router({
         WHERE ${unitCond}
           AND p.tipo != 'ser'
           AND v.comanda_temp = 0
-          AND v.status != 0
+          AND v.status = 1
         GROUP BY p.nome
         ORDER BY qtd DESC
       `, []);
