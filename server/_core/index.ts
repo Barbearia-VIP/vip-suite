@@ -10,6 +10,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { scheduleDailyRaioXSync } from "../raioXCacheSync";
+import { startSyncScheduler } from "../syncEngine";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -69,6 +70,8 @@ async function startServer() {
     console.log(`Server running on http://localhost:${port}/`);
     // Agendar sync noturna do cache persistente do Raio-X (02:00 BRT = 05:00 UTC)
     scheduleDailyRaioXSync();
+    // Iniciar sincronização incremental a cada 30 minutos
+    startSyncScheduler();
   });
 }
 

@@ -11,6 +11,7 @@ import { reputacaoRouter } from "./routers/reputacao";
 import { igConfigRouter, igDashboardRouter, igLogsRouter, igApprovalRouter, igStoriesRouter, igPromptsRouter } from "./routers/instagram";
 import { weSendRouter } from "./routers/weSend";
 import { raioXRouter } from "./routers/raioX";
+import { syncRouter } from "./routers/sync";
 import { initSchedulers } from "./igScheduler";
 import { initReputacaoScheduler } from "./reputacaoScheduler";
 
@@ -43,6 +44,7 @@ export const appRouter = router({
   igPrompts: igPromptsRouter,
   weSend: weSendRouter,
   raioX: raioXRouter,
+  sync: syncRouter,
 });
 
 export type AppRouter = typeof appRouter;
