@@ -1157,3 +1157,4 @@
 
 - [x] Bug corrigido: query raio_x_cache_sync_log usava campos inexistentes (startedAt/finishedAt/mesesSynced) → corrigido para createdAt/status/duracaoMs
 - [x] Corrigir lógica de routing: Só 1 barbeiro, Multi-barbeiro e Média barb/cliente devem usar barbeiros distintos NO PERÍODO (não histórico total)
+- [x] Corrigir cache persistente Raio-X: dados históricos devem ser servidos EXCLUSIVAMENTE do cache local, sem disparar queries SSH

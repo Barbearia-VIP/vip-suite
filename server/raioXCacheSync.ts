@@ -145,7 +145,112 @@ async function calcVisaoGeralMes(extId: number, mesRef: string): Promise<any> {
   };
 }
 
-// ── Query de Churn para um mês específico ────────────────────────────────────
+// ── Query de Routing para um mês específico ──────────────────────────────────────────────────────
+
+async function calcRoutingMes(extId: number, mesRef: string): Promise<any> {
+  const dataInicio = getMesInicio(mesRef);
+  const dataFim = getMesFim(mesRef);
+  const unitCondU = `uu.unidade = ${extId}`;
+  const janelaAtividade = 60;
+
+  // Etapa 0: Barbeiros ativos no período (via vendas_produtos.colaborador)
+  const barbeirosAtivosRows = await queryExternal<{ barbeiro_id: number }>(`
+    SELECT DISTINCT vp.colaborador as barbeiro_id
+    FROM vendas_produtos vp
+    JOIN vendas v ON v.id = vp.venda
+    JOIN usuarios uu ON uu.id = vp.colaborador
+    WHERE ${unitCondU}
+      AND DATE(v.data_criacao) >= '${dataInicio}'
+      AND DATE(v.data_criacao) <= '${dataFim}'
+      AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
+      AND v.cliente IS NOT NULL AND v.cliente != 2
+      AND vp.colaborador IS NOT NULL
+  `);
+
+  const barbeirosAtivosIds = barbeirosAtivosRows.map(r => Number(r.barbeiro_id));
+  if (barbeirosAtivosIds.length === 0) {
+    return { kpis: null, barbeiros: [], segmentosGeral: null, evolucao: [], mesRef };
+  }
+  const barbeirosAtivosStr = barbeirosAtivosIds.join(",");
+
+  // Etapa 1: Clientes do período
+  const clientesPeriodo = await queryExternal<{ cliente_id: number }>(`
+    SELECT DISTINCT v.cliente as cliente_id
+    FROM vendas v
+    JOIN vendas_produtos vp ON vp.venda = v.id AND vp.colaborador IN (${barbeirosAtivosStr})
+    WHERE DATE(v.data_criacao) >= '${dataInicio}'
+      AND DATE(v.data_criacao) <= '${dataFim}'
+      AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
+      AND v.cliente IS NOT NULL AND v.cliente != 2
+  `);
+
+  if (clientesPeriodo.length === 0) {
+    return { kpis: null, barbeiros: [], segmentosGeral: null, evolucao: [], mesRef };
+  }
+
+  const clienteIds = clientesPeriodo.map(r => Number(r.cliente_id)).slice(0, 5000);
+  const clienteIdsStr = clienteIds.join(",");
+  const totalClientes = clienteIds.length;
+
+  // Etapa 2A: Barbeiros distintos NO PERÍODO por cliente
+  const clientesRows = await queryExternal<{
+    cliente_id: number;
+    barbeiros_distintos: number;
+    ultima_visita: string;
+    dias_desde_ultima: number;
+    ultimo_barbeiro: number;
+    total_visitas_periodo: number;
+  }>(`
+    SELECT
+      v.cliente as cliente_id,
+      COUNT(DISTINCT vp.colaborador) as barbeiros_distintos,
+      MAX(DATE(v.data_criacao)) as ultima_visita,
+      DATEDIFF('${dataFim}', MAX(DATE(v.data_criacao))) as dias_desde_ultima,
+      (SELECT vp2.colaborador FROM vendas v2
+        JOIN vendas_produtos vp2 ON vp2.venda = v2.id AND vp2.colaborador IN (${barbeirosAtivosStr})
+        WHERE v2.cliente = v.cliente
+          AND DATE(v2.data_criacao) >= '${dataInicio}'
+          AND DATE(v2.data_criacao) <= '${dataFim}'
+          AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
+        ORDER BY v2.data_criacao DESC LIMIT 1) as ultimo_barbeiro,
+      COUNT(DISTINCT v.id) as total_visitas_periodo
+    FROM vendas v
+    JOIN vendas_produtos vp ON vp.venda = v.id AND vp.colaborador IN (${barbeirosAtivosStr})
+    WHERE v.cliente IN (${clienteIdsStr})
+      AND DATE(v.data_criacao) >= '${dataInicio}'
+      AND DATE(v.data_criacao) <= '${dataFim}'
+      AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
+    GROUP BY v.cliente
+  `);
+
+  // KPIs gerais
+  const so1Barbeiro = clientesRows.filter(r => Number(r.barbeiros_distintos) === 1).length;
+  const multiBarbeiro = clientesRows.filter(r => Number(r.barbeiros_distintos) > 1).length;
+  const perdidos = clientesRows.filter(r => Number(r.dias_desde_ultima) > janelaAtividade).length;
+  const somaBarb = clientesRows.reduce((acc, r) => acc + Number(r.barbeiros_distintos), 0);
+  const mediaBarb = totalClientes > 0 ? Math.round((somaBarb / totalClientes) * 100) / 100 : 0;
+
+  return {
+    mesRef,
+    kpis: {
+      totalClientes,
+      so1Barbeiro,
+      multiBarbeiro,
+      mediaBarb,
+      perdidos,
+      pctSo1Barbeiro: totalClientes > 0 ? Math.round((so1Barbeiro / totalClientes) * 100) : 0,
+      pctMultiBarbeiro: totalClientes > 0 ? Math.round((multiBarbeiro / totalClientes) * 100) : 0,
+      pctPerdidos: totalClientes > 0 ? Math.round((perdidos / totalClientes) * 100) : 0,
+      janelaAtividade,
+    },
+    barbeiros: [],
+    segmentosGeral: null,
+    evolucao: [],
+    syncedAt: new Date().toISOString(),
+  };
+}
+
+// ── Query de Churn para um mês específico ──────────────────────────────────────────────────────
 
 async function calcChurnMes(extId: number, mesRef: string): Promise<any> {
   const dataFim = getMesFim(mesRef);
@@ -289,6 +394,25 @@ export async function syncRaioXCacheUnit(opts: SyncOptions): Promise<{ synced: n
       console.error(`[RaioX Cache] churn ${mesRef} ERRO:`, err?.message);
     }
 
+    // Routing
+    try {
+      const jaTemRouting = !forceAll && await isCached("raio_x_cache_routing", unitId, mesRef);
+      if (jaTemRouting) {
+        skipped++;
+      } else {
+        const t0 = Date.now();
+        const dados = await calcRoutingMes(externalId, mesRef);
+        await saveCache("raio_x_cache_routing", unitId, orgId, mesRef, dados);
+        await logSync(unitId, orgId, mesRef, "routing", "success", Date.now() - t0);
+        synced++;
+        console.log(`[RaioX Cache] routing ${mesRef} OK (${Date.now() - t0}ms)`);
+      }
+    } catch (err: any) {
+      errors++;
+      await logSync(unitId, orgId, mesRef, "routing", "error", 0, err?.message);
+      console.error(`[RaioX Cache] routing ${mesRef} ERRO:`, err?.message);
+    }
+
     // Aguarda 2s entre meses para não sobrecarregar o banco externo
     await new Promise((r) => setTimeout(r, 2000));
   }
@@ -373,7 +497,69 @@ export async function getCachedChurn(unitId: number, mesRef: string): Promise<an
   }
 }
 
-// ── Scheduler noturno (02:00 BRT = 05:00 UTC) ────────────────────────────────
+// ── Helpers genéricos: busca do cache por período ──────────────────────────────────────────────────────
+
+/**
+ * Detecta se o período (dataInicio, dataFim) corresponde a um mês fechado completo
+ * que já passou (anterior ao mês atual). Se sim, retorna o mesRef ('YYYY-MM').
+ * Caso contrário retorna null (deve ir ao SSH).
+ */
+export function detectMesFechado(dataInicio: string, dataFim: string): string | null {
+  const mesAtual = getMesRef(new Date());
+  const mesDataFim = dataFim.substring(0, 7);
+  if (mesDataFim >= mesAtual) return null;
+  const mesDataInicio = dataInicio.substring(0, 7);
+  if (mesDataInicio !== mesDataFim) return null;
+  const expectedInicio = getMesInicio(mesDataFim);
+  const expectedFim = getMesFim(mesDataFim);
+  if (dataInicio !== expectedInicio || dataFim !== expectedFim) return null;
+  return mesDataFim;
+}
+
+export async function getCachedVisaoGeralByPeriod(
+  unitId: number,
+  dataInicio: string,
+  dataFim: string
+): Promise<any | null> {
+  const mesRef = detectMesFechado(dataInicio, dataFim);
+  if (!mesRef) return null;
+  return getCachedVisaoGeral(unitId, mesRef);
+}
+
+export async function getCachedChurnByPeriod(
+  unitId: number,
+  dataInicio: string,
+  dataFim: string
+): Promise<any | null> {
+  const mesRef = detectMesFechado(dataInicio, dataFim);
+  if (!mesRef) return null;
+  return getCachedChurn(unitId, mesRef);
+}
+
+export async function getCachedRoutingByPeriod(
+  unitId: number,
+  dataInicio: string,
+  dataFim: string
+): Promise<any | null> {
+  const mesRef = detectMesFechado(dataInicio, dataFim);
+  if (!mesRef) return null;
+  try {
+    const db = await getDb();
+    if (!db) return null;
+    const [rows] = await db.execute(sql.raw(`
+      SELECT dados FROM raio_x_cache_routing
+      WHERE unitId = ${unitId} AND mesRef = '${mesRef}'
+      LIMIT 1
+    `)) as any;
+    const row = (rows as any[])[0];
+    if (!row) return null;
+    return typeof row.dados === "string" ? JSON.parse(row.dados) : row.dados;
+  } catch (_) {
+    return null;
+  }
+}
+
+// ── Scheduler noturno (02:00 BRT = 05:00 UTC) ──────────────────────────────────────────────────────
 
 let syncScheduled = false;
 

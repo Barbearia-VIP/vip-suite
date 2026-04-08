@@ -2575,11 +2575,11 @@ export default function RaioXPage() {
           ) : qRouting.data ? (() => {
             const rd = qRouting.data;
             const kpis = rd.kpis;
-            const barbeiros = showAllBarbeiros ? rd.barbeiros : rd.barbeiros.filter(b => b.total >= 5);
+            const barbeiros = showAllBarbeiros ? rd.barbeiros : rd.barbeiros.filter((b: any) => b.total >= 5);
             const seg = rd.segmentosGeral;
             const evolucao = rd.evolucao;
             const MESES_ABREV = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-            const evolucaoChart = evolucao.map(e => ({
+            const evolucaoChart = evolucao.map((e: any) => ({
               ...e,
               mesLabel: `${MESES_ABREV[Number(e.mes.split("-")[1]) - 1]}/${e.mes.split("-")[0].slice(2)}`,
             }));
@@ -2677,14 +2677,14 @@ export default function RaioXPage() {
                         className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 border border-border/40 rounded px-2 py-1"
                       >
                         {showAllBarbeiros ? (
-                          <><span>⊖</span> Exibir principais<span className="text-muted-foreground/60">({rd.barbeiros.filter(b => b.total >= 5).length})</span></>
+                          <><span>⊖</span> Exibir principais<span className="text-muted-foreground/60">({rd.barbeiros.filter((b: any) => b.total >= 5).length})</span></>
                         ) : (
                           <><span>⊕</span> Exibir todos<span className="text-muted-foreground/60">({rd.barbeiros.length})</span></>
                         )}
                       </button>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {barbeiros.map(b => {
+                      {barbeiros.map((b: any) => {
                         const total = b.total || 1;
                         const so1Total = b.so1Barb || 1;
                         const multiTotal = b.multiBarb || 1;

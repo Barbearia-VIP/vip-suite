@@ -20,7 +20,13 @@ import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
 import { sql } from "drizzle-orm";
 import { queryExternal } from "../db-external";
-import { syncRaioXCacheUnit, runRaioXCacheSyncJob } from "../raioXCacheSync";
+import {
+  syncRaioXCacheUnit,
+  runRaioXCacheSyncJob,
+  getCachedVisaoGeralByPeriod,
+  getCachedChurnByPeriod,
+  getCachedRoutingByPeriod,
+} from "../raioXCacheSync";
 import {
   getChurnPorBarbeiro,
   getCadenciaVisitas,
@@ -170,7 +176,7 @@ export const raioXRouter = router({
   visaoGeral: protectedProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
-      const { extIds } = await resolveExternalIds(
+      const { extIds, unitFilter } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
@@ -179,7 +185,15 @@ export const raioXRouter = router({
       const dataFimDate = new Date(dataFim + "T00:00:00Z");
       const dataInicio12m = new Date(dataFimDate.getTime() - 365 * 86400000).toISOString().split("T")[0];
       const dataInicio24m = new Date(dataFimDate.getTime() - 730 * 86400000).toISOString().split("T")[0];
-      // ── Cache check ──
+      // ── Cache persistente: mês fechado de unidade única ──
+      if (unitFilter && extIds.length === 1) {
+        const persistentCache = await getCachedVisaoGeralByPeriod(unitFilter, dataInicio, dataFim);
+        if (persistentCache) {
+          console.log(`[visaoGeral] cache persistente hit unitId=${unitFilter} ${dataInicio}..${dataFim}`);
+          return persistentCache;
+        }
+      }
+      // ── Cache em memória (10 min) ──
       const vgCacheKey = `vg-${extIds.join(",")}-${dataInicio}-${dataFim}`;
       const vgCached = getCached(visaoGeralCache, vgCacheKey);
       if (vgCached) { console.log("[visaoGeral] cache hit"); return vgCached; }
@@ -1140,7 +1154,7 @@ export const raioXRouter = router({
       periodo: z.enum(["30d", "60d", "90d", "6m", "12m"]).optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const { extIds } = await resolveExternalIds(
+      const { extIds, unitFilter } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
 
@@ -1152,6 +1166,14 @@ export const raioXRouter = router({
 
       const dataInicio = input.dataInicio || new Date(Date.now() - diasPeriodo * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
+      // ── Cache persistente: mês fechado de unidade única ──
+      if (unitFilter && extIds.length === 1) {
+        const persistentCache = await getCachedChurnByPeriod(unitFilter, dataInicio, dataFim);
+        if (persistentCache) {
+          console.log(`[churn] cache persistente hit unitId=${unitFilter} ${dataInicio}..${dataFim}`);
+          return persistentCache;
+        }
+      }
       const churnCacheKey = `churn-${extIds.join(",")}-${dataInicio}-${dataFim}-${input.periodo||"90d"}`;
       const churnCached = getCached(churnCache, churnCacheKey);
       if (churnCached) { console.log("[churn] cache hit"); return churnCached; }
@@ -2339,7 +2361,7 @@ export const raioXRouter = router({
   routing: protectedProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
-      const { extIds } = await resolveExternalIds(
+      const { extIds, unitFilter } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
       if (extIds.length === 0) return { kpis: null, barbeiros: [], segmentosGeral: null, evolucao: [] };
@@ -2349,6 +2371,15 @@ export const raioXRouter = router({
 
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
+
+      // ── Cache persistente: mês fechado de unidade única ──
+      if (unitFilter && extIds.length === 1) {
+        const persistentCache = await getCachedRoutingByPeriod(unitFilter, dataInicio, dataFim);
+        if (persistentCache) {
+          console.log(`[routing] cache persistente hit unitId=${unitFilter} ${dataInicio}..${dataFim}`);
+          return persistentCache;
+        }
+      }
 
       // Janela de atividade: 60 dias (cliente ativo = visitou nos últimos 60 dias)
       const janelaAtividade = 60;
