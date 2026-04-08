@@ -954,13 +954,13 @@ export default function RaioXPage() {
 
               {/* ── Risco & Retenção ── */}
               {v.riscoMensal && v.riscoMensal.length > 0 && (() => {
-                const totalEmRisco = v.riscoMensal.reduce((s, r) => s + r.emRisco, 0);
-                const totalChurn = v.riscoMensal.reduce((s, r) => s + r.churnNovos, 0);
+                const totalEmRisco = v.riscoMensal.reduce((s: number, r: (typeof v.riscoMensal)[0]) => s + r.emRisco, 0);
+                const totalChurn = v.riscoMensal.reduce((s: number, r: (typeof v.riscoMensal)[0]) => s + r.churnNovos, 0);
                 const mediaChurnPct = v.riscoMensal.length > 0
-                  ? Math.round(v.riscoMensal.reduce((s, r) => s + r.churnPct, 0) / v.riscoMensal.length)
+                  ? Math.round(v.riscoMensal.reduce((s: number, r: (typeof v.riscoMensal)[0]) => s + r.churnPct, 0) / v.riscoMensal.length)
                   : 0;
                 const mediaEmRiscoPct = v.riscoMensal.length > 0
-                  ? Math.round(v.riscoMensal.reduce((s, r) => s + r.emRiscoPct, 0) / v.riscoMensal.length)
+                  ? Math.round(v.riscoMensal.reduce((s: number, r: (typeof v.riscoMensal)[0]) => s + r.emRiscoPct, 0) / v.riscoMensal.length)
                   : 0;
                 return (
                 <div className="glass-card bg-card/60 border-border/50">
@@ -1710,7 +1710,7 @@ export default function RaioXPage() {
                               <td className="p-2 text-right">{fmtDate(c.ultimaVenda)}</td>
                               <td className={`p-2 text-right font-medium ${
                                 churnListaTipo === "perdidos" ? "text-red-400" : churnListaTipo === "emRisco" ? "text-yellow-400" : "text-green-400"
-                              }`}>{c.dias}d</td>
+                              }`}>{(c as {dias?: number; diasSemVisita?: number}).dias ?? c.diasSemVisita ?? 0}d</td>
                               <td className="p-2 text-right pr-4 text-muted-foreground">{c.totalVisitas}x</td>
                             </tr>
                           ))}
