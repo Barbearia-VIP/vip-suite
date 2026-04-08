@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `raio_x_cache_visao_geral` (`id` int AUTO_INCREMENT NOT NULL, `unitId` int NOT NULL, `orgId` int NOT NULL, `mesRef` varchar(7) NOT NULL, `dados` json NOT NULL, `syncedAt` timestamp NOT NULL DEFAULT (now()), `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP, CONSTRAINT `raio_x_cache_visao_geral_id` PRIMARY KEY(`id`))",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4T7G3uAA8hnJwsB.fa5b0780ed64 --database Gw6CU8nRy9T64yBMvKuEjJ --execute CREATE TABLE IF NOT EXISTS `raio_x_cache_visao_geral` (`id` int AUTO_INCREMENT NOT NULL, `unitId` int NOT NULL, `orgId` int NOT NULL, `mesRef` varchar(7) NOT NULL, `dados` json NOT NULL, `syncedAt` timestamp NOT NULL DEFAULT (now()), `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP, CONSTRAINT `raio_x_cache_visao_geral_id` PRIMARY KEY(`id`))",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 475
+}

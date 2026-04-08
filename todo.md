@@ -1146,3 +1146,11 @@
   - [x] Cache em memória 10min para visaoGeral, churn, cohort e barbeiros
   - [x] Paralelizar loops sequenciais de 12 meses (cadencia + churn) com Promise.all
   - [x] Resultado: 12 queries sequenciais → 12 queries paralelas (redução ~10x no tempo dos loops)
+
+## Bug: Timeout no Raio-X ao mudar período
+- [ ] Investigar timeout "Tentativa 3 de 3" no Raio-X ao mudar período — query visaoGeral trava sem carregar
+
+## Cache Persistente Raio-X (Joinville primeiro, depois demais unidades)
+- [ ] Criar tabelas no banco interno para cache de dados históricos do Raio-X por unidade
+- [ ] Criar job noturno que sincroniza dados históricos do banco externo para o banco interno
+- [ ] Atualizar router do Raio-X para usar cache interno (dados históricos) + banco externo (semana atual)

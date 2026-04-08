@@ -20,6 +20,7 @@ import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
 import { sql } from "drizzle-orm";
 import { queryExternal } from "../db-external";
+import { syncRaioXCacheUnit, runRaioXCacheSyncJob } from "../raioXCacheSync";
 import {
   getChurnPorBarbeiro,
   getCadenciaVisitas,
@@ -2672,6 +2673,64 @@ export const raioXRouter = router({
           totalAtendimentos: Number(r.total_atendimentos),
           totalClientes: Number(r.total_clientes),
         })),
+      };
+    }),
+
+  // ── Cache Sync Manual ────────────────────────────────────────────────────────
+  triggerCacheSync: protectedProcedure
+    .input(z.object({
+      unitId: z.number().optional(),
+      forceAll: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      if (input.unitId) {
+        const [rows] = await db.execute(sql`
+          SELECT id, orgId, externalId, name FROM units
+          WHERE id = ${input.unitId} AND externalId IS NOT NULL
+        `) as any;
+        const unit = (rows as any[])[0];
+        if (!unit) throw new TRPCError({ code: "NOT_FOUND", message: "Unidade não encontrada" });
+        syncRaioXCacheUnit({
+          unitId: Number(unit.id),
+          orgId: Number(unit.orgId),
+          externalId: Number(unit.externalId),
+          meses: 24,
+          forceAll: input.forceAll ?? false,
+        }).catch(err => console.error("[triggerCacheSync] Erro:", err?.message));
+        return { started: true, unitName: unit.name };
+      } else {
+        runRaioXCacheSyncJob(input.forceAll ?? false)
+          .catch(err => console.error("[triggerCacheSync] Erro job:", err?.message));
+        return { started: true, unitName: "todas as unidades" };
+      }
+    }),
+
+  getCacheStatus: protectedProcedure
+    .input(z.object({ unitId: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { meses: [], totalCached: 0, lastSync: null };
+      const unitCond = input.unitId ? `unitId = ${input.unitId}` : "1=1";
+      const [rows] = await db.execute(sql.raw(`
+        SELECT mesRef, syncedAt FROM raio_x_cache_visao_geral
+        WHERE ${unitCond}
+        ORDER BY mesRef DESC
+        LIMIT 36
+      `)) as any;
+      const [logRows] = await db.execute(sql.raw(`
+        SELECT finishedAt, status, mesesSynced FROM raio_x_cache_sync_log
+        WHERE ${unitCond.replace("unitId", "unitId")}
+        ORDER BY startedAt DESC LIMIT 1
+      `)) as any;
+      const meses = (rows as any[]).map(r => ({ mesRef: r.mesRef, syncedAt: r.syncedAt }));
+      const lastLog = (logRows as any[])[0];
+      return {
+        meses,
+        totalCached: meses.length,
+        lastSync: lastLog ? { at: lastLog.finishedAt, status: lastLog.status, meses: lastLog.mesesSynced } : null,
       };
     }),
 });

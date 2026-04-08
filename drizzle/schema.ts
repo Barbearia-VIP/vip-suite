@@ -1377,3 +1377,94 @@ export const produtoCategorias = mysqlTable("produto_categorias", {
 ]);
 export type ProdutoCategoria = typeof produtoCategorias.$inferSelect;
 export type InsertProdutoCategoria = typeof produtoCategorias.$inferInsert;
+
+// ─────────────────────────────────────────────
+// RAIO-X CACHE — Cache persistente de dados históricos
+// Armazena snapshots mensais calculados do banco externo
+// para evitar queries pesadas em períodos já fechados.
+// Chave: unitId + mesRef (YYYY-MM) + tipo
+// ─────────────────────────────────────────────
+
+// Snapshot mensal da Visão Geral do Raio-X
+export const raioXCacheVisaoGeral = mysqlTable("raio_x_cache_visao_geral", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  orgId: int("orgId").notNull(),
+  mesRef: varchar("mesRef", { length: 7 }).notNull(), // YYYY-MM
+  // JSON com os dados calculados (kpis, distribuicoes, evolucao mensal)
+  dados: json("dados").notNull(),
+  syncedAt: timestamp("syncedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_raiox_vg_unit").on(t.unitId),
+  index("idx_raiox_vg_org").on(t.orgId),
+  uniqueIndex("uq_raiox_vg_unit_mes").on(t.unitId, t.mesRef),
+]);
+export type RaioXCacheVisaoGeral = typeof raioXCacheVisaoGeral.$inferSelect;
+export type InsertRaioXCacheVisaoGeral = typeof raioXCacheVisaoGeral.$inferInsert;
+
+// Snapshot mensal do Churn do Raio-X
+export const raioXCacheChurn = mysqlTable("raio_x_cache_churn", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  orgId: int("orgId").notNull(),
+  mesRef: varchar("mesRef", { length: 7 }).notNull(), // YYYY-MM
+  dados: json("dados").notNull(),
+  syncedAt: timestamp("syncedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_raiox_churn_unit").on(t.unitId),
+  uniqueIndex("uq_raiox_churn_unit_mes").on(t.unitId, t.mesRef),
+]);
+export type RaioXCacheChurn = typeof raioXCacheChurn.$inferSelect;
+export type InsertRaioXCacheChurn = typeof raioXCacheChurn.$inferInsert;
+
+// Snapshot mensal do Cohort do Raio-X
+export const raioXCacheCohort = mysqlTable("raio_x_cache_cohort", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  orgId: int("orgId").notNull(),
+  mesRef: varchar("mesRef", { length: 7 }).notNull(), // YYYY-MM
+  dados: json("dados").notNull(),
+  syncedAt: timestamp("syncedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_raiox_cohort_unit").on(t.unitId),
+  uniqueIndex("uq_raiox_cohort_unit_mes").on(t.unitId, t.mesRef),
+]);
+export type RaioXCacheCohort = typeof raioXCacheCohort.$inferSelect;
+export type InsertRaioXCacheCohort = typeof raioXCacheCohort.$inferInsert;
+
+// Snapshot mensal do Routing (barbeiros) do Raio-X
+export const raioXCacheRouting = mysqlTable("raio_x_cache_routing", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  orgId: int("orgId").notNull(),
+  mesRef: varchar("mesRef", { length: 7 }).notNull(), // YYYY-MM
+  dados: json("dados").notNull(),
+  syncedAt: timestamp("syncedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_raiox_routing_unit").on(t.unitId),
+  uniqueIndex("uq_raiox_routing_unit_mes").on(t.unitId, t.mesRef),
+]);
+export type RaioXCacheRouting = typeof raioXCacheRouting.$inferSelect;
+export type InsertRaioXCacheRouting = typeof raioXCacheRouting.$inferInsert;
+
+// Log de sincronização do cache do Raio-X
+export const raioXCacheSyncLog = mysqlTable("raio_x_cache_sync_log", {
+  id: int("id").autoincrement().primaryKey(),
+  unitId: int("unitId").notNull(),
+  orgId: int("orgId").notNull(),
+  mesRef: varchar("mesRef", { length: 7 }).notNull(), // YYYY-MM
+  tipo: varchar("tipo", { length: 30 }).notNull(), // visao_geral | churn | cohort | routing
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending | success | error
+  erro: text("erro"),
+  duracaoMs: int("duracaoMs"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_raiox_sync_unit").on(t.unitId),
+  index("idx_raiox_sync_mes").on(t.mesRef),
+]);
+export type RaioXCacheSyncLog = typeof raioXCacheSyncLog.$inferSelect;
+export type InsertRaioXCacheSyncLog = typeof raioXCacheSyncLog.$inferInsert;

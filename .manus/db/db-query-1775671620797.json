@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `raio_x_cache_visao_geral` ADD CONSTRAINT `uq_raiox_vg_unit_mes` UNIQUE(`unitId`, `mesRef`); ALTER TABLE `raio_x_cache_churn` ADD CONSTRAINT `uq_raiox_churn_unit_mes` UNIQUE(`unitId`, `mesRef`); ALTER TABLE `raio_x_cache_cohort` ADD CONSTRAINT `uq_raiox_cohort_unit_mes` UNIQUE(`unitId`, `mesRef`); ALTER TABLE `raio_x_cache_routing` ADD CONSTRAINT `uq_raiox_routing_unit_mes` UNIQUE(`unitId`, `mesRef`)",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4T7G3uAA8hnJwsB.fa5b0780ed64 --database Gw6CU8nRy9T64yBMvKuEjJ --execute ALTER TABLE `raio_x_cache_visao_geral` ADD CONSTRAINT `uq_raiox_vg_unit_mes` UNIQUE(`unitId`, `mesRef`); ALTER TABLE `raio_x_cache_churn` ADD CONSTRAINT `uq_raiox_churn_unit_mes` UNIQUE(`unitId`, `mesRef`); ALTER TABLE `raio_x_cache_cohort` ADD CONSTRAINT `uq_raiox_cohort_unit_mes` UNIQUE(`unitId`, `mesRef`); ALTER TABLE `raio_x_cache_routing` ADD CONSTRAINT `uq_raiox_routing_unit_mes` UNIQUE(`unitId`, `mesRef`)",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1279
+}

@@ -23,7 +23,7 @@ import { useChartTheme } from "../../hooks/useChartTheme";
 import {
   Users, UserCheck, UserX, AlertTriangle, TrendingDown, TrendingUp,
   Zap, Activity, Target, Scissors, Search, RefreshCw, Info, ChevronRight, Calendar,
-  Wifi, WifiOff, Download, RotateCcw, ChevronDown, ChevronUp
+  Wifi, WifiOff, Download, RotateCcw, ChevronDown, ChevronUp, DatabaseZap
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -243,6 +243,15 @@ export default function RaioXPage() {
     { enabled: !!org?.id && tab === "acoes" }
   );
   const qDiag = trpc.raioX.diagnostico.useQuery(baseInput, { enabled: !!org?.id && tab === "diagnostico" });
+  const qCacheStatus = trpc.raioX.getCacheStatus.useQuery(
+    { unitId: selectedUnit?.id },
+    { enabled: !!org?.id }
+  );
+  const triggerSync = trpc.raioX.triggerCacheSync.useMutation({
+    onSuccess: (data) => {
+      console.log("[RaioX] Sync iniciada:", data.unitName);
+    },
+  });
   // Status do banco externo
   const qDbStatus = trpc.dataVip.dbStatus.useQuery(undefined, {
     refetchInterval: 10000,
@@ -378,6 +387,82 @@ export default function RaioXPage() {
           <Button variant="outline" size="sm" onClick={() => qVisao.refetch()}>
             <RefreshCw className="w-3.5 h-3.5" />
           </Button>
+          {/* Botão de sync de cache persistente */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                <DatabaseZap className="w-3.5 h-3.5 text-amber-400" />
+                Cache
+                {qCacheStatus.data && (
+                  <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
+                    qCacheStatus.data.totalCached > 0 ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
+                  }`}>{qCacheStatus.data.totalCached}</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-3" align="end">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold">Cache Persistente do Raio-X</p>
+                <p className="text-xs text-muted-foreground">
+                  Dados históricos salvos localmente para carregamento instantâneo. Apenas o período atual vai ao banco externo.
+                </p>
+                {qCacheStatus.data && (
+                  <div className="text-xs space-y-1">
+                    <p className="text-muted-foreground">
+                      <span className="font-medium text-foreground">{qCacheStatus.data.totalCached}</span> meses em cache
+                    </p>
+                    {qCacheStatus.data.lastSync && (
+                      <p className="text-muted-foreground">
+                        Última sync: <span className="font-medium text-foreground">
+                          {new Date(qCacheStatus.data.lastSync.at).toLocaleString("pt-BR")}
+                        </span>
+                      </p>
+                    )}
+                    {qCacheStatus.data.meses.length > 0 && (
+                      <div className="mt-2 max-h-32 overflow-y-auto space-y-0.5">
+                        {qCacheStatus.data.meses.slice(0, 6).map(m => (
+                          <div key={m.mesRef} className="flex justify-between text-[10px]">
+                            <span className="text-emerald-400">{m.mesRef}</span>
+                            <span className="text-muted-foreground">{new Date(m.syncedAt).toLocaleDateString("pt-BR")}</span>
+                          </div>
+                        ))}
+                        {qCacheStatus.data.meses.length > 6 && (
+                          <p className="text-[10px] text-muted-foreground">+ {qCacheStatus.data.meses.length - 6} meses anteriores</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    className="flex-1 text-xs h-7"
+                    onClick={() => triggerSync.mutate({ unitId: selectedUnit?.id })}
+                    disabled={triggerSync.isPending}
+                  >
+                    {triggerSync.isPending ? (
+                      <><RefreshCw className="w-3 h-3 mr-1 animate-spin" /> Sincronizando...</>
+                    ) : (
+                      <><DatabaseZap className="w-3 h-3 mr-1" /> Sincronizar Agora</>
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs h-7"
+                    onClick={() => triggerSync.mutate({ unitId: selectedUnit?.id, forceAll: true })}
+                    disabled={triggerSync.isPending}
+                    title="Forçar re-sync de todos os meses"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </Button>
+                </div>
+                {triggerSync.isSuccess && (
+                  <p className="text-xs text-emerald-400">✓ Sincronização iniciada em background. Pode levar alguns minutos.</p>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 

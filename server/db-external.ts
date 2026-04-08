@@ -36,6 +36,29 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_DELAY_MS = 30 * 1000; // máximo 30s entre tentativas (era 5 min)
 
+// ─── Semáforo de concorrência ─────────────────────────────────────────────────
+// Limita queries simultâneas para não saturar o túnel SSH
+const MAX_CONCURRENT = 6;
+let activeQueries = 0;
+const queryQueue: Array<() => void> = [];
+
+function acquireSemaphore(): Promise<void> {
+  return new Promise((resolve) => {
+    if (activeQueries < MAX_CONCURRENT) {
+      activeQueries++;
+      resolve();
+    } else {
+      queryQueue.push(() => { activeQueries++; resolve(); });
+    }
+  });
+}
+
+function releaseSemaphore() {
+  activeQueries--;
+  const next = queryQueue.shift();
+  if (next) next();
+}
+
 // ─── Criar túnel SSH ─────────────────────────────────────────────────────────
 
 function destroyTunnel() {
@@ -110,15 +133,14 @@ function createTunnel(): Promise<void> {
           password: DB_PASS,
           database: DB_NAME,
           waitForConnections: true,
-          connectionLimit: 10,       // aumentado de 5 para 10
-          queueLimit: 50,
+          connectionLimit: 15,       // aumentado para 15
+          queueLimit: 100,
           connectTimeout: 30000,     // 30s para conectar
           ssl: { rejectUnauthorized: false },
           enableKeepAlive: true,
           keepAliveInitialDelay: 10000,
         });
-
-        // Detectar erros no pool e reconectar
+        // Detectar erros no pool e reconectarr
         pool.on("connection", (conn) => {
           conn.on("error", (err) => {
             console.warn("[SSH Tunnel] Erro na conexão do pool:", err.message);
@@ -143,8 +165,8 @@ function createTunnel(): Promise<void> {
               password: DB_PASS,
               database: DB_NAME,
               waitForConnections: true,
-              connectionLimit: 10,
-              queueLimit: 50,
+              connectionLimit: 15,
+              queueLimit: 100,
               connectTimeout: 30000,
               ssl: { rejectUnauthorized: false },
               enableKeepAlive: true,
@@ -241,17 +263,24 @@ export async function getExternalPool(): Promise<Pool> {
  * Executa uma query no banco externo com retry automático em caso de
  * erro de conexão (ECONNRESET, PROTOCOL_CONNECTION_LOST, etc.).
  */
+// Timeout por query individual (ms) — evita que queries lentas travem indefinidamente
+const QUERY_TIMEOUT_MS = 25000;
+
 export async function queryExternal<T = Record<string, unknown>>(
   sql: string,
   params: unknown[] = [],
   retries = 3
 ): Promise<T[]> {
+  await acquireSemaphore();
+  try {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const p = await getExternalPool();
-      // Aumentar o max_execution_time para esta sessão (MySQL hint)
-      // Algumas versões do MySQL aceitam SET SESSION, outras usam MAX_EXECUTION_TIME hint
-      const [rows] = await p.execute(sql, params);
+      const queryPromise = p.execute(sql, params);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(Object.assign(new Error('Query execution was interrupted by timeout'), { code: 'ER_QUERY_INTERRUPTED', errno: 3024 })), QUERY_TIMEOUT_MS)
+      );
+      const [rows] = await Promise.race([queryPromise, timeoutPromise]) as [T[], unknown];
       return rows as T[];
     } catch (err: any) {
       const isConnectionError =
@@ -292,6 +321,9 @@ export async function queryExternal<T = Record<string, unknown>>(
     }
   }
   throw new Error("queryExternal: número máximo de tentativas atingido");
+  } finally {
+    releaseSemaphore();
+  }
 }
 
 /**
