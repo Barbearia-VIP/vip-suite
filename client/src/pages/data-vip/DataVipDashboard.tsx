@@ -155,44 +155,40 @@ function DateRangePicker({
         avoidCollisions={true}
         collisionPadding={12}
       >
-        <div className="flex flex-col">
-          {/* ── Topo: Calendário de range em destaque ── */}
-          <div className="p-4 border-b border-border">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-              Selecionar período
-            </p>
+        <div className="flex flex-col w-[300px]">
+          {/* ── Topo: Calendário compacto de 1 mês ── */}
+          <div className="p-3 border-b border-border">
             <CalendarUI
               mode="range"
               selected={calRange}
               onSelect={setCalRange}
               locale={ptBR}
-              numberOfMonths={2}
+              numberOfMonths={1}
               disabled={{ after: new Date() }}
               className="rounded-md"
             />
             {calRange?.from && (
-              <div className="mt-3 px-2 py-1.5 rounded-md bg-primary/10 text-primary text-xs text-center font-medium">
+              <div className="mt-2 px-2 py-1 rounded-md bg-primary/10 text-primary text-xs text-center font-medium">
                 {calRange.to && calRange.from.getTime() !== calRange.to.getTime()
                   ? `${format(calRange.from, "dd/MM/yyyy", { locale: ptBR })} → ${format(calRange.to, "dd/MM/yyyy", { locale: ptBR })}`
                   : format(calRange.from, "dd/MM/yyyy", { locale: ptBR })
                 }
               </div>
             )}
-            <div className="flex gap-2 mt-3">
-              <Button size="sm" className="flex-1" disabled={!calRange?.from} onClick={applyCalRange}>
-                Aplicar período
+            <div className="flex gap-2 mt-2">
+              <Button size="sm" className="flex-1 h-7 text-xs" disabled={!calRange?.from} onClick={applyCalRange}>
+                Aplicar
               </Button>
-              <Button size="sm" variant="outline" disabled={!calRange?.from} onClick={() => setCalRange(undefined)}>
+              <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!calRange?.from} onClick={() => setCalRange(undefined)}>
                 Limpar
               </Button>
             </div>
           </div>
 
-          {/* ── Inferior: Atalhos rápidos + Meses ── */}
-          <div className="flex">
-            {/* Atalhos */}
-            <div className="border-r border-border p-3 space-y-0.5 min-w-[150px]">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Atalhos</p>
+          {/* ── Inferior: Atalhos rápidos em linha + Meses ── */}
+          <div className="p-3 border-b border-border">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Atalhos</p>
+            <div className="flex flex-wrap gap-1">
               {quickRanges.map(r => (
                 <button
                   key={r.label}
@@ -201,39 +197,39 @@ function DateRangePicker({
                     setCalRange(undefined);
                     setOpen(false);
                   }}
-                  className={`w-full text-left text-sm px-2 py-1.5 rounded hover:bg-muted transition-colors ${
+                  className={`text-xs px-2 py-1 rounded border transition-colors ${
                     filter.mode === "range" && filter.label === r.label
-                      ? "bg-primary/10 text-primary font-medium"
-                      : "text-foreground"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border hover:bg-muted text-foreground"
                   }`}
                 >
                   {r.label}
                 </button>
               ))}
             </div>
+          </div>
 
-            {/* Meses */}
-            <div className="p-3 min-w-[140px]">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Por mês</p>
-              <div className="max-h-[160px] overflow-y-auto space-y-0.5 pr-1">
-                {periodos.map(p => (
-                  <button
-                    key={p.val}
-                    onClick={() => {
-                      onFilterChange({ mode: "month", periodo: p.val });
-                      setCalRange(undefined);
-                      setOpen(false);
-                    }}
-                    className={`w-full text-left text-sm px-2 py-1 rounded hover:bg-muted transition-colors ${
-                      filter.mode === "month" && filter.periodo === p.val
-                        ? "bg-primary/10 text-primary font-medium"
-                        : "text-foreground"
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
+          {/* Meses */}
+          <div className="p-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Por mês</p>
+            <div className="max-h-[120px] overflow-y-auto space-y-0.5 pr-1">
+              {periodos.map(p => (
+                <button
+                  key={p.val}
+                  onClick={() => {
+                    onFilterChange({ mode: "month", periodo: p.val });
+                    setCalRange(undefined);
+                    setOpen(false);
+                  }}
+                  className={`w-full text-left text-sm px-2 py-1 rounded hover:bg-muted transition-colors ${
+                    filter.mode === "month" && filter.periodo === p.val
+                      ? "bg-primary/10 text-primary font-medium"
+                      : "text-foreground"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>

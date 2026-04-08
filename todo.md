@@ -1134,3 +1134,6 @@
 
 ## Auditoria de Dados Data VIP (Joinville como referência)
 - [x] Corrigir faturamento: substituir status != 0 por status = 1 em todas as queries (69+ ocorrências em dataVipQueries.ts, dataVip.ts, raioX.ts, dashboard.ts, vipDataSync.ts) — exclui comandas em aberto (status=2) e mantém apenas fechadas/pagas (status=1)
+
+## Seletor de Período Compacto (Data VIP Dashboard)
+- [x] Compactar DateRangePicker: 1 mês de calendário no topo + atalhos em linha + lista de meses, largura fixa 300px
