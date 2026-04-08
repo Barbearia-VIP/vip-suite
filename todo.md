@@ -1108,3 +1108,12 @@
 - [x] Corrigir card Auto Instagram: dados não aparecem mesmo com bot rodando
 - [x] VIP Cam aba Detecções por Hora: gráfico de linha premium com clientes únicos, KPIs do dia, todas as 24h
 - [x] Tema claro: menu superior e lateral mudar de cor
+
+## Tema Claro (Light Mode)
+- [x] ThemeProvider e useTheme hook criados com persistência em localStorage
+- [x] Botão Sol/Lua adicionado no header
+- [x] Variáveis CSS para tema claro definidas no index.css
+- [x] Hook useChartTheme criado para gráficos Recharts
+- [x] AppLayout.tsx atualizado — sidebar e header respondem ao tema
+- [x] glass-card e kpi-card atualizados no CSS para tema claro
+- [x] Transição suave 0.3s ease em body, glass-card, kpi-card, header e sidebar

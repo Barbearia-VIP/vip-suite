@@ -312,6 +312,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           WebkitBackdropFilter: "blur(20px) saturate(180%)",
           borderBottom: isDark ? "1px solid oklch(0.22 0.014 260 / 0.6)" : "1px solid oklch(0.88 0.006 260 / 0.8)",
           boxShadow: isDark ? "0 1px 0 0 oklch(1 0 0 / 0.03) inset, 0 4px 24px -4px oklch(0 0 0 / 0.4)" : "0 1px 0 0 oklch(0 0 0 / 0.04) inset, 0 2px 12px -2px oklch(0 0 0 / 0.08)",
+          transition: "background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease",
         }}
       >
         <div className="flex items-center h-full w-full">
@@ -533,6 +534,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             background: isDark ? "oklch(0.095 0.008 260 / 0.97)" : "oklch(0.99 0.002 80 / 0.97)",
             backdropFilter: "blur(16px)",
             borderBottom: isDark ? "1px solid oklch(0.22 0.014 260 / 0.5)" : "1px solid oklch(0.88 0.006 260 / 0.7)",
+            transition: "background 0.3s ease, border-color 0.3s ease",
           }}
         >
           <div className="grid grid-cols-4 gap-0">
@@ -569,6 +571,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             width: sidebarCollapsed ? "56px" : "208px",
             background: isDark ? "oklch(0.075 0.008 260)" : "oklch(0.975 0.003 80)",
             borderRight: isDark ? "1px solid oklch(0.175 0.012 260 / 0.8)" : "1px solid oklch(0.88 0.006 260 / 0.8)",
+            transition: "background 0.3s ease, border-color 0.3s ease, width 0.2s ease",
           }}
         >
           {/* Module header */}
