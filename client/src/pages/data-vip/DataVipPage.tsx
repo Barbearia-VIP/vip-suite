@@ -330,7 +330,7 @@ export default function DataVipPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0)" />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: "oklch(0.6 0 0)" }} />
                   <YAxis tick={{ fontSize: 11, fill: "oklch(0.6 0 0)" }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: number) => [formatCurrency(v), "Faturamento"]} contentStyle={{ background: "oklch(0.15 0 0)", border: "1px solid oklch(0.25 0 0)", borderRadius: 8, fontSize: 12 }} />
+                  <Tooltip formatter={(v: number) => [formatCurrency(v), "Faturamento"]} contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)" }} />
                   <Area type="monotone" dataKey="faturamento" stroke="oklch(0.65 0.15 200)" fill="url(#colorFat)" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -344,7 +344,7 @@ export default function DataVipPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0)" />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: "oklch(0.6 0 0)" }} />
                   <YAxis tick={{ fontSize: 11, fill: "oklch(0.6 0 0)" }} />
-                  <Tooltip contentStyle={{ background: "oklch(0.15 0 0)", border: "1px solid oklch(0.25 0 0)", borderRadius: 8, fontSize: 12 }} />
+                  <Tooltip contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)" }} />
                   <Bar dataKey="atendimentos" fill="oklch(0.78 0.12 75)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -362,7 +362,7 @@ export default function DataVipPage() {
                     <Pie data={MOCK_SERVICES} cx="50%" cy="50%" innerRadius={55} outerRadius={80} paddingAngle={3} dataKey="value">
                       {MOCK_SERVICES.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ background: "oklch(0.15 0 0)", border: "1px solid oklch(0.25 0 0)", borderRadius: 8, fontSize: 12 }} />
+                    <Tooltip contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)" }} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="flex flex-wrap gap-2 justify-center mt-2">

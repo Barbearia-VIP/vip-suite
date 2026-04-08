@@ -157,12 +157,12 @@ function DotBadge({ color, label, count, pct }: { color: string; label: string; 
 }
 
 const CORES = {
-  verde: "#22c55e",
-  amarelo: "#eab308",
-  vermelho: "#ef4444",
-  azul: "#3b82f6",
-  roxo: "#a855f7",
-  laranja: "#f97316",
+  verde:    "oklch(0.65 0.16 145)",   // esmeralda
+  amarelo:  "oklch(0.76 0.145 72)",   // âmbar VIP
+  vermelho: "oklch(0.58 0.20 25)",    // vermelho
+  azul:     "oklch(0.65 0.16 240)",   // azul
+  roxo:     "oklch(0.65 0.16 290)",   // roxo
+  laranja:  "oklch(0.70 0.18 45)",    // laranja
 };
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -868,21 +868,21 @@ export default function RaioXPage() {
                   <div>
                     <ResponsiveContainer width="100%" height={220}>
                       <ComposedChart data={v.movimentoMensal} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                        <XAxis dataKey="mes" tickFormatter={fmtMes} tick={{ fontSize: 11, fill: "#888" }} />
-                        <YAxis tick={{ fontSize: 11, fill: "#888" }} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
+                        <XAxis dataKey="mes" tickFormatter={fmtMes} tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} />
+                        <YAxis tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} />
                         <Tooltip
                           formatter={(val: number, name: string) => [
                             val.toLocaleString(),
                             name === "atendidos" ? "Atendidos" : name === "emRisco" ? "Em risco" : "Resgatados"
                           ]}
                           labelFormatter={fmtMes}
-                          contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }}
+                          contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
                         />
-                        <ReferenceLine y={mediaAtend} stroke="#ca8a04" strokeDasharray="4 2" strokeOpacity={0.5} label={{ value: `Méd: ${mediaAtend}`, fill: "#ca8a04", fontSize: 10, position: "insideTopLeft" }} />
-                        <Bar dataKey="atendidos" fill="#ca8a04" radius={[3, 3, 0, 0]} name="atendidos" />
-                        <Line type="monotone" dataKey="emRisco" stroke="#f97316" strokeWidth={2} dot={{ r: 3, fill: "#f97316" }} name="emRisco" />
-                        <Line type="monotone" dataKey="resgatados" stroke="#22c55e" strokeWidth={2} dot={{ r: 3, fill: "#22c55e" }} name="resgatados" />
+                        <ReferenceLine y={mediaAtend} stroke="oklch(0.76 0.145 72)" strokeDasharray="4 2" strokeOpacity={0.5} label={{ value: `Méd: ${mediaAtend}`, fill: "oklch(0.76 0.145 72)", fontSize: 10, position: "insideTopLeft" }} />
+                        <Bar dataKey="atendidos" fill="oklch(0.76 0.145 72)" radius={[3, 3, 0, 0]} name="atendidos" />
+                        <Line type="monotone" dataKey="emRisco" stroke="oklch(0.70 0.18 45)" strokeWidth={2} dot={{ r: 3, fill: "oklch(0.70 0.18 45)" }} name="emRisco" />
+                        <Line type="monotone" dataKey="resgatados" stroke="oklch(0.65 0.16 145)" strokeWidth={2} dot={{ r: 3, fill: "oklch(0.65 0.16 145)" }} name="resgatados" />
                       </ComposedChart>
                     </ResponsiveContainer>
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
@@ -935,19 +935,19 @@ export default function RaioXPage() {
                   <div>
                     <ResponsiveContainer width="100%" height={200}>
                       <BarChart data={v.entradasMensais} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                        <XAxis dataKey="mes" tickFormatter={fmtMes} tick={{ fontSize: 11, fill: "#888" }} />
-                        <YAxis tick={{ fontSize: 11, fill: "#888" }} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
+                        <XAxis dataKey="mes" tickFormatter={fmtMes} tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} />
+                        <YAxis tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} />
                         <Tooltip
                           formatter={(val: number, name: string) => [
                             val.toLocaleString(),
                             name === "novos" ? "Novos" : "Resgatados"
                           ]}
                           labelFormatter={fmtMes}
-                          contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }}
+                          contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
                         />
-                        <Bar dataKey="novos" fill={CORES.verde} radius={[3, 3, 0, 0]} name="novos" />
-                        <Bar dataKey="resgatados" fill={CORES.azul} radius={[3, 3, 0, 0]} name="resgatados" />
+                        <Bar dataKey="novos" fill="oklch(0.65 0.16 145)" radius={[3, 3, 0, 0]} name="novos" />
+                        <Bar dataKey="resgatados" fill="oklch(0.65 0.16 240)" radius={[3, 3, 0, 0]} name="resgatados" />
                       </BarChart>
                     </ResponsiveContainer>
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
@@ -1002,10 +1002,10 @@ export default function RaioXPage() {
                   <div>
                     <ResponsiveContainer width="100%" height={230}>
                       <ComposedChart data={v.riscoMensal} margin={{ top: 5, right: 40, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                        <XAxis dataKey="mes" tickFormatter={fmtMes} tick={{ fontSize: 11, fill: "#888" }} />
-                        <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "#888" }} />
-                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "#888" }} tickFormatter={(v: number) => `${v}%`} domain={[0, 100]} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
+                        <XAxis dataKey="mes" tickFormatter={fmtMes} tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} />
+                        <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} />
+                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} tickFormatter={(v: number) => `${v}%`} domain={[0, 100]} />
                         <Tooltip
                           formatter={(val: number, name: string) => [
                             name === "churnPct" || name === "emRiscoPct" ? `${val}%` : val.toLocaleString(),
@@ -1014,12 +1014,12 @@ export default function RaioXPage() {
                             name === "emRiscoPct" ? "Em risco %" : "Churn %"
                           ]}
                           labelFormatter={fmtMes}
-                          contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }}
+                          contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
                         />
-                        <Bar yAxisId="left" dataKey="emRisco" fill="#f97316" radius={[3, 3, 0, 0]} name="emRisco" opacity={0.85} />
-                        <Bar yAxisId="left" dataKey="churnNovos" fill="#ef4444" radius={[3, 3, 0, 0]} name="churnNovos" opacity={0.85} />
-                        <Line yAxisId="right" type="monotone" dataKey="emRiscoPct" stroke="#fb923c" strokeWidth={2} strokeDasharray="4 2" dot={{ r: 3, fill: "#fb923c" }} name="emRiscoPct" />
-                        <Line yAxisId="right" type="monotone" dataKey="churnPct" stroke="#f87171" strokeWidth={2} dot={{ r: 3, fill: "#f87171" }} name="churnPct" />
+                        <Bar yAxisId="left" dataKey="emRisco" fill="oklch(0.70 0.18 45)" radius={[3, 3, 0, 0]} name="emRisco" opacity={0.85} />
+                        <Bar yAxisId="left" dataKey="churnNovos" fill="oklch(0.58 0.20 25)" radius={[3, 3, 0, 0]} name="churnNovos" opacity={0.85} />
+                        <Line yAxisId="right" type="monotone" dataKey="emRiscoPct" stroke="oklch(0.72 0.16 55)" strokeWidth={2} strokeDasharray="4 2" dot={{ r: 3, fill: "oklch(0.72 0.16 55)" }} name="emRiscoPct" />
+                        <Line yAxisId="right" type="monotone" dataKey="churnPct" stroke="oklch(0.62 0.18 25)" strokeWidth={2} dot={{ r: 3, fill: "oklch(0.62 0.18 25)" }} name="churnPct" />
                       </ComposedChart>
                     </ResponsiveContainer>
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground flex-wrap">
@@ -1444,18 +1444,40 @@ export default function RaioXPage() {
                           emRiscoPct: e.total > 0 ? Math.round(e.em_risco / e.total * 100) : 0,
                           perdidoPct: e.total > 0 ? Math.round(e.perdido / e.total * 100) : 0,
                         }))} stackOffset="expand" margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                          <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#888" }} />
-                          <YAxis tickFormatter={v => `${Math.round(v * 100)}%`} tick={{ fontSize: 10, fill: "#888" }} />
+                          <defs>
+                            <linearGradient id="gradPerdido" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="oklch(0.58 0.20 25)" stopOpacity={0.9} />
+                              <stop offset="100%" stopColor="oklch(0.58 0.20 25)" stopOpacity={0.7} />
+                            </linearGradient>
+                            <linearGradient id="gradEmRisco" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="oklch(0.70 0.18 45)" stopOpacity={0.85} />
+                              <stop offset="100%" stopColor="oklch(0.70 0.18 45)" stopOpacity={0.65} />
+                            </linearGradient>
+                            <linearGradient id="gradEspacando" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="oklch(0.76 0.145 72)" stopOpacity={0.8} />
+                              <stop offset="100%" stopColor="oklch(0.76 0.145 72)" stopOpacity={0.6} />
+                            </linearGradient>
+                            <linearGradient id="gradRegular" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="oklch(0.65 0.16 240)" stopOpacity={0.75} />
+                              <stop offset="100%" stopColor="oklch(0.65 0.16 240)" stopOpacity={0.55} />
+                            </linearGradient>
+                            <linearGradient id="gradAssiduo" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="oklch(0.65 0.16 160)" stopOpacity={0.85} />
+                              <stop offset="100%" stopColor="oklch(0.65 0.16 160)" stopOpacity={0.65} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
+                          <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} axisLine={false} tickLine={false} />
+                          <YAxis tickFormatter={v => `${Math.round(v * 100)}%`} tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} axisLine={false} tickLine={false} />
                           <Tooltip
                             formatter={(val: number, name: string) => [`${Math.round(val * 100)}%`, name]}
-                            contentStyle={{ background: "#1a1a1a", border: "1px solid #333", fontSize: 11 }}
+                            contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
                           />
-                          <Area type="monotone" dataKey="perdidoPct" name="Perdido" stackId="1" stroke="#ef4444" fill="#ef4444" fillOpacity={0.85} />
-                          <Area type="monotone" dataKey="emRiscoPct" name="Em Risco" stackId="1" stroke="#f97316" fill="#f97316" fillOpacity={0.7} />
-                          <Area type="monotone" dataKey="espacandoPct" name="Espaçando" stackId="1" stroke="#eab308" fill="#eab308" fillOpacity={0.6} />
-                          <Area type="monotone" dataKey="regularPct" name="Regular" stackId="1" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.6} />
-                          <Area type="monotone" dataKey="assiduoPct" name="Assíduo" stackId="1" stroke="#10b981" fill="#10b981" fillOpacity={0.7} />
+                          <Area type="monotone" dataKey="perdidoPct" name="Perdido" stackId="1" stroke="oklch(0.58 0.20 25)" fill="url(#gradPerdido)" />
+                          <Area type="monotone" dataKey="emRiscoPct" name="Em Risco" stackId="1" stroke="oklch(0.70 0.18 45)" fill="url(#gradEmRisco)" />
+                          <Area type="monotone" dataKey="espacandoPct" name="Espaçando" stackId="1" stroke="oklch(0.76 0.145 72)" fill="url(#gradEspacando)" />
+                          <Area type="monotone" dataKey="regularPct" name="Regular" stackId="1" stroke="oklch(0.65 0.16 240)" fill="url(#gradRegular)" />
+                          <Area type="monotone" dataKey="assiduoPct" name="Assíduo" stackId="1" stroke="oklch(0.65 0.16 160)" fill="url(#gradAssiduo)" />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
@@ -1568,24 +1590,24 @@ export default function RaioXPage() {
                     >
                       <defs>
                         <linearGradient id="gradChurnG" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f87171" stopOpacity={0.25} />
-                          <stop offset="95%" stopColor="#f87171" stopOpacity={0.02} />
+                          <stop offset="5%" stopColor="oklch(0.62 0.18 25)" stopOpacity={0.25} />
+                          <stop offset="95%" stopColor="oklch(0.62 0.18 25)" stopOpacity={0.02} />
                         </linearGradient>
                         <linearGradient id="gradFidG" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#fb923c" stopOpacity={0.25} />
-                          <stop offset="95%" stopColor="#fb923c" stopOpacity={0.02} />
+                          <stop offset="5%" stopColor="oklch(0.72 0.16 55)" stopOpacity={0.25} />
+                          <stop offset="95%" stopColor="oklch(0.72 0.16 55)" stopOpacity={0.02} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="mesLabel" tick={{ fontSize: 10, fill: "#888" }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: "#888" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} domain={[0, 100]} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
+                      <XAxis dataKey="mesLabel" tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} domain={[0, 100]} />
                       <Tooltip
-                        contentStyle={{ background: "#1a1a2e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", fontSize: "12px" }}
+                        contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
                         formatter={(value: number, name: string) => [`${value.toFixed(1)}%`, name === "churnPct" ? "Churn geral" : "Churn fidelizados"]}
                         labelFormatter={(label) => `Mês: ${label}`}
                       />
-                      <Area type="monotone" dataKey="churnPct" stroke="#f87171" strokeWidth={2} fill="url(#gradChurnG)" dot={{ r: 3, fill: "#f87171" }} activeDot={{ r: 5 }} />
-                      <Area type="monotone" dataKey="fidPct" stroke="#fb923c" strokeWidth={2} fill="url(#gradFidG)" dot={{ r: 3, fill: "#fb923c" }} activeDot={{ r: 5 }} />
+                      <Area type="monotone" dataKey="churnPct" stroke="oklch(0.62 0.18 25)" strokeWidth={2} fill="url(#gradChurnG)" dot={{ r: 3, fill: "oklch(0.62 0.18 25)" }} activeDot={{ r: 5 }} />
+                      <Area type="monotone" dataKey="fidPct" stroke="oklch(0.72 0.16 55)" strokeWidth={2} fill="url(#gradFidG)" dot={{ r: 3, fill: "oklch(0.72 0.16 55)" }} activeDot={{ r: 5 }} />
                     </AreaChart>
                   </ResponsiveContainer>
                   {/* Análises automáticas */}
@@ -2546,21 +2568,21 @@ export default function RaioXPage() {
                     <div>
                       <ResponsiveContainer width="100%" height={220}>
                         <BarChart data={evolucaoChart} barSize={18} barGap={2}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                          <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
                           <XAxis dataKey="mesLabel" tick={{ fontSize: 10 }} />
                           <YAxis tick={{ fontSize: 10 }} />
                           <Tooltip
-                            contentStyle={{ background: "#1a1a2e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
+                            contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
                             formatter={(v: number, name: string) => [
                               v.toLocaleString(),
                               name === "novos" ? "Novos" : name === "recFieis" ? "Rec. Fiéis" : name === "recExclusivos" ? "Rec. Exclusivos" : name === "recRotativos" ? "Rec. Rotativos" : name
                             ]}
                           />
-                          <Bar dataKey="novos" stackId="a" fill="oklch(0.65 0.15 240)" />
-                          <Bar dataKey="recFieis" stackId="a" fill="oklch(0.65 0.15 145)" />
-                          <Bar dataKey="recExclusivos" stackId="a" fill="oklch(0.75 0.12 185)" />
-                          <Bar dataKey="recRotativos" stackId="a" fill="oklch(0.65 0.15 290)" />
-                          <Line type="monotone" dataKey="totalClientes" stroke="rgba(255,255,255,0.4)" strokeWidth={1.5} dot={false} />
+                          <Bar dataKey="novos" stackId="a" fill="oklch(0.65 0.16 240)" />
+                          <Bar dataKey="recFieis" stackId="a" fill="oklch(0.65 0.16 145)" />
+                          <Bar dataKey="recExclusivos" stackId="a" fill="oklch(0.65 0.16 185)" />
+                          <Bar dataKey="recRotativos" stackId="a" fill="oklch(0.65 0.16 290)" />
+                          <Line type="monotone" dataKey="totalClientes" stroke="oklch(0.55 0.012 260 / 0.6)" strokeWidth={1.5} dot={false} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -2997,11 +3019,11 @@ export default function RaioXPage() {
                   <div>
                     <ResponsiveContainer width="100%" height={180}>
                       <BarChart data={(qDiag.data?.visitasDistribuicao ?? []).slice(0, 12)} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                        <XAxis dataKey="visitas" tick={{ fontSize: 11, fill: "#888" }} label={{ value: "visitas", position: "insideBottom", offset: -2, fontSize: 10, fill: "#666" }} />
-                        <YAxis tick={{ fontSize: 11, fill: "#888" }} />
-                        <Tooltip formatter={(val: number) => [val.toLocaleString(), "Clientes"]} contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
-                        <Bar dataKey="clientes" fill={CORES.roxo} radius={[3, 3, 0, 0]} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
+                        <XAxis dataKey="visitas" tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} label={{ value: "visitas", position: "insideBottom", offset: -2, fontSize: 10, fill: "#666" }} />
+                        <YAxis tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} />
+                        <Tooltip formatter={(val: number) => [val.toLocaleString(), "Clientes"]} contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }} />
+                        <Bar dataKey="clientes" fill="oklch(0.65 0.16 290)" radius={[3, 3, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -3046,11 +3068,11 @@ export default function RaioXPage() {
                   <div>
                     <ResponsiveContainer width="100%" height={160}>
                       <BarChart data={qDiag.data?.horarios ?? []} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#888" }} />
-                        <YAxis tick={{ fontSize: 10, fill: "#888" }} />
-                        <Tooltip formatter={(val: number) => [val.toLocaleString(), "Atendimentos"]} contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }} />
-                        <Bar dataKey="atendimentos" fill={CORES.azul} radius={[2, 2, 0, 0]} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
+                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} />
+                        <YAxis tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} />
+                        <Tooltip formatter={(val: number) => [val.toLocaleString(), "Atendimentos"]} contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }} />
+                        <Bar dataKey="atendimentos" fill="oklch(0.65 0.16 240)" radius={[2, 2, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -3065,13 +3087,13 @@ export default function RaioXPage() {
                   <div>
                     <ResponsiveContainer width="100%" height={160}>
                       <BarChart data={qDiag.data?.diasSemana ?? []} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                        <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#888" }} />
-                        <YAxis tick={{ fontSize: 11, fill: "#888" }} />
-                        <Tooltip contentStyle={{ background: "#1a1a1a", border: "1px solid #333" }}
+                        <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
+                        <XAxis dataKey="label" tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} />
+                        <YAxis tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} />
+                        <Tooltip contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
                           formatter={(val: number, name: string) => [val.toLocaleString(), name === "atendimentos" ? "Atendimentos" : "Clientes únicos"]} />
-                        <Bar dataKey="atendimentos" fill={CORES.verde} radius={[2, 2, 0, 0]} name="atendimentos" />
-                        <Bar dataKey="clientes" fill={CORES.roxo} radius={[2, 2, 0, 0]} name="clientes" />
+                        <Bar dataKey="atendimentos" fill="oklch(0.65 0.16 145)" radius={[2, 2, 0, 0]} name="atendimentos" />
+                        <Bar dataKey="clientes" fill="oklch(0.65 0.16 290)" radius={[2, 2, 0, 0]} name="clientes" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>

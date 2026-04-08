@@ -880,7 +880,7 @@ export default function DataVipDashboard() {
                                   `${fmt(v)} (${totalPag > 0 ? Math.round((v / totalPag) * 100) : 0}%)`,
                                   props.payload?.forma || "Outros"
                                 ]}
-                                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 11 }}
+                                contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)" }}
                               />
                             </PieChart>
                           </ResponsiveContainer>

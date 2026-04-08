@@ -1149,11 +1149,20 @@ export default function ClientesPage() {
                   <div className="h-36">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={qDetalhe.data.evolucaoMensal.map(r => ({ label: r.periodo.slice(0, 7), valor: r.valor, visitas: r.visitas }))}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                        <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
-                        <Tooltip formatter={(v: number) => fmtMoeda(v)} />
-                        <Area type="monotone" dataKey="valor" stroke="#d4a017" fill="#d4a01733" strokeWidth={2} name="Valor" />
+                        <defs>
+                          <linearGradient id="gradClienteGasto" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="oklch(0.76 0.145 72)" stopOpacity={0.3} />
+                            <stop offset="100%" stopColor="oklch(0.76 0.145 72)" stopOpacity={0.02} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
+                        <XAxis dataKey="label" tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} axisLine={false} tickLine={false} />
+                        <Tooltip
+                          formatter={(v: number) => fmtMoeda(v)}
+                          contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)" }}
+                        />
+                        <Area type="monotone" dataKey="valor" stroke="oklch(0.76 0.145 72)" fill="url(#gradClienteGasto)" strokeWidth={2} name="Valor" dot={false} activeDot={{ r: 4, fill: "oklch(0.76 0.145 72)" }} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>

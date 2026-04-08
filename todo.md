@@ -1056,3 +1056,28 @@
 - [x] Aplicar font-display no branding "VIP Suite" do AppLayout
 - [x] Aplicar font-display no PageHeader (todos os títulos de página)
 - [x] Configurar font-feature-settings para ligatures e alternates do Geist
+
+## Modernização de Gráficos Recharts (2026-04-08)
+
+- [x] Substituir CORES object no RaioXPage para padrão OKLCH âmbar
+- [x] Modernizar 9 gráficos do RaioXPage com tooltip glass (backdrop-filter, box-shadow)
+- [x] Adicionar gradientes defs no AreaChart de evolução por status (5 gradientes empilhados)
+- [x] Adicionar gradientes defs no AreaChart de churn mensal (2 gradientes)
+- [x] Modernizar BarChart e RadarChart do IndicadoresPage (Gestão Total)
+- [x] Adicionar gradiente âmbar no BarChart de atingimento de indicadores
+- [x] Adicionar radialGradient no RadarChart de performance
+- [x] Modernizar tooltips do AutoInstagramPage, DataVipPage e DataVipDashboard
+- [x] Modernizar AreaChart de evolução de gasto do ClientesPage
+- [x] Remover axisLine/tickLine dos eixos para visual mais limpo
+- [x] TypeScript 0 erros após todas as modificações
+
+## Modernização de Gráficos Recharts (2026-04-08)
+- [x] Substituir CORES object no RaioXPage para padrão OKLCH âmbar
+- [x] Modernizar 9 gráficos do RaioXPage com tooltip glass
+- [x] Gradientes defs no AreaChart de evolução por status (5 gradientes)
+- [x] Gradientes defs no AreaChart de churn mensal
+- [x] Modernizar BarChart e RadarChart do IndicadoresPage
+- [x] Gradiente âmbar no BarChart + radialGradient no RadarChart
+- [x] Modernizar tooltips do AutoInstagramPage, DataVipPage, DataVipDashboard
+- [x] Modernizar AreaChart do ClientesPage
+- [x] TypeScript 0 erros

@@ -149,26 +149,30 @@ function GraficosView({ indicadores }: { indicadores: Indicador[] }) {
           <h3 className="text-sm font-semibold mb-4 text-foreground">% de Atingimento por Indicador</h3>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={barData} margin={{ top: 5, right: 10, left: 0, bottom: 70 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <defs>
+                <linearGradient id="gradBarAmbar" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="oklch(0.82 0.16 72)" stopOpacity={1} />
+                  <stop offset="100%" stopColor="oklch(0.68 0.14 55)" stopOpacity={0.85} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
               <XAxis
                 dataKey="nome"
-                tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }}
                 angle={-35}
                 textAnchor="end"
                 interval={0}
+                axisLine={false}
+                tickLine={false}
               />
-              <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} unit="%" domain={[0, 100]} />
+              <YAxis tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} unit="%" domain={[0, 100]} axisLine={false} tickLine={false} />
               <Tooltip
                 formatter={(v: number) => [`${v}%`, "Atingimento"]}
-                contentStyle={{
-                  background: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
-                labelStyle={{ color: "hsl(var(--foreground))" }}
+                contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
+                labelStyle={{ color: "oklch(0.55 0.012 260)"  }}
+                cursor={{ fill: "oklch(0.76 0.145 72 / 0.08)" }}
               />
-              <Bar dataKey="pct" name="% da Meta" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="pct" name="% da Meta" fill="url(#gradBarAmbar)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -179,16 +183,23 @@ function GraficosView({ indicadores }: { indicadores: Indicador[] }) {
           <h3 className="text-sm font-semibold mb-4 text-foreground">Radar de Performance</h3>
           <ResponsiveContainer width="100%" height={300}>
             <RadarChart data={radarData}>
-              <PolarGrid stroke="hsl(var(--border))" />
-              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+              <defs>
+                <radialGradient id="gradRadarAmbar" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="oklch(0.82 0.16 72)" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="oklch(0.68 0.14 55)" stopOpacity={0.08} />
+                </radialGradient>
+              </defs>
+              <PolarGrid stroke="oklch(0.22 0.014 260 / 0.5)" strokeDasharray="3 3" />
+              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} />
               <Radar
                 name="% da Meta"
                 dataKey="pct"
-                stroke="hsl(var(--primary))"
-                fill="hsl(var(--primary))"
-                fillOpacity={0.2}
+                stroke="oklch(0.76 0.145 72)"
+                strokeWidth={2}
+                fill="url(#gradRadarAmbar)"
+                dot={{ r: 3, fill: "oklch(0.76 0.145 72)", strokeWidth: 0 }}
               />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 12, color: "oklch(0.55 0.012 260)" }} />
             </RadarChart>
           </ResponsiveContainer>
         </div>
