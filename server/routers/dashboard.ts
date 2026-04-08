@@ -12,7 +12,6 @@ import {
   gtProblemas,
   gtReunioes,
   gtFinanceiro,
-  igBotStats,
 } from "../../drizzle/schema";
 
 // Helper: db.execute(sql.raw(...)) retorna [[rows], [metadata]] no MySQL2
@@ -262,29 +261,19 @@ export const dashboardRouter = router({
       const nps = totalRep > 0 ? Math.round(((promotores - detratores) / totalRep) * 100) : 0;
 
       // ── AUTO INSTAGRAM: comentários e stories respondidos no período ──
-      // igBotStats.date é tipo Date no Drizzle (MySqlDate) — usar objetos Date
-      const igQuery = unitId
-        ? await db.select({
-            comentariosRespondidos: sql<number>`COALESCE(SUM(${igBotStats.repliesCount}), 0)`,
-            storiesRespondidos: sql<number>`COALESCE(SUM(${igBotStats.storiesReplied}), 0)`,
-          }).from(igBotStats).where(and(
-            eq(igBotStats.unitId, unitId),
-            gte(igBotStats.date, mesStart),
-            lte(igBotStats.date, mesEnd),
-          ))
-        : await db.select({
-            comentariosRespondidos: sql<number>`COALESCE(SUM(${igBotStats.repliesCount}), 0)`,
-            storiesRespondidos: sql<number>`COALESCE(SUM(${igBotStats.storiesReplied}), 0)`,
-          }).from(igBotStats)
-            .innerJoin(units, eq(igBotStats.unitId, units.id))
-            .where(and(
-              eq(units.orgId, orgId),
-              gte(igBotStats.date, mesStart),
-              lte(igBotStats.date, mesEnd),
-            ));
+      // igBotStats.date é tipo DATE (sem hora) — usar strings YYYY-MM-DD para comparação correta
+      const igDateStart = mesStartStr.slice(0, 10);
+      const igDateEnd = mesEndStr.slice(0, 10);
+      const igUnitWhere = unitId ? `AND unitId = ${unitId}` : `AND unitId IN (SELECT id FROM units WHERE orgId = ${orgId})`;
+      const igRaw = await db.execute(sql.raw(
+        `SELECT COALESCE(SUM(repliesCount), 0) as comentariosRespondidos, COALESCE(SUM(storiesReplied), 0) as storiesRespondidos
+         FROM ig_bot_stats
+         WHERE date >= '${igDateStart}' AND date <= '${igDateEnd}' ${igUnitWhere}`
+      ));
+      const igRow = execRow(igRaw);
       const igTotals = {
-        comentariosRespondidos: Number(igQuery[0]?.comentariosRespondidos ?? 0),
-        storiesRespondidos: Number(igQuery[0]?.storiesRespondidos ?? 0),
+        comentariosRespondidos: Number(igRow.comentariosRespondidos ?? 0),
+        storiesRespondidos: Number(igRow.storiesRespondidos ?? 0),
       };
 
       return {

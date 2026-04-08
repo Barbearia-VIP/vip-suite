@@ -1105,3 +1105,4 @@
 - [x] Visual dos cards: mais moderno e impactante
 - [x] Card Reputação Dashboard: remover NPS, manter apenas nota Google + pendentes
 - [x] Card Auto Instagram Dashboard: mostrar comentários respondidos e stories respondidos separadamente
+- [x] Corrigir card Auto Instagram: dados não aparecem mesmo com bot rodando
