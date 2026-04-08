@@ -33,18 +33,31 @@ function execRows(result: unknown): Record<string, unknown>[] {
 }
 
 function getMonthRange(offsetMonths = 0) {
+  // Usa fuso Brasil (UTC-3) para determinar o mês correto
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + offsetMonths;
-  const start = new Date(year, month, 1, 0, 0, 0);
-  const end = new Date(year, month + 1, 0, 23, 59, 59);
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const year = brt.getUTCFullYear();
+  const month = brt.getUTCMonth() + offsetMonths;
+  // Início do mês em BRT → convertido para UTC (adiciona 3h)
+  const startBRT = new Date(Date.UTC(year, month, 1, 0, 0, 0));
+  const start = new Date(startBRT.getTime() + 3 * 60 * 60 * 1000);
+  // Fim do mês em BRT → início do próximo mês BRT - 1ms → UTC
+  const endBRT = new Date(Date.UTC(year, month + 1, 1, 0, 0, 0));
+  const end = new Date(endBRT.getTime() + 3 * 60 * 60 * 1000 - 1);
   return { start, end };
 }
 
 function getToday() {
+  // Usa fuso Brasil (UTC-3) para determinar o dia correto
   const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const year = brt.getUTCFullYear();
+  const month = brt.getUTCMonth();
+  const day = brt.getUTCDate();
+  const startBRT = new Date(Date.UTC(year, month, day, 0, 0, 0));
+  const start = new Date(startBRT.getTime() + 3 * 60 * 60 * 1000);
+  const endBRT = new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
+  const end = new Date(endBRT.getTime() + 3 * 60 * 60 * 1000);
   return { start, end };
 }
 

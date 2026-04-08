@@ -80,30 +80,32 @@ function groupByWeek(daily: any[]): any[] {
 export default function VipCamPage() {
   const { selectedUnit } = useApp();
   const unitId = selectedUnit?.id;
-  const today = new Date().toISOString().slice(0, 10);
+
+  // Data atual no fuso Brasil (UTC-3) para evitar troca de dia às 21h UTC
+  const todayBRT = useMemo(() => {
+    const now = new Date();
+    const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+    return brt.toISOString().slice(0, 10);
+  }, []);
+
   const [trendPeriod, setTrendPeriod] = useState<PeriodOption>(7);
 
   const trendStartDate = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - (trendPeriod - 1));
-    return d.toISOString().slice(0, 10);
+    const now = new Date();
+    const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+    brt.setUTCDate(brt.getUTCDate() - (trendPeriod - 1));
+    return brt.toISOString().slice(0, 10);
   }, [trendPeriod]);
 
-  const sevenDaysAgo = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 6);
-    return d.toISOString().slice(0, 10);
-  })();
-
   const { data: dashboard, isLoading } = trpc.vipCam.getDashboard.useQuery(
-    { unitId, date: today },
+    { unitId, date: todayBRT },
     { refetchInterval: 30_000 }
   );
 
   const { data: metricas } = trpc.vipCam.getMetricas.useQuery({
     unitId,
     startDate: trendStartDate,
-    endDate: today,
+    endDate: todayBRT,
   });
 
   const { data: clientesData } = trpc.vipCam.getClientes.useQuery({
@@ -112,17 +114,28 @@ export default function VipCamPage() {
     page: 1,
   });
 
+  // Dados do dia (para gráfico horário)
   const today_data = dashboard?.today;
-  const satisfactionRate = today_data?.satisfactionRate ?? 0;
-  const totalDeteccoes = today_data?.totalDeteccoes ?? 0;
-  const satisfeitos = today_data?.satisfeitos ?? 0;
-  const neutros = today_data?.neutros ?? 0;
-  const insatisfeitos = today_data?.insatisfeitos ?? 0;
+
+  // KPIs do mês (baseados em clientes reais)
+  const mes = dashboard?.mes;
+  const satisfactionRateMes = mes?.satisfactionRate ?? 0;
+  const clientesUnicosMes = mes?.clientesUnicos ?? 0;
+  const novosMes = mes?.novosClientes ?? 0;
+  const yearMonth = mes?.yearMonth ?? '';
+  const mesLabel = yearMonth
+    ? new Date(yearMonth + '-01T12:00:00Z').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+    : 'este mês';
+
+  // Distribuição de satisfação do mês (para pie chart)
+  const satisfeitosMes = mes?.satisfeitos ?? 0;
+  const neutrosMes = mes?.neutros ?? 0;
+  const insatisfeitosMes = mes?.insatisfeitos ?? 0;
 
   const pieData = [
-    { name: 'Satisfeitos', value: satisfeitos, color: COLORS.satisfied },
-    { name: 'Neutros', value: neutros, color: COLORS.neutral },
-    { name: 'Insatisfeitos', value: insatisfeitos, color: COLORS.unsatisfied },
+    { name: 'Satisfeitos', value: satisfeitosMes, color: COLORS.satisfied },
+    { name: 'Neutros', value: neutrosMes, color: COLORS.neutral },
+    { name: 'Insatisfeitos', value: insatisfeitosMes, color: COLORS.unsatisfied },
   ].filter(d => d.value > 0);
 
   const areaDataRaw = (metricas?.daily ?? []).map(d => ({
@@ -145,28 +158,28 @@ export default function VipCamPage() {
 
   const kpis = [
     {
-      label: 'Detecções Hoje',
-      value: totalDeteccoes,
+      label: 'Clientes no Mês',
+      value: clientesUnicosMes,
       icon: Camera,
       color: 'text-blue-500',
       bg: 'bg-blue-500/10',
-      sub: 'reconhecimentos faciais',
+      sub: `visitaram em ${mesLabel}`,
     },
     {
       label: 'Taxa de Satisfação',
-      value: `${satisfactionRate}%`,
-      icon: satisfactionRate >= 70 ? Smile : satisfactionRate >= 40 ? Meh : Frown,
-      color: satisfactionRate >= 70 ? 'text-green-500' : satisfactionRate >= 40 ? 'text-amber-500' : 'text-red-500',
-      bg: satisfactionRate >= 70 ? 'bg-green-500/10' : satisfactionRate >= 40 ? 'bg-amber-500/10' : 'bg-red-500/10',
-      sub: 'clientes satisfeitos hoje',
+      value: `${satisfactionRateMes}%`,
+      icon: satisfactionRateMes >= 70 ? Smile : satisfactionRateMes >= 40 ? Meh : Frown,
+      color: satisfactionRateMes >= 70 ? 'text-green-500' : satisfactionRateMes >= 40 ? 'text-amber-500' : 'text-red-500',
+      bg: satisfactionRateMes >= 70 ? 'bg-green-500/10' : satisfactionRateMes >= 40 ? 'bg-amber-500/10' : 'bg-red-500/10',
+      sub: `clientes satisfeitos em ${mesLabel}`,
     },
     {
-      label: 'Clientes Únicos',
-      value: dashboard?.totalClientes ?? 0,
+      label: 'Novos no Mês',
+      value: novosMes,
       icon: Users,
       color: 'text-purple-500',
       bg: 'bg-purple-500/10',
-      sub: 'na base de dados',
+      sub: `1ª visita registrada em ${mesLabel}`,
     },
     {
       label: 'Novos Hoje',
@@ -174,7 +187,7 @@ export default function VipCamPage() {
       icon: TrendingUp,
       color: 'text-amber-500',
       bg: 'bg-amber-500/10',
-      sub: 'primeira visita registrada',
+      sub: 'primeira visita registrada hoje',
     },
   ];
 
@@ -301,16 +314,16 @@ export default function VipCamPage() {
           </div>
         </div>
 
-        {/* Distribuição de Satisfação — Hoje */}
+        {/* Distribuição de Satisfação — Mês */}
         <div className="glass-card">
           <div className="p-6 pb-2">
-            <h3 className="font-semibold text-foreground text-base">Distribuição — Hoje</h3>
+            <h3 className="font-semibold text-foreground text-base">Distribuição — {mesLabel}</h3>
           </div>
           <div className="p-6 pt-0">
             {pieData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm gap-2">
                 <Camera className="w-8 h-8 opacity-30" />
-                <p>Sem dados hoje</p>
+                <p>Sem dados este mês</p>
                 <Button size="sm" variant="outline" asChild>
                   <Link href="/vip-cam/ao-vivo">Iniciar câmera</Link>
                 </Button>
@@ -337,11 +350,11 @@ export default function VipCamPage() {
                 </ResponsiveContainer>
                 <div className="space-y-2">
                   {[
-                    { label: 'Satisfeitos', value: satisfeitos, color: COLORS.satisfied, icon: ThumbsUp, textColor: 'text-green-600' },
-                    { label: 'Neutros', value: neutros, color: COLORS.neutral, icon: Minus, textColor: 'text-amber-600' },
-                    { label: 'Insatisfeitos', value: insatisfeitos, color: COLORS.unsatisfied, icon: ThumbsDown, textColor: 'text-red-600' },
+                    { label: 'Satisfeitos', value: satisfeitosMes, color: COLORS.satisfied, icon: ThumbsUp, textColor: 'text-green-600' },
+                    { label: 'Neutros', value: neutrosMes, color: COLORS.neutral, icon: Minus, textColor: 'text-amber-600' },
+                    { label: 'Insatisfeitos', value: insatisfeitosMes, color: COLORS.unsatisfied, icon: ThumbsDown, textColor: 'text-red-600' },
                   ].map((s) => {
-                    const total = totalDeteccoes || 1;
+                    const total = (satisfeitosMes + neutrosMes + insatisfeitosMes) || 1;
                     const pct = Math.round((s.value / total) * 100);
                     return (
                       <div key={s.label}>

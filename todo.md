@@ -1081,3 +1081,12 @@
 - [x] Modernizar tooltips do AutoInstagramPage, DataVipPage, DataVipDashboard
 - [x] Modernizar AreaChart do ClientesPage
 - [x] TypeScript 0 erros
+
+## VIP Cam — Correções de Timezone e KPIs (2026-04-08)
+- [x] Corrigir timezone Brasil (UTC-3) no getDashboard e saveCapture
+- [x] Mudar "Detecções Hoje" para "Clientes no Mês" (contagem de camClientes por mês)
+- [x] Mudar "Taxa de Satisfação" para calcular por clientes do mês (não detecções do dia)
+- [x] Mudar "Clientes Únicos" para "Clientes no Mês" (lastSeenAt dentro do mês atual)
+- [x] Manter "Novos HOJE" com data correta do Brasil
+- [x] Adicionar procedure getMonthStats no router vipCam
+- [x] Atualizar VipCamPage para usar novos KPIs mensais

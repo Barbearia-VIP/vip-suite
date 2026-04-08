@@ -21,6 +21,63 @@ import { storagePut } from '../storage';
 // Helpers
 // ─────────────────────────────────────────────
 
+/**
+ * Retorna a data atual no fuso horário do Brasil (UTC-3) no formato YYYY-MM-DD.
+ * Evita o problema de troca de dia às 21h UTC (meia-noite BRT).
+ */
+function todayBRT(): string {
+  const now = new Date();
+  // UTC-3: subtrai 3 horas
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  return brt.toISOString().slice(0, 10);
+}
+
+/**
+ * Retorna a hora atual no fuso horário do Brasil (UTC-3).
+ */
+function hourBRT(): number {
+  const now = new Date();
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  return brt.getUTCHours();
+}
+
+/**
+ * Retorna o início e fim do mês atual no fuso Brasil (UTC-3) como objetos Date UTC.
+ * Ex: para abril/2026, retorna início = 2026-04-01T03:00:00Z e fim = 2026-05-01T02:59:59Z
+ */
+function currentMonthRangeBRT(): { start: Date; end: Date; yearMonth: string } {
+  const now = new Date();
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const year = brt.getUTCFullYear();
+  const month = brt.getUTCMonth(); // 0-indexed
+  // Início do mês em BRT = início do mês BRT convertido para UTC (adiciona 3h)
+  const startBRT = new Date(Date.UTC(year, month, 1, 0, 0, 0));
+  const startUTC = new Date(startBRT.getTime() + 3 * 60 * 60 * 1000);
+  // Fim do mês em BRT = início do próximo mês BRT - 1ms, convertido para UTC
+  const endBRT = new Date(Date.UTC(year, month + 1, 1, 0, 0, 0));
+  const endUTC = new Date(endBRT.getTime() + 3 * 60 * 60 * 1000 - 1);
+  const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+  return { start: startUTC, end: endUTC, yearMonth };
+}
+
+/**
+ * Retorna o início e fim do dia atual no fuso Brasil (UTC-3) como objetos Date UTC.
+ */
+function todayRangeBRT(): { start: Date; end: Date } {
+  const now = new Date();
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const year = brt.getUTCFullYear();
+  const month = brt.getUTCMonth();
+  const day = brt.getUTCDate();
+  // Início do dia BRT convertido para UTC
+  const startBRT = new Date(Date.UTC(year, month, day, 0, 0, 0));
+  const startUTC = new Date(startBRT.getTime() + 3 * 60 * 60 * 1000);
+  // Fim do dia BRT convertido para UTC
+  const endBRT = new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
+  const endUTC = new Date(endBRT.getTime() + 3 * 60 * 60 * 1000);
+  return { start: startUTC, end: endUTC };
+}
+
 function randomSuffix() {
   return Math.random().toString(36).slice(2, 8);
 }
@@ -197,8 +254,8 @@ export const vipCamRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       const now = new Date();
-      const todayStr = now.toISOString().slice(0, 10);
-      const currentHour = now.getHours();
+      const todayStr = todayBRT(); // Data no fuso Brasil (UTC-3)
+      const currentHour = hourBRT(); // Hora no fuso Brasil (UTC-3)
 
       let clienteId: number;
       let isNewCliente = false;
@@ -237,8 +294,13 @@ export const vipCamRouter = router({
         const finalLevel = calcFinalSatisfactionLevel(allTimeline);
 
         // Verificar se é a primeira visita do dia (para incrementar visitCount)
+        // Comparar lastSeenAt com a data atual no fuso Brasil
         const lastSeenDate = cliente.lastSeenAt
-          ? new Date(cliente.lastSeenAt).toISOString().slice(0, 10)
+          ? (() => {
+              const d = new Date(cliente.lastSeenAt);
+              const brt = new Date(d.getTime() - 3 * 60 * 60 * 1000);
+              return brt.toISOString().slice(0, 10);
+            })()
           : null;
         const isNewDay = lastSeenDate !== todayStr;
 
@@ -370,17 +432,18 @@ export const vipCamRouter = router({
   getDashboard: protectedProcedure
     .input(z.object({
       unitId: z.number().optional(), // null = todas as unidades (admin)
-      date: z.string().optional(),   // YYYY-MM-DD, default hoje
+      date: z.string().optional(),   // YYYY-MM-DD, default hoje BRT
     }))
     .query(async ({ input }) => {
       const db = await getDb();
-      const targetDate = input.date ?? new Date().toISOString().slice(0, 10);
+      // Usar fuso Brasil (UTC-3) para determinar a data atual
+      const targetDate = input.date ?? todayBRT();
 
+      // ── Métricas do dia (detecções) ──
       const whereUnit = input.unitId
         ? eq(camMetricasDiarias.unitId, input.unitId)
         : sql`1=1`;
 
-      // Métricas do dia
       const dailyRows = await db!
         .select()
         .from(camMetricasDiarias)
@@ -396,7 +459,63 @@ export const vipCamRouter = router({
         insatisfeitos: acc.insatisfeitos + (r.insatisfeitos ?? 0),
       }), { totalDeteccoes: 0, satisfeitos: 0, neutros: 0, insatisfeitos: 0 });
 
-      // Total de clientes únicos da unidade
+      // ── Clientes novos HOJE (fuso Brasil) ──
+      const todayRange = todayRangeBRT();
+      const whereClienteUnitNew = input.unitId
+        ? and(eq(camClientes.unitId, input.unitId), gte(camClientes.createdAt, todayRange.start), lte(camClientes.createdAt, todayRange.end))
+        : and(gte(camClientes.createdAt, todayRange.start), lte(camClientes.createdAt, todayRange.end));
+
+      const [novosHojeRow] = await db!
+        .select({ total: count() })
+        .from(camClientes)
+        .where(whereClienteUnitNew);
+
+      // ── KPIs do MÊS ATUAL (baseados em camClientes, não em detecções) ──
+      const monthRange = currentMonthRangeBRT();
+
+      // Clientes únicos que visitaram no mês (lastSeenAt dentro do mês)
+      const whereClientesMes = input.unitId
+        ? and(eq(camClientes.unitId, input.unitId), gte(camClientes.lastSeenAt, monthRange.start), lte(camClientes.lastSeenAt, monthRange.end))
+        : and(gte(camClientes.lastSeenAt, monthRange.start), lte(camClientes.lastSeenAt, monthRange.end));
+
+      const [clientesMesRow] = await db!
+        .select({ total: count() })
+        .from(camClientes)
+        .where(whereClientesMes);
+
+      // Clientes novos no mês (createdAt dentro do mês)
+      const whereNovosMes = input.unitId
+        ? and(eq(camClientes.unitId, input.unitId), gte(camClientes.createdAt, monthRange.start), lte(camClientes.createdAt, monthRange.end))
+        : and(gte(camClientes.createdAt, monthRange.start), lte(camClientes.createdAt, monthRange.end));
+
+      const [novosMesRow] = await db!
+        .select({ total: count() })
+        .from(camClientes)
+        .where(whereNovosMes);
+
+      // Taxa de satisfação do mês: baseada nos clientes que visitaram no mês
+      // Conta clientes por satisfactionLevel dentre os que visitaram no mês
+      const clientesMesSatisf = await db!
+        .select({
+          satisfactionLevel: camClientes.satisfactionLevel,
+          total: count(),
+        })
+        .from(camClientes)
+        .where(whereClientesMes)
+        .groupBy(camClientes.satisfactionLevel);
+
+      const satisfMap = { satisfied: 0, neutral: 0, unsatisfied: 0 };
+      for (const row of clientesMesSatisf) {
+        if (row.satisfactionLevel === 'satisfied') satisfMap.satisfied = row.total;
+        else if (row.satisfactionLevel === 'neutral') satisfMap.neutral = row.total;
+        else if (row.satisfactionLevel === 'unsatisfied') satisfMap.unsatisfied = row.total;
+      }
+      const totalClientesMes = satisfMap.satisfied + satisfMap.neutral + satisfMap.unsatisfied;
+      const satisfactionRateMes = totalClientesMes > 0
+        ? Math.round((satisfMap.satisfied / totalClientesMes) * 100)
+        : 0;
+
+      // ── Total geral de clientes na base ──
       const whereClienteUnit = input.unitId
         ? eq(camClientes.unitId, input.unitId)
         : sql`1=1`;
@@ -406,19 +525,7 @@ export const vipCamRouter = router({
         .from(camClientes)
         .where(whereClienteUnit);
 
-      // Clientes novos hoje
-      const startOfDay = new Date(targetDate + 'T00:00:00Z');
-      const endOfDay = new Date(targetDate + 'T23:59:59Z');
-      const whereClienteUnitNew = input.unitId
-        ? and(eq(camClientes.unitId, input.unitId), gte(camClientes.createdAt, startOfDay), lte(camClientes.createdAt, endOfDay))
-        : and(gte(camClientes.createdAt, startOfDay), lte(camClientes.createdAt, endOfDay));
-
-      const [novosHojeRow] = await db!
-        .select({ total: count() })
-        .from(camClientes)
-        .where(whereClienteUnitNew);
-
-      // Métricas dos últimos 7 dias
+      // ── Métricas dos últimos 7 dias (para gráfico de tendência) ──
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
       const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
@@ -433,7 +540,7 @@ export const vipCamRouter = router({
         .where(whereUnit7)
         .orderBy(camMetricasDiarias.data);
 
-      // Métricas horárias de hoje
+      // ── Métricas horárias de hoje ──
       const whereHourlyUnit = input.unitId
         ? and(eq(camMetricasHorarias.unitId, input.unitId), eq(camMetricasHorarias.data, targetDate as any))
         : eq(camMetricasHorarias.data, targetDate as any);
@@ -444,16 +551,27 @@ export const vipCamRouter = router({
         .where(whereHourlyUnit)
         .orderBy(camMetricasHorarias.hora);
 
-      // Índice de satisfação (%)
-      const satisfactionRate = todayMetrics.totalDeteccoes > 0
+      // Índice de satisfação do dia (para compatibilidade com gráfico horário)
+      const satisfactionRateHoje = todayMetrics.totalDeteccoes > 0
         ? Math.round((todayMetrics.satisfeitos / todayMetrics.totalDeteccoes) * 100)
         : 0;
 
       return {
         today: {
           ...todayMetrics,
-          satisfactionRate,
+          satisfactionRate: satisfactionRateHoje,
           novosClientes: novosHojeRow?.total ?? 0,
+        },
+        // KPIs do mês (baseados em clientes reais)
+        mes: {
+          clientesUnicos: clientesMesRow?.total ?? 0,
+          novosClientes: novosMesRow?.total ?? 0,
+          satisfactionRate: satisfactionRateMes,
+          satisfeitos: satisfMap.satisfied,
+          neutros: satisfMap.neutral,
+          insatisfeitos: satisfMap.unsatisfied,
+          totalClientes: totalClientesMes,
+          yearMonth: monthRange.yearMonth,
         },
         totalClientes: totalClientesRow?.total ?? 0,
         last7Days,
