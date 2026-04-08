@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Legend,
-  BarChart, Bar,
+  BarChart, Bar, LineChart, Line, ReferenceLine,
 } from 'recharts';
 import {
   Camera, Users, Smile, TrendingUp, Settings, Play,
@@ -173,11 +173,42 @@ export default function VipCamPage() {
           .map(w => ({ ...w, data: new Date(w.data + 'T12:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) }));
       })();
 
-  const hourlyData = (dashboard?.hourlyToday ?? []).map(h => ({
-    hora: `${h.hora}h`,
-    Total: h.totalDeteccoes ?? 0,
-    Satisfeitos: h.satisfeitos ?? 0,
-  }));
+  // Hora atual BRT para marcar no gráfico
+  const horaAtualBRT = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getTime() - 3 * 60 * 60 * 1000).getUTCHours();
+  }, []);
+
+  // Mapa de clientes únicos por hora (do backend getDashboard)
+  const clientesHoraMap = useMemo(() => {
+    const m: Record<number, number> = {};
+    (dashboard?.clientesUnicosPorHora ?? []).forEach((r: any) => {
+      m[Number(r.hora)] = Number(r.total);
+    });
+    return m;
+  }, [dashboard?.clientesUnicosPorHora]);
+
+  // Mapa de detecções por hora (do hourlyToday)
+  const deteccoesHoraMap = useMemo(() => {
+    const m: Record<number, number> = {};
+    (dashboard?.hourlyToday ?? []).forEach((h: any) => {
+      m[Number(h.hora)] = Number(h.totalDeteccoes ?? 0);
+    });
+    return m;
+  }, [dashboard?.hourlyToday]);
+
+  // Gera todas as 24h do dia, preenchendo com 0 as horas futuras
+  const hourlyData = useMemo(() => {
+    return Array.from({ length: 24 }, (_, h) => ({
+      hora: `${String(h).padStart(2, '0')}h`,
+      horaNum: h,
+      Clientes: h <= horaAtualBRT ? (clientesHoraMap[h] ?? 0) : null,
+      Detecções: h <= horaAtualBRT ? (deteccoesHoraMap[h] ?? 0) : null,
+    }));
+  }, [clientesHoraMap, deteccoesHoraMap, horaAtualBRT]);
+
+  // KPIs do dia (clientes reais) - vem do getDashboard
+  const kpisHoje = dashboard?.kpisHoje ?? { totalClientes: 0, totalDeteccoes: 0, satisfeitos: 0, neutros: 0, insatisfeitos: 0 };
 
   const kpis = [
     {
@@ -406,40 +437,106 @@ export default function VipCamPage() {
         </div>
       </div>
 
-      {/* Detecções por Hora + Clientes Recentes */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Detecções por hora */}
-        <div className="glass-card lg:col-span-2">
-          <div className="p-6 pb-2">
-            <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
+      {/* Clientes por Hora Hoje — Gráfico de Linha Premium */}
+      <div className="glass-card">
+        {/* KPIs do dia */}
+        <div className="p-6 pb-4 border-b border-white/5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display font-semibold text-foreground text-base flex items-center gap-2">
               <Clock className="w-4 h-4 text-primary" />
-              Detecções por Hora — Hoje
+              Clientes por Hora — Hoje
             </h3>
+            <span className="text-xs text-muted-foreground">
+              Atualiza a cada 30s • {String(horaAtualBRT).padStart(2, '0')}:xx BRT
+            </span>
           </div>
-          <div className="p-6 pt-0">
-            {hourlyData.length === 0 ? (
-              <div className="flex items-center justify-center h-40 text-muted-foreground text-sm gap-2">
-                <AlertCircle className="w-5 h-5 opacity-40" />
-                Sem dados horários hoje
+          {/* 5 KPIs do dia */}
+          <div className="grid grid-cols-5 gap-3">
+            {[
+              { label: 'Total Clientes', value: kpisHoje.totalClientes, color: 'text-primary', bg: 'bg-primary/10', border: 'border-primary/20' },
+              { label: 'Total Detecções', value: kpisHoje.totalDeteccoes, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
+              { label: 'Satisfeitos', value: kpisHoje.satisfeitos, color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/20' },
+              { label: 'Neutros', value: kpisHoje.neutros, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
+              { label: 'Insatisfeitos', value: kpisHoje.insatisfeitos, color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' },
+            ].map((kpi) => (
+              <div key={kpi.label} className={`rounded-xl p-3 border ${kpi.bg} ${kpi.border} text-center`}>
+                <p className={`font-display text-2xl font-bold ${kpi.color}`}>{kpi.value}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{kpi.label}</p>
               </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={hourlyData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                  <XAxis dataKey="hora" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="Total" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Satisfeitos" fill={COLORS.satisfied} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
+            ))}
           </div>
         </div>
+        {/* Gráfico de linha */}
+        <div className="p-6">
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={hourlyData} margin={{ top: 8, right: 16, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gradClientes" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="oklch(0.76 0.145 72)" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="oklch(0.76 0.145 72)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="oklch(1 0 0 / 0.05)" />
+              <XAxis
+                dataKey="hora"
+                tick={{ fontSize: 9, fill: 'oklch(0.65 0.01 80)' }}
+                tickLine={false}
+                axisLine={false}
+                interval={1}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: 'oklch(0.65 0.01 80)' }}
+                tickLine={false}
+                axisLine={false}
+                allowDecimals={false}
+              />
+              <Tooltip
+                content={<CustomTooltip />}
+                cursor={{ stroke: 'oklch(0.76 0.145 72 / 0.3)', strokeWidth: 1, strokeDasharray: '4 4' }}
+              />
+              <Legend
+                iconType="circle"
+                iconSize={8}
+                wrapperStyle={{ fontSize: 11, color: 'oklch(0.75 0.01 80)', paddingTop: 8 }}
+              />
+              {/* Linha vertical na hora atual */}
+              <ReferenceLine
+                x={`${String(horaAtualBRT).padStart(2, '0')}h`}
+                stroke="oklch(0.76 0.145 72 / 0.5)"
+                strokeDasharray="4 4"
+                label={{ value: 'agora', position: 'top', fontSize: 9, fill: 'oklch(0.76 0.145 72)' }}
+              />
+              <Line
+                type="monotone"
+                dataKey="Clientes"
+                stroke="oklch(0.76 0.145 72)"
+                strokeWidth={2.5}
+                dot={{ r: 3, fill: 'oklch(0.76 0.145 72)', strokeWidth: 0 }}
+                activeDot={{ r: 5, fill: 'oklch(0.76 0.145 72)', strokeWidth: 2, stroke: 'oklch(0.2 0.01 80)' }}
+                connectNulls={false}
+                isAnimationActive
+                animationDuration={800}
+                animationEasing="ease-out"
+              />
+              <Line
+                type="monotone"
+                dataKey="Detecções"
+                stroke="oklch(0.65 0.12 240)"
+                strokeWidth={1.5}
+                strokeDasharray="5 3"
+                dot={false}
+                connectNulls={false}
+                isAnimationActive
+                animationDuration={800}
+                animationEasing="ease-out"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
 
-        {/* Clientes recentes */}
-        <div className="glass-card">
+      {/* Clientes Recentes */}
+      <div className="glass-card">
           <div className="p-6 pb-2 flex flex-row items-center justify-between pb-2">
             <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
               <Users className="w-4 h-4 text-primary" />
@@ -476,7 +573,6 @@ export default function VipCamPage() {
             </div>
           </div>
         </div>
-      </div>
     </div>
   );
 }

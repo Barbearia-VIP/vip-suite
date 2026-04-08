@@ -574,6 +574,45 @@ export const vipCamRouter = router({
         .where(whereHourlyUnit)
         .orderBy(camMetricasHorarias.hora);
 
+      // ── Clientes únicos por hora do dia (via lastSeenAt em BRT) ──
+      // lastSeenAt é UTC; converter para BRT subtraindo 3h: HOUR(DATE_SUB(lastSeenAt, INTERVAL 3 HOUR))
+      const unitWhereStr = input.unitId ? `AND unitId = ${input.unitId}` : '';
+      const clientesHoraRaw = await db!.execute(sql.raw(
+        `SELECT HOUR(DATE_SUB(lastSeenAt, INTERVAL 3 HOUR)) as hora, COUNT(*) as total
+         FROM cam_clientes
+         WHERE DATE(DATE_SUB(lastSeenAt, INTERVAL 3 HOUR)) = '${targetDate}'
+         ${unitWhereStr}
+         GROUP BY HOUR(DATE_SUB(lastSeenAt, INTERVAL 3 HOUR))
+         ORDER BY hora`
+      ));
+      // Drizzle execute retorna [[rows], metadata] — acessar rows corretamente
+      const clientesHoraRows: Array<{ hora: number; total: number }> =
+        (Array.isArray((clientesHoraRaw as any)[0]) ? (clientesHoraRaw as any)[0] : clientesHoraRaw) as any;
+
+      // KPIs do dia baseados em clientes reais (lastSeenAt hoje BRT)
+      const clientesHojeRaw = await db!.execute(sql.raw(
+        `SELECT
+           COUNT(*) as totalClientes,
+           SUM(CASE WHEN satisfactionLevel = 'satisfied' THEN 1 ELSE 0 END) as satisfeitos,
+           SUM(CASE WHEN satisfactionLevel = 'neutral' THEN 1 ELSE 0 END) as neutros,
+           SUM(CASE WHEN satisfactionLevel = 'unsatisfied' THEN 1 ELSE 0 END) as insatisfeitos
+         FROM cam_clientes
+         WHERE DATE(DATE_SUB(lastSeenAt, INTERVAL 3 HOUR)) = '${targetDate}'
+         ${unitWhereStr}`
+      ));
+      const clientesHojeRow: any =
+        Array.isArray((clientesHojeRaw as any)[0])
+          ? (clientesHojeRaw as any)[0][0]
+          : (clientesHojeRaw as any)[0];
+
+      const kpisHoje = {
+        totalClientes: Number(clientesHojeRow?.totalClientes ?? 0),
+        totalDeteccoes: todayMetrics.totalDeteccoes,
+        satisfeitos: Number(clientesHojeRow?.satisfeitos ?? 0),
+        neutros: Number(clientesHojeRow?.neutros ?? 0),
+        insatisfeitos: Number(clientesHojeRow?.insatisfeitos ?? 0),
+      };
+
       // Índice de satisfação do dia (para compatibilidade com gráfico horário)
       const satisfactionRateHoje = todayMetrics.totalDeteccoes > 0
         ? Math.round((todayMetrics.satisfeitos / todayMetrics.totalDeteccoes) * 100)
@@ -600,6 +639,8 @@ export const vipCamRouter = router({
         totalClientes: totalClientesRow?.total ?? 0,
         last7Days,
         hourlyToday,
+        clientesUnicosPorHora: clientesHoraRows,
+        kpisHoje,
       };
     }),
 
