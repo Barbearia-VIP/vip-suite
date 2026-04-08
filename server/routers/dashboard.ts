@@ -183,17 +183,28 @@ export const dashboardRouter = router({
           ...(unitId ? [eq(gtReunioes.unitId, unitId)] : []),
         ));
 
-      // Financeiro do mês atual
-      const refMes = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
-      const finRows = await db.select({ tipo: gtFinanceiro.tipo, valor: gtFinanceiro.valor })
-        .from(gtFinanceiro)
-        .where(and(
-          eq(gtFinanceiro.orgId, orgId),
-          eq(gtFinanceiro.referencia, refMes),
-          ...(unitId ? [eq(gtFinanceiro.unitId, unitId)] : []),
-        ));
-      const receitasGt = finRows.filter(f => f.tipo === "receita").reduce((s, f) => s + Number(f.valor), 0);
-      const despesasGt = finRows.filter(f => f.tipo === "despesa").reduce((s, f) => s + Number(f.valor), 0);
+      // Financeiro do período selecionado (usa todos os meses que se sobrepõem ao período)
+      // A tabela gtFinanceiro usa campo 'referencia' no formato YYYY-MM
+      // Busca todos os meses entre mesStart e mesEnd
+      const mesRefs: string[] = [];
+      const cursor = new Date(mesStart.getFullYear(), mesStart.getMonth(), 1);
+      const mesEndRef = new Date(mesEnd.getFullYear(), mesEnd.getMonth(), 1);
+      while (cursor <= mesEndRef) {
+        mesRefs.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`);
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+
+      const finRows = mesRefs.length > 0
+        ? await db.select({ tipo: gtFinanceiro.tipo, valor: gtFinanceiro.valor })
+            .from(gtFinanceiro)
+            .where(and(
+              eq(gtFinanceiro.orgId, orgId),
+              inArray(gtFinanceiro.referencia, mesRefs),
+              ...(unitId ? [eq(gtFinanceiro.unitId, unitId)] : []),
+            ))
+        : [];
+      const receitasGt = finRows.filter(f => f.tipo === 'receita').reduce((s, f) => s + Number(f.valor), 0);
+      const despesasGt = finRows.filter(f => f.tipo === 'despesa').reduce((s, f) => s + Number(f.valor), 0);
 
       // ── VIP CAM: clientes únicos no período com regra SenseVIP ──
       const camTimelineRows = await db.select({
@@ -225,7 +236,7 @@ export const dashboardRouter = router({
         ? Math.round((camSatisfeitos / camTotal) * 100)
         : 0;
 
-      // ── REPUTAÇÃO: nota média geral (sem filtro de período — avaliações são históricas) ──
+      // ── REPUTAÇÃO: nota média geral (histórico completo) + NPS calculado ──
       const [repStats] = await db.select({
         media: sql<string>`COALESCE(AVG(${repAvaliacoes.nota}), 0)`,
         total: count(repAvaliacoes.id),
@@ -234,6 +245,9 @@ export const dashboardRouter = router({
         mediaGoogle: sql<string>`COALESCE(AVG(CASE WHEN ${repAvaliacoes.plataforma} = 'google' THEN ${repAvaliacoes.nota} END), 0)`,
         totalGoogle: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.plataforma} = 'google' THEN 1 ELSE 0 END), 0)`,
         semRespostaGoogle: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.plataforma} = 'google' AND (${repAvaliacoes.resposta} IS NULL OR ${repAvaliacoes.resposta} = '') THEN 1 ELSE 0 END), 0)`,
+        // NPS: promotores (nota >= 9), detratores (nota <= 6), neutros (7-8)
+        promotores: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.nota} >= 9 THEN 1 ELSE 0 END), 0)`,
+        detratores: sql<string>`COALESCE(SUM(CASE WHEN ${repAvaliacoes.nota} <= 6 THEN 1 ELSE 0 END), 0)`,
       }).from(repAvaliacoes).where(
         unitId ? eq(repAvaliacoes.unitId, unitId) : undefined
       );
@@ -241,6 +255,10 @@ export const dashboardRouter = router({
       const totalRep = Number(repStats?.total ?? 0);
       const mediaFinal = totalRep > 0 ? parseFloat(repStats?.media ?? "0") : 0;
       const positivasFinal = Number(repStats?.positivas ?? 0);
+      const promotores = Number(repStats?.promotores ?? 0);
+      const detratores = Number(repStats?.detratores ?? 0);
+      // NPS = (promotores - detratores) / total * 100
+      const nps = totalRep > 0 ? Math.round(((promotores - detratores) / totalRep) * 100) : 0;
 
       return {
         dataVip: {
@@ -278,6 +296,9 @@ export const dashboardRouter = router({
           totalGoogle: Number(repStats?.totalGoogle ?? 0),
           semRespostaGoogle: Number(repStats?.semRespostaGoogle ?? 0),
           semResposta: Number(repStats?.semResposta ?? 0),
+          nps,
+          promotores,
+          detratores,
           hasData: totalRep > 0,
         },
         autoInstagram: {

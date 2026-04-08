@@ -7,14 +7,14 @@ import {
   Building2, BarChart3, RefreshCw, ArrowUpRight, AlertCircle,
   CheckSquare, Wifi, WifiOff, Settings, TrendingDown,
   Users, AlertTriangle, CalendarDays, DollarSign, Smile,
-  MessageCircle, ThumbsUp, Clock, Zap, Activity,
+  MessageCircle, ThumbsUp, Clock, Zap, Activity, Meh, Frown,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useOrg } from "@/hooks/useOrg";
 import { useState, useEffect, useMemo } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell,
+  BarChart, Bar, Cell, PieChart, Pie, Legend,
 } from "recharts";
 import { cn } from "@/lib/utils";
 
@@ -545,36 +545,104 @@ export default function DashboardPage() {
 
         {/* GESTÃO TOTAL */}
         <ModuleCard title="Gestão Total" icon={Building2} color="oklch(0.65 0.15 145)"
-          badge="Tarefas, problemas e reuniões" configured={true} onNavigate={() => navigate("/gestao-total")}>
-          <MiniKPI label="Tarefas Pendentes" value={fmtNum(kpis?.gestaoTotal.tarefasAbertas ?? 0)}
-            sub={kpis?.gestaoTotal.tarefasCriticas ? `${kpis.gestaoTotal.tarefasCriticas} críticas` : undefined}
-            icon={CheckSquare} color="oklch(0.65 0.15 145)" />
-          <MiniKPI label="Problemas Ativos" value={fmtNum(kpis?.gestaoTotal.problemasAbertos ?? 0)}
-            icon={AlertTriangle} color={kpis?.gestaoTotal.problemasAbertos ? "oklch(0.65 0.15 60)" : "oklch(0.65 0.15 145)"} />
-          <MiniKPI label="Reuniões Hoje" value={fmtNum(kpis?.gestaoTotal.reunioesHoje ?? 0)}
-            icon={CalendarDays} color="oklch(0.65 0.15 145)" />
-          {kpis && (kpis.gestaoTotal.receitasMes > 0 || kpis.gestaoTotal.despesasMes > 0) && (
-            <MiniKPI label="Resultado Financeiro" value={fmt(kpis.gestaoTotal.lucroMes)}
-              sub={`Receitas: ${fmt(kpis.gestaoTotal.receitasMes)} · Despesas: ${fmt(kpis.gestaoTotal.despesasMes)}`}
-              icon={DollarSign} color={kpis.gestaoTotal.lucroMes >= 0 ? "oklch(0.65 0.15 145)" : "oklch(0.65 0.15 15)"} />
-          )}
+          badge="Operacional e financeiro" configured={true} onNavigate={() => navigate("/gestao-total")}>
+          {/* Linha 1: Tarefas + Reuniões */}
+          <div className="grid grid-cols-2 gap-2 mb-1">
+            <div className="rounded-xl p-3" style={{ background: "oklch(0.65 0.15 145 / 0.08)", border: "1px solid oklch(0.65 0.15 145 / 0.18)" }}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <CheckSquare className="h-3.5 w-3.5" style={{ color: "oklch(0.65 0.15 145)" }} />
+                <span className="text-xs text-muted-foreground">Tarefas</span>
+              </div>
+              <p className="text-xl font-display font-bold text-foreground">{fmtNum(kpis?.gestaoTotal.tarefasAbertas ?? 0)}</p>
+              <p className="text-xs text-muted-foreground">
+                {kpis?.gestaoTotal.tarefasCriticas ? <span style={{ color: "oklch(0.65 0.15 15)" }}>{kpis.gestaoTotal.tarefasCriticas} críticas</span> : "pendentes"}
+              </p>
+            </div>
+            <div className="rounded-xl p-3" style={{ background: "oklch(0.65 0.15 145 / 0.08)", border: "1px solid oklch(0.65 0.15 145 / 0.18)" }}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <CalendarDays className="h-3.5 w-3.5" style={{ color: "oklch(0.65 0.15 145)" }} />
+                <span className="text-xs text-muted-foreground">Reuniões</span>
+              </div>
+              <p className="text-xl font-display font-bold text-foreground">{fmtNum(kpis?.gestaoTotal.reunioesHoje ?? 0)}</p>
+              <p className="text-xs text-muted-foreground">hoje</p>
+            </div>
+          </div>
+          {/* Linha 2: Financeiro */}
+          <div className="rounded-xl p-3 mt-1" style={{ background: "oklch(0.11 0.01 260 / 0.6)", border: "1px solid oklch(0.22 0.014 260 / 0.4)" }}>
+            <p className="text-xs text-muted-foreground mb-2 font-medium">Financeiro — {period.label}</p>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <p className="text-xs text-muted-foreground">Faturamento</p>
+                <p className="text-sm font-display font-bold" style={{ color: "oklch(0.65 0.15 145)" }}>{fmt(kpis?.gestaoTotal.receitasMes ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Despesas</p>
+                <p className="text-sm font-display font-bold" style={{ color: "oklch(0.65 0.15 15)" }}>{fmt(kpis?.gestaoTotal.despesasMes ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Resultado</p>
+                <p className="text-sm font-display font-bold" style={{ color: (kpis?.gestaoTotal.lucroMes ?? 0) >= 0 ? "oklch(0.65 0.15 145)" : "oklch(0.65 0.15 15)" }}>
+                  {fmt(kpis?.gestaoTotal.lucroMes ?? 0)}
+                </p>
+              </div>
+            </div>
+          </div>
         </ModuleCard>
 
         {/* VIP CAM */}
         <ModuleCard title="VIP Cam" icon={Camera} color="oklch(0.65 0.15 280)"
-          badge="Satisfação de clientes" configured={modules?.vip_cam ?? true}
+          badge="Distribuição de satisfação" configured={modules?.vip_cam ?? true}
           onConfigure={() => navigate("/configuracoes")} onNavigate={() => navigate("/vip-cam")}>
-          {kpis?.vipCam.hasData ? (
-            <>
-              <MiniKPI label="Clientes Reconhecidos" value={fmtNum(kpis.vipCam.clientesNoPeriodo)}
-                sub="Clientes únicos no período" icon={Users} color="oklch(0.65 0.15 280)" />
-              <MiniKPI label="Taxa de Satisfação" value={fmtPct(kpis.vipCam.satisfacaoPercent)}
-                sub={`${kpis.vipCam.satisfeitosNoPeriodo} satisfeitos · ${kpis.vipCam.neutrosNoPeriodo} neutros`}
-                icon={Smile} color={kpis.vipCam.satisfacaoPercent >= 70 ? "oklch(0.65 0.15 145)" : kpis.vipCam.satisfacaoPercent >= 40 ? "oklch(0.65 0.15 60)" : "oklch(0.65 0.15 15)"} />
-              <SatisfactionBar satisfeitos={kpis.vipCam.satisfeitosNoPeriodo} neutros={kpis.vipCam.neutrosNoPeriodo}
-                insatisfeitos={kpis.vipCam.insatisfeitosNoPeriodo} total={kpis.vipCam.clientesNoPeriodo} />
-            </>
-          ) : (
+          {kpis?.vipCam.hasData ? (() => {
+            const camTotal = kpis.vipCam.clientesNoPeriodo;
+            const camSat = kpis.vipCam.satisfacaoPercent;
+            const pieData = [
+              { name: "Satisfeitos", value: kpis.vipCam.satisfeitosNoPeriodo, color: "oklch(0.65 0.15 145)" },
+              { name: "Neutros", value: kpis.vipCam.neutrosNoPeriodo, color: "oklch(0.76 0.145 72)" },
+              { name: "Insatisfeitos", value: kpis.vipCam.insatisfeitosNoPeriodo, color: "oklch(0.65 0.15 15)" },
+            ].filter(d => d.value > 0);
+            return (
+              <>
+                {/* Header: total + taxa */}
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-2xl font-display font-bold text-foreground">{fmtNum(camTotal)}</p>
+                    <p className="text-xs text-muted-foreground">clientes no período</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-display font-bold" style={{ color: camSat >= 70 ? "oklch(0.65 0.15 145)" : camSat >= 40 ? "oklch(0.76 0.145 72)" : "oklch(0.65 0.15 15)" }}>{camSat}%</p>
+                    <p className="text-xs text-muted-foreground">satisfação</p>
+                  </div>
+                </div>
+                {/* Mini PieChart de distribuição */}
+                {pieData.length > 0 && (
+                  <div className="flex items-center gap-3">
+                    <PieChart width={80} height={80}>
+                      <Pie data={pieData} cx={35} cy={35} innerRadius={22} outerRadius={36}
+                        dataKey="value" paddingAngle={2} strokeWidth={0}>
+                        {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                      </Pie>
+                    </PieChart>
+                    <div className="flex-1 space-y-1.5">
+                      {[
+                        { icon: Smile, label: "Satisfeitos", value: kpis.vipCam.satisfeitosNoPeriodo, color: "oklch(0.65 0.15 145)" },
+                        { icon: Meh, label: "Neutros", value: kpis.vipCam.neutrosNoPeriodo, color: "oklch(0.76 0.145 72)" },
+                        { icon: Frown, label: "Insatisfeitos", value: kpis.vipCam.insatisfeitosNoPeriodo, color: "oklch(0.65 0.15 15)" },
+                      ].map(({ icon: Icon, label, value, color }) => (
+                        <div key={label} className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <Icon className="h-3 w-3" style={{ color }} />
+                            <span className="text-xs text-muted-foreground">{label}</span>
+                          </div>
+                          <span className="text-xs font-semibold" style={{ color }}>{fmtNum(value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })() : (
             <div className="py-2 text-center">
               <p className="text-xs text-muted-foreground">Sem capturas no período</p>
               <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/vip-cam")}>Abrir VIP Cam →</Button>
@@ -584,23 +652,51 @@ export default function DashboardPage() {
 
         {/* REPUTAÇÃO */}
         <ModuleCard title="Reputação" icon={Star} color="oklch(0.65 0.15 30)"
-          badge="Google e plataformas" configured={modules?.reputacao ?? true}
+          badge="NPS · Google · Pendentes" configured={modules?.reputacao ?? true}
           onConfigure={() => navigate("/configuracoes")} onNavigate={() => navigate("/reputacao")}>
           {kpis?.reputacao.hasData ? (
             <>
-              <div className="grid grid-cols-2 gap-2">
-                <MiniKPI label="Nota Média Google"
-                  value={kpis.reputacao.totalGoogle > 0 ? `${kpis.reputacao.mediaGoogle.toFixed(1)} ★` : `${kpis.reputacao.mediaAvaliacoes.toFixed(1)} ★`}
-                  sub={kpis.reputacao.totalGoogle > 0 ? `${fmtNum(kpis.reputacao.totalGoogle)} Google` : `${fmtNum(kpis.reputacao.totalAvaliacoes)} avaliações`}
-                  icon={Star} color="oklch(0.65 0.15 30)" />
-                <MiniKPI label="Avaliações Positivas" value={fmtPct(kpis.reputacao.positivasPercent)}
-                  sub={`${fmtNum(kpis.reputacao.totalAvaliacoes)} total`}
-                  icon={ThumbsUp} color="oklch(0.65 0.15 145)" />
+              {/* Linha 1: NPS + Nota Google */}
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                {/* NPS */}
+                <div className="rounded-xl p-3" style={{ background: "oklch(0.65 0.15 30 / 0.08)", border: "1px solid oklch(0.65 0.15 30 / 0.18)" }}>
+                  <p className="text-xs text-muted-foreground mb-1">NPS</p>
+                  <p className="text-2xl font-display font-bold" style={{
+                    color: (kpis.reputacao.nps ?? 0) >= 50 ? "oklch(0.65 0.15 145)" :
+                           (kpis.reputacao.nps ?? 0) >= 0 ? "oklch(0.76 0.145 72)" : "oklch(0.65 0.15 15)"
+                  }}>
+                    {(kpis.reputacao.nps ?? 0) >= 0 ? "+" : ""}{kpis.reputacao.nps ?? 0}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {(kpis.reputacao.nps ?? 0) >= 75 ? "Excelente" :
+                     (kpis.reputacao.nps ?? 0) >= 50 ? "Muito bom" :
+                     (kpis.reputacao.nps ?? 0) >= 0 ? "Bom" : "Crítico"}
+                  </p>
+                </div>
+                {/* Nota Google */}
+                <div className="rounded-xl p-3" style={{ background: "oklch(0.65 0.15 30 / 0.08)", border: "1px solid oklch(0.65 0.15 30 / 0.18)" }}>
+                  <p className="text-xs text-muted-foreground mb-1">Google</p>
+                  <p className="text-2xl font-display font-bold" style={{ color: "oklch(0.76 0.145 72)" }}>
+                    {kpis.reputacao.totalGoogle > 0 ? kpis.reputacao.mediaGoogle.toFixed(1) : kpis.reputacao.mediaAvaliacoes.toFixed(1)} ★
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {fmtNum(kpis.reputacao.totalGoogle > 0 ? kpis.reputacao.totalGoogle : kpis.reputacao.totalAvaliacoes)} avaliações
+                  </p>
+                </div>
               </div>
+              {/* Pendentes de resposta */}
               {kpis.reputacao.semRespostaGoogle > 0 && (
-                <MiniKPI label="Sem Resposta (Google)" value={fmtNum(kpis.reputacao.semRespostaGoogle)}
-                  sub="Aguardando resposta" icon={MessageCircle} color="oklch(0.65 0.15 60)" />
+                <div className="rounded-xl p-3 flex items-center gap-3" style={{ background: "oklch(0.65 0.15 60 / 0.08)", border: "1px solid oklch(0.65 0.15 60 / 0.25)" }}>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: "oklch(0.65 0.15 60 / 0.15)" }}>
+                    <MessageCircle className="h-4 w-4" style={{ color: "oklch(0.76 0.145 72)" }} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold" style={{ color: "oklch(0.76 0.145 72)" }}>{fmtNum(kpis.reputacao.semRespostaGoogle)} pendentes</p>
+                    <p className="text-xs text-muted-foreground">avaliações sem resposta no Google</p>
+                  </div>
+                </div>
               )}
+              {/* Ranking (multi-unidade) */}
               {!selectedUnit && rankingRep.length > 0 && (
                 <div className="mt-2">
                   <p className="text-xs font-medium text-muted-foreground mb-1.5">Ranking por nota Google</p>
@@ -622,7 +718,7 @@ export default function DashboardPage() {
             </>
           ) : (
             <div className="py-2 text-center">
-              <p className="text-xs text-muted-foreground">Sem avaliações no período</p>
+              <p className="text-xs text-muted-foreground">Sem avaliações cadastradas</p>
               <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/reputacao")}>Configurar Reputação →</Button>
             </div>
           )}

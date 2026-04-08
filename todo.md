@@ -1097,3 +1097,9 @@
 - [x] Métricas VIP Cam: satisfação/satisfeitos/neutros/insatisfeitos por base de clientes
 - [x] Métricas VIP Cam: adicionar neutros nos totais
 - [x] Métricas VIP Cam: manter total de detecções do histórico
+
+## Dashboard Principal — Modernização de Cards (2026-04-08)
+- [x] VIP Cam card: gráfico de distribuição do período selecionado
+- [x] Reputação card: NPS + nota Google + pendentes de resposta (histórico)
+- [x] Gestão Total card: tarefas pendentes, reuniões hoje, faturamento, despesas, resultado (período)
+- [x] Visual dos cards: mais moderno e impactante
