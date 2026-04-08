@@ -2721,16 +2721,16 @@ export const raioXRouter = router({
         LIMIT 36
       `)) as any;
       const [logRows] = await db.execute(sql.raw(`
-        SELECT finishedAt, status, mesesSynced FROM raio_x_cache_sync_log
-        WHERE ${unitCond.replace("unitId", "unitId")}
-        ORDER BY startedAt DESC LIMIT 1
+        SELECT createdAt, status, duracaoMs FROM raio_x_cache_sync_log
+        WHERE ${unitCond}
+        ORDER BY createdAt DESC LIMIT 1
       `)) as any;
       const meses = (rows as any[]).map(r => ({ mesRef: r.mesRef, syncedAt: r.syncedAt }));
       const lastLog = (logRows as any[])[0];
       return {
         meses,
         totalCached: meses.length,
-        lastSync: lastLog ? { at: lastLog.finishedAt, status: lastLog.status, meses: lastLog.mesesSynced } : null,
+        lastSync: lastLog ? { at: lastLog.createdAt, status: lastLog.status, duracaoMs: lastLog.duracaoMs } : null,
       };
     }),
 });

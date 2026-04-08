@@ -1154,3 +1154,5 @@
 - [ ] Criar tabelas no banco interno para cache de dados históricos do Raio-X por unidade
 - [ ] Criar job noturno que sincroniza dados históricos do banco externo para o banco interno
 - [ ] Atualizar router do Raio-X para usar cache interno (dados históricos) + banco externo (semana atual)
+
+- [x] Bug corrigido: query raio_x_cache_sync_log usava campos inexistentes (startedAt/finishedAt/mesesSynced) → corrigido para createdAt/status/duracaoMs
