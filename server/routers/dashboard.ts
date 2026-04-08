@@ -12,6 +12,7 @@ import {
   gtProblemas,
   gtReunioes,
   gtFinanceiro,
+  igBotStats,
 } from "../../drizzle/schema";
 
 // Helper: db.execute(sql.raw(...)) retorna [[rows], [metadata]] no MySQL2
@@ -260,6 +261,32 @@ export const dashboardRouter = router({
       // NPS = (promotores - detratores) / total * 100
       const nps = totalRep > 0 ? Math.round(((promotores - detratores) / totalRep) * 100) : 0;
 
+      // ── AUTO INSTAGRAM: comentários e stories respondidos no período ──
+      // igBotStats.date é tipo Date no Drizzle (MySqlDate) — usar objetos Date
+      const igQuery = unitId
+        ? await db.select({
+            comentariosRespondidos: sql<number>`COALESCE(SUM(${igBotStats.repliesCount}), 0)`,
+            storiesRespondidos: sql<number>`COALESCE(SUM(${igBotStats.storiesReplied}), 0)`,
+          }).from(igBotStats).where(and(
+            eq(igBotStats.unitId, unitId),
+            gte(igBotStats.date, mesStart),
+            lte(igBotStats.date, mesEnd),
+          ))
+        : await db.select({
+            comentariosRespondidos: sql<number>`COALESCE(SUM(${igBotStats.repliesCount}), 0)`,
+            storiesRespondidos: sql<number>`COALESCE(SUM(${igBotStats.storiesReplied}), 0)`,
+          }).from(igBotStats)
+            .innerJoin(units, eq(igBotStats.unitId, units.id))
+            .where(and(
+              eq(units.orgId, orgId),
+              gte(igBotStats.date, mesStart),
+              lte(igBotStats.date, mesEnd),
+            ));
+      const igTotals = {
+        comentariosRespondidos: Number(igQuery[0]?.comentariosRespondidos ?? 0),
+        storiesRespondidos: Number(igQuery[0]?.storiesRespondidos ?? 0),
+      };
+
       return {
         dataVip: {
           faturamentoMes,
@@ -304,8 +331,9 @@ export const dashboardRouter = router({
         autoInstagram: {
           seguidores: 0,
           novosSeguidores: 0,
-          comentariosRespondidos: 0,
-          hasData: false,
+          comentariosRespondidos: igTotals.comentariosRespondidos,
+          storiesRespondidos: igTotals.storiesRespondidos,
+          hasData: igTotals.comentariosRespondidos > 0 || igTotals.storiesRespondidos > 0,
         },
         weSend: {
           campanhas: 0,

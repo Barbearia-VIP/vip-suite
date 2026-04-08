@@ -1104,3 +1104,4 @@
 - [x] Gestão Total card: tarefas pendentes, reuniões hoje, faturamento, despesas, resultado (período)
 - [x] Visual dos cards: mais moderno e impactante
 - [x] Card Reputação Dashboard: remover NPS, manter apenas nota Google + pendentes
+- [x] Card Auto Instagram Dashboard: mostrar comentários respondidos e stories respondidos separadamente

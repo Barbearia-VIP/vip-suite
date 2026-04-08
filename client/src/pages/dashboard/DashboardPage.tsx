@@ -7,7 +7,7 @@ import {
   Building2, BarChart3, RefreshCw, ArrowUpRight, AlertCircle,
   CheckSquare, Wifi, WifiOff, Settings, TrendingDown,
   Users, AlertTriangle, CalendarDays, DollarSign, Smile,
-  MessageCircle, ThumbsUp, Clock, Zap, Activity, Meh, Frown,
+  MessageCircle, ThumbsUp, Clock, Zap, Activity, Meh, Frown, ImagePlay,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useOrg } from "@/hooks/useOrg";
@@ -719,19 +719,32 @@ export default function DashboardPage() {
 
         {/* AUTO INSTAGRAM */}
         <ModuleCard title="Auto Instagram" icon={Instagram} color="oklch(0.65 0.15 320)"
-          badge="Seguidores e engajamento" configured={modules?.auto_instagram ?? true}
+          badge="Respostas automáticas" configured={modules?.auto_instagram ?? true}
           onConfigure={() => navigate("/configuracoes")} onNavigate={() => navigate("/auto-instagram")}>
           {kpis?.autoInstagram.hasData ? (
-            <>
-              <MiniKPI label="Seguidores" value={fmtNum(kpis.autoInstagram.seguidores)}
-                sub={kpis.autoInstagram.novosSeguidores > 0 ? `+${kpis.autoInstagram.novosSeguidores} novos` : undefined}
-                icon={Users} color="oklch(0.65 0.15 320)" />
-              <MiniKPI label="Comentários Respondidos" value={fmtNum(kpis.autoInstagram.comentariosRespondidos)}
-                icon={MessageCircle} color="oklch(0.65 0.15 320)" />
-            </>
+            <div className="grid grid-cols-2 gap-2">
+              {/* Comentários respondidos */}
+              <div className="rounded-xl p-3" style={{ background: "oklch(0.65 0.15 320 / 0.08)", border: "1px solid oklch(0.65 0.15 320 / 0.18)" }}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <MessageCircle className="h-3.5 w-3.5" style={{ color: "oklch(0.65 0.15 320)" }} />
+                  <span className="text-xs text-muted-foreground">Comentários</span>
+                </div>
+                <p className="text-xl font-display font-bold text-foreground">{fmtNum(kpis.autoInstagram.comentariosRespondidos)}</p>
+                <p className="text-xs text-muted-foreground">respondidos</p>
+              </div>
+              {/* Stories respondidos */}
+              <div className="rounded-xl p-3" style={{ background: "oklch(0.65 0.15 320 / 0.08)", border: "1px solid oklch(0.65 0.15 320 / 0.18)" }}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <ImagePlay className="h-3.5 w-3.5" style={{ color: "oklch(0.65 0.15 320)" }} />
+                  <span className="text-xs text-muted-foreground">Stories</span>
+                </div>
+                <p className="text-xl font-display font-bold text-foreground">{fmtNum((kpis.autoInstagram as { storiesRespondidos?: number }).storiesRespondidos ?? 0)}</p>
+                <p className="text-xs text-muted-foreground">respondidos</p>
+              </div>
+            </div>
           ) : (
             <div className="py-2 text-center">
-              <p className="text-xs text-muted-foreground">Sem dados no período</p>
+              <p className="text-xs text-muted-foreground">Sem respostas no período</p>
               <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/auto-instagram")}>Configurar Instagram →</Button>
             </div>
           )}
