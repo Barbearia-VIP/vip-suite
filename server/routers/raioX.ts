@@ -2378,14 +2378,14 @@ export const raioXRouter = router({
       }
 
       const barbeirosAtivosStr = barbeirosAtivosIds.join(",");
-
-      // ── ETAPA 1: IDs dos clientes atendidos no período ─────────────────────────────────────────────
-      // Usa vendas.usuario filtrado pelos IDs dos barbeiros executores (mais rápido que JOIN vendas_produtos)
+      // ── ETAPA 1: IDs dos clientes atendidos no período ─────────────────────────────────────────────────────
+      // Usa vendas_produtos.colaborador para capturar clientes atendidos por barbeiros executores
+      // (vendas.usuario pode ser o caixa, não o barbeiro que executou)
       const clientesPeriodo = await queryExternal<{ cliente_id: number }>(`
         SELECT DISTINCT v.cliente as cliente_id
         FROM vendas v
-        WHERE v.usuario IN (${barbeirosAtivosStr})
-          AND DATE(v.data_criacao) >= '${dataInicio}'
+        JOIN vendas_produtos vp ON vp.venda = v.id AND vp.colaborador IN (${barbeirosAtivosStr})
+        WHERE DATE(v.data_criacao) >= '${dataInicio}'
           AND DATE(v.data_criacao) <= '${dataFim}'
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -2400,7 +2400,8 @@ export const raioXRouter = router({
       const clienteIdsStr = clienteIds.join(",");
 
       // ── ETAPA 2A: Histórico agregado por cliente ─────────────────────────────────────────────
-      // Usa vendas.usuario (rápido) para contar visitas e barbeiros distintos
+      // barbeiros_distintos = contagem de barbeiros DISTINTOS NO PERÍODO (não histórico total)
+      // Isso alinha com o sistema de referência: Só 1 + Multi = Total do período
       const clientesRows = await queryExternal<{
         cliente_id: number;
         total_visitas_hist: number;
@@ -2412,13 +2413,15 @@ export const raioXRouter = router({
         SELECT
           v.cliente as cliente_id,
           COUNT(v.id) as total_visitas_hist,
-          COUNT(DISTINCT v.usuario) as barbeiros_distintos,
+          COUNT(DISTINCT vp.colaborador) as barbeiros_distintos,
           MAX(v.data_criacao) as ultima_visita,
           DATEDIFF(NOW(), MAX(v.data_criacao)) as dias_desde_ultima,
           MIN(v.data_criacao) as primeira_visita_hist
         FROM vendas v
+        JOIN vendas_produtos vp ON vp.venda = v.id AND vp.colaborador IN (${barbeirosAtivosStr})
         WHERE v.cliente IN (${clienteIdsStr})
-          AND v.usuario IN (${barbeirosAtivosStr})
+          AND DATE(v.data_criacao) >= '${dataInicio}'
+          AND DATE(v.data_criacao) <= '${dataFim}'
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
         GROUP BY v.cliente
@@ -2455,6 +2458,8 @@ export const raioXRouter = router({
             JOIN vendas v ON v.id = vp.venda
             WHERE v.cliente IN (${clienteIdsStr})
               AND vp.colaborador IN (${barbeirosAtivosStr})
+              AND DATE(v.data_criacao) >= '${dataInicio}'
+              AND DATE(v.data_criacao) <= '${dataFim}'
               AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
               AND v.cliente IS NOT NULL AND v.cliente != 2
             GROUP BY v.cliente, vp.colaborador

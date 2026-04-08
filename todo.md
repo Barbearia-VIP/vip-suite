@@ -1156,3 +1156,4 @@
 - [ ] Atualizar router do Raio-X para usar cache interno (dados históricos) + banco externo (semana atual)
 
 - [x] Bug corrigido: query raio_x_cache_sync_log usava campos inexistentes (startedAt/finishedAt/mesesSynced) → corrigido para createdAt/status/duracaoMs
+- [x] Corrigir lógica de routing: Só 1 barbeiro, Multi-barbeiro e Média barb/cliente devem usar barbeiros distintos NO PERÍODO (não histórico total)

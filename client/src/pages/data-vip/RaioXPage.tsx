@@ -2602,12 +2602,12 @@ export default function RaioXPage() {
                       <p className="text-xs text-muted-foreground">Total clientes</p>
                       <p className="text-2xl font-bold mt-1">{kpis.totalClientes.toLocaleString()}</p>
                     </div>
-                    <div className="glass-card bg-card/60 border-border/50 p-3">
+                    <div className="glass-card bg-card/60 border-border/50 p-3" title="Clientes que visitaram apenas 1 barbeiro no período. Só 1 + Multi = Total.">
                       <p className="text-xs text-muted-foreground">Só 1 barbeiro</p>
                       <p className="text-2xl font-bold mt-1 text-emerald-400">{kpis.so1Barbeiro.toLocaleString()}</p>
                       <p className="text-[10px] text-muted-foreground">{kpis.pctSo1Barbeiro}% do total</p>
                     </div>
-                    <div className="glass-card bg-card/60 border-border/50 p-3">
+                    <div className="glass-card bg-card/60 border-border/50 p-3" title="Clientes que visitaram 2+ barbeiros distintos no período. Só 1 + Multi = Total.">
                       <p className="text-xs text-muted-foreground">Multi-barbeiro</p>
                       <p className="text-2xl font-bold mt-1 text-blue-400">{kpis.multiBarbeiro.toLocaleString()}</p>
                       <p className="text-[10px] text-muted-foreground">{kpis.pctMultiBarbeiro}% do total</p>
@@ -2617,7 +2617,7 @@ export default function RaioXPage() {
                       <p className="text-2xl font-bold mt-1 text-yellow-400">{kpis.voltaram2x.toLocaleString()}</p>
                       <p className="text-[10px] text-muted-foreground">{kpis.pctVoltaram2x}% do total</p>
                     </div>
-                    <div className="glass-card bg-card/60 border-border/50 p-3">
+                    <div className="glass-card bg-card/60 border-border/50 p-3" title="Média de barbeiros distintos por cliente no período. Cálculo: Σ(barb. distintos por cliente) ÷ total clientes. Ideal: 1.0 (todos fidelizados).">
                       <p className="text-xs text-muted-foreground">Média barb./cliente</p>
                       <p className="text-2xl font-bold mt-1">{kpis.mediaBarb.toFixed(2)}</p>
                       <p className="text-[10px] text-muted-foreground">ideal: 1.0 (fidelizado)</p>
