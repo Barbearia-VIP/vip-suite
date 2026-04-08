@@ -863,7 +863,45 @@ export const vipCamRouter = router({
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([data, v]) => ({ data, ...v }));
 
-      return { daily, hourly, totals: { ...totals, satisfactionRate }, clientesPorDia };
+      // ── Totais por base de clientes (satisfactionLevel de camClientes) ──
+      // Conta todos os clientes da unidade (sem filtro de período)
+      // pois satisfactionLevel é o estado atual consolidado do cliente
+      const whereClientesBase = input.unitId
+        ? eq(camClientes.unitId, input.unitId)
+        : sql`1=1`;
+
+      const clientesBase = await db!
+        .select({
+          satisfactionLevel: camClientes.satisfactionLevel,
+          total: count(),
+        })
+        .from(camClientes)
+        .where(whereClientesBase)
+        .groupBy(camClientes.satisfactionLevel);
+
+      const clientesTotals = clientesBase.reduce(
+        (acc, r) => {
+          const n = Number(r.total);
+          if (r.satisfactionLevel === 'satisfied') acc.satisfeitos += n;
+          else if (r.satisfactionLevel === 'neutral') acc.neutros += n;
+          else acc.insatisfeitos += n;
+          acc.totalClientes += n;
+          return acc;
+        },
+        { satisfeitos: 0, neutros: 0, insatisfeitos: 0, totalClientes: 0 }
+      );
+
+      const satisfactionRateClientes = clientesTotals.totalClientes > 0
+        ? Math.round((clientesTotals.satisfeitos / clientesTotals.totalClientes) * 100)
+        : 0;
+
+      return {
+        daily,
+        hourly,
+        totals: { ...totals, satisfactionRate },
+        clientesPorDia,
+        clientesTotals: { ...clientesTotals, satisfactionRate: satisfactionRateClientes },
+      };
     }),
 
   // ── Timeline paginada ───────────────────────

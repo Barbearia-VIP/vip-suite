@@ -1094,3 +1094,6 @@
 - [x] Gráfico de tendência do Dashboard: incluir dia atual
 - [x] Gráfico de tendência do Dashboard: usar camClientes (clientes reais) em vez de camMetricasDiarias
 - [x] 1º card VIP Cam: mudar para total de detecções do mês (camMetricasDiarias)
+- [x] Métricas VIP Cam: satisfação/satisfeitos/neutros/insatisfeitos por base de clientes
+- [x] Métricas VIP Cam: adicionar neutros nos totais
+- [x] Métricas VIP Cam: manter total de detecções do histórico
