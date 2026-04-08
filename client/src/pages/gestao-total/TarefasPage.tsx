@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Plus, LayoutGrid, List, Trash2, Edit2, Clock, AlertCircle, BookOpen, ExternalLink } from "lucide-react";
+import { DatePicker } from "@/components/DatePicker";
 import { Badge } from "@/components/ui/badge";
 import { useLocation } from "wouter";
 
@@ -136,7 +137,7 @@ function FormTarefa({ initial, onSave, onClose }: {
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Prazo</Label>
-          <Input type="date" value={prazo} onChange={e => setPrazo(e.target.value)} className="text-sm" />
+          <DatePicker value={prazo} onChange={setPrazo} placeholder="Prazo" />
         </div>
       </div>
       <div className="space-y-1.5">

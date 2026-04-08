@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Calendar, Plus, Trash2 } from "lucide-react";
+import { DatePicker } from "@/components/DatePicker";
 import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 
 const TIPO_COLORS: Record<string, string> = {
@@ -100,7 +101,7 @@ export default function CalendarioPage() {
           <DialogHeader><DialogTitle>Novo Registro</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label>Colaborador (opcional)</Label><Input value={form.colaboradorNome} onChange={e => setForm(f => ({ ...f, colaboradorNome: e.target.value }))} placeholder="Nome do colaborador" /></div>
-            <div><Label>Data</Label><Input type="date" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))} /></div>
+            <div><Label>Data</Label><DatePicker value={form.data} onChange={v => setForm(f => ({ ...f, data: v }))} placeholder="Selecionar data" /></div>
             <div>
               <Label>Tipo</Label>
               <Select value={form.tipo} onValueChange={v => setForm(f => ({ ...f, tipo: v }))}>

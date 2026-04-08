@@ -18,6 +18,7 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { useChartTheme } from "../../hooks/useChartTheme";
+import { DatePicker } from "@/components/DatePicker";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function fmt(value: number) {
@@ -478,13 +479,9 @@ export default function DashboardPage() {
         ))}
         {showCustom && (
           <div className="flex items-center gap-1.5 ml-1">
-            <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
-              className="h-7 px-2 text-xs rounded-lg border bg-card text-foreground"
-              style={{ border: ct.border, background: ct.cardBgMuted }} />
+            <DatePicker value={customFrom} onChange={setCustomFrom} placeholder="Início" className="h-7 text-xs w-36" />
             <span className="text-xs text-muted-foreground">até</span>
-            <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
-              className="h-7 px-2 text-xs rounded-lg border bg-card text-foreground"
-              style={{ border: ct.border, background: ct.cardBgMuted }} />
+            <DatePicker value={customTo} onChange={setCustomTo} placeholder="Fim" min={customFrom} className="h-7 text-xs w-36" />
           </div>
         )}
         <span

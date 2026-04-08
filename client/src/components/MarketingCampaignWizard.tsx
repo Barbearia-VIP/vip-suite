@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight, Wand2 } from "lucide-react";
+import { DatePicker } from "@/components/DatePicker";
 
 export interface WizardData {
   objective: string;
@@ -231,13 +232,20 @@ export default function MarketingCampaignWizard({ open, onClose, onGenerate, isG
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Data de Início</Label>
-                  <Input type="date" value={data.budget.start_date}
-                    onChange={e => update("budget", { ...data.budget, start_date: e.target.value })} />
+                  <DatePicker
+                    value={data.budget.start_date}
+                    onChange={v => update("budget", { ...data.budget, start_date: v })}
+                    placeholder="Data de início"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Data de Fim</Label>
-                  <Input type="date" value={data.budget.end_date}
-                    onChange={e => update("budget", { ...data.budget, end_date: e.target.value })} />
+                  <DatePicker
+                    value={data.budget.end_date}
+                    onChange={v => update("budget", { ...data.budget, end_date: v })}
+                    min={data.budget.start_date}
+                    placeholder="Data de fim"
+                  />
                 </div>
               </div>
             </div>

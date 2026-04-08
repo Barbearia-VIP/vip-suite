@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Plus, Trash2, Edit2, TrendingUp, TrendingDown, DollarSign, CheckCircle2, Clock, RefreshCw, Database } from "lucide-react";
+import { DatePicker } from "@/components/DatePicker";
 
 type Lancamento = {
   id: number; tipo: "receita" | "despesa"; categoria: string | null;
@@ -73,7 +74,7 @@ function FormLancamento({ initial, onSave, onClose }: {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5"><Label className="text-xs">Vencimento</Label>
-          <Input type="date" value={vencimento} onChange={e=>setVencimento(e.target.value)} className="text-sm" />
+          <DatePicker value={vencimento} onChange={setVencimento} placeholder="Data de vencimento" />
         </div>
         <div className="space-y-1.5"><Label className="text-xs">Forma de Pagamento</Label>
           <Select value={formaPagamento} onValueChange={setFormaPagamento}>

@@ -21,6 +21,7 @@ import {
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from "recharts";
 import { useChartTheme } from "@/hooks/useChartTheme";
+import { DatePicker } from "@/components/DatePicker";
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -152,11 +153,11 @@ function SyncModal({ open, onClose, units, onSync, isSyncing }: SyncModalProps) 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Data início</Label>
-              <Input type="date" value={inicio} onChange={e => setInicio(e.target.value)} max={today} />
+              <DatePicker value={inicio} onChange={setInicio} max={today} placeholder="Data início" />
             </div>
             <div className="space-y-1.5">
               <Label>Data fim</Label>
-              <Input type="date" value={fim} onChange={e => setFim(e.target.value)} max={today} />
+              <DatePicker value={fim} onChange={setFim} min={inicio} max={today} placeholder="Data fim" />
             </div>
           </div>
 

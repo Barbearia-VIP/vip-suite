@@ -1121,3 +1121,7 @@
 
 ## Auditoria Tema Claro
 - [x] Auditoria de contraste no tema claro — corrigidos boxes escuros hardcoded em DashboardPage, MensalPage, FaturamentoPage, DataVipPage, DataVipDashboard, ColaboradoresPage, ProdutosPage, ServicosPage, CamRelatoriosPage, AppLayout, chart.tsx
+
+## Seletores de Data
+- [x] Criar componente DatePicker reutilizável (Popover + Calendar)
+- [x] Substituir todos os inputs type="date" por DatePicker em todo o sistema (14 arquivos, 25 campos)

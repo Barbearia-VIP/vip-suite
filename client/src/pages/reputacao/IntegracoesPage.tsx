@@ -14,6 +14,7 @@ import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { DatePicker } from "@/components/DatePicker";
 
 type Plataforma = "google" | "ifood" | "tripadvisor" | "ubereats" | "rappi" | "instagram" | "facebook" | "manual";
 
@@ -592,10 +593,10 @@ export default function IntegracoesPage() {
             </div>
             <div>
               <Label>Data</Label>
-              <Input
-                type="date"
+              <DatePicker
                 value={manualForm.dataAvaliacao}
-                onChange={(e) => setManualForm(f => ({ ...f, dataAvaliacao: e.target.value }))}
+                onChange={(v) => setManualForm(f => ({ ...f, dataAvaliacao: v }))}
+                placeholder="Data da avaliação"
               />
             </div>
           </div>

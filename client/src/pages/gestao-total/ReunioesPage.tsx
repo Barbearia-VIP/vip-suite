@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Plus, Trash2, Edit2, Calendar, Clock, Users } from "lucide-react";
+import { DatePicker } from "@/components/DatePicker";
 
 type Reuniao = {
   id: number; orgId: number; unitId: number | null;
@@ -47,7 +48,20 @@ function FormReuniao({ initial, onSave, onClose }: {
         <Input type="number" value={duracao} onChange={e=>setDuracao(e.target.value)} className="text-sm" />
       </div>
       <div className="space-y-1.5"><Label className="text-xs">Data e Hora *</Label>
-        <Input type="datetime-local" value={dataHora} onChange={e=>setDataHora(e.target.value)} className="text-sm" />
+        <div className="flex gap-2">
+          <DatePicker
+            value={dataHora ? dataHora.slice(0, 10) : ""}
+            onChange={d => setDataHora(d + (dataHora ? dataHora.slice(10) : "T09:00"))}
+            placeholder="Data da reunião"
+            className="flex-1"
+          />
+          <Input
+            type="time"
+            value={dataHora ? dataHora.slice(11, 16) : ""}
+            onChange={e => setDataHora((dataHora ? dataHora.slice(0, 10) : new Date().toISOString().slice(0, 10)) + "T" + e.target.value)}
+            className="text-sm w-28"
+          />
+        </div>
       </div>
       <div className="space-y-1.5"><Label className="text-xs">Local</Label>
         <Input value={local} onChange={e=>setLocal(e.target.value)} placeholder="Sala de reunião, online..." className="text-sm" />

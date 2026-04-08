@@ -18,6 +18,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DataVipErrorState, DataVipLoadingState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
+import { DatePicker } from "@/components/DatePicker";
 import { useChartTheme } from "../../hooks/useChartTheme";
 import {
   Users, UserCheck, UserX, AlertTriangle, TrendingDown, TrendingUp,
@@ -358,20 +359,10 @@ export default function RaioXPage() {
               </SelectContent>
             </Select>
             {periodoPreset === "custom" && (
-              <div className="flex items-center gap-1">
-                <input
-                  type="date"
-                  value={customInicio}
-                  onChange={e => setCustomInicio(e.target.value)}
-                  className="h-8 px-2 text-xs rounded border border-border bg-background text-foreground"
-                />
+              <div className="flex items-center gap-1.5">
+                <DatePicker value={customInicio} onChange={setCustomInicio} placeholder="Início" className="h-8 text-xs w-34" />
                 <span className="text-xs text-muted-foreground">→</span>
-                <input
-                  type="date"
-                  value={customFim}
-                  onChange={e => setCustomFim(e.target.value)}
-                  className="h-8 px-2 text-xs rounded border border-border bg-background text-foreground"
-                />
+                <DatePicker value={customFim} onChange={setCustomFim} placeholder="Fim" min={customInicio} className="h-8 text-xs w-34" />
               </div>
             )}
             {periodoPreset !== "custom" && (

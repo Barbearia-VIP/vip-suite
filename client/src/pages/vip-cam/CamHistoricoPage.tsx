@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { SATISFACTION_LABELS, SATISFACTION_COLORS, SATISFACTION_EMOJIS, SatisfactionLevel } from '@/lib/emotionClassifier';
+import { DatePicker } from '@/components/DatePicker';
 
 export default function CamHistoricoPage() {
   const { selectedUnit } = useApp();
@@ -30,11 +31,11 @@ export default function CamHistoricoPage() {
       <div className="flex gap-3 flex-wrap items-center">
         <div className="flex items-center gap-2">
           <label className="text-sm text-muted-foreground">De:</label>
-          <Input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setPage(1); }} className="w-40" />
+          <DatePicker value={startDate} onChange={(v) => { setStartDate(v); setPage(1); }} placeholder="Data inicial" className="w-40" />
         </div>
         <div className="flex items-center gap-2">
           <label className="text-sm text-muted-foreground">Até:</label>
-          <Input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); setPage(1); }} className="w-40" />
+          <DatePicker value={endDate} onChange={(v) => { setEndDate(v); setPage(1); }} placeholder="Data final" min={startDate} className="w-40" />
         </div>
         {(startDate || endDate) && (
           <Button variant="ghost" size="sm" onClick={() => { setStartDate(''); setEndDate(''); setPage(1); }}>Limpar</Button>

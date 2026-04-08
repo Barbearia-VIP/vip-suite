@@ -20,6 +20,7 @@ import {
   Calendar, Target, Sparkles,
 } from "lucide-react";
 import MarketingCampaignWizard, { type WizardData } from "@/components/MarketingCampaignWizard";
+import { DatePicker } from "@/components/DatePicker";
 import CampaignPreview from "@/components/CampaignPreview";
 import AssignCampaignModal from "@/components/AssignCampaignModal";
 
@@ -105,10 +106,10 @@ function FormCampanha({ initial, onSave, onClose }: {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5"><Label className="text-xs">Data Início</Label>
-          <Input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="text-sm" />
+          <DatePicker value={dataInicio} onChange={setDataInicio} placeholder="Data início" />
         </div>
         <div className="space-y-1.5"><Label className="text-xs">Data Fim</Label>
-          <Input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="text-sm" />
+          <DatePicker value={dataFim} onChange={setDataFim} min={dataInicio} placeholder="Data fim" />
         </div>
       </div>
       <div className="space-y-1.5"><Label className="text-xs">Descrição / Objetivo</Label>

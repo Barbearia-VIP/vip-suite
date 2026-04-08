@@ -15,6 +15,7 @@ import {
 import { BarChart2, TrendingUp, Smile, Meh, Frown, Users } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { useChartTheme } from '@/hooks/useChartTheme';
+import { DatePicker } from '@/components/DatePicker';
 
 const COLORS = { satisfied: '#22c55e', neutral: '#f59e0b', unsatisfied: '#ef4444' };
 
@@ -145,11 +146,11 @@ export default function CamRelatoriosPage() {
       <div className="flex gap-3 flex-wrap items-center">
         <div className="flex items-center gap-2">
           <label className="text-sm text-muted-foreground">De:</label>
-          <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-40" />
+          <DatePicker value={startDate} onChange={setStartDate} placeholder="Data inicial" className="w-40" />
         </div>
         <div className="flex items-center gap-2">
           <label className="text-sm text-muted-foreground">Até:</label>
-          <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-40" />
+          <DatePicker value={endDate} onChange={setEndDate} placeholder="Data final" min={startDate} className="w-40" />
         </div>
         <p className="text-xs text-muted-foreground ml-2">
           * Satisfação, satisfeitos, neutros e insatisfeitos refletem o estado atual da base de clientes.

@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Trash2, Edit2, TrendingUp } from "lucide-react";
+import { DatePicker } from "@/components/DatePicker";
 
 type Oportunidade = {
   id: number; orgId: number; unitId: number | null;
@@ -81,7 +82,7 @@ function FormOportunidade({ initial, onSave, onClose }: {
           <Input type="number" value={valorEstimado} onChange={e => setValorEstimado(e.target.value)} placeholder="0" className="text-sm" />
         </div>
         <div className="space-y-1.5"><Label className="text-xs">Prazo</Label>
-          <Input type="date" value={prazo} onChange={e => setPrazo(e.target.value)} className="text-sm" />
+          <DatePicker value={prazo} onChange={setPrazo} placeholder="Prazo" />
         </div>
       </div>
       <div className="space-y-1.5"><Label className="text-xs">Responsável</Label>

@@ -9,6 +9,7 @@ import PageHeader from "@/components/PageHeader";
 import { FileText, Search, ChevronLeft, ChevronRight, MessageCircle, Activity, AlertTriangle, Zap } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { DatePicker } from "@/components/DatePicker";
 
 const LOG_TYPES = [
   { value: "all", label: "Todos os tipos" },
@@ -95,8 +96,8 @@ export default function LogsPage() {
                 {LOG_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} placeholder="De" />
-            <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} placeholder="Até" />
+            <DatePicker value={dateFrom} onChange={(v) => { setDateFrom(v); setPage(1); }} placeholder="De" className="w-36" />
+            <DatePicker value={dateTo} onChange={(v) => { setDateTo(v); setPage(1); }} placeholder="Até" min={dateFrom} className="w-36" />
           </div>
         </div>
       </div>

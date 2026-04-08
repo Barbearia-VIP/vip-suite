@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Trash2, Edit2, Users } from "lucide-react";
+import { DatePicker } from "@/components/DatePicker";
 
 type Colaborador = {
   id: number; orgId: number; unitId: number | null;
@@ -66,7 +67,7 @@ function FormColaborador({ initial, onSave, onClose }: {
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Data de Admissão</Label>
-          <Input type="date" value={dataAdmissao} onChange={e => setDataAdmissao(e.target.value)} className="text-sm" />
+          <DatePicker value={dataAdmissao} onChange={setDataAdmissao} placeholder="Data de admissão" />
         </div>
       </div>
       <div className="space-y-1.5">

@@ -18,6 +18,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { RefreshCw, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, KeyRound, ExternalLink, PlaySquare } from "lucide-react";
 import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
+import { DatePicker } from "@/components/DatePicker";
 import { Link } from "wouter";
 
 function fmtDt(d: string | null) {
@@ -278,11 +279,11 @@ export default function SincronizacaoPage() {
               <div className="grid sm:grid-cols-2 gap-3">
                 <div>
                   <Label>Data Início</Label>
-                  <Input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} max={today} />
+                  <DatePicker value={dataInicio} onChange={setDataInicio} max={today} placeholder="Data início" />
                 </div>
                 <div>
                   <Label>Data Fim</Label>
-                  <Input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} max={today} />
+                  <DatePicker value={dataFim} onChange={setDataFim} min={dataInicio} max={today} placeholder="Data fim" />
                 </div>
               </div>
             )}
