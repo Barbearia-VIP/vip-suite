@@ -485,6 +485,75 @@ html:not(.dark) {
   --sidebar-ring:      oklch(0.62 0.155 68);
 }
 
+/* ── Glass card no tema claro ── */
+html:not(.dark) .glass-card {
+  background: oklch(1.0 0 0 / 0.85);
+  border: 1px solid oklch(0.88 0.006 260 / 0.6);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.9) inset,
+    0 2px 12px -2px oklch(0 0 0 / 0.08),
+    0 0 0 0.5px oklch(0.88 0.006 260 / 0.4);
+}
+html:not(.dark) .glass-card-hover:hover {
+  border-color: oklch(0.62 0.155 68 / 0.35);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.9) inset,
+    0 4px 20px -4px oklch(0 0 0 / 0.12),
+    0 0 0 0.5px oklch(0.62 0.155 68 / 0.2);
+}
+html:not(.dark) .kpi-card {
+  background: oklch(1.0 0 0 / 0.9);
+  border: 1px solid oklch(0.88 0.006 260 / 0.6);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.9) inset,
+    0 2px 12px -2px oklch(0 0 0 / 0.08);
+}
+html:not(.dark) .kpi-card::before {
+  background: linear-gradient(135deg, oklch(0.62 0.155 68 / 0.04) 0%, transparent 60%);
+}
+html:not(.dark) .kpi-card:hover {
+  border-color: oklch(0.62 0.155 68 / 0.35);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.9) inset,
+    0 4px 20px -4px oklch(0 0 0 / 0.12),
+    0 0 0 0.5px oklch(0.62 0.155 68 / 0.2);
+}
+html:not(.dark) .vip-table thead tr {
+  border-bottom: 1px solid oklch(0.88 0.006 260 / 0.8);
+}
+html:not(.dark) .vip-table tbody tr {
+  border-bottom: 1px solid oklch(0.92 0.004 260 / 0.6);
+}
+html:not(.dark) .vip-table tbody tr:hover {
+  background: oklch(0.96 0.004 80 / 0.7);
+}
+html:not(.dark) .section-header::after {
+  background: linear-gradient(to right, oklch(0.85 0.006 260 / 0.8), transparent);
+}
+html:not(.dark) .vip-divider {
+  background: linear-gradient(to right, transparent, oklch(0.88 0.006 260 / 0.8), transparent);
+}
+html:not(.dark) .badge-amber {
+  background: oklch(0.62 0.155 68 / 0.12);
+  color: oklch(0.50 0.14 68);
+  border: 1px solid oklch(0.62 0.155 68 / 0.3);
+}
+html:not(.dark) .badge-green {
+  background: oklch(0.52 0.18 145 / 0.10);
+  color: oklch(0.38 0.16 145);
+  border: 1px solid oklch(0.52 0.18 145 / 0.3);
+}
+html:not(.dark) .badge-red {
+  background: oklch(0.52 0.22 25 / 0.10);
+  color: oklch(0.40 0.20 25);
+  border: 1px solid oklch(0.52 0.22 25 / 0.3);
+}
+html:not(.dark) .badge-blue {
+  background: oklch(0.52 0.18 220 / 0.10);
+  color: oklch(0.38 0.16 220);
+  border: 1px solid oklch(0.52 0.18 220 / 0.3);
+}
+
 /* ── Body no tema claro ── */
 html:not(.dark) body {
   background-image:

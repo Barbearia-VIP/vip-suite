@@ -61,6 +61,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTheme } from "../contexts/ThemeContext";
+import { useChartTheme } from "../hooks/useChartTheme";
 
 interface Module {
   id: ModuleId;
@@ -234,6 +235,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const { activeModule, setActiveModule, selectedUnit, setSelectedUnit, availableUnits, setAvailableUnits, sidebarCollapsed, setSidebarCollapsed, userRole } = useApp();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const ct = useChartTheme();
+  const isDark = theme === "dark";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const orgsQuery = trpc.orgs.list.useQuery(undefined, { enabled: !!user });
@@ -304,11 +307,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <header
         className="h-14 sticky top-0 z-50 flex items-center"
         style={{
-          background: "oklch(0.075 0.008 260 / 0.92)",
+          background: isDark ? "oklch(0.075 0.008 260 / 0.92)" : "oklch(0.99 0.002 80 / 0.95)",
           backdropFilter: "blur(20px) saturate(180%)",
           WebkitBackdropFilter: "blur(20px) saturate(180%)",
-          borderBottom: "1px solid oklch(0.22 0.014 260 / 0.6)",
-          boxShadow: "0 1px 0 0 oklch(1 0 0 / 0.03) inset, 0 4px 24px -4px oklch(0 0 0 / 0.4)",
+          borderBottom: isDark ? "1px solid oklch(0.22 0.014 260 / 0.6)" : "1px solid oklch(0.88 0.006 260 / 0.8)",
+          boxShadow: isDark ? "0 1px 0 0 oklch(1 0 0 / 0.03) inset, 0 4px 24px -4px oklch(0 0 0 / 0.4)" : "0 1px 0 0 oklch(0 0 0 / 0.04) inset, 0 2px 12px -2px oklch(0 0 0 / 0.08)",
         }}
       >
         <div className="flex items-center h-full w-full">
@@ -317,7 +320,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             className="flex items-center gap-2.5 px-4 h-full shrink-0"
             style={{
               minWidth: sidebarCollapsed ? "56px" : "208px",
-              borderRight: "1px solid oklch(0.22 0.014 260 / 0.5)",
+              borderRight: isDark ? "1px solid oklch(0.22 0.014 260 / 0.5)" : "1px solid oklch(0.88 0.006 260 / 0.7)",
               transition: "min-width 0.2s ease",
             }}
           >
@@ -386,7 +389,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     style={{
                       background: isActive
                         ? `${module.color}12`
-                        : "oklch(0.22 0.014 260 / 0.4)",
+                        : isDark ? "oklch(0.22 0.014 260 / 0.4)" : "oklch(0.92 0.005 80 / 0.6)",
                     }}
                   />
                   <Icon className="w-3.5 h-3.5 relative z-10" />
@@ -406,9 +409,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   size="sm"
                   className="h-8 text-xs gap-1.5 hidden sm:flex"
                   style={{
-                    background: "oklch(0.155 0.012 260 / 0.8)",
-                    border: "1px solid oklch(0.28 0.015 260 / 0.6)",
-                    color: "oklch(0.85 0.006 80)",
+                    background: isDark ? "oklch(0.155 0.012 260 / 0.8)" : "oklch(0.96 0.004 80 / 0.9)",
+                    border: isDark ? "1px solid oklch(0.28 0.015 260 / 0.6)" : "1px solid oklch(0.85 0.006 260 / 0.8)",
+                    color: isDark ? "oklch(0.85 0.006 80)" : "oklch(0.25 0.010 260)",
                   }}
                 >
                   <Building2 className="w-3.5 h-3.5 opacity-70" />
@@ -527,9 +530,9 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <div
           className="lg:hidden z-40"
           style={{
-            background: "oklch(0.095 0.008 260 / 0.97)",
+            background: isDark ? "oklch(0.095 0.008 260 / 0.97)" : "oklch(0.99 0.002 80 / 0.97)",
             backdropFilter: "blur(16px)",
-            borderBottom: "1px solid oklch(0.22 0.014 260 / 0.5)",
+            borderBottom: isDark ? "1px solid oklch(0.22 0.014 260 / 0.5)" : "1px solid oklch(0.88 0.006 260 / 0.7)",
           }}
         >
           <div className="grid grid-cols-4 gap-0">
@@ -542,7 +545,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   onClick={() => handleModuleClick(module)}
                   className="flex flex-col items-center gap-1 p-3 text-xs transition-all"
                   style={{
-                    color: isActive ? module.color : "oklch(0.55 0.012 260)",
+                    color: isActive ? module.color : isDark ? "oklch(0.55 0.012 260)" : "oklch(0.45 0.010 260)",
                     background: isActive ? `${module.color}10` : "transparent",
                   }}
                 >
@@ -564,14 +567,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
           )}
           style={{
             width: sidebarCollapsed ? "56px" : "208px",
-            background: "oklch(0.075 0.008 260)",
-            borderRight: "1px solid oklch(0.175 0.012 260 / 0.8)",
+            background: isDark ? "oklch(0.075 0.008 260)" : "oklch(0.975 0.003 80)",
+            borderRight: isDark ? "1px solid oklch(0.175 0.012 260 / 0.8)" : "1px solid oklch(0.88 0.006 260 / 0.8)",
           }}
         >
           {/* Module header */}
           <div
             className="flex items-center gap-2 px-3 py-3"
-            style={{ borderBottom: "1px solid oklch(0.175 0.012 260 / 0.8)" }}
+            style={{ borderBottom: isDark ? "1px solid oklch(0.175 0.012 260 / 0.8)" : "1px solid oklch(0.88 0.006 260 / 0.7)" }}
           >
             {!sidebarCollapsed && (
               <>
@@ -584,7 +587,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 >
                   <currentModule.icon className="w-3.5 h-3.5" style={{ color: currentModule.color }} />
                 </div>
-                <span className="text-xs font-semibold truncate flex-1" style={{ color: "oklch(0.88 0.006 80)" }}>
+                <span className="text-xs font-semibold truncate flex-1" style={{ color: isDark ? "oklch(0.88 0.006 80)" : "oklch(0.20 0.010 260)" }}>
                   {currentModule.label}
                 </span>
               </>
@@ -607,7 +610,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   <div
                     key={`sep-${idx}`}
                     className="my-1.5 mx-3"
-                    style={{ height: "1px", background: "oklch(0.175 0.012 260 / 0.6)" }}
+                    style={{ height: "1px", background: isDark ? "oklch(0.175 0.012 260 / 0.6)" : "oklch(0.88 0.006 260 / 0.6)" }}
                   />
                 );
               }
@@ -617,10 +620,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   <div key={`group-${item.label}`}>
                     {!sidebarCollapsed && (
                       <div className="flex items-center gap-1.5 px-4 py-1.5 mt-1">
-                        <GroupIcon className="w-3 h-3" style={{ color: "oklch(0.45 0.01 260)" }} />
+                        <GroupIcon className="w-3 h-3" style={{ color: ct.textMuted }} />
                         <span
                           className="text-[10px] font-semibold uppercase tracking-wider"
-                          style={{ color: "oklch(0.45 0.01 260)" }}
+                          style={{ color: ct.textMuted }}
                         >
                           {item.label}
                         </span>
@@ -646,7 +649,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                                   border: `1px solid ${currentModule.color}25`,
                                 }
                               : {
-                                  color: "oklch(0.55 0.012 260)",
+                                  color: ct.textMuted,
                                   border: "1px solid transparent",
                                 }
                           }
@@ -679,7 +682,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                           border: `1px solid ${currentModule.color}25`,
                         }
                       : {
-                          color: "oklch(0.55 0.012 260)",
+                          color: ct.textMuted,
                           border: "1px solid transparent",
                         }
                   }
@@ -695,7 +698,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           {/* Sidebar footer */}
           <div
             className="p-2"
-            style={{ borderTop: "1px solid oklch(0.175 0.012 260 / 0.8)" }}
+            style={{ borderTop: isDark ? "1px solid oklch(0.175 0.012 260 / 0.8)" : "1px solid oklch(0.88 0.006 260 / 0.7)" }}
           >
             <button
               onClick={() => navigate("/configuracoes")}
@@ -703,7 +706,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 "w-full flex items-center gap-2.5 py-2 rounded-lg text-xs transition-all",
                 sidebarCollapsed ? "px-2.5 justify-center" : "px-3",
               )}
-              style={{ color: "oklch(0.50 0.01 260)" }}
+              style={{ color: ct.textMuted }}
               title={sidebarCollapsed ? "Configurações" : undefined}
             >
               <Settings className="w-3.5 h-3.5 shrink-0" />

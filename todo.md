@@ -1107,3 +1107,4 @@
 - [x] Card Auto Instagram Dashboard: mostrar comentários respondidos e stories respondidos separadamente
 - [x] Corrigir card Auto Instagram: dados não aparecem mesmo com bot rodando
 - [x] VIP Cam aba Detecções por Hora: gráfico de linha premium com clientes únicos, KPIs do dia, todas as 24h
+- [x] Tema claro: menu superior e lateral mudar de cor
