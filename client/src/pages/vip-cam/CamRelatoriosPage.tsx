@@ -14,28 +14,21 @@ import {
 } from 'recharts';
 import { BarChart2, TrendingUp, Smile, Meh, Frown, Users } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import { useChartTheme } from '@/hooks/useChartTheme';
 
 const COLORS = { satisfied: '#22c55e', neutral: '#f59e0b', unsatisfied: '#ef4444' };
 
 // Tooltip glass premium
 const GlassTooltip = ({ active, payload, label }: any) => {
+  const ct = useChartTheme();
   if (!active || !payload?.length) return null;
   return (
-    <div style={{
-      background: 'oklch(0.18 0.006 240 / 0.85)',
-      backdropFilter: 'blur(12px)',
-      border: '1px solid oklch(0.92 0.006 80 / 0.15)',
-      borderRadius: '10px',
-      padding: '10px 14px',
-      boxShadow: '0 4px 24px oklch(0 0 0 / 0.4)',
-      color: 'oklch(0.92 0.006 80)',
-      fontSize: 12,
-    }}>
+    <div style={ct.tooltipStyle}>
       <p style={{ fontWeight: 600, marginBottom: 4 }}>{label}</p>
       {payload.map((p: any) => (
         <div key={p.name} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block' }} />
-          <span style={{ color: 'oklch(0.75 0.006 80)' }}>{p.name}:</span>
+          <span style={{ color: ct.textMuted }}>{p.name}:</span>
           <span style={{ fontWeight: 600 }}>{typeof p.value === 'number' && p.name?.includes('%') ? `${p.value}%` : p.value}</span>
         </div>
       ))}

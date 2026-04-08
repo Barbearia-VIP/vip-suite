@@ -332,7 +332,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 boxShadow: "0 0 16px oklch(0.76 0.145 72 / 0.35)",
               }}
             >
-              <Zap className="w-4 h-4" style={{ color: "oklch(0.08 0.01 260)" }} />
+              <Zap className="w-4 h-4" style={{ color: isDark ? "oklch(0.08 0.01 260)" : "oklch(0.98 0 0)" }} />
             </div>
             {!sidebarCollapsed && (
               <div className="flex flex-col leading-none">
@@ -495,7 +495,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                       className="text-xs font-bold"
                       style={{
                         background: "linear-gradient(135deg, oklch(0.76 0.145 72) 0%, oklch(0.68 0.16 65) 100%)",
-                        color: "oklch(0.08 0.01 260)",
+                        color: isDark ? "oklch(0.08 0.01 260)" : "oklch(0.98 0 0)",
                       }}
                     >
                       {initials}

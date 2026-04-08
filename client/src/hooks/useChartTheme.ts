@@ -8,7 +8,11 @@ export function useChartTheme() {
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
+  // Expose isDark for conditional rendering in components
+  const dark = isDark;
+
   return {
+    isDark,
     // Tooltip glass
     tooltipStyle: {
       background: isDark

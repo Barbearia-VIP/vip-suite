@@ -1118,3 +1118,6 @@
 - [x] glass-card e kpi-card atualizados no CSS para tema claro
 - [x] Transição suave 0.3s ease em body, glass-card, kpi-card, header e sidebar
 - [x] Sincronizar tema com prefers-color-scheme do SO (localStorage como override manual, ponto âmbar no botão quando seguindo o sistema)
+
+## Auditoria Tema Claro
+- [x] Auditoria de contraste no tema claro — corrigidos boxes escuros hardcoded em DashboardPage, MensalPage, FaturamentoPage, DataVipPage, DataVipDashboard, ColaboradoresPage, ProdutosPage, ServicosPage, CamRelatoriosPage, AppLayout, chart.tsx

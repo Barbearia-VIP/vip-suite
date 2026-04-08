@@ -172,14 +172,10 @@ function ChartTooltipContent({
     <div
       className={cn(
         "grid min-w-[8rem] items-start gap-1.5 rounded-xl px-3 py-2.5 text-xs",
+        "bg-popover text-popover-foreground border border-border shadow-lg",
         className
       )}
-      style={{
-        background: "oklch(0.14 0.012 260 / 0.96)",
-        border: "1px solid oklch(0.28 0.015 260 / 0.6)",
-        backdropFilter: "blur(16px)",
-        boxShadow: "0 8px 32px -8px oklch(0 0 0 / 0.6), 0 1px 0 0 oklch(1 0 0 / 0.04) inset",
-      }}
+      style={{ backdropFilter: "blur(16px)" }}
     >
       {!nestLabel ? tooltipLabel : null}
       <div className="grid gap-1.5">

@@ -20,6 +20,7 @@ import {
   User, X, Wifi, WifiOff, AlertCircle,
 } from "lucide-react";
 import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
+import { useChartTheme } from "@/hooks/useChartTheme";
 
 // ── Formatadores ─────────────────────────────────────────────────────────────
 function fmtMoeda(v: number) {
@@ -114,6 +115,7 @@ function CustomTooltip({ active, payload, metricCfg }: {
   payload?: Array<{ payload: Record<string, number>; value: number }>;
   metricCfg: MetricConfig;
 }) {
+  const ct = useChartTheme();
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   const v = payload[0].value;
@@ -121,12 +123,7 @@ function CustomTooltip({ active, payload, metricCfg }: {
   return (
     <div
       className="rounded-xl p-3 min-w-[200px] text-sm"
-      style={{
-        background: "oklch(0.14 0.012 260 / 0.97)",
-        border: "1px solid oklch(0.28 0.015 260 / 0.6)",
-        backdropFilter: "blur(16px)",
-        boxShadow: "0 8px 32px -8px oklch(0 0 0 / 0.6)",
-      }}
+      style={ct.tooltipStyle}
     >
       <div className="flex items-center gap-1.5 mb-2 text-muted-foreground font-medium text-xs">
         <CalendarDays className="w-3.5 h-3.5" />
@@ -136,7 +133,7 @@ function CustomTooltip({ active, payload, metricCfg }: {
         {metricCfg.fmt(v)}
       </div>
       <div className="text-xs text-muted-foreground mb-2">{metricCfg.label}</div>
-      <div className="pt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs" style={{ borderTop: "1px solid oklch(0.22 0.014 260 / 0.5)" }}>
+      <div className="pt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs" style={{ borderTop: ct.borderSubtle }}>
         <span className="text-muted-foreground">Atendimentos:</span>
         <span className="text-right font-medium">{fmtNum(d.atendimentos)}</span>
         <span className="text-muted-foreground">Ticket Médio:</span>
@@ -194,6 +191,7 @@ const KPI_ICONS: Record<string, React.ReactNode> = {
 
 // ── Card de KPI ──────────────────────────────────────────────────────────────
 function KpiCard({ kpi }: { kpi: KpiData }) {
+  const ct = useChartTheme();
   const isMoeda = kpi.tipo === "moeda";
   const fmt = (v: number) =>
     isMoeda
@@ -204,8 +202,8 @@ function KpiCard({ kpi }: { kpi: KpiData }) {
     <div
       className="rounded-2xl p-4 flex flex-col gap-2 relative overflow-hidden"
       style={{
-        background: "linear-gradient(135deg, oklch(0.135 0.010 260 / 0.95) 0%, oklch(0.11 0.008 260 / 0.85) 100%)",
-        border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+        background: ct.cardBg,
+        border: ct.border,
       }}
     >
       <div className="flex items-center justify-between">
@@ -217,7 +215,7 @@ function KpiCard({ kpi }: { kpi: KpiData }) {
       <span className="text-xl font-bold text-foreground leading-tight">
         {fmt(kpi.valor)}
       </span>
-      <div className="flex flex-wrap gap-x-2 gap-y-0.5" style={{ borderTop: "1px solid oklch(0.22 0.014 260 / 0.4)", paddingTop: "0.375rem" }}>
+      <div className="flex flex-wrap gap-x-2 gap-y-0.5" style={{ borderTop: ct.borderSubtle, paddingTop: "0.375rem" }}>
         {[
           { label: "SPLY", data: kpi.sply },
           { label: "MOM",  data: kpi.mom  },
@@ -234,12 +232,13 @@ function KpiCard({ kpi }: { kpi: KpiData }) {
 }
 
 function KpiSkeleton() {
+  const ct = useChartTheme();
   return (
     <div
       className="rounded-2xl p-4 space-y-2"
       style={{
-        background: "linear-gradient(135deg, oklch(0.135 0.010 260 / 0.95) 0%, oklch(0.11 0.008 260 / 0.85) 100%)",
-        border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+        background: ct.cardBg,
+        border: ct.border,
       }}
     >
       <Skeleton className="h-3 w-24" />
@@ -406,6 +405,7 @@ function FiltrosPanel({
 export default function MensalPage() {
   const { selectedUnit } = useApp();
   const { org } = useOrg();
+  const ct = useChartTheme();
   const [metricKey, setMetricKey] = useState<MetricKey>("faturamento");
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
 
@@ -686,11 +686,11 @@ export default function MensalPage() {
                       <stop offset="100%" stopColor={metricCfg.color} stopOpacity={0.55} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.4)" vertical={false} />
-                  <XAxis dataKey="mesLabel" tick={{ fontSize: 11, fill: "oklch(0.55 0.01 260)" }} axisLine={false} tickLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={ct.gridStroke} vertical={false} />
+                  <XAxis dataKey="mesLabel" tick={{ fontSize: 11, fill: ct.axisColor }} axisLine={false} tickLine={false} />
                   <YAxis
                     tickFormatter={v => metricCfg.isMoeda ? `R$${(v/1000).toFixed(0)}k` : fmtNum(v)}
-                    tick={{ fontSize: 11, fill: "oklch(0.55 0.01 260)" }} axisLine={false} tickLine={false} width={55}
+                    tick={{ fontSize: 11, fill: ct.axisColor }} axisLine={false} tickLine={false} width={55}
                   />
                   <Tooltip
                     content={<CustomTooltip metricCfg={metricCfg} />}
@@ -708,11 +708,11 @@ export default function MensalPage() {
                 </BarChart>
               ) : (
                 <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.4)" vertical={false} />
-                  <XAxis dataKey="mesLabel" tick={{ fontSize: 11, fill: "oklch(0.55 0.01 260)" }} axisLine={false} tickLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={ct.gridStroke} vertical={false} />
+                  <XAxis dataKey="mesLabel" tick={{ fontSize: 11, fill: ct.axisColor }} axisLine={false} tickLine={false} />
                   <YAxis
                     tickFormatter={v => metricCfg.isMoeda ? `R$${(v/1000).toFixed(0)}k` : fmtNum(v)}
-                    tick={{ fontSize: 11, fill: "oklch(0.55 0.01 260)" }} axisLine={false} tickLine={false} width={55}
+                    tick={{ fontSize: 11, fill: ct.axisColor }} axisLine={false} tickLine={false} width={55}
                   />
                   <Tooltip
                     content={<CustomTooltip metricCfg={metricCfg} />}
@@ -732,7 +732,7 @@ export default function MensalPage() {
                     stroke={metricCfg.color}
                     strokeWidth={2.5}
                     dot={{ fill: metricCfg.color, r: 4, strokeWidth: 0 }}
-                    activeDot={{ r: 6, strokeWidth: 2, stroke: "oklch(0.14 0.012 260)" }}
+                    activeDot={{ r: 6, strokeWidth: 2, stroke: ct.isDark ? "oklch(0.14 0.012 260)" : "oklch(0.97 0.003 80)" }}
                   />
                 </LineChart>
               )}

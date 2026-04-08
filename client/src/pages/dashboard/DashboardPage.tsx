@@ -68,11 +68,12 @@ function getPeriodDates(option: PeriodOption, customFrom?: string, customTo?: st
 function KpiCard({ label, value, sub, icon: Icon, color, trend }: {
   label: string; value: string; sub?: string; icon: React.ElementType; color: string; trend?: number | null;
 }) {
+  const ct = useChartTheme();
   return (
     <div
       className="relative rounded-2xl p-4 overflow-hidden"
       style={{
-        background: `linear-gradient(135deg, oklch(0.14 0.012 260 / 0.9) 0%, oklch(0.11 0.01 260 / 0.8) 100%)`,
+        background: ct.cardBg,
         border: `1px solid ${color}25`,
         backdropFilter: "blur(12px)",
         boxShadow: `0 4px 24px -4px ${color}20, 0 1px 0 0 oklch(1 0 0 / 0.04) inset`,
@@ -149,9 +150,9 @@ function ModuleCard({
       className="rounded-2xl p-5 relative overflow-hidden"
       style={{
         background: ct.cardBg,
-        border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+        border: ct.border,
         backdropFilter: "blur(12px)",
-        boxShadow: "0 4px 24px -8px oklch(0 0 0 / 0.4)",
+        boxShadow: ct.isDark ? "0 4px 24px -8px oklch(0 0 0 / 0.4)" : "0 4px 24px -8px oklch(0 0 0 / 0.12)",
       }}
     >
       {/* Top accent line */}
@@ -253,9 +254,9 @@ function PremiumTooltip({ active, payload, label }: any) {
       className="rounded-xl px-3 py-2.5 text-xs"
       style={{
         background: ct.cardBgSolid,
-        border: "1px solid oklch(0.28 0.015 260 / 0.6)",
+        border: ct.border,
         backdropFilter: "blur(16px)",
-        boxShadow: "0 8px 32px -8px oklch(0 0 0 / 0.6)",
+        boxShadow: ct.isDark ? "0 8px 32px -8px oklch(0 0 0 / 0.6)" : "0 4px 20px -4px oklch(0 0 0 / 0.15)",
       }}
     >
       <p className="text-muted-foreground mb-1.5 font-medium">{label}</p>
@@ -339,7 +340,7 @@ export default function DashboardPage() {
           className="rounded-2xl p-12 text-center"
           style={{
             background: ct.cardBg,
-            border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+            border: ct.border,
           }}
         >
           <div
@@ -361,7 +362,7 @@ export default function DashboardPage() {
             className="gap-2"
             style={{
               background: "linear-gradient(135deg, oklch(0.76 0.145 72) 0%, oklch(0.68 0.16 65) 100%)",
-              color: "oklch(0.08 0.01 260)",
+              color: ct.isDark ? "oklch(0.08 0.01 260)" : "oklch(0.98 0 0)",
               border: "none",
             }}
           >
@@ -407,8 +408,8 @@ export default function DashboardPage() {
             className="gap-1.5 text-xs"
             onClick={handleRefresh}
             style={{
-              background: "oklch(0.155 0.012 260 / 0.8)",
-              border: "1px solid oklch(0.28 0.015 260 / 0.6)",
+              background: ct.cardBgMuted,
+              border: ct.border,
             }}
           >
             <RefreshCw className={cn("w-3.5 h-3.5", isLoading && "animate-spin")} />
@@ -461,14 +462,14 @@ export default function DashboardPage() {
               periodOption === opt
                 ? {
                     background: "linear-gradient(135deg, oklch(0.76 0.145 72) 0%, oklch(0.68 0.16 65) 100%)",
-                    color: "oklch(0.08 0.01 260)",
+                    color: ct.isDark ? "oklch(0.08 0.01 260)" : "oklch(0.98 0 0)",
                     border: "1px solid transparent",
                     boxShadow: "0 0 12px oklch(0.76 0.145 72 / 0.3)",
                   }
                 : {
-                    background: "oklch(0.155 0.012 260 / 0.6)",
-                    color: "oklch(0.55 0.012 260)",
-                    border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+                    background: ct.cardBgSubtle,
+                    color: ct.textMuted,
+                    border: ct.borderSubtle,
                   }
             }
           >
@@ -479,19 +480,19 @@ export default function DashboardPage() {
           <div className="flex items-center gap-1.5 ml-1">
             <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
               className="h-7 px-2 text-xs rounded-lg border bg-card text-foreground"
-              style={{ border: "1px solid oklch(0.22 0.014 260 / 0.5)", background: "oklch(0.155 0.012 260 / 0.8)" }} />
+              style={{ border: ct.border, background: ct.cardBgMuted }} />
             <span className="text-xs text-muted-foreground">até</span>
             <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
               className="h-7 px-2 text-xs rounded-lg border bg-card text-foreground"
-              style={{ border: "1px solid oklch(0.22 0.014 260 / 0.5)", background: "oklch(0.155 0.012 260 / 0.8)" }} />
+              style={{ border: ct.border, background: ct.cardBgMuted }} />
           </div>
         )}
         <span
           className="text-xs font-medium px-2.5 py-1 rounded-full ml-auto"
           style={{
-            background: "oklch(0.155 0.012 260 / 0.6)",
-            color: "oklch(0.65 0.012 260)",
-            border: "1px solid oklch(0.22 0.014 260 / 0.4)",
+            background: ct.cardBgSubtle,
+            color: ct.textMuted,
+            border: ct.borderSubtle,
           }}
         >
           {period.label}
@@ -584,7 +585,7 @@ export default function DashboardPage() {
             </div>
           </div>
           {/* Linha 2: Financeiro */}
-          <div className="rounded-xl p-3 mt-1" style={{ background: "oklch(0.11 0.01 260 / 0.6)", border: "1px solid oklch(0.22 0.014 260 / 0.4)" }}>
+          <div className="rounded-xl p-3 mt-1" style={{ background: ct.cardBgDeep, border: ct.borderSubtle }}>
             <p className="text-xs text-muted-foreground mb-2 font-medium">Financeiro — {period.label}</p>
             <div className="grid grid-cols-3 gap-2">
               <div>
@@ -794,7 +795,7 @@ export default function DashboardPage() {
             className="rounded-2xl p-5 h-full"
             style={{
               background: ct.cardBg,
-              border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+              border: ct.border,
             }}
           >
             <div className="flex items-center justify-between mb-5">
@@ -825,14 +826,14 @@ export default function DashboardPage() {
                       <stop offset="100%" stopColor="oklch(0.76 0.145 72)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.4)" vertical={false} />
-                  <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "oklch(0.50 0.01 260)" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: "oklch(0.50 0.01 260)" }} axisLine={false} tickLine={false}
+                  <CartesianGrid strokeDasharray="3 3" stroke={ct.gridStroke} vertical={false} />
+                  <XAxis dataKey="mes" tick={{ fontSize: 10, fill: ct.axisColor }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: ct.axisColor }} axisLine={false} tickLine={false}
                     tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} width={48} />
                   <Tooltip content={<PremiumTooltip />} />
                   <Area type="monotone" dataKey="faturamento" stroke="oklch(0.76 0.145 72)"
                     strokeWidth={2.5} fill="url(#gradFat)" dot={false}
-                    activeDot={{ r: 4, fill: "oklch(0.76 0.145 72)", stroke: "oklch(0.14 0.012 260)", strokeWidth: 2 }} />
+                    activeDot={{ r: 4, fill: "oklch(0.76 0.145 72)", stroke: ct.isDark ? "oklch(0.14 0.012 260)" : "oklch(0.97 0.003 80)", strokeWidth: 2 }} />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -852,7 +853,7 @@ export default function DashboardPage() {
             className="rounded-2xl p-5 h-full"
             style={{
               background: ct.cardBg,
-              border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+              border: ct.border,
             }}
           >
             <div className="flex items-center justify-between mb-4">
@@ -869,7 +870,7 @@ export default function DashboardPage() {
                   <button key={mod.key} onClick={() => navigate(mod.path)}
                     className="w-full flex items-center gap-2.5 p-2.5 rounded-xl transition-all text-left"
                     style={{ border: "1px solid transparent" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "oklch(0.18 0.012 260 / 0.6)")}
+                    onMouseEnter={e => (e.currentTarget.style.background = ct.cardBgHover)}
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                   >
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
@@ -893,7 +894,7 @@ export default function DashboardPage() {
                         </span>
                       ) : (
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full"
-                          style={{ background: "oklch(0.18 0.012 260 / 0.6)", color: ct.textMuted, border: "1px solid oklch(0.22 0.014 260 / 0.5)" }}>
+                          style={{ background: ct.cardBgMuted, color: ct.textMuted, border: ct.border }}>
                           Configurar
                         </span>
                       )}
@@ -913,7 +914,7 @@ export default function DashboardPage() {
             className="rounded-2xl p-5"
             style={{
               background: ct.cardBg,
-              border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+              border: ct.border,
             }}
           >
             <div className="flex items-center justify-between mb-4">
@@ -937,7 +938,7 @@ export default function DashboardPage() {
                         <p className="text-xs font-medium text-foreground truncate">{unit.name}</p>
                         <p className="text-xs font-semibold text-foreground shrink-0 ml-2">{fmt(unit.faturamento)}</p>
                       </div>
-                      <div className="w-full rounded-full h-1" style={{ background: "oklch(0.22 0.014 260 / 0.5)" }}>
+                      <div className="w-full rounded-full h-1" style={{ background: ct.isDark ? "oklch(0.22 0.014 260 / 0.5)" : "oklch(0.88 0.006 260 / 0.6)" }}>
                         <div className="h-1 rounded-full"
                           style={{
                             width: `${ranking[0].faturamento > 0 ? (unit.faturamento / ranking[0].faturamento) * 100 : 0}%`,
@@ -962,7 +963,7 @@ export default function DashboardPage() {
             className="rounded-2xl p-5"
             style={{
               background: ct.cardBg,
-              border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+              border: ct.border,
             }}
           >
             <div className="flex items-center justify-between mb-4">
@@ -976,7 +977,7 @@ export default function DashboardPage() {
             </div>
             {orgLoading ? (
               <div className="space-y-2">
-                {[1,2,3].map(i => <div key={i} className="h-10 rounded-xl animate-pulse" style={{ background: "oklch(0.18 0.012 260 / 0.5)" }} />)}
+                {[1,2,3].map(i => <div key={i} className="h-10 rounded-xl animate-pulse" style={{ background: ct.skeletonBg }} />)}
               </div>
             ) : units.length === 0 ? (
               <div className="py-6 text-center">
@@ -988,7 +989,7 @@ export default function DashboardPage() {
               <div className="space-y-1.5">
                 {units.slice(0, 5).map((unit) => (
                   <div key={unit.id} className="flex items-center gap-3 p-2.5 rounded-xl transition-all"
-                    style={{ border: "1px solid oklch(0.22 0.014 260 / 0.3)" }}>
+                    style={{ border: ct.borderSubtle }}>
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
                       style={{ background: "oklch(0.76 0.145 72 / 0.12)", border: "1px solid oklch(0.76 0.145 72 / 0.2)" }}>
                       <Building2 className="w-3.5 h-3.5" style={{ color: "oklch(0.76 0.145 72)" }} />
@@ -1029,14 +1030,14 @@ export default function DashboardPage() {
                 className="rounded-2xl p-4 text-left relative overflow-hidden transition-all group"
                 style={{
                   background: ct.cardBg,
-                  border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+                  border: ct.border,
                 }}
                 onMouseEnter={e => {
                   (e.currentTarget as HTMLElement).style.border = `1px solid ${mod.color}40`;
                   (e.currentTarget as HTMLElement).style.boxShadow = `0 4px 20px -4px ${mod.color}20`;
                 }}
                 onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.border = "1px solid oklch(0.22 0.014 260 / 0.5)";
+                  (e.currentTarget as HTMLElement).style.border = ct.border;
                   (e.currentTarget as HTMLElement).style.boxShadow = "none";
                 }}
               >

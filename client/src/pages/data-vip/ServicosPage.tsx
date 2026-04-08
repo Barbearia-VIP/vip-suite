@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Scissors, Save, Info } from "lucide-react";
 import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
+import { useChartTheme } from "@/hooks/useChartTheme";
 
 type Categoria = "base" | "extra";
 
@@ -25,6 +26,7 @@ interface ServicoRow {
 export default function ServicosPage() {
   const { selectedUnit } = useApp();
   const { org } = useOrg();
+  const ct = useChartTheme();
 
   // Estado local de edição: mapa nome → categoria
   const [overrides, setOverrides] = useState<Record<string, Categoria>>({});
@@ -127,13 +129,13 @@ export default function ServicosPage() {
 
       {/* Tabela */}
       <div className="glass-card overflow-hidden">
-        <div className="px-4 py-3" style={{ borderBottom: "1px solid oklch(0.28 0.015 260 / 0.5)" }}>
+        <div className="px-4 py-3" style={{ borderBottom: ct.border }}>
           <p className="text-sm font-medium text-muted-foreground">Clique na categoria para alternar entre Base e Extra</p>
         </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs" style={{ borderBottom: "1px solid oklch(0.28 0.015 260 / 0.5)", background: "oklch(0.12 0.010 260 / 0.6)" }}>
+                <tr className="text-xs" style={{ borderBottom: ct.border, background: ct.cardBgMuted }}>
                   <th className="text-left px-4 py-2">Nome do Serviço</th>
                   <th className="text-right px-4 py-2">Qtd. Vendas</th>
                   <th className="text-center px-4 py-2 w-36">Categoria</th>
@@ -163,8 +165,8 @@ export default function ServicosPage() {
                           <tr
                             key={s.nome}
                             className="transition-colors"
-                            style={{ borderBottom: "1px solid oklch(0.28 0.015 260 / 0.3)", background: isPending ? "oklch(0.76 0.145 72 / 0.04)" : undefined }}
-                            onMouseEnter={e => (e.currentTarget.style.background = "oklch(0.18 0.010 260 / 0.4)")}
+                            style={{ borderBottom: ct.borderSubtle, background: isPending ? "oklch(0.76 0.145 72 / 0.04)" : undefined }}
+                            onMouseEnter={e => (e.currentTarget.style.background = ct.cardBgHover)}
                             onMouseLeave={e => (e.currentTarget.style.background = isPending ? "oklch(0.76 0.145 72 / 0.04)" : "")}
                           >
                             <td className="px-4 py-2 font-medium">

@@ -36,8 +36,9 @@ function PctBadge({ value }: { value: number | null }) {
 }
 
 function ProgressBar({ pct, color = "oklch(0.76 0.145 72)" }: { pct: number; color?: string }) {
+  const ct = useChartTheme();
   return (
-    <div className="w-full h-1.5 rounded-full overflow-hidden mt-1" style={{ background: "oklch(0.22 0.014 260 / 0.5)" }}>
+    <div className="w-full h-1.5 rounded-full overflow-hidden mt-1" style={{ background: ct.isDark ? "oklch(0.22 0.014 260 / 0.5)" : "oklch(0.88 0.006 260 / 0.6)" }}>
       <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: color }} />
     </div>
   );
@@ -53,7 +54,7 @@ function ResumoCard({ label, value, icon: Icon, highlight = false }: { label: st
         background: highlight
           ? "linear-gradient(135deg, oklch(0.76 0.145 72 / 0.12) 0%, oklch(0.68 0.16 65 / 0.06) 100%)"
           : ct.cardBg,
-        border: `1px solid ${highlight ? "oklch(0.76 0.145 72 / 0.3)" : "oklch(0.22 0.014 260 / 0.5)"}`,
+        border: `1px solid ${highlight ? "oklch(0.76 0.145 72 / 0.3)" : ct.border.replace("1px solid ", "")}`,
         boxShadow: highlight ? `0 4px 20px -4px oklch(0.76 0.145 72 / 0.15)` : "none",
       }}
     >
@@ -65,7 +66,7 @@ function ResumoCard({ label, value, icon: Icon, highlight = false }: { label: st
         <Icon className="w-4 h-4" style={{ color: highlight ? ambar : "oklch(0.50 0.01 260)" }} />
         <span className="text-xs text-muted-foreground uppercase tracking-wide">{label}</span>
       </div>
-      <p className="text-xl font-bold" style={{ color: highlight ? ambar : "oklch(0.92 0.01 260)" }}>{fmt(value)}</p>
+      <p className="text-xl font-bold" style={{ color: highlight ? ambar : ct.textForeground }}>{fmt(value)}</p>
     </div>
   );
 }
@@ -77,7 +78,7 @@ function ResumoCardDias({ label, value, icon: Icon }: { label: string; value: nu
       className="rounded-2xl p-4"
       style={{
         background: ct.cardBg,
-        border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+        border: ct.border,
       }}
     >
       <div className="flex items-center gap-2 mb-2">
@@ -195,9 +196,9 @@ export default function FaturamentoPage() {
           onChange={e => setPeriodo(e.target.value)}
           className="text-sm rounded-xl px-3 py-2 focus:outline-none"
           style={{
-            background: "oklch(0.155 0.012 260 / 0.8)",
-            border: "1px solid oklch(0.28 0.015 260 / 0.5)",
-            color: "oklch(0.85 0.01 260)",
+            background: ct.cardBgMuted,
+            border: ct.border,
+            color: ct.textForeground,
           }}
         >
           {periodos.map(p => <option key={p.val} value={p.val}>{p.label}</option>)}
@@ -236,13 +237,13 @@ export default function FaturamentoPage() {
           className="overflow-hidden rounded-2xl"
           style={{
             background: ct.cardBg,
-            border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+            border: ct.border,
           }}
         >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: "1px solid oklch(0.22 0.014 260 / 0.5)", background: "oklch(0.155 0.012 260 / 0.5)" }}>
+                <tr style={{ borderBottom: ct.border, background: ct.cardBgMuted }}>
                   <th className="text-left px-4 py-3 text-muted-foreground font-medium min-w-[120px]">Categoria</th>
                   <th className="text-right px-4 py-3 min-w-[110px]">
                     <div className="font-semibold" style={{ color: "oklch(0.76 0.145 72)" }}>Atual</div>
@@ -301,10 +302,10 @@ export default function FaturamentoPage() {
                         key={row.key}
                         className="transition-colors"
                         style={{
-                          borderBottom: "1px solid oklch(0.22 0.014 260 / 0.3)",
+                          borderBottom: ct.borderSubtle,
                           background: row.highlight ? "oklch(0.76 0.145 72 / 0.06)" : "transparent",
                         }}
-                        onMouseEnter={e => (e.currentTarget.style.background = row.highlight ? "oklch(0.76 0.145 72 / 0.1)" : "oklch(0.18 0.012 260 / 0.4)")}
+                        onMouseEnter={e => (e.currentTarget.style.background = row.highlight ? "oklch(0.76 0.145 72 / 0.1)" : ct.cardBgHover)}
                         onMouseLeave={e => (e.currentTarget.style.background = row.highlight ? "oklch(0.76 0.145 72 / 0.06)" : "transparent")}
                       >
                         <td className="px-4 py-3 font-medium" style={{ color: row.highlight ? "oklch(0.76 0.145 72)" : undefined }}>{row.label}</td>
@@ -353,7 +354,7 @@ export default function FaturamentoPage() {
           className="rounded-2xl p-5"
           style={{
             background: ct.cardBg,
-            border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+            border: ct.border,
           }}
         >
           <div className="flex items-center gap-2 mb-4">
@@ -393,7 +394,7 @@ export default function FaturamentoPage() {
           className="rounded-2xl p-5"
           style={{
             background: ct.cardBg,
-            border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+            border: ct.border,
           }}
         >
           <div className="flex items-center gap-2 mb-4">
@@ -430,7 +431,7 @@ export default function FaturamentoPage() {
           className="rounded-2xl p-5"
           style={{
             background: ct.cardBg,
-            border: "1px solid oklch(0.22 0.014 260 / 0.5)",
+            border: ct.border,
           }}
         >
           <div className="flex items-center gap-2 mb-4">

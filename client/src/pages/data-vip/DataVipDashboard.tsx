@@ -633,7 +633,7 @@ export default function DataVipDashboard() {
 
       {/* Evolução Diária — linha inteira */}
       <div>
-        <Card className="bg-[oklch(0.12_0.01_240)] border-[oklch(0.22_0.02_240)]">
+        <Card style={{ background: ct.cardBg, border: ct.border }}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -763,7 +763,7 @@ export default function DataVipDashboard() {
                         strokeWidth={2}
                         fill={chartType === "area" ? `url(#gradEvol-${metrica})` : "none"}
                         dot={false}
-                        activeDot={{ r: 4, fill: metricaCfg.color, stroke: "oklch(0.12 0.01 240)", strokeWidth: 2 }}
+                        activeDot={{ r: 4, fill: metricaCfg.color, stroke: ct.isDark ? "oklch(0.12 0.01 240)" : "oklch(0.97 0.003 80)", strokeWidth: 2 }}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -928,7 +928,7 @@ export default function DataVipDashboard() {
           ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Card key={i} className="bg-[oklch(0.12_0.01_240)] border-[oklch(0.22_0.02_240)]">
+                <Card key={i} style={{ background: ct.cardBg, border: ct.border }}>
                   <CardContent className="pt-4 pb-4">
                     <div className="flex items-center gap-3 mb-4">
                       <Skeleton className="w-9 h-9 rounded-full" />
@@ -962,7 +962,7 @@ export default function DataVipDashboard() {
                   const avatarColors = ["oklch(0.55 0.15 200)","oklch(0.55 0.12 75)","oklch(0.50 0.15 145)","oklch(0.50 0.15 280)","oklch(0.50 0.12 30)"];
                   const ac = avatarColors[i % avatarColors.length];
                   return (
-                    <Card key={c.colaboradorId} className="bg-[oklch(0.12_0.01_240)] border-[oklch(0.22_0.02_240)]">
+                    <Card key={c.colaboradorId} style={{ background: ct.cardBg, border: ct.border }}>
                       <CardContent className="pt-4 pb-4">
                         {/* Cabeçalho do colaborador */}
                         <div className="flex items-center gap-3 mb-4">

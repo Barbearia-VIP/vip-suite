@@ -17,6 +17,7 @@ import { DateRangePicker, buildPeriodos, type DateFilter } from "@/components/ui
 import { toast } from "sonner";
 import { Scissors, Calendar, Save } from "lucide-react";
 import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
+import { useChartTheme } from "@/hooks/useChartTheme";
 
 function fmt(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
@@ -26,6 +27,7 @@ export default function ColaboradoresPage() {
   const { selectedUnit, userRole } = useApp();
   const { org } = useOrg();
   const { user } = useAuth();
+  const ct = useChartTheme();
   const isAdmin = userRole === "master" || userRole === "org_admin" || user?.role === "admin";
   const now = new Date();
 
@@ -120,7 +122,7 @@ export default function ColaboradoresPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs" style={{ borderBottom: "1px solid oklch(0.28 0.015 260 / 0.5)", background: "oklch(0.12 0.010 260 / 0.6)" }}>
+                <tr className="text-xs" style={{ borderBottom: ct.border, background: ct.cardBgMuted }}>
                   <th className="text-left px-4 py-2">#</th>
                   <th className="text-left px-4 py-2">Nome</th>
                   {!isRangeMode && <th className="text-left px-4 py-2">Tipo</th>}
@@ -163,7 +165,7 @@ export default function ColaboradoresPage() {
                           editComissao[c.colaboradorId]?.pctProdutos !== undefined;
 
                         return (
-                          <tr key={c.colaboradorId} className="transition-colors" style={{ borderBottom: "1px solid oklch(0.28 0.015 260 / 0.3)" }} onMouseEnter={e => (e.currentTarget.style.background = "oklch(0.18 0.010 260 / 0.4)")} onMouseLeave={e => (e.currentTarget.style.background = "")}>
+                          <tr key={c.colaboradorId} className="transition-colors" style={{ borderBottom: ct.borderSubtle }} onMouseEnter={e => (e.currentTarget.style.background = ct.cardBgHover)} onMouseLeave={e => (e.currentTarget.style.background = "")}>
                             <td className="px-4 py-2 text-muted-foreground">{i + 1}</td>
                             <td className="px-4 py-2 font-medium">{c.colaboradorNome}</td>
                             {!isRangeMode && (
