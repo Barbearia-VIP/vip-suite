@@ -1125,3 +1125,9 @@
 ## Seletores de Data
 - [x] Criar componente DatePicker reutilizável (Popover + Calendar)
 - [x] Substituir todos os inputs type="date" por DatePicker em todo o sistema (14 arquivos, 25 campos)
+
+## Data VIP Dashboard
+- [x] Seleção de período no DataVipDashboard já existia — confirmado: botão Abr 2026 no header abre popover com atalhos rápidos, lista de 24 meses e calendário de range personalizado
+
+## Correção Seletor de Período Data VIP
+- [x] Reorganizar popover do DateRangePicker: calendário de 2 meses em destaque no topo, atalhos e meses em painel inferior
