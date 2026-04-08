@@ -320,7 +320,7 @@ export default function RaioXPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-bold flex items-center gap-2 font-display tracking-tight">
             <Zap className="w-6 h-6 text-yellow-400" />
             Raio X — Clientes
             {!dbConnected && (

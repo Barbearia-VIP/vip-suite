@@ -307,7 +307,7 @@ export default function ProcessosPage() {
     <div className="p-6 space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Processos</h1>
+          <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Processos</h1>
           <p className="text-sm text-muted-foreground">
             {currentUnit?.name ?? "Unidade"} • {processos.length} processo{processos.length !== 1 ? "s" : ""}
           </p>
@@ -355,7 +355,7 @@ export default function ProcessosPage() {
         <div className="space-y-6">
           {principais.length > 0 && (
             <div>
-              <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2 font-display tracking-tight">
                 <Layers className="w-4 h-4 text-blue-400" /> Processos Principais
                 <Badge variant="outline" className="text-xs">{principais.length}</Badge>
               </h2>
@@ -372,7 +372,7 @@ export default function ProcessosPage() {
           )}
           {apoio.length > 0 && (
             <div>
-              <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2 font-display tracking-tight">
                 <Settings className="w-4 h-4 text-gray-400" /> Processos de Apoio
                 <Badge variant="outline" className="text-xs">{apoio.length}</Badge>
               </h2>

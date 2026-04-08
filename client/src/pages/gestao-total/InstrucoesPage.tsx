@@ -389,7 +389,7 @@ export default function InstrucoesPage() {
       {/* Cabeçalho */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Instruções de Trabalho</h1>
+          <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Instruções de Trabalho</h1>
           <p className="text-sm text-muted-foreground">SOPs e procedimentos operacionais da unidade</p>
         </div>
         <div className="flex gap-2">
@@ -555,7 +555,7 @@ export default function InstrucoesPage() {
                   <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center shrink-0">
                     <BookOpen className="w-4 h-4 text-violet-400" />
                   </div>
-                  <h2 className="text-base font-bold text-foreground leading-snug line-clamp-2">{viewingIT.titulo}</h2>
+                  <h2 className="text-base font-bold text-foreground leading-snug line-clamp-2 font-display tracking-tight">{viewingIT.titulo}</h2>
                 </div>
                 <p className="text-xs text-muted-foreground pl-10">
                   Criada em {new Date(viewingIT.createdAt).toLocaleDateString("pt-BR")}

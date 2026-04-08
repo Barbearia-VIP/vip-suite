@@ -51,7 +51,7 @@ export default function PrivilegiosPage() {
     <div className="p-6 space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Privilégios</h1>
+          <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Privilégios</h1>
           <p className="text-sm text-muted-foreground">Controle de acesso e permissões por perfil de usuário</p>
         </div>
         <Badge variant="outline" className="text-xs gap-1.5">

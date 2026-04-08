@@ -82,7 +82,7 @@ export default function ColaboradoresPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-bold flex items-center gap-2 font-display tracking-tight">
             <Scissors className="w-6 h-6 text-pink-400" /> Colaboradores
           </h1>
           <p className="text-sm text-muted-foreground">

@@ -177,7 +177,7 @@ export default function PlanejamentoPage() {
     <div className="p-6 space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Planejamento Estratégico</h1>
+          <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Planejamento Estratégico</h1>
           <p className="text-sm text-muted-foreground flex items-center gap-1.5">
             {currentUnit && <><Building2 className="w-3.5 h-3.5" />{currentUnit.name}</>}
             {currentUnit?.city && <><MapPin className="w-3 h-3" />{currentUnit.city}</>}
@@ -242,7 +242,7 @@ export default function PlanejamentoPage() {
 
           {/* SWOT */}
           <div>
-            <h2 className="text-sm font-semibold text-foreground mb-3">Análise SWOT</h2>
+            <h2 className="text-sm font-semibold text-foreground mb-3 font-display tracking-tight">Análise SWOT</h2>
             <div className="grid grid-cols-2 gap-3">
               <SwotQuadrant title="Forças (Strengths)" color="border-green-500/30 bg-green-500/5" items={forcas} onChange={setForcas} />
               <SwotQuadrant title="Fraquezas (Weaknesses)" color="border-red-500/30 bg-red-500/5" items={fraquezas} onChange={setFraquezas} />
@@ -253,7 +253,7 @@ export default function PlanejamentoPage() {
 
           {/* Objetivos */}
           <div>
-            <h2 className="text-sm font-semibold text-foreground mb-3">Objetivos Estratégicos</h2>
+            <h2 className="text-sm font-semibold text-foreground mb-3 font-display tracking-tight">Objetivos Estratégicos</h2>
             <div className="glass-card bg-white/5 border-white/10">
               <div className="p-6 pt-0 p-3 space-y-2">
                 {objetivos.map((o, i) => (

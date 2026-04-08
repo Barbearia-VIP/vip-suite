@@ -230,7 +230,7 @@ export default function MarketingPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Marketing</h1>
+          <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Marketing</h1>
           <p className="text-sm text-muted-foreground">
             {ativas} campanhas ativas • {fmt(totalBudget)} budget total • {aiCampaigns.length} estratégias com IA
           </p>

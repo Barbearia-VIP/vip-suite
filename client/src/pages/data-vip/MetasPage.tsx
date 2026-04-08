@@ -504,7 +504,7 @@ function MetaDinamicaTab() {
         <>
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold">Metas Dinâmicas — {unitObj?.name ?? "Unidade"}</h2>
+              <h2 className="text-base font-semibold font-display tracking-tight">Metas Dinâmicas — {unitObj?.name ?? "Unidade"}</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Crie metas com regras flexíveis. Ao bater a meta, o bônus aparece automaticamente na aba Comissões.
               </p>
@@ -780,7 +780,7 @@ export default function MetasPage() {
   return (
     <div className="p-6 space-y-5">
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
+        <h1 className="text-2xl font-bold flex items-center gap-2 font-display tracking-tight">
           <Target className="w-6 h-6" style={{ color: "oklch(0.76 0.145 72)" }} /> Metas
         </h1>
         <p className="text-sm text-muted-foreground">{selectedUnit ? selectedUnit.name : "Todas as unidades"}</p>

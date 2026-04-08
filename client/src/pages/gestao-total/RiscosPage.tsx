@@ -143,7 +143,7 @@ export default function RiscosPage() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Riscos</h1>
+          <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Riscos</h1>
           <p className="text-sm text-muted-foreground">{riscos.length} riscos mapeados {criticos > 0 && `• ${criticos} críticos`}</p>
         </div>
         <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">

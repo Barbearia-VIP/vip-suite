@@ -367,7 +367,7 @@ export default function DataVipDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-bold flex items-center gap-2 font-display tracking-tight">
             <BarChart3 className="w-6 h-6 text-primary" />
             Data VIP
           </h1>
@@ -921,7 +921,7 @@ export default function DataVipDashboard() {
       {/* Colaboradores — lista completa detalhada */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2 font-display tracking-tight">
             <Users className="w-4 h-4 text-primary" />
             Colaboradores
           </h2>

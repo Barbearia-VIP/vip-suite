@@ -84,7 +84,7 @@ export default function HistoricoIAPage() {
           <Bot className="w-5 h-5 text-violet-400" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold">Histórico Auto-Resposta IA</h1>
+          <h1 className="text-xl font-semibold font-display tracking-tight">Histórico Auto-Resposta IA</h1>
           <p className="text-sm text-muted-foreground">Auditoria de avaliações respondidas automaticamente pela IA</p>
         </div>
         <Button

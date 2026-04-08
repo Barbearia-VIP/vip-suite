@@ -329,7 +329,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             {!sidebarCollapsed && (
               <div className="flex flex-col leading-none">
                 <span
-                  className="font-bold text-sm tracking-wide"
+                  className="font-bold text-sm tracking-tight font-display"
                   style={{
                     background: "linear-gradient(135deg, oklch(0.84 0.14 80) 0%, oklch(0.70 0.16 60) 100%)",
                     WebkitBackgroundClip: "text",

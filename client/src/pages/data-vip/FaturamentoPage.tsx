@@ -178,7 +178,7 @@ export default function FaturamentoPage() {
       {/* Cabeçalho */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-bold flex items-center gap-2 font-display tracking-tight">
             <DollarSign className="w-6 h-6 text-yellow-400" />
             Faturamento — Detalhamento
           </h1>
@@ -202,7 +202,7 @@ export default function FaturamentoPage() {
 
       {/* Resumo Executivo */}
       <section>
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2 font-display">
           <DollarSign className="w-3.5 h-3.5 text-yellow-400" /> Resumo Executivo
           {!isLoading && d && (
             <span className="font-normal normal-case">
@@ -227,7 +227,7 @@ export default function FaturamentoPage() {
 
       {/* Tabela Comparativa */}
       <section>
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Comparativo de Períodos</h2>
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 font-display">Comparativo de Períodos</h2>
         <div
           className="overflow-hidden rounded-2xl"
           style={{

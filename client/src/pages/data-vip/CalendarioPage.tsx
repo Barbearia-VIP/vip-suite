@@ -53,7 +53,7 @@ export default function CalendarioPage() {
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Calendar className="w-6 h-6 text-primary" /> Calendário</h1>
+          <h1 className="text-2xl font-bold flex items-center gap-2 font-display tracking-tight"><Calendar className="w-6 h-6 text-primary" /> Calendário</h1>
           <p className="text-sm text-muted-foreground">{selectedUnit ? selectedUnit.name : "Todas as unidades"}</p>
         </div>
         <div className="flex items-center gap-2">

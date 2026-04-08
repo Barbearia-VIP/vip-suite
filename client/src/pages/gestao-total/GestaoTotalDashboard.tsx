@@ -84,7 +84,7 @@ export default function GestaoTotalDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Gestão Total</h1>
+          <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Gestão Total</h1>
           <p className="text-sm text-muted-foreground">
             {selectedUnit ? selectedUnit.name : "Todas as unidades"} — visão geral operacional
           </p>

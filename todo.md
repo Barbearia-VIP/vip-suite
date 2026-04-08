@@ -1046,3 +1046,13 @@
 - [x] glass-card tem animação vip-fade-up embutida por padrão (todas as páginas)
 - [x] Aplicar animate-fade-in nos wrappers principais de 32 páginas do sistema
 - [x] Classes utilitárias delay-50 a delay-400 para grids escalonados
+
+## Fonte Premium Geist (2026-04-08)
+
+- [x] Carregar Geist via Google Fonts CDN no index.html (junto com Inter)
+- [x] Definir --font-display: 'Geist' no @theme do design system
+- [x] Aplicar font-display em h1/h2 de 43 páginas e componentes via script
+- [x] Aplicar font-display no KpiCard do Dashboard (valores estatísticos)
+- [x] Aplicar font-display no branding "VIP Suite" do AppLayout
+- [x] Aplicar font-display no PageHeader (todos os títulos de página)
+- [x] Configurar font-feature-settings para ligatures e alternates do Geist

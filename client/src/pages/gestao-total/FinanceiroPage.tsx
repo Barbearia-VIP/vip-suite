@@ -126,7 +126,7 @@ export default function FinanceiroPage() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div><h1 className="text-xl font-bold text-foreground">Financeiro</h1><p className="text-sm text-muted-foreground">Receitas e despesas operacionais</p></div>
+        <div><h1 className="text-xl font-bold text-foreground font-display tracking-tight">Financeiro</h1><p className="text-sm text-muted-foreground">Receitas e despesas operacionais</p></div>
         <div className="flex items-center gap-2">
           <Input type="month" value={referencia} onChange={e=>setReferencia(e.target.value)} className="text-sm w-40" />
           {selectedUnit && <Button size="sm" variant="outline" onClick={()=>syncM.mutate({orgId:org?.id??0,unitId:selectedUnit.id})} disabled={syncM.isPending} className="gap-1.5"><RefreshCw className={`w-3.5 h-3.5 ${syncM.isPending?'animate-spin':''}` } /> Sincronizar Data VIP</Button>}

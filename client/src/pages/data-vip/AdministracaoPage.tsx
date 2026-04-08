@@ -43,7 +43,7 @@ export default function AdministracaoPage() {
   return (
     <div className="p-6 space-y-5">
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2"><Settings className="w-6 h-6 text-primary" /> Administração Data VIP</h1>
+        <h1 className="text-2xl font-bold flex items-center gap-2 font-display tracking-tight"><Settings className="w-6 h-6 text-primary" /> Administração Data VIP</h1>
         <p className="text-sm text-muted-foreground">Gerenciar credenciais e configurações das unidades</p>
       </div>
 

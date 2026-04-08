@@ -90,7 +90,7 @@ export default function ComissoesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-bold flex items-center gap-2 font-display tracking-tight">
             <DollarSign className="w-6 h-6" style={{ color: "oklch(0.76 0.145 72)" }} /> Comissões
           </h1>
           <p className="text-sm text-muted-foreground">

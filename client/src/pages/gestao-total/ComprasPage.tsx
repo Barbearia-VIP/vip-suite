@@ -107,7 +107,7 @@ export default function ComprasPage() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Compras</h1>
+          <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Compras</h1>
           <p className="text-sm text-muted-foreground">{compras.filter(c=>c.status==="aguardando_aprovacao").length} aguardando aprovação • {fmt(totalPendente)}</p>
         </div>
         <Button size="sm" onClick={()=>setShowForm(true)} className="gap-1.5"><Plus className="w-3.5 h-3.5" /> Nova Compra</Button>

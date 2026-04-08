@@ -226,7 +226,7 @@ export default function IndicadoresPage() {
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Indicadores</h1>
+          <h1 className="text-2xl font-bold text-foreground font-display tracking-tight">Indicadores</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Visão integrada em tempo real — {selectedUnit?.name ?? "Organização"}
           </p>
@@ -305,7 +305,7 @@ export default function IndicadoresPage() {
               <div key={cat}>
                 <div className="flex items-center gap-2 mb-4">
                   {CATEGORIA_ICON[cat] ?? <Target className="w-4 h-4 text-muted-foreground" />}
-                  <h2 className="text-base font-semibold text-foreground">{cat}</h2>
+                  <h2 className="text-base font-semibold text-foreground font-display tracking-tight">{cat}</h2>
                   <Badge variant="outline" className="text-xs">
                     {catIndicadores.length} indicador{catIndicadores.length !== 1 ? "es" : ""}
                   </Badge>

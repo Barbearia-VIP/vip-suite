@@ -87,7 +87,7 @@ export default function ReunioesPage() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div><h1 className="text-xl font-bold text-foreground">Reuniões</h1><p className="text-sm text-muted-foreground">{reunioes.length} reuniões registradas</p></div>
+        <div><h1 className="text-xl font-bold text-foreground font-display tracking-tight">Reuniões</h1><p className="text-sm text-muted-foreground">{reunioes.length} reuniões registradas</p></div>
         <Button size="sm" onClick={()=>setShowForm(true)} className="gap-1.5"><Plus className="w-3.5 h-3.5" /> Nova Reunião</Button>
       </div>
       {q.isLoading?<div className="space-y-2">{Array.from({length:4}).map((_,i)=><Skeleton key={i} className="h-20 rounded-lg" />)}</div>

@@ -41,7 +41,7 @@ export default function ConfiguracoesGtPage() {
   return (
     <div className="p-6 space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-xl font-bold text-foreground">Configurações</h1>
+        <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Configurações</h1>
         <p className="text-sm text-muted-foreground">Personalize o comportamento do módulo Gestão Total</p>
       </div>
 

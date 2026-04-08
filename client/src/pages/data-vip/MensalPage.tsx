@@ -517,7 +517,7 @@ export default function MensalPage() {
       {/* Cabeçalho */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-bold flex items-center gap-2 font-display tracking-tight">
             <BarChart3 className="w-6 h-6 text-primary" /> Análise Mensal
             {!dbConnected && (
               <span className="flex items-center gap-1 text-xs font-normal text-amber-500 bg-amber-500/10 border border-amber-500/30 rounded-full px-2 py-0.5">
@@ -744,7 +744,7 @@ export default function MensalPage() {
       {/* ── KPIs do período (soma dos N meses selecionados) ────────────────── */}
       <div>
         <div className="mb-3">
-          <h2 className="text-base font-semibold">
+          <h2 className="text-base font-semibold font-display tracking-tight">
             KPIs do Período
             {qKpis.data?.periodoLabel
               ? <span className="text-muted-foreground font-normal text-sm ml-2">({qKpis.data.periodoLabel})</span>

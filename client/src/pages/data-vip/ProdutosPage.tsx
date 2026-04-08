@@ -127,7 +127,7 @@ export default function ProdutosPage() {
       {/* Cabeçalho */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-bold flex items-center gap-2 font-display tracking-tight">
             <Package className="w-6 h-6 text-primary" /> Produtos
           </h1>
           <p className="text-sm text-muted-foreground">

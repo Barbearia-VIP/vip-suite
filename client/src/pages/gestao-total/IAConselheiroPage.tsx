@@ -116,7 +116,7 @@ export default function IAConselheiroPage() {
             <Brain className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-base font-bold text-foreground">IA Conselheiro</h1>
+            <h1 className="text-base font-bold text-foreground font-display tracking-tight">IA Conselheiro</h1>
             <p className="text-xs text-muted-foreground">Especialista em gestão de barbearias • {selectedUnit?.name ?? "Todas as unidades"}</p>
           </div>
         </div>

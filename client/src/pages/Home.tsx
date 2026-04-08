@@ -68,7 +68,7 @@ export default function Home() {
             <Zap className="w-3.5 h-3.5" />
             Plataforma Multi-Módulo de Gestão Empresarial
           </div>
-          <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-4 leading-tight">
+          <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-4 leading-tight font-display tracking-tight">
             Tudo que sua rede precisa,<br />
             <span className="text-gradient-gold">em um único lugar</span>
           </h1>

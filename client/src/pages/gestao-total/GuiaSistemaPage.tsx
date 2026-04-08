@@ -109,7 +109,7 @@ export default function GuiaSistemaPage() {
   return (
     <div className="p-6 space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-xl font-bold text-foreground">Guia do Sistema</h1>
+        <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Guia do Sistema</h1>
         <p className="text-sm text-muted-foreground">Como usar cada seção do módulo Gestão Total</p>
       </div>
 

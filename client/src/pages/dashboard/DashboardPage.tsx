@@ -95,7 +95,7 @@ function KpiCard({ label, value, sub, icon: Icon, color, trend }: {
           </div>
         )}
       </div>
-      <p className="text-2xl font-bold tracking-tight text-foreground leading-none mb-1">{value}</p>
+      <p className="text-2xl font-bold tracking-tight text-foreground leading-none mb-1 font-display">{value}</p>
       <p className="text-xs text-muted-foreground leading-none">{label}</p>
       {sub && <p className="text-xs text-muted-foreground/60 mt-1 leading-none">{sub}</p>}
     </div>
@@ -375,7 +375,7 @@ export default function DashboardPage() {
             >
               <Zap className="w-3.5 h-3.5" style={{ color: "oklch(0.76 0.145 72)" }} />
             </div>
-            <h1 className="text-xl font-bold text-foreground">Dashboard</h1>
+            <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Dashboard</h1>
           </div>
           <p className="text-sm text-muted-foreground">
             {selectedUnit ? `Visão consolidada — ${selectedUnit.name}` : isMasterOrAdmin ? "Visão consolidada de toda a rede" : "Visão da sua unidade"}
@@ -899,7 +899,7 @@ export default function DashboardPage() {
 
       {/* ── Acesso Rápido ── */}
       <div>
-        <h2 className="text-sm font-semibold text-foreground mb-3">Acesso Rápido</h2>
+        <h2 className="text-sm font-semibold text-foreground mb-3 font-display tracking-tight">Acesso Rápido</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {MODULE_DEFS.map((mod) => {
             const isConfigured = modules?.[mod.key as ModuleKey] ?? false;
