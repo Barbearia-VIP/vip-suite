@@ -433,3 +433,190 @@
 .glass-card {
   animation: vip-fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* ── VIP Suite Premium Light ─────────────────────────────────────────────── */
+:root.light,
+html:not(.dark) {
+  /* Backgrounds — papel off-white premium */
+  --background:        oklch(0.975 0.003 80);
+  --foreground:        oklch(0.13 0.010 260);
+
+  --card:              oklch(1.0 0 0);
+  --card-foreground:   oklch(0.13 0.010 260);
+
+  --popover:           oklch(1.0 0 0);
+  --popover-foreground: oklch(0.13 0.010 260);
+
+  /* Primary — âmbar mais escuro para contraste no claro */
+  --primary:           oklch(0.62 0.155 68);
+  --primary-foreground: oklch(0.99 0 0);
+
+  --secondary:         oklch(0.94 0.005 80);
+  --secondary-foreground: oklch(0.25 0.010 260);
+
+  --muted:             oklch(0.945 0.005 80);
+  --muted-foreground:  oklch(0.48 0.012 260);
+
+  --accent:            oklch(0.93 0.008 80);
+  --accent-foreground: oklch(0.18 0.010 260);
+
+  --destructive:       oklch(0.52 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  --border:            oklch(0.88 0.006 260);
+  --input:             oklch(0.97 0.003 80);
+  --ring:              oklch(0.62 0.155 68);
+
+  /* Chart palette — mais saturada para contraste no claro */
+  --chart-1:           oklch(0.62 0.155 68);
+  --chart-2:           oklch(0.52 0.18 200);
+  --chart-3:           oklch(0.52 0.18 145);
+  --chart-4:           oklch(0.52 0.18 280);
+  --chart-5:           oklch(0.52 0.18 30);
+
+  /* Sidebar — cinza claro premium */
+  --sidebar:           oklch(0.965 0.004 80);
+  --sidebar-foreground: oklch(0.20 0.010 260);
+  --sidebar-primary:   oklch(0.62 0.155 68);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent:    oklch(0.93 0.008 80);
+  --sidebar-accent-foreground: oklch(0.20 0.010 260);
+  --sidebar-border:    oklch(0.88 0.006 260);
+  --sidebar-ring:      oklch(0.62 0.155 68);
+}
+
+/* ── Body no tema claro ── */
+html:not(.dark) body {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, oklch(0.62 0.155 68 / 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, oklch(0.52 0.18 200 / 0.03) 0%, transparent 50%);
+}
+
+/* ── Scrollbar no tema claro ── */
+html:not(.dark) ::-webkit-scrollbar-thumb {
+  background: oklch(0.78 0.008 260);
+}
+html:not(.dark) ::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.62 0.155 68 / 0.7);
+}
+
+/* ── Glass card no tema claro ── */
+html:not(.dark) .glass-card {
+  background: oklch(1.0 0 0 / 0.85);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid oklch(0.88 0.006 260 / 0.8);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.8) inset,
+    0 2px 16px -2px oklch(0 0 0 / 0.08),
+    0 0 0 0.5px oklch(0.88 0.006 260 / 0.5);
+}
+
+html:not(.dark) .glass-card-hover:hover {
+  border-color: oklch(0.62 0.155 68 / 0.4);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.9) inset,
+    0 4px 20px -4px oklch(0 0 0 / 0.12),
+    0 0 0 0.5px oklch(0.62 0.155 68 / 0.25);
+  transform: translateY(-1px);
+}
+
+/* ── KPI card no tema claro ── */
+html:not(.dark) .kpi-card {
+  background: oklch(1.0 0 0 / 0.85);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid oklch(0.88 0.006 260 / 0.8);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.8) inset,
+    0 2px 16px -2px oklch(0 0 0 / 0.08);
+}
+html:not(.dark) .kpi-card::before {
+  background: linear-gradient(135deg, oklch(0.62 0.155 68 / 0.04) 0%, transparent 60%);
+}
+html:not(.dark) .kpi-card:hover {
+  border-color: oklch(0.62 0.155 68 / 0.4);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.9) inset,
+    0 4px 20px -4px oklch(0 0 0 / 0.12),
+    0 0 0 0.5px oklch(0.62 0.155 68 / 0.25);
+}
+
+/* ── Section header no tema claro ── */
+html:not(.dark) .section-header::after {
+  background: linear-gradient(to right, oklch(0.85 0.006 260 / 0.9), transparent);
+}
+
+/* ── Badges no tema claro ── */
+html:not(.dark) .badge-amber {
+  background: oklch(0.62 0.155 68 / 0.12);
+  color: oklch(0.48 0.14 68);
+  border-color: oklch(0.62 0.155 68 / 0.35);
+}
+html:not(.dark) .badge-green {
+  background: oklch(0.52 0.18 145 / 0.12);
+  color: oklch(0.38 0.16 145);
+  border-color: oklch(0.52 0.18 145 / 0.35);
+}
+html:not(.dark) .badge-red {
+  background: oklch(0.52 0.22 25 / 0.12);
+  color: oklch(0.40 0.20 25);
+  border-color: oklch(0.52 0.22 25 / 0.35);
+}
+html:not(.dark) .badge-blue {
+  background: oklch(0.52 0.18 220 / 0.12);
+  color: oklch(0.38 0.16 220);
+  border-color: oklch(0.52 0.18 220 / 0.35);
+}
+
+/* ── Divider no tema claro ── */
+html:not(.dark) .vip-divider {
+  background: linear-gradient(to right, transparent, oklch(0.85 0.006 260 / 0.9), transparent);
+}
+
+/* ── Tabela no tema claro ── */
+html:not(.dark) .vip-table thead tr {
+  border-bottom-color: oklch(0.88 0.006 260 / 0.9);
+}
+html:not(.dark) .vip-table tbody tr {
+  border-bottom-color: oklch(0.92 0.004 80 / 0.8);
+}
+html:not(.dark) .vip-table tbody tr:hover {
+  background: oklch(0.96 0.004 80 / 0.8);
+}
+
+/* ── Input focus no tema claro ── */
+html:not(.dark) input:focus-visible,
+html:not(.dark) select:focus-visible,
+html:not(.dark) textarea:focus-visible {
+  box-shadow: 0 0 0 3px oklch(0.62 0.155 68 / 0.20);
+}
+
+/* ── Accent top no tema claro ── */
+html:not(.dark) .accent-top {
+  border-top-color: oklch(0.62 0.155 68 / 0.7);
+}
+
+/* ── Gradient border no tema claro ── */
+html:not(.dark) .gradient-border::before {
+  background: linear-gradient(135deg, oklch(0.62 0.155 68 / 0.35) 0%, oklch(0.88 0.006 260 / 0.4) 50%, oklch(0.52 0.18 200 / 0.2) 100%);
+}
+
+/* ── Amber gradient text no tema claro ── */
+html:not(.dark) .text-amber-gradient {
+  background: linear-gradient(135deg, oklch(0.55 0.155 68) 0%, oklch(0.45 0.16 55) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Btn amber no tema claro ── */
+html:not(.dark) .btn-amber {
+  background: linear-gradient(135deg, oklch(0.62 0.155 68) 0%, oklch(0.55 0.16 62) 100%);
+  color: oklch(0.99 0 0);
+  box-shadow: 0 0 16px oklch(0.62 0.155 68 / 0.25), 0 2px 8px oklch(0 0 0 / 0.12);
+}
+html:not(.dark) .btn-amber:hover {
+  box-shadow: 0 0 24px oklch(0.62 0.155 68 / 0.35), 0 4px 12px oklch(0 0 0 / 0.15);
+}
+

@@ -18,6 +18,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DataVipErrorState, DataVipLoadingState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
+import { useChartTheme } from "../../hooks/useChartTheme";
 import {
   Users, UserCheck, UserX, AlertTriangle, TrendingDown, TrendingUp,
   Zap, Activity, Target, Scissors, Search, RefreshCw, Info, ChevronRight, Calendar,
@@ -177,6 +178,7 @@ export default function RaioXPage() {
 
   // Seletor de período
   type PeriodoPreset = "30d" | "60d" | "90d" | "6m" | "12m" | "custom";
+  const ct = useChartTheme();
   const [periodoPreset, setPeriodoPreset] = useState<PeriodoPreset>("90d");
   const [customInicio, setCustomInicio] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().split("T")[0];
@@ -877,7 +879,7 @@ export default function RaioXPage() {
                             name === "atendidos" ? "Atendidos" : name === "emRisco" ? "Em risco" : "Resgatados"
                           ]}
                           labelFormatter={fmtMes}
-                          contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
+                          contentStyle={ct.tooltipStyle}
                         />
                         <ReferenceLine y={mediaAtend} stroke="oklch(0.76 0.145 72)" strokeDasharray="4 2" strokeOpacity={0.5} label={{ value: `Méd: ${mediaAtend}`, fill: "oklch(0.76 0.145 72)", fontSize: 10, position: "insideTopLeft" }} />
                         <Bar dataKey="atendidos" fill="oklch(0.76 0.145 72)" radius={[3, 3, 0, 0]} name="atendidos" />
@@ -944,7 +946,7 @@ export default function RaioXPage() {
                             name === "novos" ? "Novos" : "Resgatados"
                           ]}
                           labelFormatter={fmtMes}
-                          contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
+                          contentStyle={ct.tooltipStyle}
                         />
                         <Bar dataKey="novos" fill="oklch(0.65 0.16 145)" radius={[3, 3, 0, 0]} name="novos" />
                         <Bar dataKey="resgatados" fill="oklch(0.65 0.16 240)" radius={[3, 3, 0, 0]} name="resgatados" />
@@ -1014,7 +1016,7 @@ export default function RaioXPage() {
                             name === "emRiscoPct" ? "Em risco %" : "Churn %"
                           ]}
                           labelFormatter={fmtMes}
-                          contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
+                          contentStyle={ct.tooltipStyle}
                         />
                         <Bar yAxisId="left" dataKey="emRisco" fill="oklch(0.70 0.18 45)" radius={[3, 3, 0, 0]} name="emRisco" opacity={0.85} />
                         <Bar yAxisId="left" dataKey="churnNovos" fill="oklch(0.58 0.20 25)" radius={[3, 3, 0, 0]} name="churnNovos" opacity={0.85} />
@@ -1471,7 +1473,7 @@ export default function RaioXPage() {
                           <YAxis tickFormatter={v => `${Math.round(v * 100)}%`} tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} axisLine={false} tickLine={false} />
                           <Tooltip
                             formatter={(val: number, name: string) => [`${Math.round(val * 100)}%`, name]}
-                            contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
+                            contentStyle={ct.tooltipStyle}
                           />
                           <Area type="monotone" dataKey="perdidoPct" name="Perdido" stackId="1" stroke="oklch(0.58 0.20 25)" fill="url(#gradPerdido)" />
                           <Area type="monotone" dataKey="emRiscoPct" name="Em Risco" stackId="1" stroke="oklch(0.70 0.18 45)" fill="url(#gradEmRisco)" />
@@ -1602,7 +1604,7 @@ export default function RaioXPage() {
                       <XAxis dataKey="mesLabel" tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} domain={[0, 100]} />
                       <Tooltip
-                        contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
+                        contentStyle={ct.tooltipStyle}
                         formatter={(value: number, name: string) => [`${value.toFixed(1)}%`, name === "churnPct" ? "Churn geral" : "Churn fidelizados"]}
                         labelFormatter={(label) => `Mês: ${label}`}
                       />
@@ -2572,7 +2574,7 @@ export default function RaioXPage() {
                           <XAxis dataKey="mesLabel" tick={{ fontSize: 10 }} />
                           <YAxis tick={{ fontSize: 10 }} />
                           <Tooltip
-                            contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
+                            contentStyle={ct.tooltipStyle}
                             formatter={(v: number, name: string) => [
                               v.toLocaleString(),
                               name === "novos" ? "Novos" : name === "recFieis" ? "Rec. Fiéis" : name === "recExclusivos" ? "Rec. Exclusivos" : name === "recRotativos" ? "Rec. Rotativos" : name
@@ -3022,7 +3024,7 @@ export default function RaioXPage() {
                         <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
                         <XAxis dataKey="visitas" tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} label={{ value: "visitas", position: "insideBottom", offset: -2, fontSize: 10, fill: "#666" }} />
                         <YAxis tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} />
-                        <Tooltip formatter={(val: number) => [val.toLocaleString(), "Clientes"]} contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }} />
+                        <Tooltip formatter={(val: number) => [val.toLocaleString(), "Clientes"]} contentStyle={ct.tooltipStyle} />
                         <Bar dataKey="clientes" fill="oklch(0.65 0.16 290)" radius={[3, 3, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -3071,7 +3073,7 @@ export default function RaioXPage() {
                         <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
                         <XAxis dataKey="label" tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} />
                         <YAxis tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} />
-                        <Tooltip formatter={(val: number) => [val.toLocaleString(), "Atendimentos"]} contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }} />
+                        <Tooltip formatter={(val: number) => [val.toLocaleString(), "Atendimentos"]} contentStyle={ct.tooltipStyle} />
                         <Bar dataKey="atendimentos" fill="oklch(0.65 0.16 240)" radius={[2, 2, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -3090,7 +3092,7 @@ export default function RaioXPage() {
                         <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
                         <XAxis dataKey="label" tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} />
                         <YAxis tick={{ fontSize: 11, fill: "oklch(0.45 0.012 260)" }} />
-                        <Tooltip contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
+                        <Tooltip contentStyle={ct.tooltipStyle}
                           formatter={(val: number, name: string) => [val.toLocaleString(), name === "atendimentos" ? "Atendimentos" : "Clientes únicos"]} />
                         <Bar dataKey="atendimentos" fill="oklch(0.65 0.16 145)" radius={[2, 2, 0, 0]} name="atendimentos" />
                         <Bar dataKey="clientes" fill="oklch(0.65 0.16 290)" radius={[2, 2, 0, 0]} name="clientes" />

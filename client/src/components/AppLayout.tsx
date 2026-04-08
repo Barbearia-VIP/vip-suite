@@ -17,6 +17,8 @@ import {
   Menu,
   X,
   Bell,
+  Sun,
+  Moon,
   ChevronRight,
   Users,
   Shield,
@@ -58,6 +60,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useTheme } from "../contexts/ThemeContext";
 
 interface Module {
   id: ModuleId;
@@ -230,6 +233,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [location, navigate] = useLocation();
   const { activeModule, setActiveModule, selectedUnit, setSelectedUnit, availableUnits, setAvailableUnits, sidebarCollapsed, setSidebarCollapsed, userRole } = useApp();
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const orgsQuery = trpc.orgs.list.useQuery(undefined, { enabled: !!user });
@@ -436,6 +440,21 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Theme toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-4 h-4" />
+              ) : (
+                <Moon className="w-4 h-4" />
+              )}
+            </Button>
 
             {/* Notifications */}
             <Button

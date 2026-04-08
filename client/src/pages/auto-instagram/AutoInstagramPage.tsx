@@ -14,8 +14,10 @@ import {
 } from "recharts";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useChartTheme } from "../../hooks/useChartTheme";
 
 export default function AutoInstagramPage() {
+  const ct = useChartTheme();
   const { selectedUnit } = useApp();
   const unitId = selectedUnit?.id ?? 0;
 
@@ -209,7 +211,7 @@ export default function AutoInstagramPage() {
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: "oklch(0.6 0 0)" }}
                     tickFormatter={(v) => { const d = new Date(v); return `${d.getDate()}/${d.getMonth() + 1}`; }} />
                   <YAxis tick={{ fontSize: 11, fill: "oklch(0.6 0 0)" }} />
-                  <Tooltip contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)" }}
+                  <Tooltip contentStyle={ct.tooltipStyle}
                     labelFormatter={(v) => new Date(v).toLocaleDateString("pt-BR")} />
                   <Bar dataKey="replies" name="Comentários" fill="oklch(0.65 0.15 145)" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="stories" name="Stories" fill="oklch(0.65 0.15 200)" radius={[4, 4, 0, 0]} />

@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DollarSign, TrendingUp, TrendingDown, Minus, Users, Package, Scissors, Zap, CalendarDays } from "lucide-react";
 import { AberturasChart } from "./AberturasChart";
 import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
+import { useChartTheme } from "../../hooks/useChartTheme";
 
 const MESES_LABEL = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -43,6 +44,7 @@ function ProgressBar({ pct, color = "oklch(0.76 0.145 72)" }: { pct: number; col
 }
 
 function ResumoCard({ label, value, icon: Icon, highlight = false }: { label: string; value: number; icon: any; highlight?: boolean }) {
+  const ct = useChartTheme();
   const ambar = "oklch(0.76 0.145 72)";
   return (
     <div
@@ -50,7 +52,7 @@ function ResumoCard({ label, value, icon: Icon, highlight = false }: { label: st
       style={{
         background: highlight
           ? "linear-gradient(135deg, oklch(0.76 0.145 72 / 0.12) 0%, oklch(0.68 0.16 65 / 0.06) 100%)"
-          : "linear-gradient(135deg, oklch(0.135 0.010 260 / 0.9) 0%, oklch(0.11 0.008 260 / 0.8) 100%)",
+          : ct.cardBg,
         border: `1px solid ${highlight ? "oklch(0.76 0.145 72 / 0.3)" : "oklch(0.22 0.014 260 / 0.5)"}`,
         boxShadow: highlight ? `0 4px 20px -4px oklch(0.76 0.145 72 / 0.15)` : "none",
       }}
@@ -69,11 +71,12 @@ function ResumoCard({ label, value, icon: Icon, highlight = false }: { label: st
 }
 
 function ResumoCardDias({ label, value, icon: Icon }: { label: string; value: number; icon: any }) {
+  const ct = useChartTheme();
   return (
     <div
       className="rounded-2xl p-4"
       style={{
-        background: "linear-gradient(135deg, oklch(0.135 0.010 260 / 0.9) 0%, oklch(0.11 0.008 260 / 0.8) 100%)",
+        background: ct.cardBg,
         border: "1px solid oklch(0.22 0.014 260 / 0.5)",
       }}
     >
@@ -90,6 +93,7 @@ export default function FaturamentoPage() {
   const { selectedUnit } = useApp();
   const { org } = useOrg();
   const now = new Date();
+  const ct = useChartTheme();
   const [periodo, setPeriodo] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
 
   const periodos = useMemo(() => {
@@ -164,7 +168,7 @@ export default function FaturamentoPage() {
     "Prod. Barba": "oklch(0.72 0.14 50)",
     "Prod. Empório": "oklch(0.65 0.15 320)",
     "Prod. Outros": "oklch(0.50 0.01 260)",
-    "Outros": "oklch(0.45 0.01 260)",
+    "Outros": ct.textMuted,
   };
 
   if (isLoading) {
@@ -231,7 +235,7 @@ export default function FaturamentoPage() {
         <div
           className="overflow-hidden rounded-2xl"
           style={{
-            background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+            background: ct.cardBg,
             border: "1px solid oklch(0.22 0.014 260 / 0.5)",
           }}
         >
@@ -348,7 +352,7 @@ export default function FaturamentoPage() {
         <div
           className="rounded-2xl p-5"
           style={{
-            background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+            background: ct.cardBg,
             border: "1px solid oklch(0.22 0.014 260 / 0.5)",
           }}
         >
@@ -388,7 +392,7 @@ export default function FaturamentoPage() {
         <div
           className="rounded-2xl p-5"
           style={{
-            background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+            background: ct.cardBg,
             border: "1px solid oklch(0.22 0.014 260 / 0.5)",
           }}
         >
@@ -425,7 +429,7 @@ export default function FaturamentoPage() {
         <div
           className="rounded-2xl p-5"
           style={{
-            background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+            background: ct.cardBg,
             border: "1px solid oklch(0.22 0.014 260 / 0.5)",
           }}
         >

@@ -14,6 +14,7 @@ import {
   Area, AreaChart,
 } from "recharts";
 import { TrendingUp, BarChart2, PieChartIcon, Zap, Target, TrendingDown, Minus } from "lucide-react";
+import { useChartTheme } from "../../hooks/useChartTheme";
 
 const GOLD = "oklch(0.76 0.145 72)";
 const GOLD_DIM = "oklch(0.76 0.145 72 / 0.18)";
@@ -125,13 +126,14 @@ interface ChartAreaProps {
 }
 
 function ChartArea({ data, chartType, media, mediaSply, media6m, height = 280 }: ChartAreaProps) {
+  const ct = useChartTheme();
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     return (
       <div
         className="rounded-xl p-2 text-xs"
         style={{
-          background: "oklch(0.14 0.012 260 / 0.97)",
+          background: ct.cardBgSolid,
           border: "1px solid oklch(0.28 0.015 260 / 0.6)",
           backdropFilter: "blur(16px)",
           boxShadow: "0 8px 32px -8px oklch(0 0 0 / 0.6)",
@@ -398,6 +400,7 @@ function GenericTab({ data, isLoading, error, extraControls, extraCol }: Generic
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export function AberturasChart({ orgId, unitId, dataInicio, dataFim }: AberturasChartProps) {
+  const ct = useChartTheme();
   const [view, setView] = useState<ViewType>("periodo");
   const [topLimit, setTopLimit] = useState<TopLimit>(20);
 

@@ -17,6 +17,7 @@ import {
   BarChart, Bar, Cell, PieChart, Pie, Legend,
 } from "recharts";
 import { cn } from "@/lib/utils";
+import { useChartTheme } from "../../hooks/useChartTheme";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function fmt(value: number) {
@@ -142,11 +143,12 @@ function ModuleCard({
   title: string; icon: React.ElementType; color: string; badge?: string;
   configured?: boolean; onConfigure?: () => void; children?: React.ReactNode; onNavigate?: () => void;
 }) {
+  const ct = useChartTheme();
   return (
     <div
       className="rounded-2xl p-5 relative overflow-hidden"
       style={{
-        background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+        background: ct.cardBg,
         border: "1px solid oklch(0.22 0.014 260 / 0.5)",
         backdropFilter: "blur(12px)",
         boxShadow: "0 4px 24px -8px oklch(0 0 0 / 0.4)",
@@ -244,12 +246,13 @@ const MODULE_KPI_MAP: Record<ModuleKey, "dataVip" | "gestaoTotal" | "vipCam" | "
 
 // ─── Tooltip customizado ─────────────────────────────────────────────────────
 function PremiumTooltip({ active, payload, label }: any) {
+  const ct = useChartTheme();
   if (!active || !payload?.length) return null;
   return (
     <div
       className="rounded-xl px-3 py-2.5 text-xs"
       style={{
-        background: "oklch(0.14 0.012 260 / 0.95)",
+        background: ct.cardBgSolid,
         border: "1px solid oklch(0.28 0.015 260 / 0.6)",
         backdropFilter: "blur(16px)",
         boxShadow: "0 8px 32px -8px oklch(0 0 0 / 0.6)",
@@ -276,6 +279,7 @@ export default function DashboardPage() {
   const orgId = org?.id ?? 0;
   const unitId = selectedUnit?.id;
 
+  const ct = useChartTheme();
   const [periodOption, setPeriodOption] = useState<PeriodOption>("month");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -334,7 +338,7 @@ export default function DashboardPage() {
         <div
           className="rounded-2xl p-12 text-center"
           style={{
-            background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+            background: ct.cardBg,
             border: "1px solid oklch(0.22 0.014 260 / 0.5)",
           }}
         >
@@ -709,7 +713,7 @@ export default function DashboardPage() {
                     {rankingRep.slice(0, 5).map((u, i) => (
                       <div key={u.unitId} className="flex items-center gap-2">
                         <span className="text-xs font-bold w-4 shrink-0" style={{
-                          color: i === 0 ? "oklch(0.76 0.145 72)" : i === 1 ? "oklch(0.75 0 0)" : i === 2 ? "oklch(0.65 0.12 60)" : "oklch(0.45 0.01 260)"
+                          color: i === 0 ? "oklch(0.76 0.145 72)" : i === 1 ? "oklch(0.75 0 0)" : i === 2 ? "oklch(0.65 0.12 60)" : ct.textMuted
                         }}>{i + 1}</span>
                         <span className="text-xs text-foreground truncate flex-1">{u.name.replace('Barbearia VIP - ', '').replace('Barbearia VIP ', '')}</span>
                         <span className="text-xs font-semibold text-foreground shrink-0">
@@ -789,7 +793,7 @@ export default function DashboardPage() {
           <div
             className="rounded-2xl p-5 h-full"
             style={{
-              background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+              background: ct.cardBg,
               border: "1px solid oklch(0.22 0.014 260 / 0.5)",
             }}
           >
@@ -847,7 +851,7 @@ export default function DashboardPage() {
           <div
             className="rounded-2xl p-5 h-full"
             style={{
-              background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+              background: ct.cardBg,
               border: "1px solid oklch(0.22 0.014 260 / 0.5)",
             }}
           >
@@ -889,7 +893,7 @@ export default function DashboardPage() {
                         </span>
                       ) : (
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full"
-                          style={{ background: "oklch(0.18 0.012 260 / 0.6)", color: "oklch(0.45 0.01 260)", border: "1px solid oklch(0.22 0.014 260 / 0.5)" }}>
+                          style={{ background: "oklch(0.18 0.012 260 / 0.6)", color: ct.textMuted, border: "1px solid oklch(0.22 0.014 260 / 0.5)" }}>
                           Configurar
                         </span>
                       )}
@@ -908,7 +912,7 @@ export default function DashboardPage() {
           <div
             className="rounded-2xl p-5"
             style={{
-              background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+              background: ct.cardBg,
               border: "1px solid oklch(0.22 0.014 260 / 0.5)",
             }}
           >
@@ -957,7 +961,7 @@ export default function DashboardPage() {
           <div
             className="rounded-2xl p-5"
             style={{
-              background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+              background: ct.cardBg,
               border: "1px solid oklch(0.22 0.014 260 / 0.5)",
             }}
           >
@@ -1024,7 +1028,7 @@ export default function DashboardPage() {
               <button key={mod.key} onClick={() => navigate(mod.path)}
                 className="rounded-2xl p-4 text-left relative overflow-hidden transition-all group"
                 style={{
-                  background: "linear-gradient(135deg, oklch(0.125 0.01 260 / 0.95) 0%, oklch(0.105 0.008 260 / 0.9) 100%)",
+                  background: ct.cardBg,
                   border: "1px solid oklch(0.22 0.014 260 / 0.5)",
                 }}
                 onMouseEnter={e => {

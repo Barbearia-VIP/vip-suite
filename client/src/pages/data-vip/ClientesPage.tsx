@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
+import { useChartTheme } from "../../hooks/useChartTheme";
 // ── Formatadores ──────────────────────────────────────────────────────────────
 function fmtMoeda(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 }).format(v);
@@ -199,6 +200,7 @@ export default function ClientesPage() {
   const [contatadosLocal, setContatadosLocal] = useState<Set<number>>(new Set());
 
   const [clienteDetalhesId, setClienteDetalhesId] = useState<number | null>(null);
+  const ct = useChartTheme();
   const [showFreqAnalise, setShowFreqAnalise] = useState(false);
   const [showDiasAnalise, setShowDiasAnalise] = useState(false);
   const [showStatusAnalise, setShowStatusAnalise] = useState(false);
@@ -1160,7 +1162,7 @@ export default function ClientesPage() {
                         <YAxis tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} axisLine={false} tickLine={false} />
                         <Tooltip
                           formatter={(v: number) => fmtMoeda(v)}
-                          contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)" }}
+                          contentStyle={ct.tooltipStyle}
                         />
                         <Area type="monotone" dataKey="valor" stroke="oklch(0.76 0.145 72)" fill="url(#gradClienteGasto)" strokeWidth={2} name="Valor" dot={false} activeDot={{ r: 4, fill: "oklch(0.76 0.145 72)" }} />
                       </AreaChart>

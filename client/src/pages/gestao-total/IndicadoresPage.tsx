@@ -15,6 +15,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend,
 } from "recharts";
+import { useChartTheme } from "../../hooks/useChartTheme";
 import {
   TrendingUp, TrendingDown, Minus, RefreshCw, LayoutGrid,
   Tag, BarChart2, AlertCircle, DollarSign,
@@ -131,6 +132,7 @@ function IndicadorCard({ ind, onNavigate }: { ind: Indicador; onNavigate: (path:
 
 // ── Aba Gráficos ──────────────────────────────────────────────────────────────
 function GraficosView({ indicadores }: { indicadores: Indicador[] }) {
+  const ct = useChartTheme();
   const barData = indicadores.map(ind => ({
     nome: ind.nome.length > 22 ? ind.nome.substring(0, 20) + "…" : ind.nome,
     pct: getPercent(ind),
@@ -168,7 +170,7 @@ function GraficosView({ indicadores }: { indicadores: Indicador[] }) {
               <YAxis tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} unit="%" domain={[0, 100]} axisLine={false} tickLine={false} />
               <Tooltip
                 formatter={(v: number) => [`${v}%`, "Atingimento"]}
-                contentStyle={{ background: "oklch(0.13 0.012 260 / 0.95)", border: "1px solid oklch(0.28 0.015 260 / 0.6)", borderRadius: "10px", backdropFilter: "blur(12px)", boxShadow: "0 8px 32px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.05) inset", fontSize: "12px", color: "oklch(0.92 0.006 80)"  }}
+                contentStyle={ct.tooltipStyle}
                 labelStyle={{ color: "oklch(0.55 0.012 260)"  }}
                 cursor={{ fill: "oklch(0.76 0.145 72 / 0.08)" }}
               />
@@ -210,6 +212,7 @@ function GraficosView({ indicadores }: { indicadores: Indicador[] }) {
 
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function IndicadoresPage() {
+  const ct = useChartTheme();
   const { selectedUnit } = useApp();
   const { org } = useOrg();
   const [, navigate] = useLocation();
