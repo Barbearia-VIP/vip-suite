@@ -292,7 +292,7 @@ export default function RaioXPage() {
     if (!lista || lista.length === 0) return;
     const labels: Record<string, string> = { perdidos: "Perdidos", emRisco: "Em_Risco_45_90d", resgatados: "Resgatados" };
     const header = ["Nome", "Telefone", "Última Visita", "Dias", "Total Visitas"].join(";");
-    const rows = lista.map(c => [
+    const rows = lista.map((c: (typeof lista)[0]) => [
       `"${(c.clienteNome || "").replace(/"/g, "'")}"`,
       c.telefone || "",
       c.ultimaVenda ? new Date(c.ultimaVenda instanceof Date ? c.ultimaVenda : c.ultimaVenda + "T12:00:00").toLocaleDateString("pt-BR") : "",
@@ -820,7 +820,7 @@ export default function RaioXPage() {
 
               {/* ── Movimento da Base ── */}
               {v.movimentoMensal && v.movimentoMensal.length > 0 && (() => {
-                const totalAtend = v.movimentoMensal.reduce((s, r) => s + r.atendidos, 0);
+                const totalAtend = v.movimentoMensal.reduce((s: number, r: (typeof v.movimentoMensal)[0]) => s + r.atendidos, 0);
                 const mediaAtend = v.movimentoMensal.length > 0 ? Math.round(totalAtend / v.movimentoMensal.length) : 0;
                 const anoAtual = new Date().getFullYear();
                 const anoAtendidos = v.movimentoMensal
