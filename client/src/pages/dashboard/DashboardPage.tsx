@@ -652,48 +652,41 @@ export default function DashboardPage() {
 
         {/* REPUTAÇÃO */}
         <ModuleCard title="Reputação" icon={Star} color="oklch(0.65 0.15 30)"
-          badge="NPS · Google · Pendentes" configured={modules?.reputacao ?? true}
+          badge="Google · Avaliações" configured={modules?.reputacao ?? true}
           onConfigure={() => navigate("/configuracoes")} onNavigate={() => navigate("/reputacao")}>
           {kpis?.reputacao.hasData ? (
             <>
-              {/* Linha 1: NPS + Nota Google */}
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                {/* NPS */}
-                <div className="rounded-xl p-3" style={{ background: "oklch(0.65 0.15 30 / 0.08)", border: "1px solid oklch(0.65 0.15 30 / 0.18)" }}>
-                  <p className="text-xs text-muted-foreground mb-1">NPS</p>
-                  <p className="text-2xl font-display font-bold" style={{
-                    color: (kpis.reputacao.nps ?? 0) >= 50 ? "oklch(0.65 0.15 145)" :
-                           (kpis.reputacao.nps ?? 0) >= 0 ? "oklch(0.76 0.145 72)" : "oklch(0.65 0.15 15)"
-                  }}>
-                    {(kpis.reputacao.nps ?? 0) >= 0 ? "+" : ""}{kpis.reputacao.nps ?? 0}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {(kpis.reputacao.nps ?? 0) >= 75 ? "Excelente" :
-                     (kpis.reputacao.nps ?? 0) >= 50 ? "Muito bom" :
-                     (kpis.reputacao.nps ?? 0) >= 0 ? "Bom" : "Crítico"}
-                  </p>
-                </div>
-                {/* Nota Google */}
-                <div className="rounded-xl p-3" style={{ background: "oklch(0.65 0.15 30 / 0.08)", border: "1px solid oklch(0.65 0.15 30 / 0.18)" }}>
-                  <p className="text-xs text-muted-foreground mb-1">Google</p>
-                  <p className="text-2xl font-display font-bold" style={{ color: "oklch(0.76 0.145 72)" }}>
-                    {kpis.reputacao.totalGoogle > 0 ? kpis.reputacao.mediaGoogle.toFixed(1) : kpis.reputacao.mediaAvaliacoes.toFixed(1)} ★
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {fmtNum(kpis.reputacao.totalGoogle > 0 ? kpis.reputacao.totalGoogle : kpis.reputacao.totalAvaliacoes)} avaliações
-                  </p>
+              {/* Nota Google em destaque */}
+              <div className="rounded-xl p-4 mb-2" style={{ background: "oklch(0.65 0.15 30 / 0.08)", border: "1px solid oklch(0.65 0.15 30 / 0.18)" }}>
+                <div className="flex items-end gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Nota Google</p>
+                    <p className="text-3xl font-display font-bold" style={{ color: "oklch(0.76 0.145 72)" }}>
+                      {kpis.reputacao.totalGoogle > 0 ? kpis.reputacao.mediaGoogle.toFixed(1) : kpis.reputacao.mediaAvaliacoes.toFixed(1)} ★
+                    </p>
+                  </div>
+                  <div className="mb-1">
+                    <p className="text-sm text-muted-foreground">
+                      {fmtNum(kpis.reputacao.totalGoogle > 0 ? kpis.reputacao.totalGoogle : kpis.reputacao.totalAvaliacoes)} avaliações
+                    </p>
+                  </div>
                 </div>
               </div>
-              {/* Pendentes de resposta */}
-              {kpis.reputacao.semRespostaGoogle > 0 && (
+              {/* Aviso de pendentes */}
+              {kpis.reputacao.semRespostaGoogle > 0 ? (
                 <div className="rounded-xl p-3 flex items-center gap-3" style={{ background: "oklch(0.65 0.15 60 / 0.08)", border: "1px solid oklch(0.65 0.15 60 / 0.25)" }}>
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: "oklch(0.65 0.15 60 / 0.15)" }}>
                     <MessageCircle className="h-4 w-4" style={{ color: "oklch(0.76 0.145 72)" }} />
                   </div>
                   <div>
-                    <p className="text-sm font-bold" style={{ color: "oklch(0.76 0.145 72)" }}>{fmtNum(kpis.reputacao.semRespostaGoogle)} pendentes</p>
-                    <p className="text-xs text-muted-foreground">avaliações sem resposta no Google</p>
+                    <p className="text-sm font-bold" style={{ color: "oklch(0.76 0.145 72)" }}>{fmtNum(kpis.reputacao.semRespostaGoogle)} sem resposta</p>
+                    <p className="text-xs text-muted-foreground">avaliações aguardando no Google</p>
                   </div>
+                </div>
+              ) : (
+                <div className="rounded-xl p-3 flex items-center gap-2" style={{ background: "oklch(0.65 0.15 145 / 0.06)", border: "1px solid oklch(0.65 0.15 145 / 0.18)" }}>
+                  <Smile className="h-4 w-4 shrink-0" style={{ color: "oklch(0.65 0.15 145)" }} />
+                  <p className="text-xs text-muted-foreground">Todas as avaliações respondidas</p>
                 </div>
               )}
               {/* Ranking (multi-unidade) */}
