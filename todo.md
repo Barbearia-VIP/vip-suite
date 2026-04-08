@@ -1137,3 +1137,12 @@
 
 ## Seletor de Período Compacto (Data VIP Dashboard)
 - [x] Compactar DateRangePicker: 1 mês de calendário no topo + atalhos em linha + lista de meses, largura fixa 300px
+
+## Performance Raio-X
+- [ ] Diagnosticar e otimizar lentidão no carregamento do Raio-X (queries do servidor externo)
+
+## Performance Raio-X
+- [x] Diagnosticar e otimizar lentidão no carregamento do Raio-X
+  - [x] Cache em memória 10min para visaoGeral, churn, cohort e barbeiros
+  - [x] Paralelizar loops sequenciais de 12 meses (cadencia + churn) com Promise.all
+  - [x] Resultado: 12 queries sequenciais → 12 queries paralelas (redução ~10x no tempo dos loops)

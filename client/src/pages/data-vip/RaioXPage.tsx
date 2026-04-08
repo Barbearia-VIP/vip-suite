@@ -1045,9 +1045,9 @@ export default function RaioXPage() {
                   <div className="space-y-3">
                     {(() => {
                       const media = v.saudeBarbeiros.length > 0
-                        ? Math.round(v.saudeBarbeiros.reduce((acc, b) => acc + b.pctEmRisco + b.pctPerdido, 0) / v.saudeBarbeiros.length)
+                        ? Math.round(v.saudeBarbeiros.reduce((acc: number, b: {pctEmRisco: number; pctPerdido: number}) => acc + b.pctEmRisco + b.pctPerdido, 0) / v.saudeBarbeiros.length)
                         : 0;
-                      return v.saudeBarbeiros.map(b => (
+                      return v.saudeBarbeiros.map((b: (typeof v.saudeBarbeiros)[0]) => (
                         <div key={b.nome} className="space-y-1">
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-medium">{b.nome}</span>
@@ -1703,7 +1703,7 @@ export default function RaioXPage() {
                         </tr></thead>
                         <tbody>
                           {(churnListaTipo === "perdidos" ? qChurn.data.perdidos : churnListaTipo === "emRisco" ? qChurn.data.emRisco : qChurn.data.resgatados)
-                            .slice(0, 100).map(c => (
+                            .slice(0, 100).map((c: {clienteId: number; clienteNome?: string; telefone?: string; ultimaVenda?: string | Date; diasSemVisita?: number; totalVisitas?: number; ticketMedio?: number}) => (
                             <tr key={c.clienteId} className="border-b border-border/20 hover:bg-muted/20">
                               <td className="p-2 pl-4 font-medium">{c.clienteNome || "—"}</td>
                               <td className="p-2 text-muted-foreground">{c.telefone || "—"}</td>
@@ -2215,7 +2215,7 @@ export default function RaioXPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {qCohort.data.cohortMensal.map(row => (
+                          {qCohort.data.cohortMensal.map((row: (typeof qCohort.data.cohortMensal)[0]) => (
                             <tr key={row.mes} className="border-b border-border/30 hover:bg-muted/20">
                               <td className="p-3 pl-4 font-medium">{fmtMes(row.mes)}</td>
                               <td className="p-3 text-right text-foreground">{row.novos}</td>

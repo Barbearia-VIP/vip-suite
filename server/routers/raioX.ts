@@ -69,6 +69,22 @@ interface DiagnosticoResult {
 }
 const diagnosticoCache = new Map<string, { data: DiagnosticoResult; ts: number }>();
 const DIAGNOSTICO_TTL = 10 * 60 * 1000; // 10 minutos
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutos (shared TTL)
+const visaoGeralCache = new Map<string, { data: any; ts: number }>();
+const churnCache = new Map<string, { data: any; ts: number }>();
+const cohortCache = new Map<string, { data: any; ts: number }>();
+const cadenciaCache = new Map<string, { data: any; ts: number }>();
+const oneShotCache = new Map<string, { data: any; ts: number }>();
+const barbeirosCache = new Map<string, { data: any; ts: number }>();
+const routingCache = new Map<string, { data: any; ts: number }>();
+function getCached<T>(cache: Map<string, { data: T; ts: number }>, key: string): T | null {
+  const entry = cache.get(key);
+  if (entry && Date.now() - entry.ts < CACHE_TTL) return entry.data;
+  return null;
+}
+function setCached<T>(cache: Map<string, { data: T; ts: number }>, key: string, data: T) {
+  cache.set(key, { data, ts: Date.now() });
+}
 
 // ─── Helper: resolve filtro de unidades (banco interno) ──────────────────────
 async function resolveUnitFilter(
@@ -162,6 +178,10 @@ export const raioXRouter = router({
       const dataFimDate = new Date(dataFim + "T00:00:00Z");
       const dataInicio12m = new Date(dataFimDate.getTime() - 365 * 86400000).toISOString().split("T")[0];
       const dataInicio24m = new Date(dataFimDate.getTime() - 730 * 86400000).toISOString().split("T")[0];
+      // ── Cache check ──
+      const vgCacheKey = `vg-${extIds.join(",")}-${dataInicio}-${dataFim}`;
+      const vgCached = getCached(visaoGeralCache, vgCacheKey);
+      if (vgCached) { console.log("[visaoGeral] cache hit"); return vgCached; }
 
       const unitCondV = extIds.length === 0 ? "1=1"
         : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
@@ -612,7 +632,7 @@ export const raioXRouter = router({
       const os = oneShotRows[0] || { total: 0, aguardando: 0, em_risco: 0, perdido: 0 };
       const ci = cadenciaIndividualRows[0] || { assiduo: 0, regular: 0, espacando: 0, primeira_vez: 0, em_risco: 0, perdido: 0, total: 0 };
 
-      return {
+      const result_vg = {
         sinais: {
           totalBase: totalBaseS,
           ativos,
@@ -781,6 +801,8 @@ export const raioXRouter = router({
           },
         },
       };
+      setCached(visaoGeralCache, vgCacheKey, result_vg);
+      return result_vg;
     }),
 
   // ── One-Shot ─────────────────────────────────────────────────────────────────────────────────
@@ -1035,11 +1057,9 @@ export const raioXRouter = router({
       const primeiraVez = Number(primeiraVezRows[0]?.total ?? 0);
 
       // Evolução mensal dos últimos 12 meses
-      const evolucao: Array<{
-        mes: string; assiduo: number; regular: number; espacando: number;
-        em_risco: number; perdido: number; total: number;
-      }> = [];
-      for (let i = 11; i >= 0; i--) {
+      // Paralelizar os 12 meses de evolução de cadência
+      const evolucao = await Promise.all(Array.from({ length: 12 }, (_, idx) => {
+        const i = 11 - idx;
         const d = new Date(dataFim + "T12:00:00Z");
         d.setMonth(d.getMonth() - i);
         const ano = d.getUTCFullYear();
@@ -1048,18 +1068,21 @@ export const raioXRouter = router({
         const refDate = `${ano}-${String(mes).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
         const ref12m = new Date(Date.UTC(ano - 1, mes - 1, lastDay)).toISOString().split("T")[0];
         const { sql, params } = buildRatioSQL(refDate, ref12m);
-        const rows = await queryExternal<{ assiduo: number; regular: number; espacando: number; em_risco: number; perdido: number; total: number }>(sql, params);
-        const r = rows[0] || { assiduo: 0, regular: 0, espacando: 0, em_risco: 0, perdido: 0, total: 0 };
-        evolucao.push({
-          mes: `${String(mes).padStart(2,"0")}/${String(ano).slice(2)}`,
-          assiduo: Number(r.assiduo),
-          regular: Number(r.regular),
-          espacando: Number(r.espacando),
-          em_risco: Number(r.em_risco),
-          perdido: Number(r.perdido),
-          total: Number(r.total),
-        });
-      }
+        return queryExternal<{ assiduo: number; regular: number; espacando: number; em_risco: number; perdido: number; total: number }>(sql, params)
+          .then(rows => {
+            const r = rows[0] || { assiduo: 0, regular: 0, espacando: 0, em_risco: 0, perdido: 0, total: 0 };
+            return {
+              mes: `${String(mes).padStart(2,"0")}/${String(ano).slice(2)}`,
+              assiduo: Number(r.assiduo),
+              regular: Number(r.regular),
+              espacando: Number(r.espacando),
+              em_risco: Number(r.em_risco),
+              perdido: Number(r.perdido),
+              total: Number(r.total),
+            };
+          })
+          .catch(() => ({ mes: `${String(mes).padStart(2,"0")}/${String(ano).slice(2)}`, assiduo: 0, regular: 0, espacando: 0, em_risco: 0, perdido: 0, total: 0 }));
+      }));
 
       // Análises automáticas
       const totalComCadencia = Number(g.total);
@@ -1128,6 +1151,9 @@ export const raioXRouter = router({
 
       const dataInicio = input.dataInicio || new Date(Date.now() - diasPeriodo * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
+      const churnCacheKey = `churn-${extIds.join(",")}-${dataInicio}-${dataFim}-${input.periodo||"90d"}`;
+      const churnCached = getCached(churnCache, churnCacheKey);
+      if (churnCached) { console.log("[churn] cache hit"); return churnCached; }
 
       if (extIds.length === 0) {
         return {
@@ -1250,21 +1276,19 @@ export const raioXRouter = router({
       // Para cada mês M: base = visitaram nos 620d antes do último dia de M
       //                  perdidos = sem visita nos 45d antes do último dia de M
       //                  fidelizados = ≥3 visitas históricas
-      const evolucaoMensal: { mes: string; churnPct: number; fidPct: number; total: number; perdidos: number; fidelizados: number; perdidosFid: number }[] = [];
-
-      // Gerar os 12 meses anteriores a dataFim
+      // Gerar os 12 meses anteriores a dataFim em PARALELO
       const dataFimDate = new Date(dataFim + "T12:00:00Z");
-      for (let i = 11; i >= 0; i--) {
+      const churnMensal = await Promise.all(Array.from({ length: 12 }, (_, idx) => {
+        const i = 11 - idx;
         const refDate = new Date(dataFimDate);
         refDate.setUTCMonth(refDate.getUTCMonth() - i);
-        // Último dia do mês de referência
         const lastDay = new Date(Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth() + 1, 0));
         const refStr = lastDay.toISOString().split("T")[0];
         const base620Str = new Date(lastDay.getTime() - 620 * 86400000).toISOString().split("T")[0];
         const mesLabel = `${lastDay.getUTCFullYear()}-${String(lastDay.getUTCMonth() + 1).padStart(2, "0")}`;
-
-        try {
-          const [snap] = await queryExternal<{
+        return (async () => {
+          try {
+            const [snap] = await queryExternal<{
             total: number; perdidos: number; fidelizados: number; perdidosFid: number;
           }>(`
             SELECT
@@ -1286,25 +1310,24 @@ export const raioXRouter = router({
               GROUP BY v2.cliente
             ) tvh ON tvh.cliente = c.id
             WHERE c.status = 1
-          `);
-          const t = Number(snap?.total ?? 0);
-          const p = Number(snap?.perdidos ?? 0);
-          const f = Number(snap?.fidelizados ?? 0);
-          const pf = Number(snap?.perdidosFid ?? 0);
-          evolucaoMensal.push({
-            mes: mesLabel,
-            churnPct: t > 0 ? Math.round(p / t * 1000) / 10 : 0,
-            fidPct: f > 0 ? Math.round(pf / f * 1000) / 10 : 0,
-            total: t, perdidos: p, fidelizados: f, perdidosFid: pf,
-          });
-        } catch {
-          evolucaoMensal.push({ mes: mesLabel, churnPct: 0, fidPct: 0, total: 0, perdidos: 0, fidelizados: 0, perdidosFid: 0 });
-        }
-      }
+            `);
+            const t = Number(snap?.total ?? 0);
+            const p = Number(snap?.perdidos ?? 0);
+            const f = Number(snap?.fidelizados ?? 0);
+            const pf = Number(snap?.perdidosFid ?? 0);
+            return {
+              mes: mesLabel,
+              churnPct: t > 0 ? Math.round(p / t * 1000) / 10 : 0,
+              fidPct: f > 0 ? Math.round(pf / f * 1000) / 10 : 0,
+              total: t, perdidos: p, fidelizados: f, perdidosFid: pf,
+            };
+          } catch {
+            return { mes: mesLabel, churnPct: 0, fidPct: 0, total: 0, perdidos: 0, fidelizados: 0, perdidosFid: 0 };
+          }
+        })();
+      }));
 
-      const churnMensal = evolucaoMensal;
-
-      return {
+      const result_churn = {
         resumo: {
           total,
           ativos: Math.max(0, total - perdidosTotal - emRisco4590),
@@ -1336,6 +1359,8 @@ export const raioXRouter = router({
         churnMensal,
         periodo: { dataInicio, dataFim, diasPeriodo },
       };
+      setCached(churnCache, churnCacheKey, result_churn);
+      return result_churn;
     }),
     // ── Churn por barbeiro ────────────────────────────────────────────────────────
   churnPorBarbeiro: protectedProcedure
@@ -1486,6 +1511,9 @@ export const raioXRouter = router({
       const dataFimRaw = input.dataFim ? new Date(input.dataFim) : new Date();
       const dataIniStr = `${dataIniRaw.getFullYear()}-${String(dataIniRaw.getMonth()+1).padStart(2,"0")}-${String(dataIniRaw.getDate()).padStart(2,"0")}`;
       const dataFimStr = `${dataFimRaw.getFullYear()}-${String(dataFimRaw.getMonth()+1).padStart(2,"0")}-${String(dataFimRaw.getDate()).padStart(2,"0")}`;
+      const cohortCacheKey = `cohort-${extIds.join(",")}-${dataIniStr}-${dataFimStr}-${input.colaboradorId||""}`;
+      const cohortCached = getCached(cohortCache, cohortCacheKey);
+      if (cohortCached) { console.log("[cohort] cache hit"); return cohortCached; }
 
       // ── 1) Clientes novos no período (1ª visita histórica dentro do período) ──
       const novosRows = await queryExternal<{
@@ -1763,7 +1791,9 @@ export const raioXRouter = router({
         })
         .sort((a, b) => b.novos - a.novos);
 
-      return { cohortMensal, analiseNovos, distribuicao, cohortHistorico, cohortPorBarbeiro };
+      const result_cohort = { cohortMensal, analiseNovos, distribuicao, cohortHistorico, cohortPorBarbeiro };
+      setCached(cohortCache, cohortCacheKey, result_cohort);
+      return result_cohort;
     }),
 
   // ── Barbeiros ────────────────────────────────────────────────────────────────
@@ -1780,6 +1810,9 @@ export const raioXRouter = router({
         : `uu.unidade IN (${extIds.join(",")})`;
       const dataInicio = input.dataInicio || new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
+      const barbCacheKey = `barb-${extIds.join(",")}-${dataInicio}-${dataFim}`;
+      const barbCached = getCached(barbeirosCache, barbCacheKey);
+      if (barbCached) { console.log("[barbeiros] cache hit"); return barbCached; }
 
       // Query principal: saúde da base por barbeiro
       // Para cada barbeiro, pega os clientes que atendeu no período e classifica por status atual
@@ -1843,7 +1876,7 @@ export const raioXRouter = router({
         ORDER BY (assiduo + regular) DESC
       `);
 
-      return {
+      const result_barb = {
         barbeiros: saudeRows.map(r => {
           const total = Number(r.total_clientes) || 1;
           const assiduo = Number(r.assiduo);
@@ -1882,6 +1915,8 @@ export const raioXRouter = router({
         }),
         periodo: { dataInicio, dataFim },
       };
+      setCached(barbeirosCache, barbCacheKey, result_barb);
+      return result_barb;
     }),
 
   // ── Diagnóstico ────────────────────────────────────────────────────────────────────────────
