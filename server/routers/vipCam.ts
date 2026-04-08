@@ -515,6 +515,29 @@ export const vipCamRouter = router({
         ? Math.round((satisfMap.satisfied / totalClientesMes) * 100)
         : 0;
 
+      // ── Total de detecções no mês (camMetricasDiarias) ──
+      // Usa o range do mês BRT convertido para string de data (formato YYYY-MM-DD)
+      const mesStartStr = monthRange.start.toISOString().slice(0, 10);
+      const mesEndStr = monthRange.end.toISOString().slice(0, 10);
+
+      const whereDeteccoesMes = input.unitId
+        ? and(
+            eq(camMetricasDiarias.unitId, input.unitId),
+            gte(camMetricasDiarias.data, mesStartStr as any),
+            lte(camMetricasDiarias.data, mesEndStr as any)
+          )
+        : and(
+            gte(camMetricasDiarias.data, mesStartStr as any),
+            lte(camMetricasDiarias.data, mesEndStr as any)
+          );
+
+      const deteccoesMesRows = await db!
+        .select({ total: sql<number>`COALESCE(SUM(${camMetricasDiarias.totalDeteccoes}), 0)` })
+        .from(camMetricasDiarias)
+        .where(whereDeteccoesMes);
+
+      const deteccoesMes = Number(deteccoesMesRows[0]?.total ?? 0);
+
       // ── Total geral de clientes na base ──
       const whereClienteUnit = input.unitId
         ? eq(camClientes.unitId, input.unitId)
@@ -562,8 +585,9 @@ export const vipCamRouter = router({
           satisfactionRate: satisfactionRateHoje,
           novosClientes: novosHojeRow?.total ?? 0,
         },
-        // KPIs do mês (baseados em clientes reais)
+        // KPIs do mês (baseados em clientes reais + detecções)
         mes: {
+          deteccoes: deteccoesMes,
           clientesUnicos: clientesMesRow?.total ?? 0,
           novosClientes: novosMesRow?.total ?? 0,
           satisfactionRate: satisfactionRateMes,
@@ -785,7 +809,61 @@ export const vipCamRouter = router({
         ? Math.round((totals.satisfeitos / totals.totalDeteccoes) * 100)
         : 0;
 
-      return { daily, hourly, totals: { ...totals, satisfactionRate } };
+      // ── Clientes únicos por dia (via lastSeenAt em camClientes) ──
+      // Converte startDate/endDate (YYYY-MM-DD BRT) para range UTC
+      // Adiciona 3h para converter BRT → UTC (início do dia BRT = 03:00 UTC)
+      const startUTC = new Date(input.startDate + 'T03:00:00Z');
+      // Fim do dia endDate BRT = endDate+1 02:59:59 UTC
+      const endUTC = new Date(input.endDate + 'T02:59:59Z');
+      endUTC.setDate(endUTC.getDate() + 1);
+
+      const whereClientesPeriodo = input.unitId
+        ? and(
+            eq(camClientes.unitId, input.unitId),
+            gte(camClientes.lastSeenAt, startUTC),
+            lte(camClientes.lastSeenAt, endUTC)
+          )
+        : and(
+            gte(camClientes.lastSeenAt, startUTC),
+            lte(camClientes.lastSeenAt, endUTC)
+          );
+
+      // Busca todos os clientes que visitaram no período com seu lastSeenAt
+      const clientesNoPeriodo = await db!
+        .select({
+          id: camClientes.id,
+          lastSeenAt: camClientes.lastSeenAt,
+          satisfactionLevel: camClientes.satisfactionLevel,
+        })
+        .from(camClientes)
+        .where(whereClientesPeriodo);
+
+      // Agrupa por dia BRT (subtrai 3h para converter UTC → BRT)
+      const clientesPorDiaMap = new Map<string, { total: number; satisfeitos: number; neutros: number; insatisfeitos: number }>();
+      for (const c of clientesNoPeriodo) {
+        if (!c.lastSeenAt) continue;
+        const brt = new Date(new Date(c.lastSeenAt).getTime() - 3 * 60 * 60 * 1000);
+        const dia = brt.toISOString().slice(0, 10);
+        const entry = clientesPorDiaMap.get(dia) ?? { total: 0, satisfeitos: 0, neutros: 0, insatisfeitos: 0 };
+        entry.total++;
+        if (c.satisfactionLevel === 'satisfied') entry.satisfeitos++;
+        else if (c.satisfactionLevel === 'neutral') entry.neutros++;
+        else entry.insatisfeitos++;
+        clientesPorDiaMap.set(dia, entry);
+      }
+
+      // Garante que o dia atual (BRT) está incluído mesmo sem dados
+      const todayKey = todayBRT();
+      if (!clientesPorDiaMap.has(todayKey)) {
+        clientesPorDiaMap.set(todayKey, { total: 0, satisfeitos: 0, neutros: 0, insatisfeitos: 0 });
+      }
+
+      // Ordena por data
+      const clientesPorDia = Array.from(clientesPorDiaMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([data, v]) => ({ data, ...v }));
+
+      return { daily, hourly, totals: { ...totals, satisfactionRate }, clientesPorDia };
     }),
 
   // ── Timeline paginada ───────────────────────

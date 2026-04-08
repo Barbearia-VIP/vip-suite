@@ -117,9 +117,10 @@ export default function VipCamPage() {
   // Dados do dia (para gráfico horário)
   const today_data = dashboard?.today;
 
-  // KPIs do mês (baseados em clientes reais)
+  // KPIs do mês (baseados em clientes reais + detecções)
   const mes = dashboard?.mes;
   const satisfactionRateMes = mes?.satisfactionRate ?? 0;
+  const deteccoesMes = mes?.deteccoes ?? 0;
   const clientesUnicosMes = mes?.clientesUnicos ?? 0;
   const novosMes = mes?.novosClientes ?? 0;
   const yearMonth = mes?.yearMonth ?? '';
@@ -138,17 +139,39 @@ export default function VipCamPage() {
     { name: 'Insatisfeitos', value: insatisfeitosMes, color: COLORS.unsatisfied },
   ].filter(d => d.value > 0);
 
-  const areaDataRaw = (metricas?.daily ?? []).map(d => ({
-    data: new Date(d.data as unknown as string).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-    Satisfeitos: d.satisfeitos ?? 0,
-    Neutros: d.neutros ?? 0,
-    Insatisfeitos: d.insatisfeitos ?? 0,
+  // Gráfico de tendência: usa clientes únicos por dia (clientesPorDia)
+  // Inclui o dia atual mesmo sem dados (garantido pelo backend)
+  const areaDataRaw = (metricas?.clientesPorDia ?? []).map(d => ({
+    data: new Date(d.data + 'T12:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+    Clientes: d.total,
+    Satisfeitos: d.satisfeitos,
+    Neutros: d.neutros,
+    Insatisfeitos: d.insatisfeitos,
   }));
 
   // Para 30+ dias, agrupa por semana para não sobrecarregar o gráfico
   const areaData = trendPeriod === 7
     ? areaDataRaw
-    : groupByWeek(metricas?.daily ?? []);
+    : (() => {
+        // Agrupa clientesPorDia por semana
+        const weeks: Record<string, { data: string; Clientes: number; Satisfeitos: number; Neutros: number; Insatisfeitos: number }> = {};
+        (metricas?.clientesPorDia ?? []).forEach(d => {
+          const date = new Date(d.data + 'T12:00:00Z');
+          const day = date.getUTCDay();
+          const diff = date.getUTCDate() - day + (day === 0 ? -6 : 1);
+          const monday = new Date(date);
+          monday.setUTCDate(diff);
+          const key = monday.toISOString().slice(0, 10);
+          if (!weeks[key]) weeks[key] = { data: key, Clientes: 0, Satisfeitos: 0, Neutros: 0, Insatisfeitos: 0 };
+          weeks[key].Clientes += d.total;
+          weeks[key].Satisfeitos += d.satisfeitos;
+          weeks[key].Neutros += d.neutros;
+          weeks[key].Insatisfeitos += d.insatisfeitos;
+        });
+        return Object.values(weeks)
+          .sort((a, b) => a.data.localeCompare(b.data))
+          .map(w => ({ ...w, data: new Date(w.data + 'T12:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) }));
+      })();
 
   const hourlyData = (dashboard?.hourlyToday ?? []).map(h => ({
     hora: `${h.hora}h`,
@@ -158,12 +181,12 @@ export default function VipCamPage() {
 
   const kpis = [
     {
-      label: 'Clientes no Mês',
-      value: clientesUnicosMes,
+      label: 'Detecções no Mês',
+      value: deteccoesMes,
       icon: Camera,
       color: 'text-blue-500',
       bg: 'bg-blue-500/10',
-      sub: `visitaram em ${mesLabel}`,
+      sub: `reconhecimentos em ${mesLabel}`,
     },
     {
       label: 'Taxa de Satisfação',
@@ -254,7 +277,7 @@ export default function VipCamPage() {
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="font-semibold text-foreground text-base flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-primary" />
-                Tendência — Últimos {trendPeriod} Dias
+                Clientes Únicos — Últimos {trendPeriod} Dias
                 {trendPeriod > 7 && <span className="text-xs font-normal text-muted-foreground">(agrupado por semana)</span>}
               </h3>
               <div className="flex gap-1">
@@ -275,10 +298,10 @@ export default function VipCamPage() {
             </div>
           </div>
           <div className="p-6 pt-0">
-            {areaData.length === 0 ? (
+              {areaData.length === 0 || areaData.every(d => d.Clientes === 0) ? (
               <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm gap-2">
                 <BarChart3 className="w-8 h-8 opacity-30" />
-                <p>Sem dados nos últimos 7 dias</p>
+                <p>Sem dados nos últimos {trendPeriod} dias</p>
                 <Button size="sm" variant="outline" asChild>
                   <Link href="/vip-cam/ao-vivo">Iniciar câmera</Link>
                 </Button>
@@ -287,16 +310,20 @@ export default function VipCamPage() {
               <ResponsiveContainer width="100%" height={220}>
                 <AreaChart data={areaData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                   <defs>
+                    <linearGradient id="gradClientes" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="oklch(0.76 0.145 72)" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="oklch(0.76 0.145 72)" stopOpacity={0} />
+                    </linearGradient>
                     <linearGradient id="gradSat" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={COLORS.satisfied} stopOpacity={0.3} />
+                      <stop offset="5%" stopColor={COLORS.satisfied} stopOpacity={0.25} />
                       <stop offset="95%" stopColor={COLORS.satisfied} stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="gradNeu" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={COLORS.neutral} stopOpacity={0.3} />
+                      <stop offset="5%" stopColor={COLORS.neutral} stopOpacity={0.25} />
                       <stop offset="95%" stopColor={COLORS.neutral} stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="gradUns" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={COLORS.unsatisfied} stopOpacity={0.3} />
+                      <stop offset="5%" stopColor={COLORS.unsatisfied} stopOpacity={0.25} />
                       <stop offset="95%" stopColor={COLORS.unsatisfied} stopOpacity={0} />
                     </linearGradient>
                   </defs>
@@ -305,9 +332,10 @@ export default function VipCamPage() {
                   <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
-                  <Area type="monotone" dataKey="Satisfeitos" stroke={COLORS.satisfied} strokeWidth={2} fill="url(#gradSat)" dot={{ r: 3, fill: COLORS.satisfied }} />
-                  <Area type="monotone" dataKey="Neutros" stroke={COLORS.neutral} strokeWidth={2} fill="url(#gradNeu)" dot={{ r: 3, fill: COLORS.neutral }} />
-                  <Area type="monotone" dataKey="Insatisfeitos" stroke={COLORS.unsatisfied} strokeWidth={2} fill="url(#gradUns)" dot={{ r: 3, fill: COLORS.unsatisfied }} />
+                  <Area type="monotone" dataKey="Clientes" stroke="oklch(0.76 0.145 72)" strokeWidth={2.5} fill="url(#gradClientes)" dot={{ r: 3.5, fill: 'oklch(0.76 0.145 72)' }} />
+                  <Area type="monotone" dataKey="Satisfeitos" stroke={COLORS.satisfied} strokeWidth={1.5} fill="url(#gradSat)" dot={{ r: 2.5, fill: COLORS.satisfied }} strokeDasharray="4 2" />
+                  <Area type="monotone" dataKey="Neutros" stroke={COLORS.neutral} strokeWidth={1.5} fill="url(#gradNeu)" dot={{ r: 2.5, fill: COLORS.neutral }} strokeDasharray="4 2" />
+                  <Area type="monotone" dataKey="Insatisfeitos" stroke={COLORS.unsatisfied} strokeWidth={1.5} fill="url(#gradUns)" dot={{ r: 2.5, fill: COLORS.unsatisfied }} strokeDasharray="4 2" />
                 </AreaChart>
               </ResponsiveContainer>
             )}

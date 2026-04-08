@@ -1090,3 +1090,7 @@
 - [x] Manter "Novos HOJE" com data correta do Brasil
 - [x] Adicionar procedure getMonthStats no router vipCam
 - [x] Atualizar VipCamPage para usar novos KPIs mensais
+- [x] Incluir dia atual no gráfico de tendência do Dashboard
+- [x] Gráfico de tendência do Dashboard: incluir dia atual
+- [x] Gráfico de tendência do Dashboard: usar camClientes (clientes reais) em vez de camMetricasDiarias
+- [x] 1º card VIP Cam: mudar para total de detecções do mês (camMetricasDiarias)
