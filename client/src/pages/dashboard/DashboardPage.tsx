@@ -33,22 +33,30 @@ function fmtPct(value: number) {
 type PeriodOption = "today" | "week" | "month" | "quarter" | "custom";
 
 function getPeriodDates(option: PeriodOption, customFrom?: string, customTo?: string): { from: string; to: string; label: string } {
-  const now = new Date();
+  // Usa fuso Brasil (UTC-3) para calcular a data atual corretamente
+  const nowUtc = new Date();
+  const brtOffset = -3 * 60 * 60 * 1000;
+  const now = new Date(nowUtc.getTime() + brtOffset);
   const pad = (n: number) => String(n).padStart(2, "0");
-  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  if (option === "today") { const t = fmt(now); return { from: t, to: t, label: "Hoje" }; }
+  // fmt usa UTC do objeto ajustado para BRT
+  const fmt = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+  const todayStr = fmt(now);
+  if (option === "today") { return { from: todayStr, to: todayStr, label: "Hoje" }; }
   if (option === "week") {
-    const day = now.getDay();
-    const mon = new Date(now); mon.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
-    return { from: fmt(mon), to: fmt(now), label: "Esta semana" };
+    const day = now.getUTCDay();
+    const mon = new Date(now.getTime() - (day === 0 ? 6 : day - 1) * 86400000);
+    return { from: fmt(mon), to: todayStr, label: "Esta semana" };
   }
   if (option === "month") {
-    return { from: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), to: fmt(now), label: "Este mês" };
+    const firstDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) + brtOffset);
+    return { from: fmt(firstDay), to: todayStr, label: "Este mês" };
   }
   if (option === "quarter") {
-    return { from: fmt(new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)), to: fmt(now), label: "Este trimestre" };
+    const firstDay = new Date(Date.UTC(now.getUTCFullYear(), Math.floor(now.getUTCMonth() / 3) * 3, 1) + brtOffset);
+    return { from: fmt(firstDay), to: todayStr, label: "Este trimestre" };
   }
-  return { from: customFrom ?? fmt(new Date(now.getFullYear(), now.getMonth(), 1)), to: customTo ?? fmt(now), label: `${customFrom ?? "—"} a ${customTo ?? "—"}` };
+  const firstDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) + brtOffset);
+  return { from: customFrom ?? fmt(firstDay), to: customTo ?? todayStr, label: `${customFrom ?? "—"} a ${customTo ?? "—"}` };
 }
 
 // ─── KPI Card Premium ────────────────────────────────────────────────────────
