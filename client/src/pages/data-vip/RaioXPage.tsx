@@ -831,13 +831,13 @@ export default function RaioXPage() {
                           ref={v.periodo.dataFim}
                           baseUsada={`24m · ${v.cadenciaIndividual.total.toLocaleString()} clientes`}
                           baseTotal={v.cadenciaIndividual.total}
-                          regra="visitas_hist ≥2 E ratio = DATEDIFF(REF, ultima_venda) / cadencia_habitual"
+                          regra="ratio = DATEDIFF(REF, ultima_venda) / cadencia_habitual"
                           usadaEm="Cadência Individual (6 status) · Score de saúde (dim. cadência)"
-                          nota="Universo: clientes com ≥2 visitas históricas que visitaram nos últimos 24m. Cadência habitual = média de todos os intervalos históricos. 1ª Vez = clientes com exatamente 1 visita histórica (one-shots)."
+                          nota="Universo: todos os clientes que visitaram nos últimos 24m. 1ª Vez = clientes com exatamente 1 visita histórica (sem cadência calculável). Cadência habitual = média de todos os intervalos históricos."
                         />
                       </h3>
                       <span className="text-xs text-muted-foreground">
-                        {v.cadenciaIndividual.total.toLocaleString()} clientes · 24m de histórico · ≥2 visitas hist.
+                        {v.cadenciaIndividual.total.toLocaleString()} clientes · 24m de histórico · inclui 1ª visita
                       </span>
                     </div>
                   </div>

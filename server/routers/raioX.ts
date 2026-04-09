@@ -308,9 +308,7 @@ export const raioXRouter = router({
             COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 46 AND 90 THEN bs.cliente END) as one_shot_risco,
             COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF('${dataFim}', bs.ultima_venda) > 90 THEN bs.cliente END) as one_shot_perdido
           FROM ${baseS12mSubquery} bs
-          JOIN sync_clientes c ON c.id = bs.cliente
           LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bs.cliente
-          WHERE c.status = 1
         `),
         // ── Por Perfil: Base S 12m, classificada por visitas históricas ─────────
         // Ocasional=2-3, Fiel=7-12, One-shot=1, Regular=4-6, Recorrente>12
@@ -324,8 +322,6 @@ export const raioXRouter = router({
             COUNT(DISTINCT bs.cliente) as total
           FROM ${baseS12mSubquery} bs
           LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bs.cliente
-          JOIN sync_clientes c ON c.id = bs.cliente
-          WHERE c.status = 1
         `),
         // ── Por Cadência: Base S 12m com >=3 visitas, por dias sem visitar (usando ultima_venda) ──
         // Perdido=>90d, Regular=31-60d, Em risco=61-90d, Espaçando=91-180d, Mto frequente=<=30d
@@ -372,16 +368,23 @@ export const raioXRouter = router({
           SELECT COUNT(DISTINCT cp.cliente) as total
           FROM ${clientesPeriodoSubquery} cp
         `),
-        // ── Novos no período (data_criacao no período) ──────────────────────────
+        // ── Novos no período: clientes cuja PRIMEIRA VENDA na unidade ocorreu no período ──────────────────────────
+        // (não usa data_criacao do cliente pois ele pode ter sido cadastrado antes mas visitado pela 1a vez no período)
         queryLocal<{ total: number; recorrentes: number; one_shot_total: number }>(`
           SELECT
-            COUNT(*) as total,
+            COUNT(DISTINCT pv.cliente) as total,
             SUM(CASE WHEN vh.total_visitas > 1 THEN 1 ELSE 0 END) as recorrentes,
             SUM(CASE WHEN vh.total_visitas = 1 OR vh.total_visitas IS NULL THEN 1 ELSE 0 END) as one_shot_total
-          FROM sync_clientes c
-          LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = c.id
-          WHERE ${unitCondSimple} AND c.status = 1
-            AND DATE(c.data_criacao) >= '${dataInicio}' AND DATE(c.data_criacao) <= '${dataFim}'
+          FROM (
+            SELECT v.cliente, MIN(DATE(v.data_criacao)) as primeira_visita
+            FROM sync_vendas v
+            WHERE ${unitCondV}
+              AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
+              AND v.cliente IS NOT NULL AND v.cliente != 2
+            GROUP BY v.cliente
+            HAVING MIN(DATE(v.data_criacao)) >= '${dataInicio}' AND MIN(DATE(v.data_criacao)) <= '${dataFim}'
+          ) pv
+          LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = pv.cliente
         `),
         // ── Resgatados no período ────────────────────────────────────────────────
         // Clientes que: existiam antes do período, tinham parado de vir (>90d antes do início),
@@ -421,7 +424,7 @@ export const raioXRouter = router({
           FROM (
             SELECT
               bs.cliente,
-              COALESCE(vh_hist.total_visitas, 0) as total_visitas_hist,
+              COALESCE(vh_hist.total_visitas, 1) as total_visitas_hist,
               uvc.ultima_venda,
               DATEDIFF('${dataFim}', uvc.ultima_venda) as dias_sem_vir,
               iv.cadencia_habitual,
@@ -438,15 +441,13 @@ export const raioXRouter = router({
                 AND v.cliente IS NOT NULL AND v.cliente != 2
                 AND DATE(v.data_criacao) >= '${dataInicio24m}' AND DATE(v.data_criacao) <= '${dataFim}'
             ) bs
-            JOIN sync_clientes c ON c.id = bs.cliente
-            JOIN (
+            LEFT JOIN (
               SELECT v.cliente, COUNT(*) as total_visitas
               FROM sync_vendas v
               WHERE ${unitCondV}
                 AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
                 AND v.cliente IS NOT NULL AND v.cliente != 2
               GROUP BY v.cliente
-              HAVING COUNT(*) >= 2
             ) vh_hist ON vh_hist.cliente = bs.cliente
             LEFT JOIN (
               SELECT sub.cliente, AVG(sub.diff) as cadencia_habitual
@@ -470,7 +471,6 @@ export const raioXRouter = router({
                 AND v.cliente IS NOT NULL AND v.cliente != 2
               GROUP BY v.cliente
             ) uvc ON uvc.cliente = bs.cliente
-            WHERE c.status = 1
           ) ci
         `),
         // ── Movimento mensal ─────────────────────────────────────────────────────
