@@ -457,7 +457,11 @@ export const dataVipRouter = router({
         data_criacao: Date; ultima_visita: Date; visitas: number; consumo: number;
       }>(`
         SELECT c.id, c.nome, c.telefone, c.data_criacao, c.ultima_visita,
-               COALESCE(vc.total_visitas, 0) as visitas, COALESCE(c.consumo, 0) as consumo
+               COALESCE(vc.total_visitas, 0) as visitas,
+               COALESCE((
+                 SELECT SUM(sv.valor_total) FROM sync_vendas sv
+                 WHERE sv.cliente = c.id AND sv.comanda_temp=0 AND sv.cancelado_motivo IS NULL AND sv.status=1
+               ), 0) as consumo
         FROM sync_clientes c
         LEFT JOIN (
           SELECT v.cliente, COUNT(*) as total_visitas

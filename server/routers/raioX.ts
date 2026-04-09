@@ -1206,7 +1206,10 @@ export const raioXRouter = router({
         SELECT
           c.id as cliente_id, c.nome, c.telefone, c.ultima_visita,
           COALESCE(tvh.tv, 0) as tv_hist,
-          COALESCE(c.consumo, 0) as ticket
+          COALESCE((
+            SELECT SUM(sv.valor_total) FROM sync_vendas sv
+            WHERE sv.cliente = c.id AND sv.comanda_temp=0 AND sv.cancelado_motivo IS NULL AND sv.status!=0
+          ), 0) as ticket
         FROM (
           SELECT DISTINCT v.cliente
           FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
@@ -2301,7 +2304,11 @@ export const raioXRouter = router({
         id: number; nome: string; telefone: string;
         ultima_visita: Date; consumo: number; dias: number; total_visitas: number;
       }>(`
-        SELECT c.id, c.nome, c.telefone, c.ultima_visita, c.consumo,
+        SELECT c.id, c.nome, c.telefone, c.ultima_visita,
+               COALESCE((
+                 SELECT SUM(sv.valor_total) FROM sync_vendas sv
+                 WHERE sv.cliente = c.id AND sv.comanda_temp=0 AND sv.cancelado_motivo IS NULL AND sv.status=1
+               ), 0) as consumo,
                DATEDIFF(NOW(), c.ultima_visita) as dias,
                COALESCE(vpc.total_visitas, 0) as total_visitas
         FROM sync_clientes c
