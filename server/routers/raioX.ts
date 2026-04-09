@@ -1400,7 +1400,7 @@ export const raioXRouter = router({
           COUNT(vh.id) as tv_hist
         FROM sync_clientes c
         JOIN sync_vendas vh ON vh.cliente = c.id
-        JOIN sync_usuarios uuh ON uuh.id = vh.usuario AND uuh.visivel_dashboard = 1
+        JOIN sync_usuarios uuh ON uuh.id = vh.usuario AND uuh.visivel_agenda != 'nenhuma'
         WHERE ${unitInVh}
           AND vh.comanda_temp=0 AND vh.cancelado_motivo IS NULL AND vh.status!=0
           AND vh.cliente IS NOT NULL AND vh.cliente!=2
@@ -1425,7 +1425,7 @@ export const raioXRouter = router({
         SELECT v.cliente as cliente_id, uu.id as colaborador_id, uu.nome as colaborador_nome, MAX(v.data_criacao) as max_dt
         FROM sync_vendas v
         JOIN sync_usuarios uu ON v.usuario = uu.id
-        WHERE ${unitIn} AND uu.visivel_dashboard = 1
+        WHERE ${unitIn} AND uu.visivel_agenda != 'nenhuma'
           AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
           AND v.cliente IN (${idList})
         GROUP BY v.cliente, uu.id, uu.nome
