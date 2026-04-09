@@ -829,15 +829,15 @@ export default function RaioXPage() {
                           descricao="O ratio mede se o cliente está atrasado em relação ao próprio histórico: dias sem vir ÷ cadência habitual (média dos intervalos entre visitas)."
                           periodoFiltrado={`${v.periodo.dataInicio} – ${v.periodo.dataFim}`}
                           ref={v.periodo.dataFim}
-                          baseUsada={`24m · ${v.cadenciaIndividual.total.toLocaleString()} clientes`}
+                          baseUsada={`12m · ${v.cadenciaIndividual.total.toLocaleString()} clientes`}
                           baseTotal={v.cadenciaIndividual.total}
                           regra="ratio = DATEDIFF(REF, ultima_venda) / cadencia_habitual"
                           usadaEm="Cadência Individual (6 status) · Score de saúde (dim. cadência)"
-                          nota="Universo: todos os clientes que visitaram nos últimos 24m. 1ª Vez = clientes com exatamente 1 visita histórica (sem cadência calculável). Cadência habitual = média de todos os intervalos históricos."
+                          nota="Universo: todos os clientes que visitaram nos últimos 12m. 1ª Vez = clientes com exatamente 1 visita histórica (sem cadência calculável). Cadência habitual = média de todos os intervalos históricos."
                         />
                       </h3>
                       <span className="text-xs text-muted-foreground">
-                        {v.cadenciaIndividual.total.toLocaleString()} clientes · 24m de histórico · inclui 1ª visita
+                        {v.cadenciaIndividual.total.toLocaleString()} clientes · 12m de histórico · inclui 1ª visita
                       </span>
                     </div>
                   </div>

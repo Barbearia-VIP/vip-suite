@@ -406,8 +406,8 @@ export const raioXRouter = router({
             AND DATE(c.data_criacao) < '${dataInicio}'
             AND DATEDIFF('${dataInicio}', ult.ultima_antes) > 90
         `),
-        // Cadencia Individual: Base P 24m com >=2 visitas historicas, logica de ratio
-        // Universo: clientes que visitaram nos ultimos 24m E tem >=2 visitas historicas (exclui one-shots)
+        // Cadencia Individual: Base S 12m com logica de ratio
+        // Universo: clientes que visitaram nos ultimos 12m (inclui one-shots como 1a Vez)
         // Cadencia habitual: media dos intervalos entre visitas (historico completo)
         // ratio = DATEDIFF(dataFim, ultima_venda) / cadencia_habitual
         // Assiduo: ratio <=0.8 | Regular: 0.8-1.2 | Espacando: 1.2-1.8 | Em Risco: 1.8-2.5 | Perdido: >2.5
@@ -439,7 +439,7 @@ export const raioXRouter = router({
               WHERE ${unitCondV}
                 AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
                 AND v.cliente IS NOT NULL AND v.cliente != 2
-                AND DATE(v.data_criacao) >= '${dataInicio24m}' AND DATE(v.data_criacao) <= '${dataFim}'
+                AND DATE(v.data_criacao) >= '${dataInicio12m}' AND DATE(v.data_criacao) <= '${dataFim}'
             ) bs
             LEFT JOIN (
               SELECT v.cliente, COUNT(*) as total_visitas
