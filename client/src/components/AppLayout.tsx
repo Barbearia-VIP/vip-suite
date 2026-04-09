@@ -242,6 +242,35 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   const orgsQuery = trpc.orgs.list.useQuery(undefined, { enabled: !!user });
   const firstOrgId = orgsQuery.data?.[0]?.id ?? 0;
+
+  // Badge de defasagem do Data VIP
+  const syncStatusQuery = trpc.sync.status.useQuery(undefined, {
+    enabled: activeModule === "data_vip" && !!user,
+    refetchInterval: 5 * 60 * 1000, // atualiza a cada 5 min
+    staleTime: 2 * 60 * 1000,
+  });
+  const ultimaSyncGlobal = syncStatusQuery.data
+    ?.filter((r: any) => r.ultima_sync)
+    .map((r: any) => r.ultima_sync as string)
+    .sort()
+    .at(-1) ?? null;
+  const syncDefasagemLabel = (() => {
+    if (!ultimaSyncGlobal) return null;
+    const diff = Date.now() - new Date(ultimaSyncGlobal).getTime();
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    if (h >= 24) return `${Math.floor(h / 24)}d atrás`;
+    if (h > 0) return `${h}h${m > 0 ? ` ${m}min` : ""} atrás`;
+    if (m > 0) return `${m}min atrás`;
+    return "Agora";
+  })();
+  const syncDefasagemCor = (() => {
+    if (!ultimaSyncGlobal) return "text-muted-foreground";
+    const diff = Date.now() - new Date(ultimaSyncGlobal).getTime();
+    if (diff > 8 * 3600000) return "text-red-400";
+    if (diff > 4 * 3600000) return "text-yellow-400";
+    return "text-green-400";
+  })();
   const unitsQuery = trpc.orgs.units.useQuery(
     { orgId: firstOrgId },
     { enabled: !!firstOrgId }
@@ -403,6 +432,22 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
           {/* Right side */}
           <div className="flex items-center gap-1.5 px-3 ml-auto">
+            {/* Badge de defasagem do Data VIP */}
+            {activeModule === "data_vip" && syncDefasagemLabel && (
+              <button
+                onClick={() => navigate("/data-vip/sync")}
+                className={`hidden sm:flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-full border transition-all hover:opacity-80 ${syncDefasagemCor}`}
+                style={{
+                  borderColor: "currentColor",
+                  opacity: 0.85,
+                  background: isDark ? "oklch(0.14 0.01 260 / 0.6)" : "oklch(0.97 0.003 80 / 0.8)",
+                }}
+                title="Dados sincronizados há..."
+              >
+                <RefreshCw className="w-2.5 h-2.5" />
+                {syncDefasagemLabel}
+              </button>
+            )}
             {/* Unit selector */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

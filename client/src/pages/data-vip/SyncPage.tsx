@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import PageHeader from "@/components/PageHeader";
 import { trpc } from "@/lib/trpc";
+import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +29,7 @@ function formatDate(d: string | null | undefined) {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
   });
 }
 
@@ -93,6 +95,8 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function SyncPage() {
+  const { userRole } = useApp();
+  const isAdmin = userRole === "master" || userRole === "org_admin";
   const [importandoUnidade, setImportandoUnidade] = useState<number | null>(null);
   const [importandoTodas, setImportandoTodas] = useState(false);
   const [syncandoUnidade, setSyncandoUnidade] = useState<number | null>(null);
@@ -191,7 +195,7 @@ export default function SyncPage() {
     .sort()
     .at(-1) ?? null;
 
-  const isBusy = syncandoAgora || importandoTodas || importandoUnidade !== null;
+  const isBusy = !isAdmin || syncandoAgora || importandoTodas || importandoUnidade !== null;
 
   return (
     <div className="p-6 space-y-6">
@@ -295,7 +299,8 @@ export default function SyncPage() {
         </Card>
       </div>
 
-      {/* Ações globais */}
+      {/* Ações globais — apenas para admin */}
+      {isAdmin && (
       <Card>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
@@ -346,6 +351,7 @@ export default function SyncPage() {
           </Button>
         </CardContent>
       </Card>
+      )}
 
       {/* Tabela por unidade */}
       <Card>
@@ -408,6 +414,7 @@ export default function SyncPage() {
                         {formatDate(row.ultima_sync)}
                       </td>
                       <td className="py-3 px-3 text-right">
+                        {isAdmin ? (
                         <div className="flex gap-2 justify-end">
                           <Button
                             size="sm"
@@ -416,7 +423,7 @@ export default function SyncPage() {
                             disabled={
                               importandoUnidade === row.unidade_id ||
                               syncandoUnidade === row.unidade_id ||
-                              isBusy
+                              syncandoAgora || importandoTodas
                             }
                             onClick={() => {
                               setSyncandoUnidade(row.unidade_id);
@@ -437,7 +444,7 @@ export default function SyncPage() {
                             disabled={
                               importandoUnidade === row.unidade_id ||
                               syncandoUnidade === row.unidade_id ||
-                              isBusy
+                              syncandoAgora || importandoTodas
                             }
                             onClick={() => {
                               setImportandoUnidade(row.unidade_id);
@@ -452,6 +459,9 @@ export default function SyncPage() {
                             Reimportar
                           </Button>
                         </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}
