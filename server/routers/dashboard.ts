@@ -126,64 +126,75 @@ export const dashboardRouter = router({
       }
 
       // ── DATA VIP: usa sync_vendas (banco local sincronizado em tempo real) ──
-      // sync_vendas.valor_total = valor bruto da venda (equivalente ao valorLiquido do sistema)
+      // Usa a mesma lógica do endpoint diagnostico do Data VIP:
+      // - Filtro de unidade via sync_usuarios.unidade (igual ao Data VIP)
+      // - status = 1 (apenas vendas finalizadas)
+      // - Atendimentos e ticket médio calculados apenas com clientes com cadastro (cliente != 2)
+      // - Faturamento total inclui com + sem cadastro
       let faturamentoMes = 0;
       let atendimentos = 0;
       let ticketMedio = 0;
       let faturamentoAnterior = 0;
       let totalClientes = 0;
 
-      if (extIds.length > 0) {
-        const unitCond = extIds.length === 1
-          ? `v.unidade_id = ${extIds[0]}`
-          : `v.unidade_id IN (${extIds.join(",")})`;
+      // Condição de unidade: usa sync_usuarios.unidade (padrão do Data VIP)
+      const unitUserCond = extIds.length === 0
+        ? "1=1"
+        : extIds.length === 1
+          ? `v.usuario IN (SELECT id FROM sync_usuarios WHERE unidade = ${extIds[0]})`
+          : `v.usuario IN (SELECT id FROM sync_usuarios WHERE unidade IN (${extIds.join(",")}))`;
+      const unitUserCondAnt = unitUserCond; // mesmo filtro para período anterior
 
-        const [syncVendaRows] = await queryLocal<{
-          total: number; atendimentos: number; ticketMedio: number;
-        }>(`
-          SELECT
-            COALESCE(SUM(v.valor_total), 0) as total,
-            COUNT(*) as atendimentos,
-            COALESCE(AVG(v.valor_total), 0) as ticketMedio
-          FROM sync_vendas v
-          WHERE ${unitCond}
-            AND v.data_criacao >= '${mesStartStr}'
-            AND v.data_criacao <= '${mesEndStr}'
-            AND v.comanda_temp = 0
-            AND v.cancelado_motivo IS NULL
-            AND v.status != 0
-        `);
-        faturamentoMes = parseFloat(String(syncVendaRows?.total ?? 0));
-        atendimentos = Number(syncVendaRows?.atendimentos ?? 0);
-        ticketMedio = parseFloat(String(syncVendaRows?.ticketMedio ?? 0));
+      // Atendimentos COM cadastro (cliente != 2 e não nulo) — base do ticket médio
+      const [atendComCadRows] = await queryLocal<{
+        total_atendimentos: number; faturamento_total: number; clientes_distintos: number;
+      }>(`
+        SELECT
+          COUNT(*) as total_atendimentos,
+          COALESCE(SUM(v.valor_total), 0) as faturamento_total,
+          COUNT(DISTINCT v.cliente) as clientes_distintos
+        FROM sync_vendas v
+        WHERE ${unitUserCond}
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
+          AND v.cliente IS NOT NULL AND v.cliente != 2
+          AND DATE(v.data_criacao) >= '${mesStartStr.slice(0, 10)}'
+          AND DATE(v.data_criacao) <= '${mesEndStr.slice(0, 10)}'
+      `);
 
-        const [syncVendaAntRows] = await queryLocal<{ total: number }>(`
-          SELECT COALESCE(SUM(v.valor_total), 0) as total
-          FROM sync_vendas v
-          WHERE ${unitCond}
-            AND v.data_criacao >= '${mesAnteriorStartStr}'
-            AND v.data_criacao <= '${mesAnteriorEndStr}'
-            AND v.comanda_temp = 0
-            AND v.cancelado_motivo IS NULL
-            AND v.status != 0
-        `);
-        faturamentoAnterior = parseFloat(String(syncVendaAntRows?.total ?? 0));
+      // Atendimentos SEM cadastro (para somar no total de atendimentos e faturamento)
+      const [atendSemCadRows] = await queryLocal<{
+        total_atendimentos: number; faturamento_total: number;
+      }>(`
+        SELECT COUNT(*) as total_atendimentos, COALESCE(SUM(v.valor_total), 0) as faturamento_total
+        FROM sync_vendas v
+        WHERE ${unitUserCond}
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
+          AND (v.cliente IS NULL OR v.cliente = 2)
+          AND DATE(v.data_criacao) >= '${mesStartStr.slice(0, 10)}'
+          AND DATE(v.data_criacao) <= '${mesEndStr.slice(0, 10)}'
+      `);
 
-        // Clientes únicos atendidos no período
-        const [clientesRows] = await queryLocal<{ total: number }>(`
-          SELECT COUNT(DISTINCT v.cliente) as total
-          FROM sync_vendas v
-          WHERE ${unitCond}
-            AND v.data_criacao >= '${mesStartStr}'
-            AND v.data_criacao <= '${mesEndStr}'
-            AND v.comanda_temp = 0
-            AND v.cancelado_motivo IS NULL
-            AND v.status != 0
-            AND v.cliente IS NOT NULL
-            AND v.cliente != 2
-        `);
-        totalClientes = Number(clientesRows?.total ?? 0);
-      }
+      const atendComCad = Number(atendComCadRows?.total_atendimentos ?? 0);
+      const fatComCad = parseFloat(String(atendComCadRows?.faturamento_total ?? 0));
+      const atendSemCad = Number(atendSemCadRows?.total_atendimentos ?? 0);
+      const fatSemCad = parseFloat(String(atendSemCadRows?.faturamento_total ?? 0));
+
+      faturamentoMes = fatComCad + fatSemCad;
+      atendimentos = atendComCad + atendSemCad;
+      // Ticket médio calculado apenas sobre atendimentos com cadastro (igual ao Data VIP)
+      ticketMedio = atendComCad > 0 ? fatComCad / atendComCad : 0;
+      totalClientes = Number(atendComCadRows?.clientes_distintos ?? 0);
+
+      // Faturamento período anterior (para calcular trend)
+      const [syncVendaAntRows] = await queryLocal<{ total: number }>(`
+        SELECT COALESCE(SUM(v.valor_total), 0) as total
+        FROM sync_vendas v
+        WHERE ${unitUserCondAnt}
+          AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
+          AND DATE(v.data_criacao) >= '${mesAnteriorStartStr.slice(0, 10)}'
+          AND DATE(v.data_criacao) <= '${mesAnteriorEndStr.slice(0, 10)}'
+      `);
+      faturamentoAnterior = parseFloat(String(syncVendaAntRows?.total ?? 0));
 
       const trendFaturamento = faturamentoAnterior > 0
         ? Math.round(((faturamentoMes - faturamentoAnterior) / faturamentoAnterior) * 100)
