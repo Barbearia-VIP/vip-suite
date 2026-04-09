@@ -1,12 +1,12 @@
 /**
  * server/routers/raioX.ts
  * Router tRPC do módulo Raio X Clientes
- * Fonte de dados: banco externo franquia_producao (via SSH tunnel)
+ * Fonte de dados: banco LOCAL (tabelas sync_*)
  *
- * Estrutura da tabela clientes:
+ * Estrutura da tabela sync_clientes:
  *   id, nome, telefone, data_criacao, ultima_visita, ultima_visita_unidade,
- *   ultima_visita_colaborador, consumo, status
- *   (NÃO tem coluna visitas — calcular via JOIN com vendas)
+ *   ultima_visita_colaborador, consumo, status, unidade_id
+ *   (NÃO tem coluna visitas — calcular via JOIN com sync_vendas)
  *
  * Definições:
  * - Ativo (≤60d): última visita ≤ 60 dias
@@ -19,7 +19,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
 import { sql } from "drizzle-orm";
-import { queryExternal } from "../db-external";
+import { queryLocal } from "../db-local";
 import {
   syncRaioXCacheUnit,
   runRaioXCacheSyncJob,
@@ -158,7 +158,7 @@ function classificarStatus(dias: number): "ativo" | "em_risco" | "perdido" {
 // ─── Subquery de visitas por cliente ─────────────────────────────────────────
 const visitasSubquery = `(
   SELECT cliente, COUNT(*) as total_visitas
-  FROM vendas WHERE comanda_temp = 0 AND cancelado_motivo IS NULL AND status = 1
+  FROM sync_vendas WHERE comanda_temp = 0 AND cancelado_motivo IS NULL AND status = 1
   GROUP BY cliente
 )`;
 
@@ -199,18 +199,18 @@ export const raioXRouter = router({
       if (vgCached) { console.log("[visaoGeral] cache hit"); return vgCached; }
 
       const unitCondV = extIds.length === 0 ? "1=1"
-        : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
-        : `uu.unidade IN (${extIds.join(",")})`;
+        : extIds.length === 1 ? `v.unidade_id = ${extIds[0]}`
+        : `v.unidade_id IN (${extIds.join(",")})`;
       const unitCondSimple = extIds.length === 0 ? "1=1"
-        : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
-        : `ultima_visita_unidade IN (${extIds.join(",")})`;
+        : extIds.length === 1 ? `c.unidade_id = ${extIds[0]}`
+        : `c.unidade_id IN (${extIds.join(",")})`;
 
       // Subquery: ultima venda por cliente na unidade (usa dataFim como REF, igual ao sistema de referencia)
       // Isso alinha o universo com o sistema de referencia que usa MAX(vendas.data_criacao) por unidade
       const ultimaVendaSubquery = `(
         SELECT v.cliente, MAX(DATE(v.data_criacao)) as ultima_venda
-        FROM vendas v
-        JOIN usuarios uu ON v.usuario = uu.id
+        FROM sync_vendas v
+        JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -229,8 +229,8 @@ export const raioXRouter = router({
       // Universo para: Cadência Individual (com >=3 visitas históricas)
       const baseP24mSubquery = `(
         SELECT DISTINCT v.cliente
-        FROM vendas v
-        JOIN usuarios uu ON v.usuario = uu.id
+        FROM sync_vendas v
+        JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -240,8 +240,8 @@ export const raioXRouter = router({
       // Visitas históricas por cliente (total ever, para classificação de perfil)
       const visitasHistoricasSubquery = `(
         SELECT v.cliente, COUNT(*) as total_visitas
-        FROM vendas v
-        JOIN usuarios uu ON v.usuario = uu.id
+        FROM sync_vendas v
+        JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -251,8 +251,8 @@ export const raioXRouter = router({
       // Clientes do período selecionado (para: clientes únicos, novos, resgatados)
       const clientesPeriodoSubquery = `(
         SELECT DISTINCT v.cliente
-        FROM vendas v
-        JOIN usuarios uu ON v.usuario = uu.id
+        FROM sync_vendas v
+        JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -288,7 +288,7 @@ export const raioXRouter = router({
         saudeBarbeirosRows,
       ] = await Promise.all([
         // ── Sinais + Saúde da Base (Base S 12m rolling) ────────────────────────
-        queryExternal<{
+        queryLocal<{
           total_base_s: number;
           ativos: number;
           em_risco: number;
@@ -312,13 +312,13 @@ export const raioXRouter = router({
             COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 46 AND 90 THEN bs.cliente END) as one_shot_risco,
             COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 AND DATEDIFF('${dataFim}', bs.ultima_venda) > 90 THEN bs.cliente END) as one_shot_perdido
           FROM ${baseS12mSubquery} bs
-          JOIN clientes c ON c.id = bs.cliente
+          JOIN sync_clientes c ON c.id = bs.cliente
           LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bs.cliente
           WHERE c.status = 1
         `),
         // ── Por Perfil: Base S 12m, classificada por visitas históricas ─────────
         // Ocasional=2-3, Fiel=7-12, One-shot=1, Regular=4-6, Recorrente>12
-        queryExternal<{ one_shot: number; ocasional: number; regular: number; fiel: number; recorrente: number; total: number }>(`
+        queryLocal<{ one_shot: number; ocasional: number; regular: number; fiel: number; recorrente: number; total: number }>(`
           SELECT
             COUNT(DISTINCT CASE WHEN vh.total_visitas = 1 THEN bs.cliente END) as one_shot,
             COUNT(DISTINCT CASE WHEN vh.total_visitas BETWEEN 2 AND 3 THEN bs.cliente END) as ocasional,
@@ -328,12 +328,12 @@ export const raioXRouter = router({
             COUNT(DISTINCT bs.cliente) as total
           FROM ${baseS12mSubquery} bs
           LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bs.cliente
-          JOIN clientes c ON c.id = bs.cliente
+          JOIN sync_clientes c ON c.id = bs.cliente
           WHERE c.status = 1
         `),
         // ── Por Cadência: Base S 12m com >=3 visitas, por dias sem visitar (usando ultima_venda) ──
         // Perdido=>90d, Regular=31-60d, Em risco=61-90d, Espaçando=91-180d, Mto frequente=<=30d
-        queryExternal<{ perdido: number; regular: number; em_risco: number; espacando: number; mto_frequente: number; total: number }>(`
+        queryLocal<{ perdido: number; regular: number; em_risco: number; espacando: number; mto_frequente: number; total: number }>(`
           SELECT
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) > 90 THEN bs.cliente END) as perdido,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 31 AND 60 THEN bs.cliente END) as regular,
@@ -342,47 +342,47 @@ export const raioXRouter = router({
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) <= 30 THEN bs.cliente END) as mto_frequente,
             COUNT(DISTINCT bs.cliente) as total
           FROM ${baseS12mSubquery} bs
-          JOIN clientes c ON c.id = bs.cliente
+          JOIN sync_clientes c ON c.id = bs.cliente
           LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bs.cliente
           WHERE c.status = 1 AND vh.total_visitas >= 3
         `),
         // ── Status 12m: Base S 12m por faixas de dias (usando ultima_venda) ───────────────────────
         // ≤60d saudavel, 61-90d em risco (excl. one-shots), >90d perdido (excl. one-shots)
-        queryExternal<{ perdido: number; em_risco: number; saudavel: number; total: number }>(`
+        queryLocal<{ perdido: number; em_risco: number; saudavel: number; total: number }>(`
           SELECT
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) > 90 AND COALESCE(vh.total_visitas, 0) > 1 THEN bs.cliente END) as perdido,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 61 AND 90 AND COALESCE(vh.total_visitas, 0) > 1 THEN bs.cliente END) as em_risco,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) <= 60 THEN bs.cliente END) as saudavel,
             COUNT(DISTINCT bs.cliente) as total
           FROM ${baseS12mSubquery} bs
-          JOIN clientes c ON c.id = bs.cliente
+          JOIN sync_clientes c ON c.id = bs.cliente
           LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bs.cliente
           WHERE c.status = 1
         `),
         // ── One-Shot: Base S 12m com 1 visita histórica (usando ultima_venda) ──────────────────────────────────
-        queryExternal<{ total: number; aguardando: number; em_risco: number; perdido: number }>(`
+        queryLocal<{ total: number; aguardando: number; em_risco: number; perdido: number }>(`
           SELECT
             COUNT(DISTINCT bs.cliente) as total,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) <= 60 THEN bs.cliente END) as aguardando,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) BETWEEN 46 AND 90 THEN bs.cliente END) as em_risco,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', bs.ultima_venda) > 90 THEN bs.cliente END) as perdido
           FROM ${baseS12mSubquery} bs
-          JOIN clientes c ON c.id = bs.cliente
+          JOIN sync_clientes c ON c.id = bs.cliente
           LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bs.cliente
           WHERE c.status = 1 AND vh.total_visitas = 1
         `),
         // ── Clientes únicos no período selecionado ──────────────────────────────
-        queryExternal<{ total: number }>(`
+        queryLocal<{ total: number }>(`
           SELECT COUNT(DISTINCT cp.cliente) as total
           FROM ${clientesPeriodoSubquery} cp
         `),
         // ── Novos no período (data_criacao no período) ──────────────────────────
-        queryExternal<{ total: number; recorrentes: number; one_shot_total: number }>(`
+        queryLocal<{ total: number; recorrentes: number; one_shot_total: number }>(`
           SELECT
             COUNT(*) as total,
             SUM(CASE WHEN vh.total_visitas > 1 THEN 1 ELSE 0 END) as recorrentes,
             SUM(CASE WHEN vh.total_visitas = 1 OR vh.total_visitas IS NULL THEN 1 ELSE 0 END) as one_shot_total
-          FROM clientes c
+          FROM sync_clientes c
           LEFT JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = c.id
           WHERE ${unitCondSimple} AND c.status = 1
             AND DATE(c.data_criacao) >= '${dataInicio}' AND DATE(c.data_criacao) <= '${dataFim}'
@@ -390,15 +390,15 @@ export const raioXRouter = router({
         // ── Resgatados no período ────────────────────────────────────────────────
         // Clientes que: existiam antes do período, tinham parado de vir (>90d antes do início),
         // e voltaram a visitar no período selecionado
-        queryExternal<{ total: number }>(`
+        queryLocal<{ total: number }>(`
           SELECT COUNT(DISTINCT cp.cliente) as total
           FROM ${clientesPeriodoSubquery} cp
-          JOIN clientes c ON c.id = cp.cliente
+          JOIN sync_clientes c ON c.id = cp.cliente
           JOIN (
             SELECT v2.cliente, MAX(DATE(v2.data_criacao)) as ultima_antes
-            FROM vendas v2
-            JOIN usuarios uu2 ON v2.usuario = uu2.id
-            WHERE uu2.unidade IN (${extIds.length > 0 ? extIds.join(",") : "0"})
+            FROM sync_vendas v2
+            JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
+            WHERE v2.unidade_id IN (${extIds.length > 0 ? extIds.join(",") : "0"})
               AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
               AND v2.cliente IS NOT NULL AND v2.cliente != 2
               AND DATE(v2.data_criacao) < '${dataInicio}'
@@ -414,7 +414,7 @@ export const raioXRouter = router({
         // ratio = DATEDIFF(dataFim, ultima_venda) / cadencia_habitual
         // Assiduo: ratio <=0.8 | Regular: 0.8-1.2 | Espacando: 1.2-1.8 | Em Risco: 1.8-2.5 | Perdido: >2.5
         // 1a Vez: 1 visita historica (one-shot, sem cadencia calculavel)
-        queryExternal<{ assiduo: number; regular: number; espacando: number; primeira_vez: number; em_risco: number; perdido: number; total: number }>(`
+        queryLocal<{ assiduo: number; regular: number; espacando: number; primeira_vez: number; em_risco: number; perdido: number; total: number }>(`
           SELECT
             COUNT(DISTINCT CASE WHEN ci.ratio IS NOT NULL AND ci.ratio <= 0.8 THEN ci.cliente END) as assiduo,
             COUNT(DISTINCT CASE WHEN ci.ratio IS NOT NULL AND ci.ratio > 0.8 AND ci.ratio <= 1.2 THEN ci.cliente END) as regular,
@@ -437,18 +437,18 @@ export const raioXRouter = router({
               END as ratio
             FROM (
               SELECT DISTINCT v.cliente
-              FROM vendas v
-              JOIN usuarios uu ON v.usuario = uu.id
+              FROM sync_vendas v
+              JOIN sync_usuarios uu ON v.usuario = uu.id
               WHERE ${unitCondV}
                 AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
                 AND v.cliente IS NOT NULL AND v.cliente != 2
                 AND DATE(v.data_criacao) >= '${dataInicio24m}' AND DATE(v.data_criacao) <= '${dataFim}'
             ) bs
-            JOIN clientes c ON c.id = bs.cliente
+            JOIN sync_clientes c ON c.id = bs.cliente
             JOIN (
               SELECT v.cliente, COUNT(*) as total_visitas
-              FROM vendas v
-              JOIN usuarios uu ON v.usuario = uu.id
+              FROM sync_vendas v
+              JOIN sync_usuarios uu ON v.usuario = uu.id
               WHERE ${unitCondV}
                 AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
                 AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -461,8 +461,8 @@ export const raioXRouter = router({
                 SELECT
                   v.cliente,
                   DATEDIFF(DATE(v.data_criacao), LAG(DATE(v.data_criacao)) OVER (PARTITION BY v.cliente ORDER BY v.data_criacao)) as diff
-                FROM vendas v
-                JOIN usuarios uu ON v.usuario = uu.id
+                FROM sync_vendas v
+                JOIN sync_usuarios uu ON v.usuario = uu.id
                 WHERE ${unitCondV}
                   AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
                   AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -472,8 +472,8 @@ export const raioXRouter = router({
             ) iv ON iv.cliente = bs.cliente
             LEFT JOIN (
               SELECT v.cliente, MAX(DATE(v.data_criacao)) as ultima_venda
-              FROM vendas v
-              JOIN usuarios uu ON v.usuario = uu.id
+              FROM sync_vendas v
+              JOIN sync_usuarios uu ON v.usuario = uu.id
               WHERE ${unitCondV}
                 AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
                 AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -483,7 +483,7 @@ export const raioXRouter = router({
           ) ci
         `),
         // ── Movimento mensal ─────────────────────────────────────────────────────
-        queryExternal<{ mes: string; atendidos: number; em_risco: number; resgatados: number }>(`
+        queryLocal<{ mes: string; atendidos: number; em_risco: number; resgatados: number }>(`
           SELECT
             DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
             COUNT(DISTINCT v.cliente) as atendidos,
@@ -494,14 +494,14 @@ export const raioXRouter = router({
               WHEN DATE(c.data_criacao) < '${dataInicio}'
                 AND DATEDIFF(DATE(v.data_criacao), ult_antes.ultima_antes) > 90
               THEN v.cliente END) as resgatados
-          FROM vendas v
-          JOIN usuarios uu ON v.usuario = uu.id
-          JOIN clientes c ON c.id = v.cliente
+          FROM sync_vendas v
+          JOIN sync_usuarios uu ON v.usuario = uu.id
+          JOIN sync_clientes c ON c.id = v.cliente
           LEFT JOIN ${ultimaVendaSubquery} uv_mes ON uv_mes.cliente = v.cliente
           LEFT JOIN (
             SELECT v2.cliente, MAX(DATE(v2.data_criacao)) as ultima_antes
-            FROM vendas v2
-            JOIN usuarios uu2 ON v2.usuario = uu2.id
+            FROM sync_vendas v2
+            JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
             WHERE ${unitCondV.replace(/\buu\./g, 'uu2.')}
               AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
               AND v2.cliente IS NOT NULL AND v2.cliente != 2
@@ -515,7 +515,7 @@ export const raioXRouter = router({
           GROUP BY mes ORDER BY mes
         `),
         // ── Entradas mensais ─────────────────────────────────────────────────────
-        queryExternal<{ mes: string; novos: number; resgatados: number }>(`
+        queryLocal<{ mes: string; novos: number; resgatados: number }>(`
           SELECT
             DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
             COUNT(DISTINCT CASE
@@ -525,13 +525,13 @@ export const raioXRouter = router({
               WHEN DATE(c.data_criacao) < '${dataInicio}'
                 AND DATEDIFF(DATE(v.data_criacao), ult_antes_em.ultima_antes) > 90
               THEN v.cliente END) as resgatados
-          FROM vendas v
-          JOIN usuarios uu ON v.usuario = uu.id
-          JOIN clientes c ON c.id = v.cliente
+          FROM sync_vendas v
+          JOIN sync_usuarios uu ON v.usuario = uu.id
+          JOIN sync_clientes c ON c.id = v.cliente
           LEFT JOIN (
             SELECT v2.cliente, MAX(DATE(v2.data_criacao)) as ultima_antes
-            FROM vendas v2
-            JOIN usuarios uu2 ON v2.usuario = uu2.id
+            FROM sync_vendas v2
+            JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
             WHERE ${unitCondV.replace(/\buu\./g, 'uu2.')}
               AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
               AND v2.cliente IS NOT NULL AND v2.cliente != 2
@@ -549,7 +549,7 @@ export const raioXRouter = router({
         // Para cada mês do período, calcula o estado dos clientes da base S
         // usando a última visita ATE o fim daquele mês (não a global).
         // Abordagem: para cada (cliente, mês), pega o MAX(data_criacao) <= LAST_DAY(mês)
-        queryExternal<{ mes: string; em_risco: number; churn_novos: number; total_ativos_mes: number }>(`
+        queryLocal<{ mes: string; em_risco: number; churn_novos: number; total_ativos_mes: number }>(`
           SELECT
             meses.mes,
             COUNT(DISTINCT CASE
@@ -567,8 +567,8 @@ export const raioXRouter = router({
             SELECT DISTINCT
               DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
               LAST_DAY(v.data_criacao) as fim_mes
-            FROM vendas v
-            JOIN usuarios uu ON v.usuario = uu.id
+            FROM sync_vendas v
+            JOIN sync_usuarios uu ON v.usuario = uu.id
             WHERE ${unitCondV}
               AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
               AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
@@ -580,14 +580,14 @@ export const raioXRouter = router({
               all_v.cliente,
               DATE_FORMAT(m2.data_criacao, '%Y-%m') as mes,
               MAX(DATE(all_v.data_criacao)) as ultima_ate_mes
-            FROM vendas all_v
-            JOIN usuarios uu_av ON all_v.usuario = uu_av.id
+            FROM sync_vendas all_v
+            JOIN sync_usuarios uu_av ON all_v.usuario = uu_av.id
             JOIN (
               SELECT DISTINCT DATE_FORMAT(v3.data_criacao, '%Y-%m') as mes_ref,
                      LAST_DAY(v3.data_criacao) as fim_mes,
                      v3.data_criacao
-              FROM vendas v3
-              JOIN usuarios uu3 ON v3.usuario = uu3.id
+              FROM sync_vendas v3
+              JOIN sync_usuarios uu3 ON v3.usuario = uu3.id
               WHERE ${unitCondV.replace(/\buu\./g, 'uu3.')}
                 AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL AND v3.status = 1
                 AND DATE(v3.data_criacao) >= '${dataInicio}' AND DATE(v3.data_criacao) <= '${dataFim}'
@@ -604,15 +604,15 @@ export const raioXRouter = router({
         `),
         // ── Saúde por barbeiro ────────────────────────────────────────────────────────────────────────────────────────────────────────────
         // Em Risco e Perdido excluem one-shots (visitas históricas = 1)
-        queryExternal<{ colaborador_nome: string; total: number; saudavel: number; em_risco: number; perdido: number }>(`
+        queryLocal<{ colaborador_nome: string; total: number; saudavel: number; em_risco: number; perdido: number }>(`
           SELECT
             uu.nome as colaborador_nome,
             COUNT(DISTINCT v.cliente) as total,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv4.ultima_venda) <= 60 THEN v.cliente END) as saudavel,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv4.ultima_venda) BETWEEN 61 AND 90 AND COALESCE(vh4.total_visitas, 0) > 1 THEN v.cliente END) as em_risco,
             COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', uv4.ultima_venda) > 90 AND COALESCE(vh4.total_visitas, 0) > 1 THEN v.cliente END) as perdido
-          FROM vendas v
-          JOIN usuarios uu ON v.usuario = uu.id
+          FROM sync_vendas v
+          JOIN sync_usuarios uu ON v.usuario = uu.id
           LEFT JOIN ${ultimaVendaSubquery} uv4 ON uv4.cliente = v.cliente
           LEFT JOIN ${visitasHistoricasSubquery} vh4 ON vh4.cliente = v.cliente
           WHERE ${unitCondV}
@@ -841,17 +841,17 @@ export const raioXRouter = router({
       const dataFimDate = new Date(dataFim + "T00:00:00Z");
       const dataInicio12m = new Date(dataFimDate.getTime() - 365 * 86400000).toISOString().split("T")[0];
       const unitCondV = extIds.length === 0 ? "1=1"
-        : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
-        : `uu.unidade IN (${extIds.join(",")})`;
+        : extIds.length === 1 ? `v.unidade_id = ${extIds[0]}`
+        : `v.unidade_id IN (${extIds.join(",")})`;
       const unitCondSimple = extIds.length === 0 ? "1=1"
-        : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
-        : `ultima_visita_unidade IN (${extIds.join(",")})`;
+        : extIds.length === 1 ? `c.unidade_id = ${extIds[0]}`
+        : `c.unidade_id IN (${extIds.join(",")})`;
 
       // Universo Base S 12m: última venda nos 12m antes de dataFim
       const ultimaVendaSubquery = `(
         SELECT v.cliente, MAX(DATE(v.data_criacao)) as ultima_venda
-        FROM vendas v
-        JOIN usuarios uu ON v.usuario = uu.id
+        FROM sync_vendas v
+        JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -864,8 +864,8 @@ export const raioXRouter = router({
       )`;
       const visitasHistoricasSubquery = `(
         SELECT v.cliente, COUNT(*) as total_visitas
-        FROM vendas v
-        JOIN usuarios uu ON v.usuario = uu.id
+        FROM sync_vendas v
+        JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -874,14 +874,14 @@ export const raioXRouter = router({
 
       const [totalBaseRows, oneShotRows] = await Promise.all([
         // Total da base S 12m (para calcular % da base)
-        queryExternal<{ total: number }>(`
+        queryLocal<{ total: number }>(`
           SELECT COUNT(DISTINCT bs.cliente) as total
           FROM ${baseS12mSubquery} bs
-          JOIN clientes c ON c.id = bs.cliente
+          JOIN sync_clientes c ON c.id = bs.cliente
           WHERE c.status = 1
         `),
         // One-shots: Base S 12m com 1 visita histórica
-        queryExternal<{
+        queryLocal<{
           id: number; nome: string; telefone: string;
           data_criacao: string; ultima_venda_dt: string; total_gasto: number;
         }>(`
@@ -889,14 +889,14 @@ export const raioXRouter = router({
                  DATE(c.data_criacao) as data_criacao,
                  bs.ultima_venda as ultima_venda_dt,
                  COALESCE((
-                   SELECT SUM(v2.valor_total) FROM vendas v2
-                   JOIN usuarios uu2 ON v2.usuario = uu2.id
-                   WHERE uu2.unidade IN (${extIds.length > 0 ? extIds.join(",") : "0"})
+                   SELECT SUM(v2.valor_total) FROM sync_vendas v2
+                   JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
+                   WHERE v2.unidade_id IN (${extIds.length > 0 ? extIds.join(",") : "0"})
                      AND v2.cliente = c.id AND v2.comanda_temp = 0
                      AND v2.cancelado_motivo IS NULL AND v2.status = 1
                  ), 0) as total_gasto
           FROM ${baseS12mSubquery} bs
-          JOIN clientes c ON c.id = bs.cliente
+          JOIN sync_clientes c ON c.id = bs.cliente
           JOIN ${visitasHistoricasSubquery} vh ON vh.cliente = bs.cliente
           WHERE c.status = 1 AND vh.total_visitas = 1
           ORDER BY bs.ultima_venda DESC
@@ -995,7 +995,7 @@ export const raioXRouter = router({
       // ratio = DATEDIFF(refDate, ultima_venda_historica) / cadencia_habitual_individual
       // Assíduo ≤0.8 | Regular 0.8-1.2 | Espaçando 1.2-1.8 | Em Risco 1.8-2.5 | Perdido >2.5
       const buildRatioSQL = (refDate: string, ref12m: string) => {
-        const unitIn = extIds.length === 1 ? `uu.unidade = ${extIds[0]}` : `uu.unidade IN (${extIds.join(",")})`;
+        const unitIn = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
         return {
           sql: `
             SELECT
@@ -1012,7 +1012,7 @@ export const raioXRouter = router({
               FROM (
                 SELECT v.cliente,
                   DATEDIFF(MAX(DATE(v.data_criacao)), MIN(DATE(v.data_criacao))) / NULLIF(COUNT(*) - 1, 0) as cadencia_habitual
-                FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+                FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
                 WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
                   AND v.cliente IS NOT NULL AND v.cliente!=2
                   AND DATE(v.data_criacao) <= ?
@@ -1020,7 +1020,7 @@ export const raioXRouter = router({
               ) iv
               JOIN (
                 SELECT v.cliente, MAX(DATE(v.data_criacao)) as ultima_venda
-                FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+                FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
                 WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
                   AND v.cliente IS NOT NULL AND v.cliente!=2
                   AND DATE(v.data_criacao) <= ?
@@ -1028,12 +1028,12 @@ export const raioXRouter = router({
               ) uvc ON uvc.cliente = iv.cliente
               JOIN (
                 SELECT DISTINCT v.cliente
-                FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+                FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
                 WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
                   AND v.cliente IS NOT NULL AND v.cliente!=2
                   AND DATE(v.data_criacao) >= ? AND DATE(v.data_criacao) <= ?
               ) bs ON bs.cliente = iv.cliente
-              JOIN clientes c ON c.id = iv.cliente
+              JOIN sync_clientes c ON c.id = iv.cliente
               WHERE c.status=1 AND iv.cadencia_habitual IS NOT NULL AND iv.cadencia_habitual > 0
             ) ratios
           `,
@@ -1043,31 +1043,31 @@ export const raioXRouter = router({
 
       // Grupos do período atual
       const { sql: sqlAtual, params: paramsAtual } = buildRatioSQL(dataFim, dataInicio12m);
-      const gruposRows = await queryExternal<{
+      const gruposRows = await queryLocal<{
         assiduo: number; regular: number; espacando: number; em_risco: number; perdido: number;
         media_cadencia: number; total: number;
       }>(sqlAtual, paramsAtual);
       const g = gruposRows[0] || { assiduo: 0, regular: 0, espacando: 0, em_risco: 0, perdido: 0, media_cadencia: 0, total: 0 };
 
       // 1ª Vez (one-shots na base 12m)
-      const unitIn = extIds.length === 1 ? `uu.unidade = ${extIds[0]}` : `uu.unidade IN (${extIds.join(",")})`;
-      const primeiraVezRows = await queryExternal<{ total: number }>(`
+      const unitIn = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
+      const primeiraVezRows = await queryLocal<{ total: number }>(`
         SELECT COUNT(*) as total
         FROM (
           SELECT v.cliente, COUNT(*) as tv
-          FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+          FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
           WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
             AND v.cliente IS NOT NULL AND v.cliente!=2
           GROUP BY v.cliente HAVING tv = 1
         ) vh
         JOIN (
           SELECT DISTINCT v.cliente
-          FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+          FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
           WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
             AND v.cliente IS NOT NULL AND v.cliente!=2
             AND DATE(v.data_criacao) >= ? AND DATE(v.data_criacao) <= ?
         ) bs ON bs.cliente = vh.cliente
-        JOIN clientes c ON c.id = vh.cliente WHERE c.status=1
+        JOIN sync_clientes c ON c.id = vh.cliente WHERE c.status=1
       `, [dataInicio12m, dataFim]);
       const primeiraVez = Number(primeiraVezRows[0]?.total ?? 0);
 
@@ -1083,7 +1083,7 @@ export const raioXRouter = router({
         const refDate = `${ano}-${String(mes).padStart(2,"0")}-${String(lastDay).padStart(2,"0")}`;
         const ref12m = new Date(Date.UTC(ano - 1, mes - 1, lastDay)).toISOString().split("T")[0];
         const { sql, params } = buildRatioSQL(refDate, ref12m);
-        return queryExternal<{ assiduo: number; regular: number; espacando: number; em_risco: number; perdido: number; total: number }>(sql, params)
+        return queryLocal<{ assiduo: number; regular: number; espacando: number; em_risco: number; perdido: number; total: number }>(sql, params)
           .then(rows => {
             const r = rows[0] || { assiduo: 0, regular: 0, espacando: 0, em_risco: 0, perdido: 0, total: 0 };
             return {
@@ -1187,7 +1187,7 @@ export const raioXRouter = router({
         };
       }
 
-      const unitIn = extIds.length === 1 ? `uu.unidade = ${extIds[0]}` : `uu.unidade IN (${extIds.join(",")})`;
+      const unitIn = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
 
       // ── Passo 1: Base de churn = clientes que visitaram nos últimos 620d ────────
       // Lógica alinhada ao sistema de referência:
@@ -1197,9 +1197,9 @@ export const raioXRouter = router({
       //   One-shot = 1 visita histórica
       const dataBase620 = new Date(new Date(dataFim + "T12:00:00Z").getTime() - 620 * 86400000)
         .toISOString().split("T")[0];
-      const unitIn2 = extIds.length === 1 ? `uu2.unidade = ${extIds[0]}` : `uu2.unidade IN (${extIds.join(",")})`;
+      const unitIn2 = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
 
-      const clientesBase = await queryExternal<{
+      const clientesBase = await queryLocal<{
         cliente_id: number; nome: string; telefone: string;
         ultima_visita: Date; tv_hist: number; ticket: number;
       }>(`
@@ -1209,15 +1209,15 @@ export const raioXRouter = router({
           COALESCE(c.consumo, 0) as ticket
         FROM (
           SELECT DISTINCT v.cliente
-          FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+          FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
           WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
             AND v.cliente IS NOT NULL AND v.cliente!=2
             AND DATE(v.data_criacao) >= '${dataBase620}' AND DATE(v.data_criacao) <= '${dataFim}'
         ) bp
-        JOIN clientes c ON c.id = bp.cliente
+        JOIN sync_clientes c ON c.id = bp.cliente
         LEFT JOIN (
           SELECT v2.cliente, COUNT(*) as tv
-          FROM vendas v2 JOIN usuarios uu2 ON v2.usuario = uu2.id
+          FROM sync_vendas v2 JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
           WHERE ${unitIn2} AND v2.comanda_temp=0
             AND v2.cancelado_motivo IS NULL AND v2.status!=0
             AND v2.cliente IS NOT NULL AND v2.cliente!=2
@@ -1229,17 +1229,17 @@ export const raioXRouter = router({
 
       // ── Passo 2: Resgatados — clientes do período cuja visita ANTERIOR ao período
       //    foi há ≥90d antes de dataInicio (usando MAX da última visita antes do período)
-      const resgatadosIds = await queryExternal<{ cliente_id: number; ultima_antes: Date }>(`
+      const resgatadosIds = await queryLocal<{ cliente_id: number; ultima_antes: Date }>(`
         SELECT bp.cliente as cliente_id, MAX(DATE(v_ant.data_criacao)) as ultima_antes
         FROM (
           SELECT DISTINCT v.cliente
-          FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+          FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
           WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
             AND v.cliente IS NOT NULL AND v.cliente!=2
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
         ) bp
-        JOIN vendas v_ant ON v_ant.cliente = bp.cliente
-        JOIN usuarios uu_ant ON v_ant.usuario = uu_ant.id
+        JOIN sync_vendas v_ant ON v_ant.cliente = bp.cliente
+        JOIN sync_usuarios uu_ant ON v_ant.usuario = uu_ant.id
         WHERE ${extIds.length === 1 ? `uu_ant.unidade = ${extIds[0]}` : `uu_ant.unidade IN (${extIds.join(",")})`}
           AND v_ant.comanda_temp=0 AND v_ant.cancelado_motivo IS NULL AND v_ant.status!=0
           AND DATE(v_ant.data_criacao) < '${dataInicio}'
@@ -1311,7 +1311,7 @@ export const raioXRouter = router({
         const mesLabel = `${lastDay.getUTCFullYear()}-${String(lastDay.getUTCMonth() + 1).padStart(2, "0")}`;
         return (async () => {
           try {
-            const [snap] = await queryExternal<{
+            const [snap] = await queryLocal<{
             total: number; perdidos: number; fidelizados: number; perdidosFid: number;
           }>(`
             SELECT
@@ -1320,14 +1320,14 @@ export const raioXRouter = router({
               SUM(CASE WHEN COALESCE(tvh.tv,0) >= 3 THEN 1 ELSE 0 END) as fidelizados,
               SUM(CASE WHEN COALESCE(tvh.tv,0) >= 3 AND DATEDIFF('${refStr}', c.ultima_visita) > 45 THEN 1 ELSE 0 END) as perdidosFid
             FROM (
-              SELECT DISTINCT v.cliente FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+              SELECT DISTINCT v.cliente FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
               WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
                 AND v.cliente IS NOT NULL AND v.cliente!=2
                 AND DATE(v.data_criacao) >= '${base620Str}' AND DATE(v.data_criacao) <= '${refStr}'
             ) bp
-            JOIN clientes c ON c.id = bp.cliente
+            JOIN sync_clientes c ON c.id = bp.cliente
             LEFT JOIN (
-              SELECT v2.cliente, COUNT(*) as tv FROM vendas v2 JOIN usuarios uu2 ON v2.usuario = uu2.id
+              SELECT v2.cliente, COUNT(*) as tv FROM sync_vendas v2 JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
               WHERE ${unitIn2} AND v2.comanda_temp=0 AND v2.cancelado_motivo IS NULL AND v2.status!=0
                 AND v2.cliente IS NOT NULL AND v2.cliente!=2
               GROUP BY v2.cliente
@@ -1400,12 +1400,12 @@ export const raioXRouter = router({
       const base620Str = new Date(new Date(dataFim + "T12:00:00Z").getTime() - 620 * 86400000).toISOString().split("T")[0];
       const resgate90Str = new Date(new Date(dataFim + "T12:00:00Z").getTime() - 90 * 86400000).toISOString().split("T")[0];
 
-      const unitIn = extIds.length === 1 ? `uu.unidade = ${extIds[0]}` : `uu.unidade IN (${extIds.join(",")})`;
-      const unitIn2 = extIds.length === 1 ? `uu2.unidade = ${extIds[0]}` : `uu2.unidade IN (${extIds.join(",")})`;
-      const unitIn3 = extIds.length === 1 ? `uu3.unidade = ${extIds[0]}` : `uu3.unidade IN (${extIds.join(",")})`;
+      const unitIn = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
+      const unitIn2 = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
+      const unitIn3 = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
 
       // Query 1: clientes da base (620d) com ultima_visita e total de visitas históricas
-      const clientesBase = await queryExternal<{
+      const clientesBase = await queryLocal<{
         cliente_id: number;
         ultima_visita: Date | string;
         tv_hist: number;
@@ -1414,9 +1414,9 @@ export const raioXRouter = router({
           c.id as cliente_id,
           c.ultima_visita,
           COUNT(vh.id) as tv_hist
-        FROM clientes c
-        JOIN vendas vh ON vh.cliente = c.id
-        JOIN usuarios uuh ON vh.usuario = uuh.id
+        FROM sync_clientes c
+        JOIN sync_vendas vh ON vh.cliente = c.id
+        JOIN sync_usuarios uuh ON vh.usuario = uuh.id
         WHERE ${unitIn.replace(/uu\./g, 'uuh.')} AND uuh.visivel_dashboard = 1
           AND vh.comanda_temp=0 AND vh.cancelado_motivo IS NULL AND vh.status!=0
           AND vh.cliente IS NOT NULL AND vh.cliente!=2
@@ -1432,15 +1432,15 @@ export const raioXRouter = router({
       const idList = clienteIds.join(",");
 
       // Query 2: último barbeiro de cada cliente (usando MAX data_criacao + JOIN)
-      const ultBarbRows = await queryExternal<{
+      const ultBarbRows = await queryLocal<{
         cliente_id: number;
         colaborador_id: number;
         colaborador_nome: string;
         max_dt: string;
       }>(`
         SELECT v.cliente as cliente_id, uu.id as colaborador_id, uu.nome as colaborador_nome, MAX(v.data_criacao) as max_dt
-        FROM vendas v
-        JOIN usuarios uu ON v.usuario = uu.id
+        FROM sync_vendas v
+        JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitIn} AND uu.visivel_dashboard = 1
           AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
           AND v.cliente IN (${idList})
@@ -1457,9 +1457,9 @@ export const raioXRouter = router({
       }
 
       // Query 3: clientes resgatados (voltaram nos últimos 90d)
-      const resgatadosRows = await queryExternal<{ cliente_id: number }>(`
+      const resgatadosRows = await queryLocal<{ cliente_id: number }>(`
         SELECT DISTINCT v.cliente as cliente_id
-        FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+        FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
           AND v.cliente IN (${idList})
           AND DATE(v.data_criacao) >= '${resgate90Str}' AND DATE(v.data_criacao) <= '${dataFim}'
@@ -1527,8 +1527,8 @@ export const raioXRouter = router({
       if (extIds.length === 0) {
         return { cohortMensal: [], analiseNovos: null, distribuicao: null, cohortHistorico: [], cohortPorBarbeiro: [] };
       }
-      const unitIn = extIds.length === 1 ? `uu.unidade = ${extIds[0]}` : `uu.unidade IN (${extIds.join(",")})`;
-      const unitIn2 = extIds.length === 1 ? `uu2.unidade = ${extIds[0]}` : `uu2.unidade IN (${extIds.join(",")})`;
+      const unitIn = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
+      const unitIn2 = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
 
       const dataIniRaw = input.dataInicio ? new Date(input.dataInicio) : new Date(Date.now() - 90 * 86400000);
       const dataFimRaw = input.dataFim ? new Date(input.dataFim) : new Date();
@@ -1539,7 +1539,7 @@ export const raioXRouter = router({
       if (cohortCached) { console.log("[cohort] cache hit"); return cohortCached; }
 
       // ── 1) Clientes novos no período (1ª visita histórica dentro do período) ──
-      const novosRows = await queryExternal<{
+      const novosRows = await queryLocal<{
         cliente_id: number;
         primeiraVisita: string | Date;
         mes: string;
@@ -1551,18 +1551,18 @@ export const raioXRouter = router({
           sub.ticketPrimeira, sub.barbeiro_id, sub.barbeiro_nome
         FROM (
           SELECT v.cliente, MIN(DATE(v.data_criacao)) as primeiraVisita,
-            (SELECT v2.valor_total FROM vendas v2 JOIN usuarios uu2 ON v2.usuario = uu2.id
+            (SELECT v2.valor_total FROM sync_vendas v2 JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
              WHERE ${unitIn2} AND v2.cliente = v.cliente AND v2.comanda_temp=0
                AND v2.cancelado_motivo IS NULL AND v2.status!=0
              ORDER BY v2.data_criacao ASC LIMIT 1) as ticketPrimeira,
-            (SELECT v3.usuario FROM vendas v3 WHERE v3.cliente = v.cliente AND v3.comanda_temp=0
+            (SELECT v3.usuario FROM sync_vendas v3 WHERE v3.cliente = v.cliente AND v3.comanda_temp=0
                AND v3.cancelado_motivo IS NULL AND v3.status!=0
              ORDER BY v3.data_criacao ASC LIMIT 1) as barbeiro_id,
-            (SELECT uu3.nome FROM vendas v3 JOIN usuarios uu3 ON v3.usuario = uu3.id
+            (SELECT uu3.nome FROM sync_vendas v3 JOIN sync_usuarios uu3 ON v3.usuario = uu3.id
              WHERE v3.cliente = v.cliente AND v3.comanda_temp=0
                AND v3.cancelado_motivo IS NULL AND v3.status!=0
              ORDER BY v3.data_criacao ASC LIMIT 1) as barbeiro_nome
-          FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+          FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
           WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
             AND v.cliente IS NOT NULL AND v.cliente!=2
           GROUP BY v.cliente
@@ -1582,13 +1582,13 @@ export const raioXRouter = router({
       const idList = clienteIds.join(",");
 
       // ── 2) Todas as visitas posteriores desses clientes ──
-      const visitasPost = await queryExternal<{
+      const visitasPost = await queryLocal<{
         cliente_id: number;
         data_visita: string | Date;
         total: number;
       }>(`
         SELECT v.cliente as cliente_id, DATE(v.data_criacao) as data_visita, v.valor_total as total
-        FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+        FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
           AND v.cliente IN (${idList})
         ORDER BY v.cliente, v.data_criacao
@@ -1670,9 +1670,9 @@ export const raioXRouter = router({
       const ticketMedio = tickets.length > 0 ? Math.round(tickets.reduce((a,b)=>a+b,0) / tickets.length * 100) / 100 : 0;
 
       // Total de clientes únicos no período (base para % novos)
-      const baseRows = await queryExternal<{ total: number }>(`
+      const baseRows = await queryLocal<{ total: number }>(`
         SELECT COUNT(DISTINCT v.cliente) as total
-        FROM vendas v JOIN usuarios uu ON v.usuario = uu.id
+        FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
           AND v.cliente IS NOT NULL AND v.cliente!=2
           AND DATE(v.data_criacao) >= '${dataIniStr}' AND DATE(v.data_criacao) <= '${dataFimStr}'
@@ -1829,8 +1829,8 @@ export const raioXRouter = router({
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
       const unitCond = extIds.length === 0 ? "1=1"
-        : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
-        : `uu.unidade IN (${extIds.join(",")})`;
+        : extIds.length === 1 ? `v.unidade_id = ${extIds[0]}`
+        : `v.unidade_id IN (${extIds.join(",")})`;
       const dataInicio = input.dataInicio || new Date(Date.now() - 365 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
       const barbCacheKey = `barb-${extIds.join(",")}-${dataInicio}-${dataFim}`;
@@ -1839,7 +1839,7 @@ export const raioXRouter = router({
 
       // Query principal: saúde da base por barbeiro
       // Para cada barbeiro, pega os clientes que atendeu no período e classifica por status atual
-      const saudeRows = await queryExternal<{
+      const saudeRows = await queryLocal<{
         colaborador_id: number;
         colaborador_nome: string;
         total_clientes: number;
@@ -1872,15 +1872,15 @@ export const raioXRouter = router({
           AVG(v.valor_total) as ticket_medio,
           COUNT(v.id) as total_atendimentos,
           SUM(CASE WHEN DATEDIFF(NOW(), c.ultima_visita) <= 30 THEN 1 ELSE 0 END) as retencao_30d
-        FROM vendas v
-        JOIN usuarios uu ON v.usuario = uu.id
-        JOIN clientes c ON c.id = v.cliente
+        FROM sync_vendas v
+        JOIN sync_usuarios uu ON v.usuario = uu.id
+        JOIN sync_clientes c ON c.id = v.cliente
         JOIN (
           SELECT
             v2.cliente,
             COUNT(*) as total_visitas_hist,
             MIN(v2.data_criacao) as primeira_visita_geral
-          FROM vendas v2
+          FROM sync_vendas v2
           WHERE v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
             AND v2.cliente IS NOT NULL AND v2.cliente != 2
           GROUP BY v2.cliente
@@ -1963,13 +1963,13 @@ export const raioXRouter = router({
 
       // Subquery para filtrar por unidade (mais rápido que JOIN)
       const unitUserCond = extIds.length === 0 ? "1=1"
-        : extIds.length === 1 ? `v.usuario IN (SELECT id FROM usuarios WHERE unidade = ${extIds[0]})`
-        : `v.usuario IN (SELECT id FROM usuarios WHERE unidade IN (${extIds.join(",")}))`;
+        : extIds.length === 1 ? `v.usuario IN (SELECT id FROM sync_usuarios WHERE unidade = ${extIds[0]})`
+        : `v.usuario IN (SELECT id FROM sync_usuarios WHERE unidade IN (${extIds.join(",")}))`;
 
       console.log('[Diagnostico] Iniciando queries sequenciais...');
 
       // Query 1: Atendimentos COM cadastro (cliente != 2 e não nulo)
-      const atendComCadastroRows = await queryExternal<{
+      const atendComCadastroRows = await queryLocal<{
         total_atendimentos: number;
         faturamento_total: number;
         clientes_distintos: number;
@@ -1978,7 +1978,7 @@ export const raioXRouter = router({
           COUNT(*) as total_atendimentos,
           COALESCE(SUM(v.valor_total), 0) as faturamento_total,
           COUNT(DISTINCT v.cliente) as clientes_distintos
-        FROM vendas v
+        FROM sync_vendas v
         WHERE ${unitUserCond}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -1987,12 +1987,12 @@ export const raioXRouter = router({
       console.log('[Diagnostico] Query 1 OK (atend com cadastro)');
 
       // Query 2: Atendimentos SEM cadastro (cliente = 2 ou nulo = "sem cadastro" do sistema)
-      const atendSemCadastroRows = await queryExternal<{
+      const atendSemCadastroRows = await queryLocal<{
         atendimentos_sem_cadastro: number;
         faturamento_sem_cadastro: number;
       }>(`
         SELECT COUNT(*) as atendimentos_sem_cadastro, COALESCE(SUM(v.valor_total), 0) as faturamento_sem_cadastro
-        FROM vendas v
+        FROM sync_vendas v
         WHERE ${unitUserCond}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND (v.cliente IS NULL OR v.cliente = 2)
@@ -2001,7 +2001,7 @@ export const raioXRouter = router({
       console.log('[Diagnostico] Query 2 OK (atend sem cadastro)');
 
       // Query 3: Saúde da base — one-shot, freq média, em risco, perdidos
-      const saudeRows2 = await queryExternal<{
+      const saudeRows2 = await queryLocal<{
         total_clientes: number;
         one_shot: number;
         voltaram_2x: number;
@@ -2021,7 +2021,7 @@ export const raioXRouter = router({
             v.cliente,
             COUNT(*) as total_visitas,
             DATEDIFF(CURDATE(), MAX(DATE(v.data_criacao))) as dias_desde_ultima
-          FROM vendas v
+          FROM sync_vendas v
           WHERE ${unitUserCond}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
             AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -2032,17 +2032,17 @@ export const raioXRouter = router({
       console.log('[Diagnostico] Query 3 OK (saude base)');
 
       // Query 4: Qualidade de cadastro — telefone (via tabela clientes)
-      const qualidadeRows2 = await queryExternal<{
+      const qualidadeRows2 = await queryLocal<{
         com_telefone: number;
         sem_telefone: number;
       }>(`
         SELECT
           SUM(CASE WHEN c.telefone IS NOT NULL AND c.telefone != '' THEN 1 ELSE 0 END) as com_telefone,
           SUM(CASE WHEN c.telefone IS NULL OR c.telefone = '' THEN 1 ELSE 0 END) as sem_telefone
-        FROM clientes c
+        FROM sync_clientes c
         WHERE c.id IN (
           SELECT DISTINCT v.cliente
-          FROM vendas v
+          FROM sync_vendas v
           WHERE ${unitUserCond}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
             AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -2052,13 +2052,13 @@ export const raioXRouter = router({
       console.log('[Diagnostico] Query 4 OK (qualidade cadastro)');
 
       // Query 5: Distribuição de visitas (1x, 2x, 3x, 4x, 5+)
-      const visitasDistRows = await queryExternal<{ total_visitas: number; clientes: number }>(`
+      const visitasDistRows = await queryLocal<{ total_visitas: number; clientes: number }>(`
         SELECT
           CASE WHEN cnt >= 5 THEN 5 ELSE cnt END as total_visitas,
           COUNT(*) as clientes
         FROM (
           SELECT v.cliente, COUNT(*) as cnt
-          FROM vendas v
+          FROM sync_vendas v
           WHERE ${unitUserCond}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
             AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -2071,9 +2071,9 @@ export const raioXRouter = router({
       console.log('[Diagnostico] Query 5 OK (dist visitas)');
 
       // Query 6: Horários de pico
-      const horarioRows = await queryExternal<{ hora: number; atendimentos: number }>(`
+      const horarioRows = await queryLocal<{ hora: number; atendimentos: number }>(`
         SELECT HOUR(v.data_criacao) as hora, COUNT(*) as atendimentos
-        FROM vendas v
+        FROM sync_vendas v
         WHERE ${unitUserCond}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
@@ -2083,12 +2083,12 @@ export const raioXRouter = router({
       console.log('[Diagnostico] Query 6 OK (horarios pico)');
 
       // Query 7: Movimento por dia da semana
-      const diaSemanaRows = await queryExternal<{ dia_semana: number; atendimentos: number; clientes: number }>(`
+      const diaSemanaRows = await queryLocal<{ dia_semana: number; atendimentos: number; clientes: number }>(`
         SELECT
           DAYOFWEEK(v.data_criacao) as dia_semana,
           COUNT(*) as atendimentos,
           COUNT(DISTINCT v.cliente) as clientes
-        FROM vendas v
+        FROM sync_vendas v
         WHERE ${unitUserCond}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
@@ -2098,7 +2098,7 @@ export const raioXRouter = router({
       console.log('[Diagnostico] Query 7 OK (dias semana)');
 
       // Query 8: Ausência desde última visita (faixas de dias)
-      const faixasDiasRows = await queryExternal<{ faixa_dias: string; total: number }>(`
+      const faixasDiasRows = await queryLocal<{ faixa_dias: string; total: number }>(`
         SELECT
           CASE
             WHEN dias_desde_ultima <= 30 THEN '0-30 dias'
@@ -2110,7 +2110,7 @@ export const raioXRouter = router({
           COUNT(*) as total
         FROM (
           SELECT v.cliente, DATEDIFF(CURDATE(), MAX(DATE(v.data_criacao))) as dias_desde_ultima
-          FROM vendas v
+          FROM sync_vendas v
           WHERE ${unitUserCond}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
             AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -2280,8 +2280,8 @@ export const raioXRouter = router({
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
 
       const unitCondV = extIds.length === 0 ? "1=1"
-        : extIds.length === 1 ? `uu.unidade = ${extIds[0]}`
-        : `uu.unidade IN (${extIds.join(",")})`;
+        : extIds.length === 1 ? `v.unidade_id = ${extIds[0]}`
+        : `v.unidade_id IN (${extIds.join(",")})`;
 
       const tipo = input.tipo || "todos";
       let extraCond = "";
@@ -2297,18 +2297,18 @@ export const raioXRouter = router({
         extraCond = " AND ((vpc.total_visitas = 1 AND DATEDIFF(NOW(), c.ultima_visita) BETWEEN 31 AND 90) OR DATEDIFF(NOW(), c.ultima_visita) BETWEEN 61 AND 180)";
       }
 
-      const rows = await queryExternal<{
+      const rows = await queryLocal<{
         id: number; nome: string; telefone: string;
         ultima_visita: Date; consumo: number; dias: number; total_visitas: number;
       }>(`
         SELECT c.id, c.nome, c.telefone, c.ultima_visita, c.consumo,
                DATEDIFF(NOW(), c.ultima_visita) as dias,
                COALESCE(vpc.total_visitas, 0) as total_visitas
-        FROM clientes c
+        FROM sync_clientes c
         JOIN (
           SELECT v.cliente, COUNT(*) as total_visitas
-          FROM vendas v
-          JOIN usuarios uu ON v.usuario = uu.id
+          FROM sync_vendas v
+          JOIN sync_usuarios uu ON v.usuario = uu.id
           WHERE ${unitCondV}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
             AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -2367,7 +2367,7 @@ export const raioXRouter = router({
       if (extIds.length === 0) return { kpis: null, barbeiros: [], segmentosGeral: null, evolucao: [] };
 
       // Filtro de unidade via JOIN usuarios
-      const unitCondU = extIds.length === 1 ? `uu.unidade = ${extIds[0]}` : `uu.unidade IN (${extIds.join(",")})`;
+      const unitCondU = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
 
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
@@ -2389,11 +2389,11 @@ export const raioXRouter = router({
       // independente de quem registrou a venda no caixa (vendas.usuario).
       // Isso captura todos os barbeiros ativos: Wuesley, Andrade, Gonzalo, Rogerio, Lester,
       // João_Flavio, Pablo, Gabriela — e o Colaborador Caixa aparece com volume real (≈3).
-      const barbeirosAtivosRows = await queryExternal<{ barbeiro_id: number }>(`
+      const barbeirosAtivosRows = await queryLocal<{ barbeiro_id: number }>(`
         SELECT DISTINCT vp.colaborador as barbeiro_id
-        FROM vendas_produtos vp
-        JOIN vendas v ON v.id = vp.venda
-        JOIN usuarios uu ON uu.id = vp.colaborador
+        FROM sync_vendas_produtos vp
+        JOIN sync_vendas v ON v.id = vp.venda
+        JOIN sync_usuarios uu ON uu.id = vp.colaborador
         WHERE ${unitCondU}
           AND DATE(v.data_criacao) >= '${dataInicio}'
           AND DATE(v.data_criacao) <= '${dataFim}'
@@ -2412,10 +2412,10 @@ export const raioXRouter = router({
       // ── ETAPA 1: IDs dos clientes atendidos no período ─────────────────────────────────────────────────────
       // Usa vendas_produtos.colaborador para capturar clientes atendidos por barbeiros executores
       // (vendas.usuario pode ser o caixa, não o barbeiro que executou)
-      const clientesPeriodo = await queryExternal<{ cliente_id: number }>(`
+      const clientesPeriodo = await queryLocal<{ cliente_id: number }>(`
         SELECT DISTINCT v.cliente as cliente_id
-        FROM vendas v
-        JOIN vendas_produtos vp ON vp.venda = v.id AND vp.colaborador IN (${barbeirosAtivosStr})
+        FROM sync_vendas v
+        JOIN sync_vendas_produtos vp ON vp.venda = v.id AND vp.colaborador IN (${barbeirosAtivosStr})
         WHERE DATE(v.data_criacao) >= '${dataInicio}'
           AND DATE(v.data_criacao) <= '${dataFim}'
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
@@ -2433,7 +2433,7 @@ export const raioXRouter = router({
       // ── ETAPA 2A: Histórico agregado por cliente ─────────────────────────────────────────────
       // barbeiros_distintos = contagem de barbeiros DISTINTOS NO PERÍODO (não histórico total)
       // Isso alinha com o sistema de referência: Só 1 + Multi = Total do período
-      const clientesRows = await queryExternal<{
+      const clientesRows = await queryLocal<{
         cliente_id: number;
         total_visitas_hist: number;
         barbeiros_distintos: number;
@@ -2448,8 +2448,8 @@ export const raioXRouter = router({
           MAX(v.data_criacao) as ultima_visita,
           DATEDIFF(NOW(), MAX(v.data_criacao)) as dias_desde_ultima,
           MIN(v.data_criacao) as primeira_visita_hist
-        FROM vendas v
-        JOIN vendas_produtos vp ON vp.venda = v.id AND vp.colaborador IN (${barbeirosAtivosStr})
+        FROM sync_vendas v
+        JOIN sync_vendas_produtos vp ON vp.venda = v.id AND vp.colaborador IN (${barbeirosAtivosStr})
         WHERE v.cliente IN (${clienteIdsStr})
           AND DATE(v.data_criacao) >= '${dataInicio}'
           AND DATE(v.data_criacao) <= '${dataFim}'
@@ -2461,7 +2461,7 @@ export const raioXRouter = router({
       // ── ETAPA 2B: Barbeiro principal e último barbeiro por cliente ──────────────────────
       // Usa vendas_produtos.colaborador para atribuir o executor real por cliente
       // (query mais leve pois já temos os IDs dos clientes e barbeiros)
-      const barbeirosPorCliente = await queryExternal<{
+      const barbeirosPorCliente = await queryLocal<{
         cliente_id: number;
         ultimo_barbeiro_id: number;
         ultimo_barbeiro_nome: string;
@@ -2485,8 +2485,8 @@ export const raioXRouter = router({
               vp.colaborador,
               COUNT(*) as cnt,
               MAX(v.data_criacao) as ultima_data
-            FROM vendas_produtos vp
-            JOIN vendas v ON v.id = vp.venda
+            FROM sync_vendas_produtos vp
+            JOIN sync_vendas v ON v.id = vp.venda
             WHERE v.cliente IN (${clienteIdsStr})
               AND vp.colaborador IN (${barbeirosAtivosStr})
               AND DATE(v.data_criacao) >= '${dataInicio}'
@@ -2497,17 +2497,17 @@ export const raioXRouter = router({
           ) sub
           GROUP BY sub.cliente_id
         ) t
-        LEFT JOIN usuarios uu_ult ON uu_ult.id = t.ultimo_barbeiro_id
-        LEFT JOIN usuarios uu_pri ON uu_pri.id = t.barbeiro_principal_id
+        LEFT JOIN sync_usuarios uu_ult ON uu_ult.id = t.ultimo_barbeiro_id
+        LEFT JOIN sync_usuarios uu_pri ON uu_pri.id = t.barbeiro_principal_id
       `);
 
       // Mapa de barbeiro por cliente
       const barbMapByCliente = new Map(barbeirosPorCliente.map(b => [Number(b.cliente_id), b]));
 
       // ── 3. Busca lista de barbeiros ativos ─────────────────────────────────────────────
-      const barbeirosList = await queryExternal<{ id: number; nome: string }>(`
+      const barbeirosList = await queryLocal<{ id: number; nome: string }>(`
         SELECT DISTINCT uu.id, uu.nome
-        FROM usuarios uu
+        FROM sync_usuarios uu
         WHERE uu.id IN (${barbeirosAtivosStr})
           AND uu.status = 1
         ORDER BY uu.nome
@@ -2634,7 +2634,7 @@ export const raioXRouter = router({
 
       // ── 7. Evolução mensal (novos, rec. fiéis, rec. exclusivos, rec. rotativos, total) ──
       // Usa vendas.usuario (rápido) para evitar JOIN pesado com vendas_produtos
-      const evolucaoRows = await queryExternal<{
+      const evolucaoRows = await queryLocal<{
         mes: string;
         novos: number;
         rec_fieis: number;
@@ -2651,14 +2651,14 @@ export const raioXRouter = router({
           COUNT(DISTINCT CASE WHEN hist2.barbeiros_distintos > 1 THEN v.cliente END) as rec_rotativos,
           COUNT(v.id) as total_atendimentos,
           COUNT(DISTINCT v.cliente) as total_clientes
-        FROM vendas v
+        FROM sync_vendas v
         JOIN (
           SELECT
             v2.cliente,
             COUNT(v2.id) as total_visitas_hist,
             COUNT(DISTINCT v2.usuario) as barbeiros_distintos,
             MIN(v2.data_criacao) as primeira_visita_geral
-          FROM vendas v2
+          FROM sync_vendas v2
           WHERE v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
             AND v2.cliente IS NOT NULL AND v2.cliente != 2
             AND v2.usuario IN (${barbeirosAtivosStr})

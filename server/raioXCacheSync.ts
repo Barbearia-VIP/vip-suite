@@ -7,13 +7,14 @@
  * - Para cada unidade configurada, calcula os dados de cada mês fechado
  *   (do mês mais antigo disponível até o mês anterior ao atual)
  * - Salva no banco interno (raio_x_cache_*) usando INSERT ... ON DUPLICATE KEY UPDATE
- * - O mês atual NUNCA é cacheado — sempre vai ao banco externo em tempo real
+ * - O mês atual NUNCA é cacheado — sempre calculado em tempo real
  * - Pode ser disparado manualmente via tRPC (raioX.triggerCacheSync)
+ * Fase 4: migrado para banco LOCAL (tabelas sync_*) — sem SSH tunnel.
  */
 
 import { getDb } from "./db";
 import { sql } from "drizzle-orm";
-import { queryExternal } from "./db-external";
+import { queryLocal } from "./db-local";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -56,13 +57,11 @@ async function calcVisaoGeralMes(extId: number, mesRef: string): Promise<any> {
   const dataInicio12m = new Date(dataFimDate.getTime() - 365 * 86400000).toISOString().split("T")[0];
   const dataInicio24m = new Date(dataFimDate.getTime() - 730 * 86400000).toISOString().split("T")[0];
 
-  const unitCond = `uu.unidade = ${extId}`;
-  const unitCondSimple = `ultima_visita_unidade = ${extId}`;
+  const unitCond = `v.unidade_id = ${extId}`;
 
   const ultimaVendaSubquery = `(
     SELECT v.cliente, MAX(DATE(v.data_criacao)) as ultima_venda
-    FROM vendas v
-    JOIN usuarios uu ON v.usuario = uu.id
+    FROM sync_vendas v
     WHERE ${unitCond}
       AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
       AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -77,15 +76,14 @@ async function calcVisaoGeralMes(extId: number, mesRef: string): Promise<any> {
 
   // KPIs básicos do período
   const [kpiRows] = await Promise.all([
-    queryExternal<any>(`
+    queryLocal<any>(`
       SELECT
         COUNT(DISTINCT v.cliente) as total_clientes,
         COUNT(DISTINCT CASE WHEN v.cliente IS NOT NULL AND v.cliente != 2 THEN v.cliente END) as clientes_ativos,
         SUM(vp.valor_total) as faturamento,
         COUNT(DISTINCT v.id) as atendimentos
-      FROM vendas v
-      JOIN usuarios uu ON v.usuario = uu.id
-      JOIN vendas_produtos vp ON vp.venda = v.id
+      FROM sync_vendas v
+      JOIN sync_vendas_produtos vp ON vp.venda = v.id
       WHERE ${unitCond}
         AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
         AND DATE(v.data_criacao) BETWEEN '${dataInicio}' AND '${dataFim}'
@@ -93,7 +91,7 @@ async function calcVisaoGeralMes(extId: number, mesRef: string): Promise<any> {
   ]);
 
   // Distribuição por status (ativo/em_risco/perdido) baseada na última visita até dataFim
-  const statusRows = await queryExternal<any>(`
+  const statusRows = await queryLocal<any>(`
     SELECT
       CASE
         WHEN DATEDIFF('${dataFim}', uv.ultima_venda) <= 60 THEN 'ativo'
@@ -107,18 +105,16 @@ async function calcVisaoGeralMes(extId: number, mesRef: string): Promise<any> {
   `);
 
   // Novos clientes no período (primeira visita ever)
-  const novosRows = await queryExternal<any>(`
+  const novosRows = await queryLocal<any>(`
     SELECT COUNT(DISTINCT v.cliente) as novos
-    FROM vendas v
-    JOIN usuarios uu ON v.usuario = uu.id
+    FROM sync_vendas v
     WHERE ${unitCond}
       AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
       AND v.cliente IS NOT NULL AND v.cliente != 2
       AND DATE(v.data_criacao) BETWEEN '${dataInicio}' AND '${dataFim}'
       AND NOT EXISTS (
-        SELECT 1 FROM vendas v2
-        JOIN usuarios uu2 ON v2.usuario = uu2.id
-        WHERE uu2.unidade = ${extId}
+        SELECT 1 FROM sync_vendas v2
+        WHERE v2.unidade_id = ${extId}
           AND v2.cliente = v.cliente
           AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
           AND DATE(v2.data_criacao) < '${dataInicio}'
@@ -150,15 +146,14 @@ async function calcVisaoGeralMes(extId: number, mesRef: string): Promise<any> {
 async function calcRoutingMes(extId: number, mesRef: string): Promise<any> {
   const dataInicio = getMesInicio(mesRef);
   const dataFim = getMesFim(mesRef);
-  const unitCondU = `uu.unidade = ${extId}`;
+  const unitCondU = `vp.unidade_id = ${extId}`;
   const janelaAtividade = 60;
 
-  // Etapa 0: Barbeiros ativos no período (via vendas_produtos.colaborador)
-  const barbeirosAtivosRows = await queryExternal<{ barbeiro_id: number }>(`
+  // Etapa 0: Barbeiros ativos no período (via sync_vendas_produtos.colaborador)
+  const barbeirosAtivosRows = await queryLocal<{ barbeiro_id: number }>(`
     SELECT DISTINCT vp.colaborador as barbeiro_id
-    FROM vendas_produtos vp
-    JOIN vendas v ON v.id = vp.venda
-    JOIN usuarios uu ON uu.id = vp.colaborador
+    FROM sync_vendas_produtos vp
+    JOIN sync_vendas v ON v.id = vp.venda
     WHERE ${unitCondU}
       AND DATE(v.data_criacao) >= '${dataInicio}'
       AND DATE(v.data_criacao) <= '${dataFim}'
@@ -174,10 +169,10 @@ async function calcRoutingMes(extId: number, mesRef: string): Promise<any> {
   const barbeirosAtivosStr = barbeirosAtivosIds.join(",");
 
   // Etapa 1: Clientes do período
-  const clientesPeriodo = await queryExternal<{ cliente_id: number }>(`
+  const clientesPeriodo = await queryLocal<{ cliente_id: number }>(`
     SELECT DISTINCT v.cliente as cliente_id
-    FROM vendas v
-    JOIN vendas_produtos vp ON vp.venda = v.id AND vp.colaborador IN (${barbeirosAtivosStr})
+    FROM sync_vendas v
+    JOIN sync_vendas_produtos vp ON vp.venda = v.id AND vp.colaborador IN (${barbeirosAtivosStr})
     WHERE DATE(v.data_criacao) >= '${dataInicio}'
       AND DATE(v.data_criacao) <= '${dataFim}'
       AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
@@ -193,7 +188,7 @@ async function calcRoutingMes(extId: number, mesRef: string): Promise<any> {
   const totalClientes = clienteIds.length;
 
   // Etapa 2A: Barbeiros distintos NO PERÍODO por cliente
-  const clientesRows = await queryExternal<{
+  const clientesRows = await queryLocal<{
     cliente_id: number;
     barbeiros_distintos: number;
     ultima_visita: string;
@@ -206,16 +201,16 @@ async function calcRoutingMes(extId: number, mesRef: string): Promise<any> {
       COUNT(DISTINCT vp.colaborador) as barbeiros_distintos,
       MAX(DATE(v.data_criacao)) as ultima_visita,
       DATEDIFF('${dataFim}', MAX(DATE(v.data_criacao))) as dias_desde_ultima,
-      (SELECT vp2.colaborador FROM vendas v2
-        JOIN vendas_produtos vp2 ON vp2.venda = v2.id AND vp2.colaborador IN (${barbeirosAtivosStr})
+      (SELECT vp2.colaborador FROM sync_vendas v2
+        JOIN sync_vendas_produtos vp2 ON vp2.venda = v2.id AND vp2.colaborador IN (${barbeirosAtivosStr})
         WHERE v2.cliente = v.cliente
           AND DATE(v2.data_criacao) >= '${dataInicio}'
           AND DATE(v2.data_criacao) <= '${dataFim}'
           AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
         ORDER BY v2.data_criacao DESC LIMIT 1) as ultimo_barbeiro,
       COUNT(DISTINCT v.id) as total_visitas_periodo
-    FROM vendas v
-    JOIN vendas_produtos vp ON vp.venda = v.id AND vp.colaborador IN (${barbeirosAtivosStr})
+    FROM sync_vendas v
+    JOIN sync_vendas_produtos vp ON vp.venda = v.id AND vp.colaborador IN (${barbeirosAtivosStr})
     WHERE v.cliente IN (${clienteIdsStr})
       AND DATE(v.data_criacao) >= '${dataInicio}'
       AND DATE(v.data_criacao) <= '${dataFim}'
@@ -254,17 +249,14 @@ async function calcRoutingMes(extId: number, mesRef: string): Promise<any> {
 
 async function calcChurnMes(extId: number, mesRef: string): Promise<any> {
   const dataFim = getMesFim(mesRef);
-  const dataInicio90d = new Date(new Date(dataFim + "T00:00:00Z").getTime() - 90 * 86400000).toISOString().split("T")[0];
+  const unitCond = `v.unidade_id = ${extId}`;
 
-  const unitCond = `uu.unidade = ${extId}`;
-
-  const rows = await queryExternal<any>(`
+  const rows = await queryLocal<any>(`
     SELECT
       COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', MAX(DATE(v.data_criacao))) > 90 THEN v.cliente END) as perdidos,
       COUNT(DISTINCT CASE WHEN DATEDIFF('${dataFim}', MAX(DATE(v.data_criacao))) BETWEEN 61 AND 90 THEN v.cliente END) as em_risco,
       COUNT(DISTINCT v.cliente) as total
-    FROM vendas v
-    JOIN usuarios uu ON v.usuario = uu.id
+    FROM sync_vendas v
     WHERE ${unitCond}
       AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
       AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -413,7 +405,7 @@ export async function syncRaioXCacheUnit(opts: SyncOptions): Promise<{ synced: n
       console.error(`[RaioX Cache] routing ${mesRef} ERRO:`, err?.message);
     }
 
-    // Aguarda 2s entre meses para não sobrecarregar o banco externo
+    // Aguarda 500ms entre meses (banco local — sem necessidade de throttle agressivo)
     await new Promise((r) => setTimeout(r, 2000));
   }
 

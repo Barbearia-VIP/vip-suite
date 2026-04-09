@@ -142,10 +142,15 @@ function handleExternalDbError(err: unknown): never {
 
 // ─── Router ──────────────────────────────────────────────────────────────────
 export const dataVipRouter = router({
-  // ── Status do banco externo ──────────────────────────────────────────────────
+  // ── Status do banco local (sync_*) ──────────────────────────────────────
   dbStatus: protectedProcedure.query(async () => {
-    const { isTunnelReady } = await import("../db-external");
-    return { connected: isTunnelReady() };
+    try {
+      const { queryLocal } = await import("../db-local");
+      await queryLocal("SELECT 1");
+      return { connected: true };
+    } catch {
+      return { connected: false };
+    }
   }),
 
   // ── Dashboard KPIs ──────────────────────────────────────────────────────────
@@ -372,10 +377,10 @@ export const dataVipRouter = router({
       const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
-      const { queryExternal } = await import("../db-external");
-      const { getColaboradoresIds } = await import("../dataVipQueries");
-      const colabIds = await getColaboradoresIds(extIds);
-      const vpCond = colabIds.length > 0 ? `vp.colaborador IN (${colabIds.join(",")})` : "1=1";
+      const { queryLocal } = await import("../db-local");
+      const unitCond = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `v.unidade_id = ${extIds[0]}`
+        : `v.unidade_id IN (${extIds.join(",")})`;
       let searchCond = "";
       const params: unknown[] = [];
       if (input.search) {
@@ -383,7 +388,7 @@ export const dataVipRouter = router({
         params.push(`%${input.search}%`, `%${input.search}%`);
       }
       const offset = (input.page - 1) * input.pageSize;
-      const rows = await queryExternal<{
+      const rows = await queryLocal<{
         id: number; nome: string; telefone: string;
         data_criacao: Date; ultima_visita: Date; total_visitas: number; total_gasto: number;
       }>(`
@@ -395,10 +400,10 @@ export const dataVipRouter = router({
           MAX(v.data_criacao) as ultima_visita,
           COUNT(DISTINCT v.id) as total_visitas,
           COALESCE(SUM(vp.valor_total), 0) as total_gasto
-        FROM clientes c
-        JOIN vendas v ON v.cliente = c.id
-        JOIN vendas_produtos vp ON vp.venda = v.id
-        WHERE ${vpCond}
+        FROM sync_clientes c
+        JOIN sync_vendas v ON v.cliente = c.id
+        JOIN sync_vendas_produtos vp ON vp.venda = v.id
+        WHERE ${unitCond}
           AND c.status = 1
           AND v.comanda_temp = 0
           AND v.status = 1${searchCond}
@@ -406,12 +411,12 @@ export const dataVipRouter = router({
         ORDER BY ultima_visita DESC
         LIMIT ${input.pageSize} OFFSET ${offset}
       `, params);
-      const cntRows = await queryExternal<{ total: number }>(`
+      const cntRows = await queryLocal<{ total: number }>(`
         SELECT COUNT(DISTINCT c.id) as total
-        FROM clientes c
-        JOIN vendas v ON v.cliente = c.id
-        JOIN vendas_produtos vp ON vp.venda = v.id
-        WHERE ${vpCond}
+        FROM sync_clientes c
+        JOIN sync_vendas v ON v.cliente = c.id
+        JOIN sync_vendas_produtos vp ON vp.venda = v.id
+        WHERE ${unitCond}
           AND c.status = 1
           AND v.comanda_temp = 0
           AND v.status = 1${searchCond}
@@ -440,18 +445,26 @@ export const dataVipRouter = router({
       const { extIds } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
-      const { queryExternal } = await import("../db-external");
+      const { queryLocal } = await import("../db-local");
       const unitCond = extIds.length === 0 ? "1=1"
-        : extIds.length === 1 ? `ultima_visita_unidade = ${extIds[0]}`
-        : `ultima_visita_unidade IN (${extIds.join(",")})`;
-      const rows = await queryExternal<{
+        : extIds.length === 1 ? `c.unidade_id = ${extIds[0]}`
+        : `c.unidade_id IN (${extIds.join(",")})`;
+      const rows = await queryLocal<{
         id: number; nome: string; telefone: string;
         data_criacao: Date; ultima_visita: Date; visitas: number; consumo: number;
       }>(`
-        SELECT id, nome, telefone, data_criacao, ultima_visita, visitas, consumo
-        FROM clientes
-        WHERE ${unitCond} AND status = 1 AND ultima_visita IS NOT NULL
-        ORDER BY ultima_visita DESC
+        SELECT c.id, c.nome, c.telefone, c.data_criacao, c.ultima_visita,
+               COALESCE(vc.total_visitas, 0) as visitas, COALESCE(c.consumo, 0) as consumo
+        FROM sync_clientes c
+        LEFT JOIN (
+          SELECT cliente, COUNT(*) as total_visitas
+          FROM sync_vendas
+          WHERE ${unitCond.replace('c.', 'sync_vendas.')}
+            AND comanda_temp = 0 AND status = 1 AND cliente IS NOT NULL AND cliente != 2
+          GROUP BY cliente
+        ) vc ON vc.cliente = c.id
+        WHERE ${unitCond} AND c.status = 1 AND c.ultima_visita IS NOT NULL
+        ORDER BY c.ultima_visita DESC
         LIMIT 5000
       `);
       const clientes = rows.map(r => {
@@ -845,21 +858,25 @@ export const dataVipRouter = router({
         SELECT m.*, u.name as unitName, u.externalId FROM metas_vip m
         LEFT JOIN units u ON u.id = m.unitId WHERE ${where} ORDER BY periodo ASC
       `) as any;
-      const { queryExternal } = await import("../db-external");
+      const { queryLocal } = await import("../db-local");
       const result = [];
       for (const meta of metas as any[]) {
         const [a, m] = meta.periodo.split("-").map(Number);
         let realizadoVal = 0;
         try {
           const extId = meta.externalId ? Number(meta.externalId) : null;
-          const unitCond = extId ? `unidade = ${extId}` : "1=1";
-          const rows = await queryExternal<{ t: number }>(`
-            SELECT COALESCE(SUM(total_vendas), 0) as t
-            FROM dashboard_faturamento
-            WHERE ${unitCond} AND ano = ? AND mes = ?
-          `, [a, m]);
-          realizadoVal = Number(rows[0]?.t ?? 0);
-        } catch { /* banco externo pode estar indisponível */ }
+          if (extId) {
+            const mesStr = `${a}-${String(m).padStart(2, '0')}`;
+            const rows = await queryLocal<{ t: number }>(`
+              SELECT COALESCE(SUM(v.valor_liquido), 0) as t
+              FROM sync_vendas v
+              WHERE v.unidade_id = ${extId}
+                AND DATE_FORMAT(v.data_criacao, '%Y-%m') = '${mesStr}'
+                AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
+            `);
+            realizadoVal = Number(rows[0]?.t ?? 0);
+          }
+        } catch { /* banco local pode estar indisponível */ }
         const metaVal = Number(meta.metaFaturamento);
         result.push({
           ...meta,
@@ -1137,23 +1154,23 @@ export const dataVipRouter = router({
       const { extIds, orgFilter } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
-      const { queryExternal } = await import("../db-external");
-      const { getColaboradoresIds } = await import("../dataVipQueries");
-      const colabIds2 = await getColaboradoresIds(extIds);
-      const vpCond2 = colabIds2.length > 0 ? `vp.colaborador IN (${colabIds2.join(",")})` : "1=1";
-      // Busca todos os nomes de serviços distintos do banco externo
-      const extServicos = await queryExternal<{ nome: string; qtd: number }>(`
+      const { queryLocal } = await import("../db-local");
+      const unitCond2 = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `vp.unidade_id = ${extIds[0]}`
+        : `vp.unidade_id IN (${extIds.join(",")})`;
+      // Busca todos os nomes de serviços distintos do banco local
+      const extServicos = await queryLocal<{ nome: string; qtd: number }>(`
         SELECT p.nome, COUNT(*) as qtd
-        FROM produtos p
-        JOIN vendas_produtos vp ON vp.produto = p.id
-        JOIN vendas v ON vp.venda = v.id
-        WHERE ${vpCond2}
+        FROM sync_produtos p
+        JOIN sync_vendas_produtos vp ON vp.produto = p.id
+        JOIN sync_vendas v ON vp.venda = v.id
+        WHERE ${unitCond2}
           AND p.tipo = 'ser'
           AND v.comanda_temp = 0
           AND v.status = 1
         GROUP BY p.nome
         ORDER BY qtd DESC
-      `, []);;
+      `);
 
       // Busca categorias salvas no banco local
       const db = await getDb();
@@ -2280,20 +2297,21 @@ export const dataVipRouter = router({
       const extInfo = await resolveExternalIds(ctx.user.id, ctx.user.role, input.orgId, input.unitId);
       if (!extInfo || extInfo.extIds.length === 0) return [];
       const unitIds = extInfo.extIds;
-      const { queryExternal } = await import("../db-external");
+      const { queryLocal } = await import("../db-local");
 
-      // Usar strings ISO para evitar "Malformed communication packet" no MySQL externo
       const dataInicio = `${input.ano}-${String(input.mes).padStart(2, '0')}-01`;
       const dataFimExcl = input.mes === 12
         ? `${input.ano + 1}-01-01`
         : `${input.ano}-${String(input.mes + 1).padStart(2, '0')}-01`;
 
       const resultados: Record<string, { colaboradorId: string; colaboradorNome: string; bonusTotal: number; metasBatidas: { nome: string; bonus: number }[] }> = {};
-      // Busca IDs dos colaboradores da unidade para filtrar diretamente sem JOIN usuarios
-      const { getColaboradoresIds } = await import("../dataVipQueries");
-      const metaColabIds = await getColaboradoresIds(unitIds);
-      const vpColabCond = metaColabIds.length > 0 ? `vp.colaborador IN (${metaColabIds.join(',')})` : "1=1";
-      const vp2ColabCond = metaColabIds.length > 0 ? `vp.colaborador IN (${metaColabIds.join(',')})` : "1=1";
+      // Filtro de unidade direto em sync_vendas_produtos.unidade_id
+      const unitCondBonus = unitIds.length === 0 ? "1=1"
+        : unitIds.length === 1 ? `vp.unidade_id = ${unitIds[0]}`
+        : `vp.unidade_id IN (${unitIds.join(',')})`;
+      const unitCondBonus2 = unitIds.length === 0 ? "1=1"
+        : unitIds.length === 1 ? `vp.unidade_id = ${unitIds[0]}`
+        : `vp.unidade_id IN (${unitIds.join(',')})`;
       for (const meta of metasAtivas) {
         const config = (() => { try { return JSON.parse(meta.config); } catch { return {}; } })();
         const bonusValor = Number(meta.bonusValor);
@@ -2303,15 +2321,15 @@ export const dataVipRouter = router({
 
           if (criterio === "quantidade") {
             const qtdMin = Number(config.qtdMinProdutos ?? 1);
-            const rows = await queryExternal(
+            const rows = await queryLocal(
               `SELECT uu.id AS colaboradorId, uu.nome AS colaboradorNome,
                  COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.quantidade ELSE 0 END), 0) AS qtdProdutos,
                  COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.valor_total ELSE 0 END), 0) AS totalProdutos
-               FROM vendas_produtos vp
-               JOIN usuarios uu ON uu.id = vp.colaborador
-               JOIN vendas v ON v.id = vp.venda
-               JOIN produtos p ON p.id = vp.produto
-               WHERE ${vpColabCond}
+               FROM sync_vendas_produtos vp
+               JOIN sync_usuarios uu ON uu.id = vp.colaborador
+               JOIN sync_vendas v ON v.id = vp.venda
+               JOIN sync_produtos p ON p.id = vp.produto
+               WHERE ${unitCondBonus}
                  AND v.data_criacao >= ? AND v.data_criacao < ?
                  AND v.comanda_temp = 0 AND v.status = 1
                GROUP BY uu.id, uu.nome
@@ -2329,14 +2347,14 @@ export const dataVipRouter = router({
             }
           } else {
             const valorMin = Number(config.valorMinProdutos ?? 0);
-            const rows = await queryExternal(
+            const rows = await queryLocal(
               `SELECT uu.id AS colaboradorId, uu.nome AS colaboradorNome,
                  COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.valor_total ELSE 0 END), 0) AS totalProdutos
-               FROM vendas_produtos vp
-               JOIN usuarios uu ON uu.id = vp.colaborador
-               JOIN vendas v ON v.id = vp.venda
-               JOIN produtos p ON p.id = vp.produto
-               WHERE ${vpColabCond}
+               FROM sync_vendas_produtos vp
+               JOIN sync_usuarios uu ON uu.id = vp.colaborador
+               JOIN sync_vendas v ON v.id = vp.venda
+               JOIN sync_produtos p ON p.id = vp.produto
+               WHERE ${unitCondBonus}
                  AND v.data_criacao >= ? AND v.data_criacao < ?
                  AND v.comanda_temp = 0 AND v.status = 1
                GROUP BY uu.id, uu.nome
@@ -2356,21 +2374,21 @@ export const dataVipRouter = router({
         } else if (meta.tipo === "servicos_multiplos") {
           const minServicos = Number(config.minServicosComanda ?? 2);
           const minComandas = Number(config.minComandas ?? 1);
-          const rows = await queryExternal(
+          const rows = await queryLocal(
             `SELECT uu.id AS colaboradorId, uu.nome AS colaboradorNome, COUNT(*) AS totalComandas
              FROM (
                SELECT vp.colaborador, vp.venda
-               FROM vendas_produtos vp
-               JOIN vendas v ON v.id = vp.venda
-               JOIN produtos p ON p.id = vp.produto
-               WHERE ${vp2ColabCond}
+               FROM sync_vendas_produtos vp
+               JOIN sync_vendas v ON v.id = vp.venda
+               JOIN sync_produtos p ON p.id = vp.produto
+               WHERE ${unitCondBonus2}
                  AND v.data_criacao >= ? AND v.data_criacao < ?
                  AND v.comanda_temp = 0 AND v.status = 1
                  AND p.tipo = 'ser'
                GROUP BY vp.colaborador, vp.venda
                HAVING COUNT(*) >= ?
              ) sub
-             JOIN usuarios uu ON uu.id = sub.colaborador
+             JOIN sync_usuarios uu ON uu.id = sub.colaborador
              GROUP BY sub.colaborador, uu.nome
              HAVING totalComandas >= ?`,
             [dataInicio, dataFimExcl, minServicos, minComandas]
@@ -2393,23 +2411,23 @@ export const dataVipRouter = router({
       const { extIds, orgFilter } = await resolveExternalIds(
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
-      const { queryExternal } = await import("../db-external");
-      const { getColaboradoresIds } = await import("../dataVipQueries");
-      const colabIds3 = await getColaboradoresIds(extIds);
-      const vpCond3 = colabIds3.length > 0 ? `vp.colaborador IN (${colabIds3.join(",")})` : "1=1";
-      // Busca todos os produtos distintos do banco externo (tipo != 'ser')
-      const extProdutos = await queryExternal<{ nome: string; qtd: number; valorTotal: number }>(`
+      const { queryLocal } = await import("../db-local");
+      const unitCond3 = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `vp.unidade_id = ${extIds[0]}`
+        : `vp.unidade_id IN (${extIds.join(",")})`;
+      // Busca todos os produtos distintos do banco local (tipo != 'ser')
+      const extProdutos = await queryLocal<{ nome: string; qtd: number; valorTotal: number }>(`
         SELECT p.nome, COUNT(*) as qtd, COALESCE(SUM(vp.valor_total), 0) as valorTotal
-        FROM produtos p
-        JOIN vendas_produtos vp ON vp.produto = p.id
-        JOIN vendas v ON vp.venda = v.id
-        WHERE ${vpCond3}
+        FROM sync_produtos p
+        JOIN sync_vendas_produtos vp ON vp.produto = p.id
+        JOIN sync_vendas v ON vp.venda = v.id
+        WHERE ${unitCond3}
           AND p.tipo != 'ser'
           AND v.comanda_temp = 0
           AND v.status = 1
         GROUP BY p.nome
         ORDER BY qtd DESC
-      `, []);;
+      `);
 
       // Busca categorias salvas no banco local
       const db = await getDb();
