@@ -2,11 +2,13 @@
  * sync.ts — Router tRPC para gerenciamento da replicação local
  *
  * Procedures:
- * - sync.status         → status de todas as unidades sincronizadas
- * - sync.importHistorico → importa histórico completo de uma unidade (admin)
- * - sync.importTodas    → importa histórico de todas as unidades sequencialmente (admin)
- * - sync.incremental    → força sync incremental de uma unidade (admin)
- * - sync.getUnidades    → lista unidades disponíveis no banco externo
+ * - sync.status           → status de todas as unidades sincronizadas
+ * - sync.schedulerInfo    → info do agendador (última sync, próxima, intervalo)
+ * - sync.syncNow          → força sync incremental de todas as unidades agora
+ * - sync.importHistorico  → importa histórico completo de uma unidade (admin)
+ * - sync.importTodas      → importa histórico de todas as unidades sequencialmente (admin)
+ * - sync.incremental      → força sync incremental de uma unidade (admin)
+ * - sync.getUnidades      → lista unidades disponíveis no banco externo
  */
 
 import { z } from "zod";
@@ -16,12 +18,34 @@ import {
   importHistorico,
   syncIncremental,
   getUnidadesExternas,
+  getSchedulerInfo,
 } from "../syncEngine";
 
 export const syncRouter = router({
   // Status de todas as unidades
   status: protectedProcedure.query(async () => {
     return getSyncStatus();
+  }),
+
+  // Info do agendador automático
+  schedulerInfo: protectedProcedure.query(() => {
+    return getSchedulerInfo();
+  }),
+
+  // Sync incremental de todas as unidades agora (botão "Sincronizar agora")
+  syncNow: protectedProcedure.mutation(async () => {
+    const unidades = await getUnidadesExternas();
+    let totalNovas = 0;
+    const erros: { unidadeId: number; erro: string }[] = [];
+    for (const uid of unidades) {
+      try {
+        const r = await syncIncremental(uid);
+        totalNovas += r.novas;
+      } catch (err) {
+        erros.push({ unidadeId: uid, erro: String(err) });
+      }
+    }
+    return { unidades: unidades.length, totalNovas, erros };
   }),
 
   // Lista unidades disponíveis no banco externo

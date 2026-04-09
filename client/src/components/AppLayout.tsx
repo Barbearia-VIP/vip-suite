@@ -159,6 +159,7 @@ const SIDEBAR_ITEMS: Record<ModuleId, SidebarItem[]> = {
     { label: "Clientes", path: "/data-vip/clientes", icon: Users },
     { label: "Raio-X Clientes", path: "/data-vip/raio-x", icon: Activity },
     { label: "Calendário", path: "/data-vip/calendario", icon: Calendar },
+    { label: "Status Sincronização", path: "/data-vip/sync", icon: RefreshCw },
     { type: "separator" },
     { type: "group", label: "Gestão de Colaboradores", icon: UserCheck, children: [
       { label: "Colaboradores", path: "/data-vip/colaboradores", icon: UserCheck },

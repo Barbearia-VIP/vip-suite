@@ -406,13 +406,31 @@ export async function getSyncStatus(): Promise<
 }
 
 // ─── Scheduler automático ────────────────────────────────────────────────────
+const SYNC_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 horas
 let schedulerTimer: ReturnType<typeof setInterval> | null = null;
+let schedulerStartedAt: Date | null = null;
+let lastCycleAt: Date | null = null;
+let nextCycleAt: Date | null = null;
+
+export function getSchedulerInfo() {
+  return {
+    ativo: schedulerTimer !== null,
+    intervaloHoras: SYNC_INTERVAL_MS / (60 * 60 * 1000),
+    iniciouEm: schedulerStartedAt?.toISOString() ?? null,
+    ultimoCiclo: lastCycleAt?.toISOString() ?? null,
+    proximoCiclo: nextCycleAt?.toISOString() ?? null,
+  };
+}
 
 export function startSyncScheduler() {
   if (schedulerTimer) return;
+  schedulerStartedAt = new Date();
+  nextCycleAt = new Date(Date.now() + SYNC_INTERVAL_MS);
   console.log("[Sync Scheduler] Iniciado — sincronização incremental a cada 4 horas");
 
   const runCycle = async () => {
+    lastCycleAt = new Date();
+    nextCycleAt = new Date(Date.now() + SYNC_INTERVAL_MS);
     try {
       const unidades = await getUnidadesExternas();
       console.log(`[Sync Scheduler] Ciclo iniciado para ${unidades.length} unidades`);
@@ -427,7 +445,7 @@ export function startSyncScheduler() {
 
   // Sem execução automática no boot — dados já estão no banco local
   // Ciclos a cada 4 horas para não comprometer o servidor externo
-  schedulerTimer = setInterval(runCycle, 4 * 60 * 60 * 1000);
+  schedulerTimer = setInterval(runCycle, SYNC_INTERVAL_MS);
 }
 
 export function stopSyncScheduler() {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import PageHeader from "@/components/PageHeader";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -15,9 +15,12 @@ import {
   Download,
   Zap,
   Server,
+  CalendarClock,
+  Activity,
+  Timer,
 } from "lucide-react";
 
-function formatDate(d: string | null) {
+function formatDate(d: string | null | undefined) {
   if (!d) return "Nunca";
   return new Date(d).toLocaleString("pt-BR", {
     day: "2-digit",
@@ -30,6 +33,37 @@ function formatDate(d: string | null) {
 
 function formatNumber(n: number) {
   return n.toLocaleString("pt-BR");
+}
+
+function useCountdown(targetIso: string | null | undefined) {
+  const [remaining, setRemaining] = useState<string>("");
+
+  useEffect(() => {
+    if (!targetIso) {
+      setRemaining("—");
+      return;
+    }
+    const update = () => {
+      const diff = new Date(targetIso).getTime() - Date.now();
+      if (diff <= 0) {
+        setRemaining("Em breve...");
+        return;
+      }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setRemaining(
+        h > 0
+          ? `${h}h ${String(m).padStart(2, "0")}min`
+          : `${m}min ${String(s).padStart(2, "0")}s`
+      );
+    };
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [targetIso]);
+
+  return remaining;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -62,12 +96,40 @@ export default function SyncPage() {
   const [importandoUnidade, setImportandoUnidade] = useState<number | null>(null);
   const [importandoTodas, setImportandoTodas] = useState(false);
   const [syncandoUnidade, setSyncandoUnidade] = useState<number | null>(null);
+  const [syncandoAgora, setSyncandoAgora] = useState(false);
 
   const { data: status, refetch: refetchStatus, isLoading } = trpc.sync.status.useQuery(undefined, {
-    refetchInterval: 5000,
+    refetchInterval: 8000,
+  });
+
+  const { data: scheduler, refetch: refetchScheduler } = trpc.sync.schedulerInfo.useQuery(undefined, {
+    refetchInterval: 10000,
   });
 
   const { data: unidades } = trpc.sync.getUnidades.useQuery();
+
+  const countdown = useCountdown(scheduler?.proximoCiclo);
+
+  const syncNow = trpc.sync.syncNow.useMutation({
+    onSuccess: (data) => {
+      setSyncandoAgora(false);
+      refetchStatus();
+      refetchScheduler();
+      if (data.erros.length === 0) {
+        toast.success("Sincronização concluída", {
+          description: `${data.unidades} unidades — ${formatNumber(data.totalNovas)} registros atualizados`,
+        });
+      } else {
+        toast.warning("Sincronização com erros", {
+          description: `${data.erros.length} unidade(s) falharam`,
+        });
+      }
+    },
+    onError: (err) => {
+      setSyncandoAgora(false);
+      toast.error(err.message);
+    },
+  });
 
   const importHistorico = trpc.sync.importHistorico.useMutation({
     onSuccess: (data, vars) => {
@@ -122,12 +184,85 @@ export default function SyncPage() {
   const totalUnidades = unidades?.length ?? 0;
   const progresso = totalUnidades > 0 ? Math.round((unidadesSincronizadas / totalUnidades) * 100) : 0;
 
+  // Última sync bem-sucedida: a mais recente entre todas as unidades
+  const ultimaSyncGlobal = status
+    ?.filter((r) => r.ultima_sync)
+    .map((r) => r.ultima_sync!)
+    .sort()
+    .at(-1) ?? null;
+
+  const isBusy = syncandoAgora || importandoTodas || importandoUnidade !== null;
+
   return (
     <div className="p-6 space-y-6">
       <PageHeader
         title="Replicação Local"
         description="Cópia local do banco externo para consultas instantâneas"
       />
+
+      {/* Painel de Status do Agendador */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="border-green-400/20 bg-green-400/5">
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle2 className="w-4 h-4 text-green-400" />
+              <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Última sincronização</span>
+            </div>
+            <div className="text-lg font-semibold text-foreground">
+              {formatDate(ultimaSyncGlobal)}
+            </div>
+            {ultimaSyncGlobal && (
+              <div className="text-xs text-muted-foreground mt-1">
+                {(() => {
+                  const diff = Date.now() - new Date(ultimaSyncGlobal).getTime();
+                  const h = Math.floor(diff / 3600000);
+                  const m = Math.floor((diff % 3600000) / 60000);
+                  return h > 0 ? `Há ${h}h ${m}min` : `Há ${m} minutos`;
+                })()}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-blue-400/20 bg-blue-400/5">
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <CalendarClock className="w-4 h-4 text-blue-400" />
+              <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Próxima sincronização</span>
+            </div>
+            <div className="text-lg font-semibold text-foreground">
+              {formatDate(scheduler?.proximoCiclo)}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+              <Timer className="w-3 h-3" />
+              {scheduler?.proximoCiclo ? countdown : "Agendador ativo"}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-orange-400/20 bg-orange-400/5">
+          <CardContent className="pt-5 pb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Activity className="w-4 h-4 text-orange-400" />
+              <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Agendador automático</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {scheduler?.ativo ? (
+                <Badge variant="outline" className="text-green-400 border-green-400/30 bg-green-400/10">
+                  <CheckCircle2 className="w-3 h-3 mr-1" /> Ativo
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-muted-foreground">
+                  <Clock className="w-3 h-3 mr-1" /> Inativo
+                </Badge>
+              )}
+            </div>
+            <div className="text-xs text-muted-foreground mt-2">
+              Intervalo: a cada {scheduler?.intervaloHoras ?? 4} horas
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* KPIs gerais */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -164,16 +299,33 @@ export default function SyncPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
-            <Server className="w-4 h-4" /> Ações Globais
+            <Server className="w-4 h-4" /> Ações
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3 items-center">
           <Button
             onClick={() => {
+              setSyncandoAgora(true);
+              syncNow.mutate();
+            }}
+            disabled={isBusy}
+            className="gap-2"
+          >
+            {syncandoAgora ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Zap className="w-4 h-4" />
+            )}
+            {syncandoAgora ? "Sincronizando..." : "Sincronizar agora"}
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => {
               setImportandoTodas(true);
               importTodas.mutate();
             }}
-            disabled={importandoTodas || importandoUnidade !== null}
+            disabled={isBusy}
             className="gap-2"
           >
             {importandoTodas ? (
@@ -181,19 +333,17 @@ export default function SyncPage() {
             ) : (
               <Download className="w-4 h-4" />
             )}
-            {importandoTodas ? "Importando histórico..." : "Importar histórico de todas as unidades"}
+            {importandoTodas ? "Importando histórico..." : "Reimportar histórico completo"}
           </Button>
+
           <Button
-            variant="outline"
-            onClick={() => refetchStatus()}
-            className="gap-2"
+            variant="ghost"
+            size="sm"
+            onClick={() => { refetchStatus(); refetchScheduler(); }}
+            className="gap-2 ml-auto"
           >
-            <RefreshCw className="w-4 h-4" /> Atualizar status
+            <RefreshCw className="w-4 h-4" /> Atualizar
           </Button>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground ml-auto">
-            <Zap className="w-3 h-3 text-green-400" />
-            Sync incremental automático a cada 30 minutos
-          </div>
         </CardContent>
       </Card>
 
@@ -214,7 +364,7 @@ export default function SyncPage() {
                 Nenhuma unidade sincronizada ainda.
               </p>
               <p className="text-xs text-muted-foreground">
-                Clique em "Importar histórico de todas as unidades" para iniciar.
+                Clique em "Reimportar histórico completo" para iniciar.
               </p>
             </div>
           ) : (
@@ -266,7 +416,7 @@ export default function SyncPage() {
                             disabled={
                               importandoUnidade === row.unidade_id ||
                               syncandoUnidade === row.unidade_id ||
-                              importandoTodas
+                              isBusy
                             }
                             onClick={() => {
                               setSyncandoUnidade(row.unidade_id);
@@ -287,7 +437,7 @@ export default function SyncPage() {
                             disabled={
                               importandoUnidade === row.unidade_id ||
                               syncandoUnidade === row.unidade_id ||
-                              importandoTodas
+                              isBusy
                             }
                             onClick={() => {
                               setImportandoUnidade(row.unidade_id);
@@ -316,7 +466,7 @@ export default function SyncPage() {
       <Card className="bg-muted/20">
         <CardContent className="pt-4">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            <strong className="text-foreground">Como funciona:</strong> O sistema mantém uma cópia local das tabelas do banco externo (vendas, itens, clientes, colaboradores). A importação histórica copia os últimos 24 meses por blocos mensais, unidade por unidade. Após a importação inicial, o sync incremental automático (a cada 30 min) busca apenas os registros novos ou alterados nas últimas 48h — incluindo cancelamentos e edições — garantindo que a cópia local esteja sempre atualizada sem sobrecarregar o banco externo.
+            <strong className="text-foreground">Como funciona:</strong> O sistema mantém uma cópia local das tabelas do banco externo (vendas, itens, clientes, colaboradores). A importação histórica copia os últimos 24 meses por blocos mensais, unidade por unidade. Após a importação inicial, o sync incremental automático (a cada 4 horas) busca apenas os registros novos ou alterados nas últimas 48h — incluindo cancelamentos e edições — garantindo que a cópia local esteja sempre atualizada sem sobrecarregar o banco externo.
           </p>
         </CardContent>
       </Card>
