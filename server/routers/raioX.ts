@@ -1527,6 +1527,11 @@ export const raioXRouter = router({
       if (cohortCached) { console.log("[cohort] cache hit"); return cohortCached; }
 
       // ── 1) Clientes novos no período (1ª visita histórica dentro do período) ──
+      // NOTA: sync_vendas.usuario = operador do PDV (caixa), NÃO o barbeiro executor.
+      // O barbeiro executor está em sync_vendas_produtos.colaborador.
+      // Os subqueries de barbeiro_id e barbeiro_nome usam sync_vendas_produtos filtrado por unidade
+      // para garantir que apenas colaboradores da unidade selecionada apareçam no seletor.
+      const unitInVp = extIds.length === 1 ? `vp.unidade_id = ${extIds[0]}` : `vp.unidade_id IN (${extIds.join(",")})`;
       const novosRows = await queryLocal<{
         cliente_id: number;
         primeiraVisita: string | Date;
@@ -1539,17 +1544,22 @@ export const raioXRouter = router({
           sub.ticketPrimeira, sub.barbeiro_id, sub.barbeiro_nome
         FROM (
           SELECT v.cliente, MIN(DATE(v.data_criacao)) as primeiraVisita,
-            (SELECT v2.valor_total FROM sync_vendas v2 JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
+            (SELECT v2.valor_total FROM sync_vendas v2
              WHERE ${unitIn2} AND v2.cliente = v.cliente AND v2.comanda_temp=0
                AND v2.cancelado_motivo IS NULL AND v2.status!=0
              ORDER BY v2.data_criacao ASC LIMIT 1) as ticketPrimeira,
-            (SELECT v3.usuario FROM sync_vendas v3 WHERE v3.cliente = v.cliente AND v3.comanda_temp=0
-               AND v3.cancelado_motivo IS NULL AND v3.status!=0
-             ORDER BY v3.data_criacao ASC LIMIT 1) as barbeiro_id,
-            (SELECT uu3.nome FROM sync_vendas v3 JOIN sync_usuarios uu3 ON v3.usuario = uu3.id
-             WHERE v3.cliente = v.cliente AND v3.comanda_temp=0
-               AND v3.cancelado_motivo IS NULL AND v3.status!=0
-             ORDER BY v3.data_criacao ASC LIMIT 1) as barbeiro_nome
+            (SELECT vp.colaborador FROM sync_vendas_produtos vp
+             JOIN sync_vendas vv ON vv.id = vp.venda
+             JOIN sync_usuarios uu3 ON uu3.id = vp.colaborador AND uu3.visivel_agenda != 'nenhuma'
+             WHERE ${unitInVp} AND vv.cliente = v.cliente AND vv.comanda_temp=0
+               AND vv.cancelado_motivo IS NULL AND vv.status!=0
+             ORDER BY vv.data_criacao ASC LIMIT 1) as barbeiro_id,
+            (SELECT uu3.nome FROM sync_vendas_produtos vp
+             JOIN sync_vendas vv ON vv.id = vp.venda
+             JOIN sync_usuarios uu3 ON uu3.id = vp.colaborador AND uu3.visivel_agenda != 'nenhuma'
+             WHERE ${unitInVp} AND vv.cliente = v.cliente AND vv.comanda_temp=0
+               AND vv.cancelado_motivo IS NULL AND vv.status!=0
+             ORDER BY vv.data_criacao ASC LIMIT 1) as barbeiro_nome
           FROM sync_vendas v
           WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
             AND v.cliente IS NOT NULL AND v.cliente!=2
