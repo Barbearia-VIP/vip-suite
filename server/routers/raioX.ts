@@ -1400,7 +1400,8 @@ export const raioXRouter = router({
           COUNT(vh.id) as tv_hist
         FROM sync_clientes c
         JOIN sync_vendas vh ON vh.cliente = c.id
-        WHERE ${unitInVh} AND uuh.visivel_dashboard = 1
+        JOIN sync_usuarios uuh ON uuh.id = vh.usuario AND uuh.visivel_dashboard = 1
+        WHERE ${unitInVh}
           AND vh.comanda_temp=0 AND vh.cancelado_motivo IS NULL AND vh.status!=0
           AND vh.cliente IS NOT NULL AND vh.cliente!=2
           AND c.status = 1
