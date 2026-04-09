@@ -210,7 +210,6 @@ export const raioXRouter = router({
       const ultimaVendaSubquery = `(
         SELECT v.cliente, MAX(DATE(v.data_criacao)) as ultima_venda
         FROM sync_vendas v
-        JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -230,7 +229,6 @@ export const raioXRouter = router({
       const baseP24mSubquery = `(
         SELECT DISTINCT v.cliente
         FROM sync_vendas v
-        JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -241,7 +239,6 @@ export const raioXRouter = router({
       const visitasHistoricasSubquery = `(
         SELECT v.cliente, COUNT(*) as total_visitas
         FROM sync_vendas v
-        JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -252,7 +249,6 @@ export const raioXRouter = router({
       const clientesPeriodoSubquery = `(
         SELECT DISTINCT v.cliente
         FROM sync_vendas v
-        JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -397,7 +393,6 @@ export const raioXRouter = router({
           JOIN (
             SELECT v2.cliente, MAX(DATE(v2.data_criacao)) as ultima_antes
             FROM sync_vendas v2
-            JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
             WHERE v2.unidade_id IN (${extIds.length > 0 ? extIds.join(",") : "0"})
               AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
               AND v2.cliente IS NOT NULL AND v2.cliente != 2
@@ -438,7 +433,6 @@ export const raioXRouter = router({
             FROM (
               SELECT DISTINCT v.cliente
               FROM sync_vendas v
-              JOIN sync_usuarios uu ON v.usuario = uu.id
               WHERE ${unitCondV}
                 AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
                 AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -448,7 +442,6 @@ export const raioXRouter = router({
             JOIN (
               SELECT v.cliente, COUNT(*) as total_visitas
               FROM sync_vendas v
-              JOIN sync_usuarios uu ON v.usuario = uu.id
               WHERE ${unitCondV}
                 AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
                 AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -462,7 +455,6 @@ export const raioXRouter = router({
                   v.cliente,
                   DATEDIFF(DATE(v.data_criacao), LAG(DATE(v.data_criacao)) OVER (PARTITION BY v.cliente ORDER BY v.data_criacao)) as diff
                 FROM sync_vendas v
-                JOIN sync_usuarios uu ON v.usuario = uu.id
                 WHERE ${unitCondV}
                   AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
                   AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -473,7 +465,6 @@ export const raioXRouter = router({
             LEFT JOIN (
               SELECT v.cliente, MAX(DATE(v.data_criacao)) as ultima_venda
               FROM sync_vendas v
-              JOIN sync_usuarios uu ON v.usuario = uu.id
               WHERE ${unitCondV}
                 AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
                 AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -495,13 +486,11 @@ export const raioXRouter = router({
                 AND DATEDIFF(DATE(v.data_criacao), ult_antes.ultima_antes) > 90
               THEN v.cliente END) as resgatados
           FROM sync_vendas v
-          JOIN sync_usuarios uu ON v.usuario = uu.id
           JOIN sync_clientes c ON c.id = v.cliente
           LEFT JOIN ${ultimaVendaSubquery} uv_mes ON uv_mes.cliente = v.cliente
           LEFT JOIN (
             SELECT v2.cliente, MAX(DATE(v2.data_criacao)) as ultima_antes
             FROM sync_vendas v2
-            JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
             WHERE ${unitCondV.replace(/\bv\./g, 'v2.')}
               AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
               AND v2.cliente IS NOT NULL AND v2.cliente != 2
@@ -526,12 +515,10 @@ export const raioXRouter = router({
                 AND DATEDIFF(DATE(v.data_criacao), ult_antes_em.ultima_antes) > 90
               THEN v.cliente END) as resgatados
           FROM sync_vendas v
-          JOIN sync_usuarios uu ON v.usuario = uu.id
           JOIN sync_clientes c ON c.id = v.cliente
           LEFT JOIN (
             SELECT v2.cliente, MAX(DATE(v2.data_criacao)) as ultima_antes
             FROM sync_vendas v2
-            JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
             WHERE ${unitCondV.replace(/\bv\./g, 'v2.')}
               AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
               AND v2.cliente IS NOT NULL AND v2.cliente != 2
@@ -568,7 +555,6 @@ export const raioXRouter = router({
               DATE_FORMAT(v.data_criacao, '%Y-%m') as mes,
               LAST_DAY(v.data_criacao) as fim_mes
             FROM sync_vendas v
-            JOIN sync_usuarios uu ON v.usuario = uu.id
             WHERE ${unitCondV}
               AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
               AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
@@ -581,13 +567,11 @@ export const raioXRouter = router({
               DATE_FORMAT(m2.data_criacao, '%Y-%m') as mes,
               MAX(DATE(all_v.data_criacao)) as ultima_ate_mes
             FROM sync_vendas all_v
-            JOIN sync_usuarios uu_av ON all_v.usuario = uu_av.id
             JOIN (
               SELECT DISTINCT DATE_FORMAT(v3.data_criacao, '%Y-%m') as mes_ref,
                      LAST_DAY(v3.data_criacao) as fim_mes,
                      v3.data_criacao
               FROM sync_vendas v3
-              JOIN sync_usuarios uu3 ON v3.usuario = uu3.id
               WHERE ${unitCondV.replace(/\bv\./g, 'v3.')}
                 AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL AND v3.status = 1
                 AND DATE(v3.data_criacao) >= '${dataInicio}' AND DATE(v3.data_criacao) <= '${dataFim}'
@@ -851,7 +835,6 @@ export const raioXRouter = router({
       const ultimaVendaSubquery = `(
         SELECT v.cliente, MAX(DATE(v.data_criacao)) as ultima_venda
         FROM sync_vendas v
-        JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -865,7 +848,6 @@ export const raioXRouter = router({
       const visitasHistoricasSubquery = `(
         SELECT v.cliente, COUNT(*) as total_visitas
         FROM sync_vendas v
-        JOIN sync_usuarios uu ON v.usuario = uu.id
         WHERE ${unitCondV}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -890,7 +872,6 @@ export const raioXRouter = router({
                  bs.ultima_venda as ultima_venda_dt,
                  COALESCE((
                    SELECT SUM(v2.valor_total) FROM sync_vendas v2
-                   JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
                    WHERE v2.unidade_id IN (${extIds.length > 0 ? extIds.join(",") : "0"})
                      AND v2.cliente = c.id AND v2.comanda_temp = 0
                      AND v2.cancelado_motivo IS NULL AND v2.status = 1
@@ -1012,7 +993,7 @@ export const raioXRouter = router({
               FROM (
                 SELECT v.cliente,
                   DATEDIFF(MAX(DATE(v.data_criacao)), MIN(DATE(v.data_criacao))) / NULLIF(COUNT(*) - 1, 0) as cadencia_habitual
-                FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
+                FROM sync_vendas v
                 WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
                   AND v.cliente IS NOT NULL AND v.cliente!=2
                   AND DATE(v.data_criacao) <= ?
@@ -1020,7 +1001,7 @@ export const raioXRouter = router({
               ) iv
               JOIN (
                 SELECT v.cliente, MAX(DATE(v.data_criacao)) as ultima_venda
-                FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
+                FROM sync_vendas v
                 WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
                   AND v.cliente IS NOT NULL AND v.cliente!=2
                   AND DATE(v.data_criacao) <= ?
@@ -1028,7 +1009,7 @@ export const raioXRouter = router({
               ) uvc ON uvc.cliente = iv.cliente
               JOIN (
                 SELECT DISTINCT v.cliente
-                FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
+                FROM sync_vendas v
                 WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
                   AND v.cliente IS NOT NULL AND v.cliente!=2
                   AND DATE(v.data_criacao) >= ? AND DATE(v.data_criacao) <= ?
@@ -1055,14 +1036,14 @@ export const raioXRouter = router({
         SELECT COUNT(*) as total
         FROM (
           SELECT v.cliente, COUNT(*) as tv
-          FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
+          FROM sync_vendas v
           WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
             AND v.cliente IS NOT NULL AND v.cliente!=2
           GROUP BY v.cliente HAVING tv = 1
         ) vh
         JOIN (
           SELECT DISTINCT v.cliente
-          FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
+          FROM sync_vendas v
           WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
             AND v.cliente IS NOT NULL AND v.cliente!=2
             AND DATE(v.data_criacao) >= ? AND DATE(v.data_criacao) <= ?
@@ -1212,7 +1193,7 @@ export const raioXRouter = router({
           ), 0) as ticket
         FROM (
           SELECT DISTINCT v.cliente
-          FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
+          FROM sync_vendas v
           WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
             AND v.cliente IS NOT NULL AND v.cliente!=2
             AND DATE(v.data_criacao) >= '${dataBase620}' AND DATE(v.data_criacao) <= '${dataFim}'
@@ -1220,7 +1201,7 @@ export const raioXRouter = router({
         JOIN sync_clientes c ON c.id = bp.cliente
         LEFT JOIN (
           SELECT v2.cliente, COUNT(*) as tv
-          FROM sync_vendas v2 JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
+          FROM sync_vendas v2
           WHERE ${unitIn2} AND v2.comanda_temp=0
             AND v2.cancelado_motivo IS NULL AND v2.status!=0
             AND v2.cliente IS NOT NULL AND v2.cliente!=2
@@ -1236,13 +1217,12 @@ export const raioXRouter = router({
         SELECT bp.cliente as cliente_id, MAX(DATE(v_ant.data_criacao)) as ultima_antes
         FROM (
           SELECT DISTINCT v.cliente
-          FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
+          FROM sync_vendas v
           WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
             AND v.cliente IS NOT NULL AND v.cliente!=2
             AND DATE(v.data_criacao) >= '${dataInicio}' AND DATE(v.data_criacao) <= '${dataFim}'
         ) bp
         JOIN sync_vendas v_ant ON v_ant.cliente = bp.cliente
-        JOIN sync_usuarios uu_ant ON v_ant.usuario = uu_ant.id
         WHERE ${extIds.length === 1 ? `v_ant.unidade_id = ${extIds[0]}` : `v_ant.unidade_id IN (${extIds.join(",")})`}
           AND v_ant.comanda_temp=0 AND v_ant.cancelado_motivo IS NULL AND v_ant.status!=0
           AND DATE(v_ant.data_criacao) < '${dataInicio}'
@@ -1323,14 +1303,14 @@ export const raioXRouter = router({
               SUM(CASE WHEN COALESCE(tvh.tv,0) >= 3 THEN 1 ELSE 0 END) as fidelizados,
               SUM(CASE WHEN COALESCE(tvh.tv,0) >= 3 AND DATEDIFF('${refStr}', c.ultima_visita) > 45 THEN 1 ELSE 0 END) as perdidosFid
             FROM (
-              SELECT DISTINCT v.cliente FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
+              SELECT DISTINCT v.cliente FROM sync_vendas v
               WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
                 AND v.cliente IS NOT NULL AND v.cliente!=2
                 AND DATE(v.data_criacao) >= '${base620Str}' AND DATE(v.data_criacao) <= '${refStr}'
             ) bp
             JOIN sync_clientes c ON c.id = bp.cliente
             LEFT JOIN (
-              SELECT v2.cliente, COUNT(*) as tv FROM sync_vendas v2 JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
+              SELECT v2.cliente, COUNT(*) as tv FROM sync_vendas v2
               WHERE ${unitIn2} AND v2.comanda_temp=0 AND v2.cancelado_motivo IS NULL AND v2.status!=0
                 AND v2.cliente IS NOT NULL AND v2.cliente!=2
               GROUP BY v2.cliente
@@ -1420,7 +1400,6 @@ export const raioXRouter = router({
           COUNT(vh.id) as tv_hist
         FROM sync_clientes c
         JOIN sync_vendas vh ON vh.cliente = c.id
-        JOIN sync_usuarios uuh ON vh.usuario = uuh.id
         WHERE ${unitInVh} AND uuh.visivel_dashboard = 1
           AND vh.comanda_temp=0 AND vh.cancelado_motivo IS NULL AND vh.status!=0
           AND vh.cliente IS NOT NULL AND vh.cliente!=2
@@ -1463,7 +1442,7 @@ export const raioXRouter = router({
       // Query 3: clientes resgatados (voltaram nos últimos 90d)
       const resgatadosRows = await queryLocal<{ cliente_id: number }>(`
         SELECT DISTINCT v.cliente as cliente_id
-        FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
+        FROM sync_vendas v
         WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
           AND v.cliente IN (${idList})
           AND DATE(v.data_criacao) >= '${resgate90Str}' AND DATE(v.data_criacao) <= '${dataFim}'
@@ -1565,7 +1544,7 @@ export const raioXRouter = router({
              WHERE v3.cliente = v.cliente AND v3.comanda_temp=0
                AND v3.cancelado_motivo IS NULL AND v3.status!=0
              ORDER BY v3.data_criacao ASC LIMIT 1) as barbeiro_nome
-          FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
+          FROM sync_vendas v
           WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
             AND v.cliente IS NOT NULL AND v.cliente!=2
           GROUP BY v.cliente
@@ -1591,7 +1570,7 @@ export const raioXRouter = router({
         total: number;
       }>(`
         SELECT v.cliente as cliente_id, DATE(v.data_criacao) as data_visita, v.valor_total as total
-        FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
+        FROM sync_vendas v
         WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
           AND v.cliente IN (${idList})
         ORDER BY v.cliente, v.data_criacao
@@ -1675,7 +1654,7 @@ export const raioXRouter = router({
       // Total de clientes únicos no período (base para % novos)
       const baseRows = await queryLocal<{ total: number }>(`
         SELECT COUNT(DISTINCT v.cliente) as total
-        FROM sync_vendas v JOIN sync_usuarios uu ON v.usuario = uu.id
+        FROM sync_vendas v
         WHERE ${unitIn} AND v.comanda_temp=0 AND v.cancelado_motivo IS NULL AND v.status!=0
           AND v.cliente IS NOT NULL AND v.cliente!=2
           AND DATE(v.data_criacao) >= '${dataIniStr}' AND DATE(v.data_criacao) <= '${dataFimStr}'
@@ -2315,7 +2294,6 @@ export const raioXRouter = router({
         JOIN (
           SELECT v.cliente, COUNT(*) as total_visitas
           FROM sync_vendas v
-          JOIN sync_usuarios uu ON v.usuario = uu.id
           WHERE ${unitCondV}
             AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
             AND v.cliente IS NOT NULL AND v.cliente != 2
