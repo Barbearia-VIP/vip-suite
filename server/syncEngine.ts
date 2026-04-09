@@ -410,7 +410,7 @@ let schedulerTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startSyncScheduler() {
   if (schedulerTimer) return;
-  console.log("[Sync Scheduler] Iniciado — sincronização incremental a cada 30 minutos");
+  console.log("[Sync Scheduler] Iniciado — sincronização incremental a cada 4 horas");
 
   const runCycle = async () => {
     try {
@@ -425,11 +425,9 @@ export function startSyncScheduler() {
     }
   };
 
-  // Primeira execução após 5 minutos do boot (não sobrecarregar na inicialização)
-  setTimeout(runCycle, 5 * 60 * 1000);
-
-  // Ciclos a cada 30 minutos
-  schedulerTimer = setInterval(runCycle, 30 * 60 * 1000);
+  // Sem execução automática no boot — dados já estão no banco local
+  // Ciclos a cada 4 horas para não comprometer o servidor externo
+  schedulerTimer = setInterval(runCycle, 4 * 60 * 60 * 1000);
 }
 
 export function stopSyncScheduler() {
