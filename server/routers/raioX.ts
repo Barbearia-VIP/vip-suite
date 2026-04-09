@@ -1197,7 +1197,7 @@ export const raioXRouter = router({
       //   One-shot = 1 visita histórica
       const dataBase620 = new Date(new Date(dataFim + "T12:00:00Z").getTime() - 620 * 86400000)
         .toISOString().split("T")[0];
-      const unitIn2 = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
+      const unitIn2 = extIds.length === 1 ? `v2.unidade_id = ${extIds[0]}` : `v2.unidade_id IN (${extIds.join(",")})`;
 
       const clientesBase = await queryLocal<{
         cliente_id: number; nome: string; telefone: string;
@@ -1403,6 +1403,7 @@ export const raioXRouter = router({
       const unitIn = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
       const unitIn2 = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
       const unitIn3 = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
+      const unitInVh = extIds.length === 1 ? `vh.unidade_id = ${extIds[0]}` : `vh.unidade_id IN (${extIds.join(",")})`;
 
       // Query 1: clientes da base (620d) com ultima_visita e total de visitas históricas
       const clientesBase = await queryLocal<{
@@ -1417,7 +1418,7 @@ export const raioXRouter = router({
         FROM sync_clientes c
         JOIN sync_vendas vh ON vh.cliente = c.id
         JOIN sync_usuarios uuh ON vh.usuario = uuh.id
-        WHERE ${unitIn.replace(/uu\./g, 'uuh.')} AND uuh.visivel_dashboard = 1
+        WHERE ${unitInVh} AND uuh.visivel_dashboard = 1
           AND vh.comanda_temp=0 AND vh.cancelado_motivo IS NULL AND vh.status!=0
           AND vh.cliente IS NOT NULL AND vh.cliente!=2
           AND c.status = 1
@@ -1528,8 +1529,7 @@ export const raioXRouter = router({
         return { cohortMensal: [], analiseNovos: null, distribuicao: null, cohortHistorico: [], cohortPorBarbeiro: [] };
       }
       const unitIn = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
-      const unitIn2 = extIds.length === 1 ? `v.unidade_id = ${extIds[0]}` : `v.unidade_id IN (${extIds.join(",")})`;
-
+      const unitIn2 = extIds.length === 1 ? `v2.unidade_id = ${extIds[0]}` : `v2.unidade_id IN (${extIds.join(",")})`;
       const dataIniRaw = input.dataInicio ? new Date(input.dataInicio) : new Date(Date.now() - 90 * 86400000);
       const dataFimRaw = input.dataFim ? new Date(input.dataFim) : new Date();
       const dataIniStr = `${dataIniRaw.getFullYear()}-${String(dataIniRaw.getMonth()+1).padStart(2,"0")}-${String(dataIniRaw.getDate()).padStart(2,"0")}`;
