@@ -77,7 +77,7 @@ export default function CampaignPreview({ open, onClose, campaign }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl w-[95vw] h-[92vh] max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
+      <DialogContent className="!max-w-[98vw] w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-0 gap-0 overflow-hidden">
         {/* Header fixo — não scrollable */}
         <div className="flex-shrink-0 px-6 pt-6 pb-3 border-b">
           <div className="flex items-start justify-between gap-4">
