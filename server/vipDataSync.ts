@@ -239,43 +239,74 @@ export async function syncVendas(
 // ─── Sincroniza faturamento com Gestão Total (gt_financeiro) ─────────────────
 
 /**
- * Agrega as vendas do Data VIP por dia e cria/atualiza lançamentos de receita
- * no gt_financeiro. Usa INSERT ... ON DUPLICATE KEY UPDATE para idempotência.
+ * Agrega as vendas do Data VIP por dia (via sync_vendas, banco externo local)
+ * e cria/atualiza lançamentos de receita no gt_financeiro.
+ * Usa INSERT ... ON DUPLICATE KEY UPDATE para idempotência.
  * Chave de deduplicação: dataVipRef = 'datavip:{unitId}:{YYYY-MM-DD}'
+ *
+ * Fonte: sync_vendas JOIN sync_usuarios (mesma lógica do Data VIP)
+ * - status = 1 (apenas vendas finalizadas)
+ * - filtro por sync_usuarios.unidade = externalId da unidade
  */
 export async function syncGtFinanceiro(orgId: number, unitId: number, inicio: string, fim: string): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
-  // Usa INSERT ... SELECT com subquery para evitar only_full_group_by
-  await db.execute(sql`
-    INSERT INTO gt_financeiro
-      (orgId, unitId, tipo, categoria, descricao, valor, vencimento, pago, paidAt, referencia, dataVipRef)
+  // Buscar o externalId da unidade (mapeamento unitId interno → unidade externa)
+  const [extRows] = await db.execute(
+    sql`SELECT externalId FROM units WHERE id = ${unitId} AND externalId IS NOT NULL`
+  ) as any;
+  const extIdRaw = (extRows as any[])[0]?.externalId;
+  if (!extIdRaw) {
+    console.warn(`[syncGtFinanceiro] unitId=${unitId} sem externalId — pulando`);
+    return;
+  }
+  const extId = Number(extIdRaw);
+
+  // Buscar faturamento diário via sync_vendas (banco local sincronizado)
+  const { queryLocal } = await import("./db-local");
+  const diasRows = await queryLocal<{
+    dia: string;
+    totalFaturamento: number;
+    qtd: number;
+  }>(`
     SELECT
-      ${orgId}, ${unitId},
-      'receita',
-      'Faturamento Data VIP',
-      CONCAT('Faturamento Data VIP - ', dia, ' (', qtd, ' atendimentos)'),
-      totalLiquido,
-      dia,
-      1,
-      dia,
-      DATE_FORMAT(dia, '%Y-%m'),
-      CONCAT('datavip:', ${unitId}, ':', dia)
-    FROM (
-      SELECT DATE(vendaData) AS dia, SUM(valorLiquido) AS totalLiquido, COUNT(*) AS qtd
-      FROM vendas_api_raw
-      WHERE orgId = ${orgId}
-        AND unitId = ${unitId}
-        AND DATE(vendaData) BETWEEN ${inicio} AND ${fim}
-        AND valorLiquido > 0
-      GROUP BY DATE(vendaData)
-    ) AS sub
-    ON DUPLICATE KEY UPDATE
-      valor = VALUES(valor),
-      descricao = VALUES(descricao),
-      updatedAt = NOW()
+      DATE(v.data_criacao) AS dia,
+      COALESCE(SUM(v.valor_total), 0) AS totalFaturamento,
+      COUNT(*) AS qtd
+    FROM sync_vendas v
+    JOIN sync_usuarios u ON u.id = v.usuario
+    WHERE u.unidade = ${extId}
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND v.status = 1
+      AND DATE(v.data_criacao) BETWEEN '${inicio.slice(0, 10)}' AND '${fim.slice(0, 10)}'
+    GROUP BY DATE(v.data_criacao)
+    ORDER BY dia
   `);
+
+  if (diasRows.length === 0) return;
+
+  // Upsert de cada dia no gt_financeiro
+  for (const row of diasRows) {
+    const dia = typeof row.dia === 'string' ? row.dia.slice(0, 10) : new Date(row.dia).toISOString().slice(0, 10);
+    const valor = parseFloat(String(row.totalFaturamento));
+    const qtd = Number(row.qtd);
+    if (valor <= 0) continue;
+    const referencia = dia.slice(0, 7); // YYYY-MM
+    const dataVipRef = `datavip:${unitId}:${dia}`;
+    const descricao = `Faturamento Data VIP - ${dia} (${qtd} atendimentos)`;
+    await db.execute(sql`
+      INSERT INTO gt_financeiro
+        (orgId, unitId, tipo, categoria, descricao, valor, vencimento, pago, paidAt, referencia, dataVipRef)
+      VALUES
+        (${orgId}, ${unitId}, 'receita', 'Faturamento Data VIP', ${descricao}, ${valor}, ${dia}, 1, ${dia}, ${referencia}, ${dataVipRef})
+      ON DUPLICATE KEY UPDATE
+        valor = VALUES(valor),
+        descricao = VALUES(descricao),
+        updatedAt = NOW()
+    `);
+  }
 }
 
 // ─── Atualiza dimensões (clientes e colaboradores) ────────────────────────────

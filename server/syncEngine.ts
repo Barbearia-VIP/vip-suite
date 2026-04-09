@@ -375,6 +375,31 @@ export async function syncIncremental(
     });
 
     log(`[Sync Incremental] Unidade ${unidadeId}: ${result.vendas} vendas novas/atualizadas`);
+
+    // Sincroniza faturamento com Gestão Total (gt_financeiro) via sync_vendas
+    try {
+      const db = await getDb();
+      if (db) {
+        const [unitRows] = await db.execute(
+          sql`SELECT id, orgId FROM units WHERE externalId = ${String(unidadeId)} LIMIT 1`
+        ) as any;
+        const unitRow = (unitRows as any[])[0];
+        if (unitRow) {
+          const { syncGtFinanceiro } = await import("./vipDataSync");
+          await syncGtFinanceiro(
+            Number(unitRow.orgId),
+            Number(unitRow.id),
+            dataInicio.slice(0, 10),
+            dataFim.slice(0, 10)
+          );
+          log(`[Sync Incremental] GT Financeiro sincronizado para unidade ${unidadeId}`);
+        }
+      }
+    } catch (gtErr) {
+      // Não falha o sync principal se o GT financeiro falhar
+      log(`[Sync Incremental] Aviso: GT Financeiro falhou para unidade ${unidadeId}: ${gtErr}`);
+    }
+
     await conn.end();
     return { ok: true, novas: result.vendas };
   } catch (err) {
