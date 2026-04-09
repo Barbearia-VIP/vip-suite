@@ -21,7 +21,9 @@ import {
   Timer,
 } from "lucide-react";
 
-function toUTC(d: string): Date {
+function toUTC(d: string | Date): Date {
+  // Superjson pode retornar Date diretamente
+  if (d instanceof Date) return d;
   // O banco salva sem 'Z' (ex: "2026-04-09 14:48:00") — forçar parse como UTC
   if (!d.endsWith("Z") && !d.includes("+")) {
     return new Date(d.replace(" ", "T") + "Z");
@@ -29,7 +31,7 @@ function toUTC(d: string): Date {
   return new Date(d);
 }
 
-function formatDate(d: string | null | undefined) {
+function formatDate(d: string | Date | null | undefined) {
   if (!d) return "Nunca";
   return toUTC(d).toLocaleString("pt-BR", {
     day: "2-digit",

@@ -249,14 +249,21 @@ export default function AppLayout({ children }: AppLayoutProps) {
     refetchInterval: 5 * 60 * 1000, // atualiza a cada 5 min
     staleTime: 2 * 60 * 1000,
   });
-  const ultimaSyncGlobal = syncStatusQuery.data
+  const ultimaSyncGlobal: string | Date | null = syncStatusQuery.data
     ?.filter((r: any) => r.ultima_sync)
-    .map((r: any) => r.ultima_sync as string)
-    .sort()
+    .map((r: any) => r.ultima_sync as string | Date)
+    .sort((a: any, b: any) => {
+      const ta = a instanceof Date ? a.getTime() : new Date(String(a).replace(" ", "T") + (String(a).endsWith("Z") ? "" : "Z")).getTime();
+      const tb = b instanceof Date ? b.getTime() : new Date(String(b).replace(" ", "T") + (String(b).endsWith("Z") ? "" : "Z")).getTime();
+      return ta - tb;
+    })
     .at(-1) ?? null;
-  // O banco salva sem 'Z' — forçar parse como UTC
-  const parseUTC = (s: string) =>
-    !s.endsWith("Z") && !s.includes("+") ? new Date(s.replace(" ", "T") + "Z") : new Date(s);
+  // Superjson pode retornar Date ou string — normalizar para Date
+  const parseUTC = (s: string | Date): Date => {
+    if (s instanceof Date) return s;
+    if (!s.endsWith("Z") && !s.includes("+")) return new Date(s.replace(" ", "T") + "Z");
+    return new Date(s);
+  };
 
   const syncDefasagemLabel = (() => {
     if (!ultimaSyncGlobal) return null;
