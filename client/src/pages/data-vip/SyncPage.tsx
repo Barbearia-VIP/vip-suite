@@ -21,9 +21,17 @@ import {
   Timer,
 } from "lucide-react";
 
+function toUTC(d: string): Date {
+  // O banco salva sem 'Z' (ex: "2026-04-09 14:48:00") — forçar parse como UTC
+  if (!d.endsWith("Z") && !d.includes("+")) {
+    return new Date(d.replace(" ", "T") + "Z");
+  }
+  return new Date(d);
+}
+
 function formatDate(d: string | null | undefined) {
   if (!d) return "Nunca";
-  return new Date(d).toLocaleString("pt-BR", {
+  return toUTC(d).toLocaleString("pt-BR", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -218,7 +226,7 @@ export default function SyncPage() {
             {ultimaSyncGlobal && (
               <div className="text-xs text-muted-foreground mt-1">
                 {(() => {
-                  const diff = Date.now() - new Date(ultimaSyncGlobal).getTime();
+                  const diff = Date.now() - toUTC(ultimaSyncGlobal).getTime();
                   const h = Math.floor(diff / 3600000);
                   const m = Math.floor((diff % 3600000) / 60000);
                   return h > 0 ? `Há ${h}h ${m}min` : `Há ${m} minutos`;

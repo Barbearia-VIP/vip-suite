@@ -254,9 +254,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
     .map((r: any) => r.ultima_sync as string)
     .sort()
     .at(-1) ?? null;
+  // O banco salva sem 'Z' — forçar parse como UTC
+  const parseUTC = (s: string) =>
+    !s.endsWith("Z") && !s.includes("+") ? new Date(s.replace(" ", "T") + "Z") : new Date(s);
+
   const syncDefasagemLabel = (() => {
     if (!ultimaSyncGlobal) return null;
-    const diff = Date.now() - new Date(ultimaSyncGlobal).getTime();
+    const diff = Date.now() - parseUTC(ultimaSyncGlobal).getTime();
     const h = Math.floor(diff / 3600000);
     const m = Math.floor((diff % 3600000) / 60000);
     if (h >= 24) return `${Math.floor(h / 24)}d atrás`;
@@ -266,7 +270,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   })();
   const syncDefasagemCor = (() => {
     if (!ultimaSyncGlobal) return "text-muted-foreground";
-    const diff = Date.now() - new Date(ultimaSyncGlobal).getTime();
+    const diff = Date.now() - parseUTC(ultimaSyncGlobal).getTime();
     if (diff > 8 * 3600000) return "text-red-400";
     if (diff > 4 * 3600000) return "text-yellow-400";
     return "text-green-400";
