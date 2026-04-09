@@ -309,6 +309,145 @@ export async function syncGtFinanceiro(orgId: number, unitId: number, inicio: st
   }
 }
 
+// ─── Sincroniza comissões com Gestão Total (gt_financeiro como despesa) ─────────
+
+/**
+ * Calcula as comissões dos colaboradores por dia (via sync_vendas_produtos + regras_comissao)
+ * e cria/atualiza lançamentos de despesa no gt_financeiro.
+ * Chave de deduplicação: dataVipRef = 'comissao:{unitId}:{YYYY-MM-DD}'
+ *
+ * Lógica:
+ * - Serviços (tipo='ser'): % de comissão de serviços (regras_comissao.percentual)
+ * - Produtos (tipo like 'pro%' ou 'pac'): % de comissão de produtos (regras_comissao.pctComissaoProdutos)
+ * - Bônus de meta: diferença entre % da faixa atingida e % base, sobre total de serviços
+ */
+export async function syncGtComissoes(orgId: number, unitId: number, inicio: string, fim: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  // Buscar externalId da unidade
+  const [extRows] = await db.execute(
+    sql`SELECT externalId FROM units WHERE id = ${unitId} AND externalId IS NOT NULL`
+  ) as any;
+  const extIdRaw = (extRows as any[])[0]?.externalId;
+  if (!extIdRaw) {
+    console.warn(`[syncGtComissoes] unitId=${unitId} sem externalId — pulando`);
+    return;
+  }
+  const extId = Number(extIdRaw);
+
+  const { queryLocal } = await import("./db-local");
+
+  // Buscar regras de comissão da org
+  const [regrasRows] = await db.execute(
+    sql`SELECT colaboradorId, percentual, pctComissaoProdutos FROM regras_comissao WHERE ativo = 1 AND orgId = ${orgId}`
+  ) as any;
+  const regrasMap: Record<string, { pct: number; pctProd: number }> = {};
+  for (const r of regrasRows as any[]) {
+    regrasMap[String(r.colaboradorId)] = {
+      pct: Number(r.percentual),
+      pctProd: Number(r.pctComissaoProdutos ?? 0),
+    };
+  }
+  if (Object.keys(regrasMap).length === 0) return; // sem regras cadastradas
+
+  // Buscar faixas de meta para bônus (por unitId)
+  const [faixasRows] = await db.execute(
+    sql`SELECT valorMinServicos, pctComissao FROM meta_faixas WHERE unitId = ${unitId} AND orgId = ${orgId} AND ativo = 1 ORDER BY valorMinServicos ASC`
+  ) as any;
+  const faixasMeta: { valorMin: number; pct: number }[] = (faixasRows as any[]).map((f: any) => ({
+    valorMin: Number(f.valorMinServicos),
+    pct: Number(f.pctComissao),
+  }));
+
+  // Buscar faturamento total de serviços por colaborador por dia (para bônus de meta)
+  const fatServicosRows = await queryLocal<{ colaborador: number; dia: string; totalServicos: number }>(`
+    SELECT
+      vp.colaborador,
+      DATE(v.data_criacao) AS dia,
+      SUM(CASE WHEN p.tipo = 'ser' THEN vp.valor_total ELSE 0 END) AS totalServicos
+    FROM sync_vendas_produtos vp
+    JOIN sync_vendas v ON v.id = vp.venda
+    JOIN sync_usuarios u ON u.id = vp.colaborador
+    LEFT JOIN sync_produtos p ON p.id = vp.produto
+    WHERE u.unidade = ${extId}
+      AND v.status = 1
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND DATE(v.data_criacao) BETWEEN '${inicio.slice(0, 10)}' AND '${fim.slice(0, 10)}'
+    GROUP BY vp.colaborador, DATE(v.data_criacao)
+  `);
+
+  // Buscar faturamento por colaborador por dia separado por tipo
+  const colabRows = await queryLocal<{ colaborador: number; dia: string; servicos: number; produtos: number }>(`
+    SELECT
+      vp.colaborador,
+      DATE(v.data_criacao) AS dia,
+      SUM(CASE WHEN p.tipo = 'ser' THEN vp.valor_total ELSE 0 END) AS servicos,
+      SUM(CASE WHEN p.tipo LIKE 'pro%' OR p.tipo = 'pac' THEN vp.valor_total ELSE 0 END) AS produtos
+    FROM sync_vendas_produtos vp
+    JOIN sync_vendas v ON v.id = vp.venda
+    JOIN sync_usuarios u ON u.id = vp.colaborador
+    LEFT JOIN sync_produtos p ON p.id = vp.produto
+    WHERE u.unidade = ${extId}
+      AND v.status = 1
+      AND v.comanda_temp = 0
+      AND v.cancelado_motivo IS NULL
+      AND DATE(v.data_criacao) BETWEEN '${inicio.slice(0, 10)}' AND '${fim.slice(0, 10)}'
+    GROUP BY vp.colaborador, DATE(v.data_criacao)
+  `);
+
+  if (colabRows.length === 0) return;
+
+  // Calcular comissão total por dia
+  const comissoesPorDia: Record<string, number> = {};
+  for (const c of colabRows) {
+    const diaStr = String(c.dia);
+    const dia = diaStr.match(/^\d{4}-\d{2}-\d{2}$/) ? diaStr : new Date(diaStr).toISOString().slice(0, 10);
+    const regra = regrasMap[String(c.colaborador)];
+    if (!regra) continue;
+    const servicos = parseFloat(String(c.servicos || 0));
+    const produtos = parseFloat(String(c.produtos || 0));
+    // Comissão base
+    const comBase = Math.round((servicos * regra.pct / 100 + produtos * regra.pctProd / 100) * 100) / 100;
+    // Bônus de meta: % faixa - % base sobre total serviços do colaborador no dia
+    let bonus = 0;
+    if (faixasMeta.length > 0) {
+      const fatRow = fatServicosRows.find(
+        r => String(r.colaborador) === String(c.colaborador) &&
+        String(r.dia).slice(0, 10) === dia
+      );
+      const fatServicos = fatRow ? parseFloat(String(fatRow.totalServicos || 0)) : 0;
+      const sorted = [...faixasMeta].sort((a, b) => b.valorMin - a.valorMin);
+      const faixa = sorted.find(f => fatServicos >= f.valorMin);
+      if (faixa) {
+        const pctBonus = Math.max(0, faixa.pct - regra.pct);
+        bonus = Math.round(servicos * pctBonus / 100 * 100) / 100;
+      }
+    }
+    comissoesPorDia[dia] = (comissoesPorDia[dia] || 0) + comBase + bonus;
+  }
+
+  // Upsert de cada dia no gt_financeiro como despesa
+  for (const [dia, valor] of Object.entries(comissoesPorDia)) {
+    if (valor <= 0) continue;
+    const valorRounded = Math.round(valor * 100) / 100;
+    const referencia = dia.slice(0, 7);
+    const dataVipRef = `comissao:${unitId}:${dia}`;
+    const descricao = `Comissões Data VIP - ${dia}`;
+    await db.execute(sql`
+      INSERT INTO gt_financeiro
+        (orgId, unitId, tipo, categoria, descricao, valor, vencimento, pago, paidAt, referencia, dataVipRef)
+      VALUES
+        (${orgId}, ${unitId}, 'despesa', 'Comissões', ${descricao}, ${valorRounded}, ${dia}, 1, ${dia}, ${referencia}, ${dataVipRef})
+      ON DUPLICATE KEY UPDATE
+        valor = VALUES(valor),
+        descricao = VALUES(descricao),
+        updatedAt = NOW()
+    `);
+  }
+}
+
 // ─── Atualiza dimensões (clientes e colaboradores) ────────────────────────────
 
 export async function updateDimensoes(orgId: number, unitId: number): Promise<void> {

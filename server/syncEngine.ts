@@ -385,7 +385,7 @@ export async function syncIncremental(
         ) as any;
         const unitRow = (unitRows as any[])[0];
         if (unitRow) {
-          const { syncGtFinanceiro } = await import("./vipDataSync");
+          const { syncGtFinanceiro, syncGtComissoes } = await import("./vipDataSync");
           await syncGtFinanceiro(
             Number(unitRow.orgId),
             Number(unitRow.id),
@@ -393,6 +393,13 @@ export async function syncIncremental(
             dataFim.slice(0, 10)
           );
           log(`[Sync Incremental] GT Financeiro sincronizado para unidade ${unidadeId}`);
+          await syncGtComissoes(
+            Number(unitRow.orgId),
+            Number(unitRow.id),
+            dataInicio.slice(0, 10),
+            dataFim.slice(0, 10)
+          );
+          log(`[Sync Incremental] GT Comissões sincronizadas para unidade ${unidadeId}`);
         }
       }
     } catch (gtErr) {
