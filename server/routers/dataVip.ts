@@ -446,9 +446,12 @@ export const dataVipRouter = router({
         ctx.user.id, ctx.user.role, input.orgId, input.unitId
       );
       const { queryLocal } = await import("../db-local");
-      const unitCond = extIds.length === 0 ? "1=1"
+      const unitCondC = extIds.length === 0 ? "1=1"
         : extIds.length === 1 ? `c.unidade_id = ${extIds[0]}`
         : `c.unidade_id IN (${extIds.join(",")})`;
+      const unitCondV = extIds.length === 0 ? "1=1"
+        : extIds.length === 1 ? `v.unidade_id = ${extIds[0]}`
+        : `v.unidade_id IN (${extIds.join(",")})`;
       const rows = await queryLocal<{
         id: number; nome: string; telefone: string;
         data_criacao: Date; ultima_visita: Date; visitas: number; consumo: number;
@@ -457,13 +460,13 @@ export const dataVipRouter = router({
                COALESCE(vc.total_visitas, 0) as visitas, COALESCE(c.consumo, 0) as consumo
         FROM sync_clientes c
         LEFT JOIN (
-          SELECT cliente, COUNT(*) as total_visitas
-          FROM sync_vendas
-          WHERE ${unitCond.replace('c.', 'sync_vendas.')}
-            AND comanda_temp = 0 AND status = 1 AND cliente IS NOT NULL AND cliente != 2
-          GROUP BY cliente
+          SELECT v.cliente, COUNT(*) as total_visitas
+          FROM sync_vendas v
+          WHERE ${unitCondV}
+            AND v.comanda_temp = 0 AND v.status = 1 AND v.cliente IS NOT NULL AND v.cliente != 2
+          GROUP BY v.cliente
         ) vc ON vc.cliente = c.id
-        WHERE ${unitCond} AND c.status = 1 AND c.ultima_visita IS NOT NULL
+        WHERE ${unitCondC} AND c.status = 1 AND c.ultima_visita IS NOT NULL
         ORDER BY c.ultima_visita DESC
         LIMIT 5000
       `);
