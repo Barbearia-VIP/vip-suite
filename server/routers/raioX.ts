@@ -502,7 +502,7 @@ export const raioXRouter = router({
             SELECT v2.cliente, MAX(DATE(v2.data_criacao)) as ultima_antes
             FROM sync_vendas v2
             JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
-            WHERE ${unitCondV.replace(/\buu\./g, 'uu2.')}
+            WHERE ${unitCondV.replace(/\bv\./g, 'v2.')}
               AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
               AND v2.cliente IS NOT NULL AND v2.cliente != 2
               AND DATE(v2.data_criacao) < '${dataInicio}'
@@ -532,7 +532,7 @@ export const raioXRouter = router({
             SELECT v2.cliente, MAX(DATE(v2.data_criacao)) as ultima_antes
             FROM sync_vendas v2
             JOIN sync_usuarios uu2 ON v2.usuario = uu2.id
-            WHERE ${unitCondV.replace(/\buu\./g, 'uu2.')}
+            WHERE ${unitCondV.replace(/\bv\./g, 'v2.')}
               AND v2.comanda_temp = 0 AND v2.cancelado_motivo IS NULL AND v2.status = 1
               AND v2.cliente IS NOT NULL AND v2.cliente != 2
               AND DATE(v2.data_criacao) < '${dataInicio}'
@@ -588,11 +588,11 @@ export const raioXRouter = router({
                      v3.data_criacao
               FROM sync_vendas v3
               JOIN sync_usuarios uu3 ON v3.usuario = uu3.id
-              WHERE ${unitCondV.replace(/\buu\./g, 'uu3.')}
+              WHERE ${unitCondV.replace(/\bv\./g, 'v3.')}
                 AND v3.comanda_temp = 0 AND v3.cancelado_motivo IS NULL AND v3.status = 1
                 AND DATE(v3.data_criacao) >= '${dataInicio}' AND DATE(v3.data_criacao) <= '${dataFim}'
             ) m2 ON DATE(all_v.data_criacao) <= m2.fim_mes
-            WHERE ${unitCondV.replace(/\buu\./g, 'uu_av.')}
+            WHERE ${unitCondV.replace(/\bv\./g, 'all_v.')}
               AND all_v.comanda_temp = 0 AND all_v.cancelado_motivo IS NULL AND all_v.status = 1
               AND all_v.cliente IS NOT NULL AND all_v.cliente != 2
               AND DATE(all_v.data_criacao) >= '${dataInicio12m}'
@@ -1240,7 +1240,7 @@ export const raioXRouter = router({
         ) bp
         JOIN sync_vendas v_ant ON v_ant.cliente = bp.cliente
         JOIN sync_usuarios uu_ant ON v_ant.usuario = uu_ant.id
-        WHERE ${extIds.length === 1 ? `uu_ant.unidade = ${extIds[0]}` : `uu_ant.unidade IN (${extIds.join(",")})`}
+        WHERE ${extIds.length === 1 ? `v_ant.unidade_id = ${extIds[0]}` : `v_ant.unidade_id IN (${extIds.join(",")})`}
           AND v_ant.comanda_temp=0 AND v_ant.cancelado_motivo IS NULL AND v_ant.status!=0
           AND DATE(v_ant.data_criacao) < '${dataInicio}'
         GROUP BY bp.cliente
