@@ -8,7 +8,7 @@ import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
 
-// Detecta se um erro é de timeout do banco externo
+// Detecta se um erro é de timeout de query
 const isTimeoutError = (error: unknown): boolean => {
   if (!(error instanceof TRPCClientError)) return false;
   return (

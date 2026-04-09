@@ -1,8 +1,7 @@
 /**
  * DataVipLoadingState
- * Componente e hook utilitário para tratar erros de timeout do banco externo
- * nas páginas Data VIP. Em vez de exibir erro, mostra um skeleton pulsante
- * com mensagem de "carregando dados do banco externo".
+ * Componente e hook utilitário para tratar estados de carregamento e erros
+ * nas páginas Data VIP.
  */
 
 import { TRPCClientError } from "@trpc/client";
@@ -13,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 // ─── Hook utilitário ─────────────────────────────────────────────────────────
 
 /**
- * Retorna true se o erro é de timeout do banco externo (max_execution_time).
+ * Retorna true se o erro é de timeout de query (max_execution_time).
  * Nesses casos, a query deve ser tratada como "ainda carregando" e não como erro.
  */
 export function isExternalDbTimeoutError(error: unknown): boolean {
@@ -80,12 +79,12 @@ export function DataVipLoadingState({
         <Database className="w-4 h-4 text-blue-400 shrink-0 animate-pulse" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-blue-300">
-            {message ?? "Carregando dados do banco externo..."}
+            {message ?? "Carregando dados..."}
           </p>
           <p className="text-xs text-blue-400/60 mt-0.5">
             {attempt && attempt > 1
-              ? `Tentativa ${attempt} de 3 — o banco está respondendo devagar, aguarde...`
-              : "Conectando via túnel SSH ao banco de dados da franquia..."}
+              ? `Tentativa ${attempt} de 3 — aguarde...`
+              : "Buscando informações, aguarde um instante..."}
           </p>
         </div>
         <RefreshCw className="w-3.5 h-3.5 text-blue-400/50 animate-spin shrink-0" />
@@ -112,10 +111,10 @@ export function DataVipErrorState({ onRetry, message }: DataVipErrorStateProps) 
       <div className="flex items-start gap-3 p-4 rounded-xl border border-yellow-500/30 bg-yellow-500/10 text-yellow-300">
         <Database className="w-5 h-5 mt-0.5 shrink-0" />
         <div className="flex-1">
-          <p className="font-semibold text-sm">Banco de dados temporariamente lento</p>
+          <p className="font-semibold text-sm">Dados temporariamente indisponíveis</p>
           <p className="text-xs mt-1 text-yellow-300/80">
             {message ??
-              "A query demorou mais do que o esperado. Isso pode acontecer quando o banco externo está sob carga. Tente novamente em alguns instantes."}
+              "A consulta demorou mais do que o esperado. Tente novamente em alguns instantes."}
           </p>
         </div>
         {onRetry && (

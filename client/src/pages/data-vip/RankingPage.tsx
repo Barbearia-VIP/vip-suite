@@ -67,7 +67,7 @@ export default function RankingPage() {
         </select>
       </div>
 
-      {/* Banner de carregando banco externo */}
+      {/* Banner de carregamento */}
       {(q.isLoading || (q.isError && isExternalDbTimeoutError(q.error) && (q.failureCount ?? 0) < 3)) && (
         <DataVipLoadingState rows={3} attempt={(q.failureCount ?? 0) + 1} />
       )}

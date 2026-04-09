@@ -114,7 +114,7 @@ export default function SincronizacaoPage() {
         <p className="text-sm text-muted-foreground">Importar dados da API externa para o VIP Suite</p>
       </div>
 
-      {/* Banner de carregando banco externo */}
+      {/* Banner de carregamento */}
       {(logsQ.isLoading || (logsQ.isError && isExternalDbTimeoutError(logsQ.error) && (logsQ.failureCount ?? 0) < 3)) && (
         <DataVipLoadingState rows={2} attempt={(logsQ.failureCount ?? 0) + 1} />
       )}

@@ -464,7 +464,7 @@ export default function MensalPage() {
     { enabled: !!org?.id }
   );
 
-  // Status do banco externo
+  // Status do banco de dados
   const qDbStatus = trpc.dataVip.dbStatus.useQuery(undefined, {
     refetchInterval: 10000,
     retry: false,
@@ -564,7 +564,7 @@ export default function MensalPage() {
         loadingColabs={qColabs.isLoading}
       />
 
-      {/* Banner de carregando banco externo */}
+      {/* Banner de carregamento */}
       {(isLoading || (qDetalhado.isError && isExternalDbTimeoutError(qDetalhado.error) && (qDetalhado.failureCount ?? 0) < 3)) && (
         <DataVipLoadingState rows={3} attempt={(qDetalhado.failureCount ?? 0) + 1} />
       )}

@@ -252,7 +252,7 @@ export default function RaioXPage() {
       console.log("[RaioX] Sync iniciada:", data.unitName);
     },
   });
-  // Status do banco externo
+  // Status do banco de dados
   const qDbStatus = trpc.dataVip.dbStatus.useQuery(undefined, {
     refetchInterval: 10000,
     retry: false,
@@ -404,7 +404,7 @@ export default function RaioXPage() {
               <div className="space-y-2">
                 <p className="text-sm font-semibold">Cache Persistente do Raio-X</p>
                 <p className="text-xs text-muted-foreground">
-                  Dados históricos salvos localmente para carregamento instantâneo. Apenas o período atual vai ao banco externo.
+                  Dados históricos carregados do banco local. Apenas o período atual é sincronizado em tempo real.
                 </p>
                 {qCacheStatus.data && (
                   <div className="text-xs space-y-1">

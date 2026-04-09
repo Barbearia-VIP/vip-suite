@@ -484,7 +484,7 @@ export default function ClientesPage() {
         </div>
       </div>
 
-      {/* Banner de carregando banco externo */}
+      {/* Banner de carregamento */}
       {(qKpis.isLoading || (qKpis.isError && isExternalDbTimeoutError(qKpis.error) && (qKpis.failureCount ?? 0) < 3)) && (
         <DataVipLoadingState rows={3} attempt={(qKpis.failureCount ?? 0) + 1} />
       )}

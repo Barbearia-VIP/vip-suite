@@ -436,7 +436,7 @@ export default function DataVipDashboard() {
       ) && (
         <div className="flex items-center gap-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-sm text-blue-300">
           <RefreshCw className="w-4 h-4 shrink-0 animate-spin" />
-          <span>Carregando dados do banco externo... Aguarde, isso pode levar alguns segundos.</span>
+          <span>Carregando dados... Aguarde um instante.</span>
         </div>
       )}
 
