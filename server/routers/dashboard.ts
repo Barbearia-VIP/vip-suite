@@ -518,46 +518,62 @@ export const dashboardRouter = router({
       const db = await getDb();
       if (!db) return [];
 
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const fmtDate = (d: Date) =>
-        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-
-      const { start, end } = getMonthRange(0);
-      const startStr = fmtDate(start);
-      const endStr = fmtDate(end);
-
-      const orgUnits = await db.select({ id: units.id, name: units.name })
+      // Buscar todas as unidades da org com seus externalIds
+      const orgUnits = await db.select({ id: units.id, name: units.name, externalId: units.externalId })
         .from(units)
         .where(eq(units.orgId, input.orgId));
 
-      const ranking = [];
-      for (const unit of orgUnits) {
-        const rawResult = await db.execute(sql.raw(
-          `SELECT COALESCE(SUM(valorLiquido), 0) as total, COUNT(*) as atendimentos
-           FROM vendas_api_raw
-           WHERE vendaData >= '${startStr}' AND vendaData <= '${endStr}' AND unitId = ${unit.id}`
-        ));
-        const rawRow = execRow(rawResult);
+      // Período: mês atual (usando datas de início e fim do mês corrente em BRT)
+      const nowUtc = new Date();
+      const brtMs = nowUtc.getTime() - 3 * 60 * 60 * 1000;
+      const brt = new Date(brtMs);
+      const y = brt.getUTCFullYear();
+      const m = String(brt.getUTCMonth() + 1).padStart(2, "0");
+      const d = String(brt.getUTCDate()).padStart(2, "0");
+      const startDate = `${y}-${m}-01`;
+      const endDate = `${y}-${m}-${d}`;
 
-        let faturamento = parseFloat(String(rawRow?.total ?? "0"));
-        let atendimentos = Number(rawRow?.atendimentos ?? 0);
+      // Uma única query consolidada: agrupa por unidade via sync_usuarios
+      // Usa a mesma lógica do Data VIP: status=1, filtro por sync_usuarios.unidade
+      const extIds = orgUnits.map(u => Number(u.externalId)).filter(Boolean);
+      if (extIds.length === 0) return [];
 
-        // Fallback para tabela vendas
-        if (faturamento === 0 && atendimentos === 0) {
-          const [fallback] = await db.select({
-            total: sql<string>`COALESCE(SUM(${vendas.valorLiquido}), 0)`,
-            atendimentos: count(vendas.id),
-          }).from(vendas).where(and(
-            gte(vendas.dataVenda, start),
-            lte(vendas.dataVenda, end),
-            eq(vendas.unitId, unit.id),
-          ));
-          faturamento = parseFloat(fallback?.total ?? "0");
-          atendimentos = Number(fallback?.atendimentos ?? 0);
-        }
+      const rows = await queryLocal<{
+        ext_id: number;
+        faturamento: number;
+        atendimentos: number;
+        clientes: number;
+      }>(`
+        SELECT
+          u.unidade as ext_id,
+          COALESCE(SUM(v.valor_total), 0) as faturamento,
+          COUNT(*) as atendimentos,
+          COUNT(DISTINCT CASE WHEN v.cliente IS NOT NULL AND v.cliente != 2 THEN v.cliente END) as clientes
+        FROM sync_vendas v
+        JOIN sync_usuarios u ON u.id = v.usuario
+        WHERE u.unidade IN (${extIds.join(",")})
+          AND v.comanda_temp = 0
+          AND v.cancelado_motivo IS NULL
+          AND v.status = 1
+          AND DATE(v.data_criacao) >= '${startDate}'
+          AND DATE(v.data_criacao) <= '${endDate}'
+        GROUP BY u.unidade
+      `);
 
-        ranking.push({ unitId: unit.id, name: unit.name, faturamento, atendimentos });
-      }
+      // Mapear extId → dados e combinar com nome da unidade interna
+      const byExtId = new Map(rows.map(r => [Number(r.ext_id), r]));
+      const ranking = orgUnits
+        .filter(u => u.externalId)
+        .map(u => {
+          const r = byExtId.get(Number(u.externalId));
+          return {
+            unitId: u.id,
+            name: u.name,
+            faturamento: parseFloat(String(r?.faturamento ?? 0)),
+            atendimentos: Number(r?.atendimentos ?? 0),
+            clientes: Number(r?.clientes ?? 0),
+          };
+        });
 
       return ranking.sort((a, b) => b.faturamento - a.faturamento);
     }),
