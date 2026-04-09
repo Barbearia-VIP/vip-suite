@@ -2267,7 +2267,7 @@ export async function getChurnSaudeBase(extIds: number[], dataInicio: string, da
 export async function getChurnPorBarbeiro(extIds: number[], dataInicio: string, dataFim: string, janelaDias: number = 60, colaboradorId?: number | null) {
   const vpCond = colaboradorId ? `vp.colaborador = ${colaboradorId}` : unitIdCond(extIds, "vp");
   const v2Cond = unitIdCond(extIds, "v2");
-  const v2bCond = unitIdCond(extIds, "v2b");
+  const v2bCond = unitIdCond(extIds, "v2"); // alias v2 = sync_vendas no subquery de exclusivos
   const janelaEntrada = Math.round(janelaDias * 1.833);
   const dataInicioJanela = new Date(new Date(dataInicio + "T12:00:00Z").getTime() - janelaEntrada * 86400000).toISOString().slice(0, 10);
 
