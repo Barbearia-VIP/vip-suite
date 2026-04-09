@@ -294,7 +294,7 @@ export default function DashboardPage() {
 
   const kpisQuery = trpc.dashboard.kpis.useQuery(
     { orgId, unitId, dateFrom: period.from, dateTo: period.to },
-    { enabled: orgId > 0, refetchOnWindowFocus: false, refetchInterval: 2 * 60 * 1000 }
+    { enabled: orgId > 0, refetchOnWindowFocus: true, refetchInterval: 5 * 60 * 1000 }
   );
   const modulesQuery = trpc.dashboard.modulesStatus.useQuery(
     { orgId, unitId },
@@ -523,14 +523,25 @@ export default function DashboardPage() {
             color="oklch(0.65 0.15 145)"
             trend={null}
           />
-          <KpiCard
-            label="Reputação"
-            value={kpis.reputacao.hasData ? `${(kpis.reputacao.totalGoogle > 0 ? kpis.reputacao.mediaGoogle : kpis.reputacao.mediaAvaliacoes).toFixed(1)} ★` : "—"}
-            sub={kpis.reputacao.hasData ? `${fmtNum(kpis.reputacao.totalGoogle > 0 ? kpis.reputacao.totalGoogle : kpis.reputacao.totalAvaliacoes)} avaliações` : "Sem dados"}
-            icon={Star}
-            color="oklch(0.65 0.15 30)"
-            trend={null}
-          />
+          {(kpis.dataVip.totalClientes ?? 0) > 0 ? (
+            <KpiCard
+              label="Clientes"
+              value={fmtNum(kpis.dataVip.totalClientes ?? 0)}
+              sub="únicos no período"
+              icon={Users}
+              color="oklch(0.65 0.15 280)"
+              trend={null}
+            />
+          ) : (
+            <KpiCard
+              label="Reputação"
+              value={kpis.reputacao.hasData ? `${(kpis.reputacao.totalGoogle > 0 ? kpis.reputacao.mediaGoogle : kpis.reputacao.mediaAvaliacoes).toFixed(1)} ★` : "—"}
+              sub={kpis.reputacao.hasData ? `${fmtNum(kpis.reputacao.totalGoogle > 0 ? kpis.reputacao.totalGoogle : kpis.reputacao.totalAvaliacoes)} avaliações` : "Sem dados"}
+              icon={Star}
+              color="oklch(0.65 0.15 30)"
+              trend={null}
+            />
+          )}
         </div>
       )}
 
@@ -548,6 +559,9 @@ export default function DashboardPage() {
                 icon={DollarSign} color="oklch(0.65 0.15 200)" />
               <MiniKPI label="Atendimentos" value={fmtNum(kpis.dataVip.atendimentos)} icon={Users} color="oklch(0.65 0.15 200)" />
               <MiniKPI label="Ticket Médio" value={fmt(kpis.dataVip.ticketMedio)} icon={TrendingUp} color="oklch(0.65 0.15 200)" />
+              {(kpis.dataVip.totalClientes ?? 0) > 0 && (
+                <MiniKPI label="Clientes" value={fmtNum(kpis.dataVip.totalClientes ?? 0)} sub="únicos no período" icon={Users} color="oklch(0.65 0.15 280)" />
+              )}
             </>
           ) : (
             <div className="py-2 text-center">

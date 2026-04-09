@@ -2,6 +2,7 @@ import { z } from "zod";
 import { and, count, eq, gte, lte, sql, inArray } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
+import { queryLocal } from "../db-local";
 import {
   vendas,
   camSentimentTimeline,
@@ -107,44 +108,83 @@ export const dashboardRouter = router({
       const mesEndStr = fmtDate(mesEnd);
       const mesAnteriorStartStr = fmtDate(mesAnteriorStart);
       const mesAnteriorEndStr = fmtDate(mesAnteriorEnd);
-      const unitWhere = unitId ? `AND unitId = ${unitId}` : "";
 
-      // ── DATA VIP: usa vendas_api_raw (tabela principal do Data VIP) ──
-      const vendaResult = await db.execute(sql.raw(
-        `SELECT COALESCE(SUM(valorLiquido), 0) as total, COUNT(*) as atendimentos, COALESCE(AVG(valorLiquido), 0) as ticketMedio
-         FROM vendas_api_raw
-         WHERE vendaData >= '${mesStartStr}' AND vendaData <= '${mesEndStr}' ${unitWhere}`
-      ));
-      const vendaRaw = execRow(vendaResult);
-
-      const vendaAnteriorResult = await db.execute(sql.raw(
-        `SELECT COALESCE(SUM(valorLiquido), 0) as total
-         FROM vendas_api_raw
-         WHERE vendaData >= '${mesAnteriorStartStr}' AND vendaData <= '${mesAnteriorEndStr}' ${unitWhere}`
-      ));
-      const vendaAnteriorRaw = execRow(vendaAnteriorResult);
-
-      let faturamentoMes = parseFloat(String(vendaRaw?.total ?? "0"));
-      let atendimentos = Number(vendaRaw?.atendimentos ?? 0);
-      let ticketMedio = parseFloat(String(vendaRaw?.ticketMedio ?? "0"));
-
-      // Fallback para tabela vendas se vendas_api_raw não tiver dados no período
-      if (faturamentoMes === 0 && atendimentos === 0) {
-        const [vendaFallback] = await db.select({
-          total: sql<string>`COALESCE(SUM(${vendas.valorLiquido}), 0)`,
-          atendimentos: count(vendas.id),
-          ticketMedio: sql<string>`COALESCE(AVG(${vendas.valorLiquido}), 0)`,
-        }).from(vendas).where(and(
-          gte(vendas.dataVenda, mesStart),
-          lte(vendas.dataVenda, mesEnd),
-          ...(unitId ? [eq(vendas.unitId, unitId)] : []),
-        ));
-        faturamentoMes = parseFloat(vendaFallback?.total ?? "0");
-        atendimentos = Number(vendaFallback?.atendimentos ?? 0);
-        ticketMedio = parseFloat(vendaFallback?.ticketMedio ?? "0");
+      // ── Resolver externalIds da unidade selecionada ──
+      // Busca os IDs externos (sync_vendas.unidade_id) correspondentes à unidade interna
+      let extIds: number[] = [];
+      if (unitId) {
+        const extRows = await db.execute(sql.raw(
+          `SELECT externalId FROM units WHERE id = ${unitId} AND externalId IS NOT NULL`
+        )) as any;
+        const extId = (Array.isArray(extRows) && Array.isArray(extRows[0]) ? extRows[0] : [])[0]?.externalId;
+        if (extId) extIds = [Number(extId)];
+      } else {
+        const extRows = await db.execute(sql.raw(
+          `SELECT externalId FROM units WHERE orgId = ${orgId} AND externalId IS NOT NULL`
+        )) as any;
+        extIds = (Array.isArray(extRows) && Array.isArray(extRows[0]) ? extRows[0] : []).map((r: any) => Number(r.externalId)).filter(Boolean);
       }
 
-      const faturamentoAnterior = parseFloat(String(vendaAnteriorRaw?.total ?? "0"));
+      // ── DATA VIP: usa sync_vendas (banco local sincronizado em tempo real) ──
+      // sync_vendas.valor_total = valor bruto da venda (equivalente ao valorLiquido do sistema)
+      let faturamentoMes = 0;
+      let atendimentos = 0;
+      let ticketMedio = 0;
+      let faturamentoAnterior = 0;
+      let totalClientes = 0;
+
+      if (extIds.length > 0) {
+        const unitCond = extIds.length === 1
+          ? `v.unidade_id = ${extIds[0]}`
+          : `v.unidade_id IN (${extIds.join(",")})`;
+
+        const [syncVendaRows] = await queryLocal<{
+          total: number; atendimentos: number; ticketMedio: number;
+        }>(`
+          SELECT
+            COALESCE(SUM(v.valor_total), 0) as total,
+            COUNT(*) as atendimentos,
+            COALESCE(AVG(v.valor_total), 0) as ticketMedio
+          FROM sync_vendas v
+          WHERE ${unitCond}
+            AND v.data_criacao >= '${mesStartStr}'
+            AND v.data_criacao <= '${mesEndStr}'
+            AND v.comanda_temp = 0
+            AND v.cancelado_motivo IS NULL
+            AND v.status != 0
+        `);
+        faturamentoMes = parseFloat(String(syncVendaRows?.total ?? 0));
+        atendimentos = Number(syncVendaRows?.atendimentos ?? 0);
+        ticketMedio = parseFloat(String(syncVendaRows?.ticketMedio ?? 0));
+
+        const [syncVendaAntRows] = await queryLocal<{ total: number }>(`
+          SELECT COALESCE(SUM(v.valor_total), 0) as total
+          FROM sync_vendas v
+          WHERE ${unitCond}
+            AND v.data_criacao >= '${mesAnteriorStartStr}'
+            AND v.data_criacao <= '${mesAnteriorEndStr}'
+            AND v.comanda_temp = 0
+            AND v.cancelado_motivo IS NULL
+            AND v.status != 0
+        `);
+        faturamentoAnterior = parseFloat(String(syncVendaAntRows?.total ?? 0));
+
+        // Clientes únicos atendidos no período
+        const [clientesRows] = await queryLocal<{ total: number }>(`
+          SELECT COUNT(DISTINCT v.cliente) as total
+          FROM sync_vendas v
+          WHERE ${unitCond}
+            AND v.data_criacao >= '${mesStartStr}'
+            AND v.data_criacao <= '${mesEndStr}'
+            AND v.comanda_temp = 0
+            AND v.cancelado_motivo IS NULL
+            AND v.status != 0
+            AND v.cliente IS NOT NULL
+            AND v.cliente != 2
+        `);
+        totalClientes = Number(clientesRows?.total ?? 0);
+      }
+
       const trendFaturamento = faturamentoAnterior > 0
         ? Math.round(((faturamentoMes - faturamentoAnterior) / faturamentoAnterior) * 100)
         : null;
@@ -293,6 +333,7 @@ export const dashboardRouter = router({
           atendimentos,
           ticketMedio,
           trendFaturamento,
+          totalClientes,
           hasData: faturamentoMes > 0 || atendimentos > 0,
         },
         gestaoTotal: {
