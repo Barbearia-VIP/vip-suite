@@ -386,7 +386,7 @@ export async function syncIncremental(
         ) as any;
         const unitRow = (unitRows as any[])[0];
         if (unitRow) {
-          const { syncGtFinanceiro, syncGtComissoes } = await import("./vipDataSync");
+          const { syncGtFinanceiro, syncGtComissoes, syncRegrasComissao } = await import("./vipDataSync");
           await syncGtFinanceiro(
             Number(unitRow.orgId),
             Number(unitRow.id),
@@ -401,6 +401,9 @@ export async function syncIncremental(
             dataFim.slice(0, 10)
           );
           log(`[Sync Incremental] GT Comissões sincronizadas para unidade ${unidadeId}`);
+          // Sincroniza regras_comissao (aba Colaboradores) com percentuais nativos do banco externo
+          await syncRegrasComissao(Number(unitRow.orgId));
+          log(`[Sync Incremental] Regras de comissão sincronizadas para org ${unitRow.orgId}`);
         }
       }
     } catch (gtErr) {

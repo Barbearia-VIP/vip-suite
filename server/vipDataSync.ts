@@ -338,19 +338,18 @@ export async function syncGtComissoes(orgId: number, unitId: number, inicio: str
 
   const { queryLocal } = await import("./db-local");
 
-  // Buscar percentuais nativos de comissão diretamente de sync_usuarios (banco externo sincronizado)
-  const usuariosComissao = await queryLocal<{ id: number; comissao_servico: number; comissao_produto: number }>(
-    `SELECT id, COALESCE(comissao_servico, 0) AS comissao_servico, COALESCE(comissao_produto, 0) AS comissao_produto
-     FROM sync_usuarios WHERE unidade = ${extId} AND visivel_agenda != 'nenhuma'`
-  );
+  // Buscar regras de comissão da org (tabela regras_comissao — aba Colaboradores)
+  const [regrasRows] = await db.execute(
+    sql`SELECT colaboradorId, percentual, pctComissaoProdutos FROM regras_comissao WHERE ativo = 1 AND orgId = ${orgId}`
+  ) as any;
   const regrasMap: Record<string, { pct: number; pctProd: number }> = {};
-  for (const u of usuariosComissao) {
-    regrasMap[String(u.id)] = {
-      pct: Number(u.comissao_servico ?? 0),
-      pctProd: Number(u.comissao_produto ?? 0),
+  for (const r of regrasRows as any[]) {
+    regrasMap[String(r.colaboradorId)] = {
+      pct: Number(r.percentual),
+      pctProd: Number(r.pctComissaoProdutos ?? 0),
     };
   }
-  if (Object.keys(regrasMap).length === 0) return; // sem colaboradores com comissão
+  if (Object.keys(regrasMap).length === 0) return; // sem regras cadastradas
 
   // Buscar faixas de meta para bônus (por unitId)
   const [faixasRows] = await db.execute(
@@ -446,6 +445,47 @@ export async function syncGtComissoes(orgId: number, unitId: number, inicio: str
         descricao = VALUES(descricao),
         updatedAt = NOW()
     `);
+  }
+}
+
+// ─── Sincroniza regras_comissao a partir dos percentuais nativos de sync_usuarios ─────────────
+
+export async function syncRegrasComissao(orgId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const { queryLocal } = await import("./db-local");
+
+  // Buscar todos os colaboradores (barbeiros) com percentuais nativos do banco externo
+  const colaboradores = await queryLocal<{
+    id: number;
+    nome: string;
+    comissao_servico: number;
+    comissao_produto: number;
+  }>(
+    `SELECT su.id, su.nome, COALESCE(su.comissao_servico, 0) AS comissao_servico, COALESCE(su.comissao_produto, 0) AS comissao_produto
+     FROM sync_usuarios su
+     INNER JOIN units u ON u.externalId = CAST(su.unidade AS CHAR) AND u.orgId = ${orgId}
+     WHERE su.visivel_agenda != 'nenhuma' AND su.status = 1`
+  );
+
+  if (colaboradores.length === 0) return;
+
+  // Upsert em lote: sempre sobrescreve com os valores do banco externo
+  const BATCH = 100;
+  for (let i = 0; i < colaboradores.length; i += BATCH) {
+    const batch = colaboradores.slice(i, i + BATCH);
+    for (const c of batch) {
+      await db.execute(sql`
+        INSERT INTO regras_comissao (orgId, colaboradorId, percentual, pctComissaoProdutos, ativo)
+        VALUES (${orgId}, ${String(c.id)}, ${c.comissao_servico}, ${c.comissao_produto}, 1)
+        ON DUPLICATE KEY UPDATE
+          percentual = VALUES(percentual),
+          pctComissaoProdutos = VALUES(pctComissaoProdutos),
+          ativo = 1,
+          updatedAt = NOW()
+      `);
+    }
   }
 }
 

@@ -749,20 +749,9 @@ export const dataVipRouter = router({
         dataFim = d.toISOString().slice(0, 10);
       }
       const colabs = await getColaboradoresComissoes(extIds, dataInicio, dataFim, nomesBase);
-
-      // Buscar percentuais nativos de comissão diretamente de sync_usuarios
-      const { queryLocal } = await import("../db-local");
-      const usuariosComissao = await queryLocal<{ id: number; comissao_servico: number; comissao_produto: number }>(
-        `SELECT id, COALESCE(comissao_servico, 0) AS comissao_servico, COALESCE(comissao_produto, 0) AS comissao_produto
-         FROM sync_usuarios WHERE id IN (${extIds.join(",") || "0"})`
-      );
-      const pctMap: Record<string, { servico: number; produto: number }> = {};
-      for (const u of usuariosComissao) {
-        pctMap[String(u.id)] = {
-          servico: Number(u.comissao_servico ?? 0),
-          produto: Number(u.comissao_produto ?? 0),
-        };
-      }
+      let rWhere = sql`ativo = 1`;
+      if (orgFilter) rWhere = sql`${rWhere} AND orgId = ${orgFilter}`;
+      const [regras] = await db.execute(sql`SELECT * FROM regras_comissao WHERE ${rWhere}`) as any;
 
       // Busca faixas de meta da unidade (ou org) para calcular bônus
       let faixasMeta: any[] = [];
@@ -787,9 +776,9 @@ export const dataVipRouter = router({
       }
 
       return colabs.map(c => {
-        const pctEntry = pctMap[String(c.colaborador_id)];
-        const pctServicos = pctEntry ? pctEntry.servico : 0;
-        const pctProdutos = pctEntry ? pctEntry.produto : 0;
+        const regra = (regras as any[]).find((r: any) => r.colaboradorId === String(c.colaborador_id));
+        const pctServicos = regra ? Number(regra.percentual) : 0;
+        const pctProdutos = regra ? Number(regra.pctComissaoProdutos ?? 0) : 0;
         const fatTotal = Number(c.faturamento ?? 0);
         const atend = Number(c.atendimentos ?? 0);
         // Breakdown direto da query (getColaboradoresComissoes retorna campos separados)
