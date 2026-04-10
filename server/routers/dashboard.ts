@@ -465,47 +465,58 @@ export const dashboardRouter = router({
       const db = await getDb();
       if (!db) return [];
 
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const fmtDate = (d: Date) =>
-        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      // Buscar externalId da unidade selecionada (ou todas da org)
+      let extIds: number[] = [];
+      if (input.unitId) {
+        const [unitRow] = await db.select({ externalId: units.externalId })
+          .from(units)
+          .where(eq(units.id, input.unitId));
+        if (unitRow?.externalId) extIds = [Number(unitRow.externalId)];
+      } else {
+        const orgUnits = await db.select({ externalId: units.externalId })
+          .from(units)
+          .where(eq(units.orgId, input.orgId));
+        extIds = orgUnits.map(u => Number(u.externalId)).filter(Boolean);
+      }
 
-      const unitWhere = input.unitId ? `AND unitId = ${input.unitId}` : "";
+      if (extIds.length === 0) return [];
+
       const meses = [];
 
       for (let i = 5; i >= 0; i--) {
-        const { start, end } = getMonthRange(-i);
-        const startStr = fmtDate(start);
-        const endStr = fmtDate(end);
+        const { start } = getMonthRange(-i);
+        const { start: nextMonthStart } = getMonthRange(-i + 1);
 
-        // Tenta vendas_api_raw primeiro
-        const rawResult = await db.execute(sql.raw(
-          `SELECT COALESCE(SUM(valorLiquido), 0) as total, COUNT(*) as atendimentos
-           FROM vendas_api_raw
-           WHERE vendaData >= '${startStr}' AND vendaData <= '${endStr}' ${unitWhere}`
-        ));
-        const rawRow = execRow(rawResult);
+        // Datas no formato YYYY-MM-DD (BRT)
+        const brtOffset = 3 * 60 * 60 * 1000;
+        const startBRT = new Date(start.getTime() - brtOffset);
+        const endBRT = new Date(nextMonthStart.getTime() - brtOffset - 1);
+        const startStr = startBRT.toISOString().slice(0, 10);
+        const endStr = endBRT.toISOString().slice(0, 10);
 
-        let faturamento = parseFloat(String(rawRow?.total ?? "0"));
-        let atendimentos = Number(rawRow?.atendimentos ?? 0);
+        // Mesma lógica do Data VIP: status=1, filtro por sync_usuarios.unidade
+        // Conta apenas atendimentos com cliente cadastrado (cliente != 2 e não nulo)
+        const rows = await queryLocal<{ faturamento: number; atendimentos: number }>(`
+          SELECT
+            COALESCE(SUM(v.valor_total), 0) as faturamento,
+            COUNT(*) as atendimentos
+          FROM sync_vendas v
+          JOIN sync_usuarios u ON u.id = v.usuario
+          WHERE u.unidade IN (${extIds.join(",")})
+            AND v.status = 1
+            AND v.comanda_temp = 0
+            AND v.cancelado_motivo IS NULL
+            AND v.cliente IS NOT NULL
+            AND v.cliente != 2
+            AND DATE(v.data_criacao) >= '${startStr}'
+            AND DATE(v.data_criacao) <= '${endStr}'
+        `);
 
-        // Fallback para tabela vendas
-        if (faturamento === 0 && atendimentos === 0) {
-          const [fallback] = await db.select({
-            total: sql<string>`COALESCE(SUM(${vendas.valorLiquido}), 0)`,
-            atendimentos: count(vendas.id),
-          }).from(vendas).where(and(
-            gte(vendas.dataVenda, start),
-            lte(vendas.dataVenda, end),
-            ...(input.unitId ? [eq(vendas.unitId, input.unitId)] : []),
-          ));
-          faturamento = parseFloat(fallback?.total ?? "0");
-          atendimentos = Number(fallback?.atendimentos ?? 0);
-        }
-
+        const row = rows[0];
         meses.push({
           mes: start.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
-          faturamento,
-          atendimentos,
+          faturamento: parseFloat(String(row?.faturamento ?? "0")),
+          atendimentos: Number(row?.atendimentos ?? 0),
         });
       }
       return meses;
