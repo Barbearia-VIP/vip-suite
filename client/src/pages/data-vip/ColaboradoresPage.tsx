@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { DateRangePicker, buildPeriodos, type DateFilter } from "@/components/ui/DateRangePicker";
 import { toast } from "sonner";
-import { Scissors, Calendar, Save } from "lucide-react";
+import { Scissors, Calendar, RefreshCw } from "lucide-react";
 import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 import { useChartTheme } from "@/hooks/useChartTheme";
 
@@ -36,9 +36,6 @@ export default function ColaboradoresPage() {
     periodo: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
   });
 
-  // Estado de edição de comissões por colaborador
-  const [editComissao, setEditComissao] = useState<Record<string, { pctServicos?: number; pctProdutos?: number }>>({});
-
   const periodos = useMemo(() => buildPeriodos(24), []);
 
   const queryParams = useMemo(() => {
@@ -57,15 +54,6 @@ export default function ColaboradoresPage() {
     onSuccess: () => { toast.success("Tipo atualizado"); utils.dataVip.colaboradores.invalidate(); },
     onError: (e) => toast.error(e.message),
   });
-  const saveRegra = trpc.dataVip.saveRegrasComissao.useMutation({
-    onSuccess: () => {
-      toast.success("Comissão salva");
-      utils.dataVip.comissoes.invalidate();
-      utils.dataVip.colaboradores.invalidate();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
   const colabs = q.data ?? [];
   const comissoesMap = useMemo(() => {
     const map: Record<string, { percentual: number; pctComissaoProdutos: number }> = {};
@@ -77,7 +65,7 @@ export default function ColaboradoresPage() {
 
   const isRangeMode = filter.mode === "range";
   const colSpanBase = isRangeMode ? 6 : 7;
-  const colSpanTotal = isAdmin ? colSpanBase + 3 : colSpanBase; // +3 para % Serv, % Prod, Ação
+  const colSpanTotal = isAdmin ? colSpanBase + 2 : colSpanBase; // +2 para % Serv, % Prod (somente leitura)
 
   return (
     <div className="p-6 space-y-5">
@@ -134,7 +122,6 @@ export default function ColaboradoresPage() {
                     <>
                       <th className="text-right px-4 py-2 text-orange-400/80">% Serviços</th>
                       <th className="text-right px-4 py-2 text-amber-400/80">% Produtos</th>
-                      <th className="text-center px-4 py-2"></th>
                     </>
                   )}
                 </tr>
@@ -158,11 +145,8 @@ export default function ColaboradoresPage() {
                     )
                     : colabs.map((c: any, i: number) => {
                         const regra = comissoesMap[c.colaboradorId];
-                        const pctServicos = editComissao[c.colaboradorId]?.pctServicos ?? regra?.percentual ?? 0;
-                        const pctProdutos = editComissao[c.colaboradorId]?.pctProdutos ?? regra?.pctComissaoProdutos ?? 0;
-                        const hasChanges =
-                          editComissao[c.colaboradorId]?.pctServicos !== undefined ||
-                          editComissao[c.colaboradorId]?.pctProdutos !== undefined;
+                        const pctServicos = regra?.percentual ?? 0;
+                        const pctProdutos = regra?.pctComissaoProdutos ?? 0;
 
                         return (
                           <tr key={c.colaboradorId} className="transition-colors" style={{ borderBottom: ct.borderSubtle }} onMouseEnter={e => (e.currentTarget.style.background = ct.cardBgHover)} onMouseLeave={e => (e.currentTarget.style.background = "")}>
@@ -196,54 +180,10 @@ export default function ColaboradoresPage() {
                             {isAdmin && (
                               <>
                                 <td className="px-4 py-2 text-right">
-                                  <Input
-                                    type="number" min={0} max={100} step={1}
-                                    value={pctServicos}
-                                    onChange={e => setEditComissao(prev => ({
-                                      ...prev,
-                                      [c.colaboradorId]: { ...prev[c.colaboradorId], pctServicos: Number(e.target.value) }
-                                    }))}
-                                    className="h-7 text-xs w-20 text-right"
-                                  />
+                                  <span className="text-orange-400 font-semibold text-xs">{pctServicos}%</span>
                                 </td>
                                 <td className="px-4 py-2 text-right">
-                                  <Input
-                                    type="number" min={0} max={100} step={1}
-                                    value={pctProdutos}
-                                    onChange={e => setEditComissao(prev => ({
-                                      ...prev,
-                                      [c.colaboradorId]: { ...prev[c.colaboradorId], pctProdutos: Number(e.target.value) }
-                                    }))}
-                                    className="h-7 text-xs w-20 text-right"
-                                  />
-                                </td>
-                                <td className="px-4 py-2 text-center">
-                                  {hasChanges && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-xs gap-1"
-                                      disabled={saveRegra.isPending}
-                                      onClick={() => {
-                                        saveRegra.mutate({
-                                          orgId: org!.id,
-                                          colaboradorId: c.colaboradorId,
-                                          percentual: pctServicos,
-                                          pctComissaoProdutos: pctProdutos,
-                                        }, {
-                                          onSuccess: () => {
-                                            setEditComissao(prev => {
-                                              const next = { ...prev };
-                                              delete next[c.colaboradorId];
-                                              return next;
-                                            });
-                                          }
-                                        });
-                                      }}
-                                    >
-                                      <Save className="w-3 h-3" /> Salvar
-                                    </Button>
-                                  )}
+                                  <span className="text-amber-400 font-semibold text-xs">{pctProdutos}%</span>
                                 </td>
                               </>
                             )}
@@ -257,9 +197,12 @@ export default function ColaboradoresPage() {
       </div>
 
       {isAdmin && (
-        <p className="text-xs text-muted-foreground text-center">
-          Os percentuais de comissão definidos aqui são usados automaticamente na aba <strong>Comissões</strong>.
-        </p>
+        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          <RefreshCw className="w-3 h-3 text-blue-400" />
+          <span>
+            Os percentuais são sincronizados automaticamente do sistema de origem a cada 4 horas e não podem ser editados manualmente.
+          </span>
+        </div>
       )}
     </div>
   );
