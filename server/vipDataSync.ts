@@ -338,18 +338,19 @@ export async function syncGtComissoes(orgId: number, unitId: number, inicio: str
 
   const { queryLocal } = await import("./db-local");
 
-  // Buscar regras de comissão da org
-  const [regrasRows] = await db.execute(
-    sql`SELECT colaboradorId, percentual, pctComissaoProdutos FROM regras_comissao WHERE ativo = 1 AND orgId = ${orgId}`
-  ) as any;
+  // Buscar percentuais nativos de comissão diretamente de sync_usuarios (banco externo sincronizado)
+  const usuariosComissao = await queryLocal<{ id: number; comissao_servico: number; comissao_produto: number }>(
+    `SELECT id, COALESCE(comissao_servico, 0) AS comissao_servico, COALESCE(comissao_produto, 0) AS comissao_produto
+     FROM sync_usuarios WHERE unidade = ${extId} AND visivel_agenda != 'nenhuma'`
+  );
   const regrasMap: Record<string, { pct: number; pctProd: number }> = {};
-  for (const r of regrasRows as any[]) {
-    regrasMap[String(r.colaboradorId)] = {
-      pct: Number(r.percentual),
-      pctProd: Number(r.pctComissaoProdutos ?? 0),
+  for (const u of usuariosComissao) {
+    regrasMap[String(u.id)] = {
+      pct: Number(u.comissao_servico ?? 0),
+      pctProd: Number(u.comissao_produto ?? 0),
     };
   }
-  if (Object.keys(regrasMap).length === 0) return; // sem regras cadastradas
+  if (Object.keys(regrasMap).length === 0) return; // sem colaboradores com comissão
 
   // Buscar faixas de meta para bônus (por unitId)
   const [faixasRows] = await db.execute(

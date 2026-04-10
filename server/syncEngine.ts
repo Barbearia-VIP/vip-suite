@@ -58,6 +58,7 @@ export async function getUnidadesExternas(): Promise<number[]> {
 async function syncUsuarios(conn: mysql.Connection, unidadeId: number) {
   const rows = await queryExternal(
     `SELECT id, unidade, nome, status, visivel_agenda, visivel_pdv, visivel_dashboard,
+            comissao_produto, comissao_servico,
             data_criacao, data_alteracao
      FROM usuarios WHERE unidade = ?`,
     [unidadeId]
