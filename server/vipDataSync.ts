@@ -239,14 +239,16 @@ export async function syncVendas(
 // ─── Sincroniza faturamento com Gestão Total (gt_financeiro) ─────────────────
 
 /**
- * Agrega as vendas do Data VIP por dia (via sync_vendas, banco externo local)
+ * Agrega as vendas do Data VIP por dia (via sync_vendas_produtos, banco externo local)
  * e cria/atualiza lançamentos de receita no gt_financeiro.
  * Usa INSERT ... ON DUPLICATE KEY UPDATE para idempotência.
  * Chave de deduplicação: dataVipRef = 'datavip:{unitId}:{YYYY-MM-DD}'
  *
- * Fonte: sync_vendas JOIN sync_usuarios (mesma lógica do Data VIP)
- * - status = 1 (apenas vendas finalizadas)
- * - filtro por sync_usuarios.unidade = externalId da unidade
+ * Fonte: sync_vendas_produtos JOIN sync_vendas (mesma lógica do Data VIP / getFaturamentoMensal)
+ * - vp.unidade_id = externalId da unidade
+ * - v.status = 1 (apenas vendas finalizadas)
+ * - v.comanda_temp = 0
+ * - v.cancelado_motivo IS NULL
  */
 export async function syncGtFinanceiro(orgId: number, unitId: number, inicio: string, fim: string): Promise<void> {
   const db = await getDb();
@@ -263,7 +265,8 @@ export async function syncGtFinanceiro(orgId: number, unitId: number, inicio: st
   }
   const extId = Number(extIdRaw);
 
-  // Buscar faturamento diário via sync_vendas (banco local sincronizado)
+  // Buscar faturamento diário via sync_vendas_produtos (lógica Data VIP correta)
+  // Usa vp.unidade_id para filtrar por unidade (igual ao getFaturamentoMensal)
   const { queryLocal } = await import("./db-local");
   const diasRows = await queryLocal<{
     dia: string;
@@ -272,11 +275,11 @@ export async function syncGtFinanceiro(orgId: number, unitId: number, inicio: st
   }>(`
     SELECT
       DATE(v.data_criacao) AS dia,
-      COALESCE(SUM(v.valor_total), 0) AS totalFaturamento,
-      COUNT(*) AS qtd
-    FROM sync_vendas v
-    JOIN sync_usuarios u ON u.id = v.usuario
-    WHERE u.unidade = ${extId}
+      COALESCE(SUM(vp.valor_total), 0) AS totalFaturamento,
+      COUNT(DISTINCT v.id) AS qtd
+    FROM sync_vendas_produtos vp
+    JOIN sync_vendas v ON v.id = vp.venda
+    WHERE vp.unidade_id = ${extId}
       AND v.comanda_temp = 0
       AND v.cancelado_motivo IS NULL
       AND v.status = 1
@@ -304,6 +307,7 @@ export async function syncGtFinanceiro(orgId: number, unitId: number, inicio: st
       ON DUPLICATE KEY UPDATE
         valor = VALUES(valor),
         descricao = VALUES(descricao),
+        referencia = VALUES(referencia),
         updatedAt = NOW()
     `);
   }
