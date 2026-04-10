@@ -3,6 +3,7 @@ import { and, count, eq, gte, lte, sql, inArray } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { queryLocal } from "../db-local";
+import { getFaturamentoMensal } from "../dataVipQueries";
 import {
   vendas,
   camSentimentTimeline,
@@ -465,7 +466,7 @@ export const dashboardRouter = router({
       const db = await getDb();
       if (!db) return [];
 
-      // Buscar externalId da unidade selecionada (ou todas da org)
+      // Buscar externalIds — mesma lógica do Data VIP
       let extIds: number[] = [];
       if (input.unitId) {
         const [unitRow] = await db.select({ externalId: units.externalId })
@@ -481,45 +482,13 @@ export const dashboardRouter = router({
 
       if (extIds.length === 0) return [];
 
-      const meses = [];
-
-      for (let i = 5; i >= 0; i--) {
-        const { start } = getMonthRange(-i);
-        const { start: nextMonthStart } = getMonthRange(-i + 1);
-
-        // Datas no formato YYYY-MM-DD (BRT)
-        const brtOffset = 3 * 60 * 60 * 1000;
-        const startBRT = new Date(start.getTime() - brtOffset);
-        const endBRT = new Date(nextMonthStart.getTime() - brtOffset - 1);
-        const startStr = startBRT.toISOString().slice(0, 10);
-        const endStr = endBRT.toISOString().slice(0, 10);
-
-        // Mesma lógica do Data VIP: status=1, filtro por sync_usuarios.unidade
-        // Conta apenas atendimentos com cliente cadastrado (cliente != 2 e não nulo)
-        const rows = await queryLocal<{ faturamento: number; atendimentos: number }>(`
-          SELECT
-            COALESCE(SUM(v.valor_total), 0) as faturamento,
-            COUNT(*) as atendimentos
-          FROM sync_vendas v
-          JOIN sync_usuarios u ON u.id = v.usuario
-          WHERE u.unidade IN (${extIds.join(",")})
-            AND v.status = 1
-            AND v.comanda_temp = 0
-            AND v.cancelado_motivo IS NULL
-            AND v.cliente IS NOT NULL
-            AND v.cliente != 2
-            AND DATE(v.data_criacao) >= '${startStr}'
-            AND DATE(v.data_criacao) <= '${endStr}'
-        `);
-
-        const row = rows[0];
-        meses.push({
-          mes: start.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
-          faturamento: parseFloat(String(row?.faturamento ?? "0")),
-          atendimentos: Number(row?.atendimentos ?? 0),
-        });
-      }
-      return meses;
+      // Usa exatamente a mesma função do Data VIP (sync_vendas_produtos, vp.unidade_id)
+      const rows = await getFaturamentoMensal(extIds, 6);
+      return rows.reverse().map(r => ({
+        mes: new Date(r.ano, r.mes - 1, 1).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+        faturamento: Number(r.total_vendas),
+        atendimentos: Number(r.quantidade_vendas),
+      }));
     }),
 
   // ─── RANKING DE UNIDADES (faturamento do mês) ────────────────────────────
