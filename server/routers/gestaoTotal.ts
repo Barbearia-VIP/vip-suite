@@ -2118,7 +2118,63 @@ const dashboardGtRouter = router({
 
 // ── Brand Assets & Image Bank ────────────────────────────────────
 const brandAssetsRouter = router({
-  // Logo da organização
+  // Logo da organização (múltiplas versões)
+  listLogos: protectedProcedure
+    .input(z.object({ orgId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db.select().from(gtBrandAssets)
+        .where(and(eq(gtBrandAssets.orgId, input.orgId), eq(gtBrandAssets.tipo, "logo")))
+        .orderBy(gtBrandAssets.criadoEm);
+    }),
+
+  addLogo: protectedProcedure
+    .input(z.object({
+      orgId: z.number(), url: z.string(), fileKey: z.string(),
+      nome: z.string().optional(), descricao: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      // Verificar limite de 4 logos
+      const existing = await db.select({ id: gtBrandAssets.id }).from(gtBrandAssets)
+        .where(and(eq(gtBrandAssets.orgId, input.orgId), eq(gtBrandAssets.tipo, "logo")));
+      if (existing.length >= 4) throw new Error("Limite de 4 logos atingido");
+      const [r] = await db.insert(gtBrandAssets).values({
+        orgId: input.orgId, tipo: "logo",
+        url: input.url, fileKey: input.fileKey,
+        nome: input.nome ?? "Logo",
+        descricao: input.descricao,
+      });
+      return { id: (r as { insertId: number }).insertId, url: input.url };
+    }),
+
+  updateLogo: protectedProcedure
+    .input(z.object({
+      id: z.number(), orgId: z.number(),
+      nome: z.string().optional(), descricao: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const { id, orgId, ...data } = input;
+      await db.update(gtBrandAssets).set(data)
+        .where(and(eq(gtBrandAssets.id, id), eq(gtBrandAssets.orgId, orgId)));
+      return { success: true };
+    }),
+
+  deleteLogoById: protectedProcedure
+    .input(z.object({ id: z.number(), orgId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await db.delete(gtBrandAssets)
+        .where(and(eq(gtBrandAssets.id, input.id), eq(gtBrandAssets.orgId, input.orgId)));
+      return { success: true };
+    }),
+
+  // Manter getLogo/saveLogo/deleteLogo por compatibilidade (retorna primeira logo)
   getLogo: protectedProcedure
     .input(z.object({ orgId: z.number() }))
     .query(async ({ input }) => {
@@ -2126,7 +2182,7 @@ const brandAssetsRouter = router({
       if (!db) return null;
       const [logo] = await db.select().from(gtBrandAssets)
         .where(and(eq(gtBrandAssets.orgId, input.orgId), eq(gtBrandAssets.tipo, "logo")))
-        .orderBy(desc(gtBrandAssets.atualizadoEm)).limit(1);
+        .orderBy(gtBrandAssets.criadoEm).limit(1);
       return logo ?? null;
     }),
 
@@ -2135,9 +2191,6 @@ const brandAssetsRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
-      // Remover logo anterior
-      await db.delete(gtBrandAssets).where(and(eq(gtBrandAssets.orgId, input.orgId), eq(gtBrandAssets.tipo, "logo")));
-      // Inserir nova logo
       const [r] = await db.insert(gtBrandAssets).values({
         orgId: input.orgId, tipo: "logo",
         url: input.url, fileKey: input.fileKey, nome: input.nome ?? "Logo",

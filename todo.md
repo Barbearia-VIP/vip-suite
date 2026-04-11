@@ -1179,3 +1179,4 @@
 - [ ] Criação de Arte: campos editáveis na estrutura de layout (Topo, Centro, Rodapé) antes de gerar flyer
 - [ ] Configurações: upload de logo global da Barbearia VIP (disponível para todas as unidades)
 - [ ] Configurações: banco de imagens global (upload de múltiplas imagens de referência para todas as unidades)
+- [x] Configurações: suporte a múltiplas logos (até 4 versões) com nome e descrição

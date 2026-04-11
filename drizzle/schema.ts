@@ -1528,6 +1528,7 @@ export const gtBrandAssets = mysqlTable("gt_brand_assets", {
   url: text("url").notNull(),
   fileKey: text("fileKey").notNull(),
   nome: varchar("nome", { length: 255 }),
+  descricao: varchar("descricao", { length: 500 }),
   criadoEm: timestamp("criadoEm").defaultNow().notNull(),
   atualizadoEm: timestamp("atualizadoEm").defaultNow().onUpdateNow().notNull(),
 }, (t) => [
