@@ -1421,6 +1421,126 @@ REGRAS:
         .where(and(eq(gtMarketingCampaigns.id, input.id), eq(gtMarketingCampaigns.orgId, input.orgId)));
       return { success: true };
     }),
+
+  // ── Gerador de Conteúdo ──────────────────────────────────────────────────────
+  generateContent: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      unitId: z.number().optional(),
+      objetivo: z.string(),
+      formato: z.string(),
+      tipoEntrega: z.string(),
+      publico: z.string(),
+      diferenciais: z.string(),
+      tom: z.string(),
+      companyName: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const { objetivo, formato, tipoEntrega, publico, diferenciais, tom, companyName } = input;
+      const empresa = companyName ?? "Barbearia VIP";
+
+      const systemPrompt = `Você é um especialista em marketing digital focado em barbearias premium, na ${empresa}, com experiência em criação de conteúdos virais, posicionamento de marca e geração de clientes.
+
+Seu objetivo é criar conteúdos estratégicos para a ${empresa}, conhecida por sua experiência premium, ambiente diferenciado e alto padrão de atendimento.
+
+Sempre que possível, conecte o conteúdo com:
+- Experiência VIP (não é só corte, é vivência)
+- Lifestyle masculino
+- Status / pertencimento
+- Sensação de recompensa
+- Rotina do homem moderno
+
+Evite conteúdos que pareçam promoção barata ou genéricos.`;
+
+      const userPrompt = `Com base nas respostas abaixo, gere EXATAMENTE 3 ideias de conteúdo altamente estratégicas e aplicáveis.
+
+CONTEXTO DO USUÁRIO:
+- Objetivo: ${objetivo}
+- Formato: ${formato}
+- Tipo de entrega: ${tipoEntrega}
+- Público: ${publico}
+- Diferenciais: ${diferenciais}
+- Tom: ${tom}
+
+REGRAS IMPORTANTES:
+- Os conteúdos devem ser simples de executar dentro da barbearia
+- Evitar ideias genéricas (como "antes e depois" simples sem contexto)
+- Criar conteúdos que gerem atenção nos primeiros 3 segundos
+- Sempre pensar em gerar desejo, identificação ou curiosidade
+- Adaptar para linguagem natural, humana e não robótica
+- Pensar como conteúdo de Instagram e TikTok
+
+RETORNE OBRIGATORIAMENTE um JSON válido com a estrutura abaixo (sem markdown, sem texto fora do JSON):
+{
+  "ideias": [
+    {
+      "titulo": "Título forte e chamativo",
+      "conceito": "Explicação rápida do que é o conteúdo",
+      "execucao": "Passo a passo simples de como gravar ou montar",
+      "gancho": "O que dizer/mostrar nos primeiros 3 segundos",
+      "roteiro": "Roteiro completo (se aplicável ao tipo de entrega solicitado, senão deixe vazio)",
+      "legendas": {
+        "emocional": "Legenda mais emocional",
+        "vendedora": "Legenda mais direta e vendedora",
+        "engajamento": "Legenda mais leve para engajamento"
+      },
+      "cta": "Call to action sugerido"
+    }
+  ]
+}`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "content_ideas",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                ideias: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      titulo: { type: "string" },
+                      conceito: { type: "string" },
+                      execucao: { type: "string" },
+                      gancho: { type: "string" },
+                      roteiro: { type: "string" },
+                      legendas: {
+                        type: "object",
+                        properties: {
+                          emocional: { type: "string" },
+                          vendedora: { type: "string" },
+                          engajamento: { type: "string" },
+                        },
+                        required: ["emocional", "vendedora", "engajamento"],
+                        additionalProperties: false,
+                      },
+                      cta: { type: "string" },
+                    },
+                    required: ["titulo", "conceito", "execucao", "gancho", "roteiro", "legendas", "cta"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ["ideias"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const rawContent = response?.choices?.[0]?.message?.content;
+      const raw = typeof rawContent === "string" ? rawContent : "{}";
+      const parsed = parseJsonSafe(raw) as { ideias: unknown[] };
+      return { ideias: parsed.ideias ?? [] };
+    }),
 });
 
 // ── IA Conselheiro ────────────────────────────────────────────

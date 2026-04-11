@@ -1161,3 +1161,6 @@
 - [x] Gestão Total - Marketing: corrigir seletor de colaboradores na destinação de campanha (não consegue selecionar colaborador cadastrado) e criar tarefa para o colaborador selecionado
 - [x] Marketing - Adicionar aba 'Gerador de Conteúdo' no menu de Marketing (estrutura pronta para lógica futura)
 - [x] Marketing - Adicionar aba 'Criação de Arte' no menu de Marketing (estrutura pronta para lógica futura)
+- [x] Marketing - Gerador de Conteúdo: wizard 6 telas (objetivo, formato, entrega, público, diferencial, tom)
+- [x] Marketing - Gerador de Conteúdo: procedure tRPC com prompt mestre Barbearia VIP
+- [x] Marketing - Gerador de Conteúdo: exibir 3 ideias geradas com roteiro, legenda e CTA

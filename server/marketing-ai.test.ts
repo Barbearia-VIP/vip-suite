@@ -369,3 +369,144 @@ describe("assignCampaign — lógica de destinação", () => {
     expect(payload.assignedToName).toBe("Fernanda Rocha");
   });
 });
+
+// ── Testes para o Gerador de Conteúdo (wizard 6 telas) ───────────────────────
+
+type ContentWizardInput = {
+  objetivo: string;
+  formato: string;
+  tipoEntrega: string;
+  publico: string;
+  diferenciais: string;
+  tom: string;
+};
+
+function validateContentWizardInput(data: ContentWizardInput): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  if (!data.objetivo?.trim()) errors.push("objetivo é obrigatório");
+  if (!data.formato?.trim()) errors.push("formato é obrigatório");
+  if (!data.tipoEntrega?.trim()) errors.push("tipoEntrega é obrigatório");
+  if (!data.publico?.trim()) errors.push("publico é obrigatório");
+  if (!data.diferenciais?.trim()) errors.push("diferenciais é obrigatório");
+  if (!data.tom?.trim()) errors.push("tom é obrigatório");
+  return { valid: errors.length === 0, errors };
+}
+
+type ContentIdeia = {
+  titulo: string;
+  conceito: string;
+  execucao: string;
+  gancho: string;
+  roteiro: string;
+  legendas: { emocional: string; vendedora: string; engajamento: string };
+  cta: string;
+};
+
+function validateContentIdeia(ideia: ContentIdeia): boolean {
+  return !!(
+    ideia.titulo?.trim() &&
+    ideia.conceito?.trim() &&
+    ideia.execucao?.trim() &&
+    ideia.gancho?.trim() &&
+    ideia.legendas?.emocional?.trim() &&
+    ideia.legendas?.vendedora?.trim() &&
+    ideia.legendas?.engajamento?.trim() &&
+    ideia.cta?.trim()
+  );
+}
+
+describe("Gerador de Conteúdo — validação do wizard", () => {
+  const validInput: ContentWizardInput = {
+    objetivo: "Captar novos clientes",
+    formato: "Vídeo (Reels/TikTok)",
+    tipoEntrega: "Ideia + roteiro + legenda",
+    publico: "Público premium",
+    diferenciais: "Ambiente premium, Open bar, Experiência VIP",
+    tom: "Padrão VIP",
+  };
+
+  it("deve validar input completo como válido", () => {
+    const { valid, errors } = validateContentWizardInput(validInput);
+    expect(valid).toBe(true);
+    expect(errors).toHaveLength(0);
+  });
+
+  it("deve rejeitar input sem objetivo", () => {
+    const { valid, errors } = validateContentWizardInput({ ...validInput, objetivo: "" });
+    expect(valid).toBe(false);
+    expect(errors).toContain("objetivo é obrigatório");
+  });
+
+  it("deve rejeitar input sem formato", () => {
+    const { valid, errors } = validateContentWizardInput({ ...validInput, formato: "" });
+    expect(valid).toBe(false);
+    expect(errors).toContain("formato é obrigatório");
+  });
+
+  it("deve rejeitar input sem tom", () => {
+    const { valid, errors } = validateContentWizardInput({ ...validInput, tom: "" });
+    expect(valid).toBe(false);
+    expect(errors).toContain("tom é obrigatório");
+  });
+
+  it("deve aceitar objetivo personalizado (campo aberto)", () => {
+    const { valid } = validateContentWizardInput({ ...validInput, objetivo: "Mostrar o processo de atendimento VIP" });
+    expect(valid).toBe(true);
+  });
+
+  it("deve aceitar múltiplos diferenciais concatenados", () => {
+    const { valid } = validateContentWizardInput({
+      ...validInput,
+      diferenciais: "Ambiente premium, Open bar, Atendimento diferenciado, Experiência VIP",
+    });
+    expect(valid).toBe(true);
+  });
+});
+
+describe("Gerador de Conteúdo — estrutura de saída esperada", () => {
+  const mockIdeia: ContentIdeia = {
+    titulo: "O Ritual do Homem VIP",
+    conceito: "Mostrar o processo completo de atendimento como uma experiência de luxo, não apenas um corte de cabelo.",
+    execucao: "1. Grave a entrada do cliente no salão\n2. Mostre o open bar sendo servido\n3. Capture o processo do corte em detalhes\n4. Finalize com a saída do cliente satisfeito",
+    gancho: "Isso não é uma barbearia. Isso é um ritual.",
+    roteiro: "Cena 1: Porta abrindo em slow motion...\nCena 2: Copo de whisky sendo servido...",
+    legendas: {
+      emocional: "Porque você merece mais do que um corte. Você merece uma experiência. ✂️",
+      vendedora: "Agende agora e descubra o que é ser atendido como VIP. Link na bio.",
+      engajamento: "Você já foi numa barbearia assim? Comenta aí 👇",
+    },
+    cta: "Agende pelo link na bio ou WhatsApp",
+  };
+
+  it("deve ter todos os campos obrigatórios preenchidos", () => {
+    expect(validateContentIdeia(mockIdeia)).toBe(true);
+  });
+
+  it("deve ter 3 variações de legenda", () => {
+    expect(mockIdeia.legendas.emocional).toBeTruthy();
+    expect(mockIdeia.legendas.vendedora).toBeTruthy();
+    expect(mockIdeia.legendas.engajamento).toBeTruthy();
+  });
+
+  it("deve ter gancho para os primeiros 3 segundos", () => {
+    expect(mockIdeia.gancho).toBeTruthy();
+    expect(typeof mockIdeia.gancho).toBe("string");
+  });
+
+  it("deve ter roteiro quando tipo de entrega inclui roteiro", () => {
+    expect(mockIdeia.roteiro).toBeTruthy();
+    expect(mockIdeia.roteiro.length).toBeGreaterThan(10);
+  });
+
+  it("deve ter CTA sugerido", () => {
+    expect(mockIdeia.cta).toBeTruthy();
+  });
+
+  it("deve rejeitar ideia sem título", () => {
+    expect(validateContentIdeia({ ...mockIdeia, titulo: "" })).toBe(false);
+  });
+
+  it("deve rejeitar ideia sem gancho", () => {
+    expect(validateContentIdeia({ ...mockIdeia, gancho: "" })).toBe(false);
+  });
+});

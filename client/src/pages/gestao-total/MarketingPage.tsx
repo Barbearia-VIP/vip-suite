@@ -23,6 +23,7 @@ import MarketingCampaignWizard, { type WizardData } from "@/components/Marketing
 import { DatePicker } from "@/components/DatePicker";
 import CampaignPreview from "@/components/CampaignPreview";
 import AssignCampaignModal from "@/components/AssignCampaignModal";
+import ContentGeneratorWizard, { type ContentWizardData } from "@/components/ContentGeneratorWizard";
 
 type Campanha = {
   id: number; orgId: number; unitId: number | null;
@@ -140,6 +141,10 @@ export default function MarketingPage() {
   const [editing, setEditing] = useState<Campanha | null>(null);
   const [filterStatus, setFilterStatus] = useState("todos");
 
+  // Estado do Gerador de Conteúdo
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [contentResult, setContentResult] = useState<any[] | null>(null);
+
   // Queries
   const manualQ = trpc.gestaoTotal.marketing.list.useQuery(
     { orgId: org?.id ?? 0, unitId: selectedUnit?.id, status: filterStatus !== "todos" ? filterStatus : undefined },
@@ -162,6 +167,29 @@ export default function MarketingPage() {
     onSuccess: () => { utils.gestaoTotal.marketing.list.invalidate(); toast.success("Removida"); },
     onError: () => toast.error("Erro ao remover"),
   });
+
+  // Mutation de Gerador de Conteúdo
+  const generateContentM = trpc.gestaoTotal.marketingCampaigns.generateContent.useMutation({
+    onSuccess: (data) => {
+      if (data.ideias && data.ideias.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        setContentResult(data.ideias as any[]);
+      } else {
+        toast.error("Nenhuma ideia foi gerada. Tente novamente.");
+      }
+    },
+    onError: (err) => toast.error("Erro ao gerar conteúdo: " + err.message),
+  });
+
+  function handleGenerateContent(wizardData: ContentWizardData) {
+    if (!org?.id) return;
+    generateContentM.mutate({
+      orgId: org.id,
+      unitId: selectedUnit?.id,
+      companyName: org.name,
+      ...wizardData,
+    });
+  }
 
   // Mutation de geração com IA
   const generateM = trpc.gestaoTotal.marketingCampaigns.generateCampaign.useMutation({
@@ -420,27 +448,12 @@ export default function MarketingPage() {
 
         {/* ABA: Gerador de Conteúdo */}
         <TabsContent value="conteudo" className="mt-4">
-          <div className="glass-card border-primary/20 bg-primary/5">
-            <div className="p-8 flex flex-col items-center text-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-primary/20 flex items-center justify-center">
-                <PenLine className="h-7 w-7 text-primary" />
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-lg font-semibold text-foreground">Gerador de Conteúdo</h2>
-                <p className="text-sm text-muted-foreground max-w-md">
-                  Gere legendas, posts, roteiros para Reels, textos para e-mail marketing e muito mais com auxílio da IA — adaptados ao tom de voz e identidade da sua unidade.
-                </p>
-              </div>
-              <div className="flex flex-wrap justify-center gap-2 text-xs">
-                {["Legendas para Instagram", "Posts para Facebook", "Roteiro de Reels", "E-mail Marketing", "WhatsApp em massa", "Blog / SEO"].map(tag => (
-                  <span key={tag} className="px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary font-medium">{tag}</span>
-                ))}
-              </div>
-              <div className="mt-2 px-4 py-3 rounded-lg bg-muted/40 border border-border text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">Em breve</span> — a lógica de geração de conteúdo será implementada nesta aba.
-              </div>
-            </div>
-          </div>
+          <ContentGeneratorWizard
+            onGenerate={handleGenerateContent}
+            isGenerating={generateContentM.isPending}
+            result={contentResult}
+            onReset={() => setContentResult(null)}
+          />
         </TabsContent>
 
         {/* ABA: Criação de Arte */}
