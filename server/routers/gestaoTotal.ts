@@ -2078,6 +2078,18 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
 
       // Montar prompt de flyer para a IA de imagem
       const flyerPrompt = [
+        // ===== FORMATO OBRIGATÓRIO — PRIMEIRA INSTRUÇÃO =====
+        `ABSOLUTE CANVAS REQUIREMENT — READ FIRST AND OBEY STRICTLY:`,
+        `This image MUST be generated in ${formato.ratio} aspect ratio (${formato.dims}).`,
+        formato.ratio === "9:16"
+          ? `VERTICAL FORMAT: The canvas is TALL and NARROW — height is approximately 1.78x the width. Like a smartphone screen held vertically. DO NOT generate a square or horizontal image.`
+          : formato.ratio === "16:9"
+          ? `HORIZONTAL FORMAT: The canvas is WIDE and SHORT — width is approximately 1.78x the height. Like a widescreen TV or YouTube banner. DO NOT generate a square or vertical image.`
+          : formato.ratio === "4:5"
+          ? `PORTRAIT FORMAT: The canvas is slightly taller than wide — height is 1.25x the width. Like a portrait photo. DO NOT generate a square or horizontal image.`
+          : `SQUARE FORMAT: The canvas has EQUAL width and height (1:1). DO NOT generate a vertical or horizontal image.`,
+        `IGNORE the aspect ratio of any reference images provided — they are ONLY for visual style and content reference. The OUTPUT must be ${formato.ratio}.`,
+        ``,
         `Create a PREMIUM, ULTRA-HIGH-END digital flyer for Barbearia VIP — Brazil's largest luxury barbershop franchise.`,
         ``,
         `=== BARBEARIA VIP BRAND IDENTITY (MANDATORY — DO NOT DEVIATE) ===`,

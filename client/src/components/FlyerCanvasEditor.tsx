@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Canvas, FabricImage, FabricText, type FabricObject } from "fabric";
+import { Canvas, FabricImage, Textbox, type FabricObject } from "fabric";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Type, Palette, Download, Trash2, Bold, Italic,
   AlignLeft, AlignCenter, AlignRight, Plus, Move,
-  ChevronUp, ChevronDown, RotateCcw, Layers,
+  ChevronUp, ChevronDown, RotateCcw, Layers, Maximize2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { VIP_STICKERS, STICKER_CATEGORIES, type StickerCategory } from "@/lib/vipStickers";
@@ -14,46 +14,48 @@ import { VIP_STICKERS, STICKER_CATEGORIES, type StickerCategory } from "@/lib/vi
 // ── Paleta de cores VIP para stickers ────────────────────────────────────────
 
 const VIP_STICKER_COLORS = [
-  { id: "gold",    label: "Dourado",  hex: "#D4AF37", textHex: "#0A0A0A" },
-  { id: "white",   label: "Branco",   hex: "#FFFFFF", textHex: "#0A0A0A" },
-  { id: "black",   label: "Preto",    hex: "#0A0A0A", textHex: "#D4AF37" },
-  { id: "graphite",label: "Grafite",  hex: "#3A3A3A", textHex: "#D4AF37" },
-  { id: "silver",  label: "Prata",    hex: "#C0C0C0", textHex: "#0A0A0A" },
+  { id: "gold",     label: "Dourado",  hex: "#D4AF37", textHex: "#0A0A0A" },
+  { id: "white",    label: "Branco",   hex: "#FFFFFF", textHex: "#0A0A0A" },
+  { id: "black",    label: "Preto",    hex: "#0A0A0A", textHex: "#D4AF37" },
+  { id: "graphite", label: "Grafite",  hex: "#3A3A3A", textHex: "#D4AF37" },
+  { id: "silver",   label: "Prata",    hex: "#C0C0C0", textHex: "#0A0A0A" },
 ] as const;
 
 type StickerColorId = typeof VIP_STICKER_COLORS[number]["id"];
 
-/**
- * Recolore um SVG substituindo as cores originais da paleta VIP pela nova cor.
- * Mantém a estrutura do SVG intacta, apenas troca as cores de preenchimento e stroke.
- */
+// ── Formatos de redes sociais ─────────────────────────────────────────────────
+
+const SOCIAL_FORMATS = [
+  { id: "post-ig",    label: "Post Instagram",  w: 1080, h: 1080, ratio: "1:1",   emoji: "📷" },
+  { id: "story-ig",   label: "Story / Reels",   w: 1080, h: 1920, ratio: "9:16",  emoji: "📱" },
+  { id: "banner-yt",  label: "Banner YouTube",  w: 1280, h: 720,  ratio: "16:9",  emoji: "▶️" },
+  { id: "cover-fb",   label: "Capa Facebook",   w: 1200, h: 628,  ratio: "1.9:1", emoji: "📘" },
+  { id: "post-fb",    label: "Post Facebook",   w: 1200, h: 900,  ratio: "4:3",   emoji: "📗" },
+  { id: "banner-wpp", label: "Banner WhatsApp", w: 1600, h: 900,  ratio: "16:9",  emoji: "💬" },
+  { id: "flyer-a4",   label: "Flyer A4",        w: 794,  h: 1123, ratio: "A4",    emoji: "📄" },
+] as const;
+
+// ── Recolorir SVG ─────────────────────────────────────────────────────────────
+
 function recolorSvg(svg: string, primaryColor: string, secondaryColor: string): string {
-  // Cores originais da paleta VIP que serão substituídas
   const originalPrimary = ["#D4AF37", "#F0C040", "#C9A84C"];
   const originalSecondary = ["#0A0A0A", "#1A1A1A"];
   const originalWhite = ["#FFFFFF"];
 
   let result = svg;
-
-  // Substituir cores primárias (dourado → nova cor primária)
-  for (const c of originalPrimary) {
-    result = result.replaceAll(c, primaryColor);
-  }
-  // Substituir cores escuras (preto/grafite → nova cor secundária)
-  for (const c of originalSecondary) {
-    result = result.replaceAll(c, secondaryColor);
-  }
-  // Branco: manter se cor primária não for branco, senão usar secundária
+  for (const c of originalPrimary) result = result.replaceAll(c, primaryColor);
+  for (const c of originalSecondary) result = result.replaceAll(c, secondaryColor);
   if (primaryColor === "#FFFFFF") {
-    for (const c of originalWhite) {
-      result = result.replaceAll(c, secondaryColor);
-    }
+    for (const c of originalWhite) result = result.replaceAll(c, secondaryColor);
   }
-
   return result;
 }
 
-// ── Tipos ────────────────────────────────────────────────────────────────────
+function svgToDataUrl(svg: string): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+// ── Tipos ─────────────────────────────────────────────────────────────────────
 
 interface FlyerCanvasEditorProps {
   flyerUrl: string;
@@ -61,37 +63,35 @@ interface FlyerCanvasEditorProps {
   onClose?: () => void;
 }
 
-// ── Utilitário: SVG string → data URL ────────────────────────────────────────
-
-function svgToDataUrl(svg: string): string {
-  const encoded = encodeURIComponent(svg);
-  return `data:image/svg+xml;charset=utf-8,${encoded}`;
-}
-
-// ── Componente principal ─────────────────────────────────────────────────────
+// ── Componente principal ──────────────────────────────────────────────────────
 
 export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCanvasEditorProps) {
   const canvasElRef = useRef<HTMLCanvasElement>(null);
-  const fabricRef = useRef<Canvas | null>(null);
+  const fabricRef   = useRef<Canvas | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Seleção
   const [selectedObj, setSelectedObj] = useState<FabricObject | null>(null);
-  const [textValue, setTextValue] = useState("");
-  const [textColor, setTextColor] = useState("#FFFFFF");
-  const [fontSize, setFontSize] = useState(32);
-  const [isBold, setIsBold] = useState(false);
-  const [isItalic, setIsItalic] = useState(false);
-  const [textAlign, setTextAlign] = useState<"left" | "center" | "right">("center");
+
+  // Propriedades de texto
+  const [textValue, setTextValue]   = useState("");
+  const [textColor, setTextColor]   = useState("#FFFFFF");
+  const [fontSize,  setFontSize]    = useState(36);
+  const [isBold,    setIsBold]      = useState(false);
+  const [isItalic,  setIsItalic]    = useState(false);
+  const [textAlign, setTextAlign]   = useState<"left" | "center" | "right">("center");
+
+  // Canvas
   const [canvasSize, setCanvasSize] = useState({ w: 540, h: 540 });
 
   // Stickers
-  const [stickerTab, setStickerTab] = useState<StickerCategory>("selos");
+  const [stickerTab,     setStickerTab]     = useState<StickerCategory>("selos");
   const [stickerColorId, setStickerColorId] = useState<StickerColorId>("gold");
 
-  // Referência ao sticker selecionado no canvas (para saber qual sticker é)
-  const selectedStickerIdRef = useRef<string | null>(null);
+  // Painel ativo no sidebar
+  const [sidePanel, setSidePanel] = useState<"text" | "sticker" | "resize" | "hint">("hint");
 
-  // ── Inicializar canvas ───────────────────────────────────────────────────
+  // ── Inicializar canvas ────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!canvasElRef.current) return;
@@ -127,9 +127,15 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
         canvas.renderAll();
       });
 
-      canvas.on("selection:created", (e) => updateSelection(e.selected?.[0] ?? null));
-      canvas.on("selection:updated", (e) => updateSelection(e.selected?.[0] ?? null));
-      canvas.on("selection:cleared", () => setSelectedObj(null));
+      canvas.on("selection:created", (e) => handleSelect(e.selected?.[0] ?? null));
+      canvas.on("selection:updated", (e) => handleSelect(e.selected?.[0] ?? null));
+      canvas.on("selection:cleared", () => { setSelectedObj(null); setSidePanel("hint"); });
+
+      // Sincronizar painel de texto ao editar inline
+      canvas.on("text:changed", (e) => {
+        const t = e.target as Textbox;
+        setTextValue(t.text ?? "");
+      });
 
       return () => { canvas.dispose(); fabricRef.current = null; };
     };
@@ -137,39 +143,67 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flyerUrl]);
 
-  // ── Atualizar painel ao selecionar objeto ────────────────────────────────
+  // ── Selecionar objeto ─────────────────────────────────────────────────────
 
-  const updateSelection = (obj: FabricObject | null) => {
+  const handleSelect = (obj: FabricObject | null) => {
     setSelectedObj(obj);
-    if (obj && obj.type === "text") {
-      const t = obj as FabricText;
+    if (!obj) { setSidePanel("hint"); return; }
+
+    if (obj.type === "textbox") {
+      const t = obj as Textbox;
       setTextValue(t.text ?? "");
       setTextColor(typeof t.fill === "string" ? t.fill : "#FFFFFF");
-      setFontSize(t.fontSize ?? 32);
+      setFontSize(t.fontSize ?? 36);
       setIsBold(t.fontWeight === "bold");
       setIsItalic(t.fontStyle === "italic");
       setTextAlign((t.textAlign as "left" | "center" | "right") ?? "center");
+      setSidePanel("text");
+    } else if (obj.type === "image" && (obj as FabricObject & { name?: string }).name?.startsWith("sticker-")) {
+      setSidePanel("sticker");
     }
   };
 
-  // ── Adicionar texto ──────────────────────────────────────────────────────
+  // ── Adicionar texto editável ──────────────────────────────────────────────
 
   const addText = useCallback(() => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    const text = new FabricText("Clique para editar", {
-      left: canvasSize.w / 2, top: canvasSize.h / 2,
-      originX: "center", originY: "center",
-      fontSize: 36, fontFamily: "Oswald, sans-serif",
-      fill: "#FFFFFF", fontWeight: "bold", textAlign: "center",
+
+    const tb = new Textbox("Clique duas vezes para editar", {
+      left: canvasSize.w / 2,
+      top: canvasSize.h / 2,
+      originX: "center",
+      originY: "center",
+      width: Math.round(canvasSize.w * 0.7),
+      fontSize: 36,
+      fontFamily: "Oswald, sans-serif",
+      fill: "#FFFFFF",
+      fontWeight: "bold",
+      textAlign: "center",
       editable: true,
+      splitByGrapheme: false,
     });
-    canvas.add(text);
-    canvas.setActiveObject(text);
+
+    canvas.add(tb);
+    canvas.setActiveObject(tb);
     canvas.renderAll();
+    setSidePanel("text");
   }, [canvasSize]);
 
-  // ── Adicionar sticker ao canvas ──────────────────────────────────────────
+  // ── Atualizar texto selecionado ───────────────────────────────────────────
+
+  const applyTextChange = useCallback((changes: Partial<{
+    text: string; fill: string; fontSize: number;
+    fontWeight: string; fontStyle: string; textAlign: string;
+  }>) => {
+    const canvas = fabricRef.current;
+    const obj = canvas?.getActiveObject();
+    if (!obj || obj.type !== "textbox") return;
+    obj.set(changes as Partial<Textbox>);
+    canvas?.renderAll();
+  }, []);
+
+  // ── Adicionar sticker ─────────────────────────────────────────────────────
 
   const addSticker = useCallback((stickerId: string) => {
     const canvas = fabricRef.current;
@@ -178,54 +212,96 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     const sticker = VIP_STICKERS.find((s) => s.id === stickerId);
     if (!sticker) return;
 
-    const dataUrl = svgToDataUrl(sticker.svg);
-
-    // Aplicar cor selecionada ao SVG antes de adicionar
     const colorConfig = VIP_STICKER_COLORS.find((c) => c.id === stickerColorId) ?? VIP_STICKER_COLORS[0];
     const coloredSvg = recolorSvg(sticker.svg, colorConfig.hex, colorConfig.textHex);
-    const coloredDataUrl = svgToDataUrl(coloredSvg);
 
-    FabricImage.fromURL(coloredDataUrl).then((img) => {
-      // Escalar para o tamanho padrão do sticker
+    FabricImage.fromURL(svgToDataUrl(coloredSvg)).then((img) => {
       const scaleX = sticker.defaultWidth / (img.width ?? sticker.defaultWidth);
       const scaleY = sticker.defaultHeight / (img.height ?? sticker.defaultHeight);
-
       img.set({
-        left: canvasSize.w / 2,
-        top: canvasSize.h / 2,
-        originX: "center",
-        originY: "center",
-        scaleX,
-        scaleY,
+        left: canvasSize.w / 2, top: canvasSize.h / 2,
+        originX: "center", originY: "center",
+        scaleX, scaleY,
         name: `sticker-${stickerId}`,
-        // Guardar metadados para recoloração posterior
         data: { stickerId, originalSvg: sticker.svg },
       } as Parameters<typeof img.set>[0]);
-
       canvas.add(img);
       canvas.setActiveObject(img);
       canvas.renderAll();
-      selectedStickerIdRef.current = stickerId;
-      toast.success(`"${sticker.name}" adicionado ao flyer`);
-    }).catch(() => {
-      toast.error("Erro ao adicionar sticker");
-    });
-  }, [canvasSize]);
+      setSidePanel("sticker");
+      toast.success(`"${sticker.name}" adicionado`);
+    }).catch(() => toast.error("Erro ao adicionar sticker"));
+  }, [canvasSize, stickerColorId]);
 
-  // ── Atualizar texto selecionado ──────────────────────────────────────────
+  // ── Recolorir sticker selecionado ─────────────────────────────────────────
 
-  const applyTextChange = useCallback((changes: Partial<{
-    text: string; fill: string; fontSize: number;
-    fontWeight: string; fontStyle: string; textAlign: string;
-  }>) => {
+  const recolorSelectedSticker = useCallback((colorId: StickerColorId) => {
     const canvas = fabricRef.current;
     const obj = canvas?.getActiveObject();
-    if (!obj || obj.type !== "text") return;
-    obj.set(changes as Partial<FabricText>);
-    canvas?.renderAll();
+    if (!obj || obj.type !== "image") return;
+
+    const objWithData = obj as FabricObject & { data?: { stickerId: string; originalSvg: string }; name?: string };
+    if (!objWithData.data?.originalSvg) return;
+
+    const colorConfig = VIP_STICKER_COLORS.find((c) => c.id === colorId) ?? VIP_STICKER_COLORS[0];
+    const coloredSvg = recolorSvg(objWithData.data.originalSvg, colorConfig.hex, colorConfig.textHex);
+
+    const saved = {
+      left: obj.left, top: obj.top,
+      scaleX: obj.scaleX, scaleY: obj.scaleY,
+      angle: obj.angle,
+      originX: obj.originX, originY: obj.originY,
+      name: objWithData.name,
+      data: objWithData.data,
+    };
+
+    FabricImage.fromURL(svgToDataUrl(coloredSvg)).then((newImg) => {
+      newImg.set(saved as Parameters<typeof newImg.set>[0]);
+      canvas?.remove(obj);
+      canvas?.add(newImg);
+      canvas?.setActiveObject(newImg);
+      canvas?.renderAll();
+      setSelectedObj(newImg);
+    });
   }, []);
 
-  // ── Deletar objeto selecionado ───────────────────────────────────────────
+  // ── Redimensionar canvas para formato de rede social ─────────────────────
+
+  const resizeToFormat = useCallback((formatId: string) => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+
+    const fmt = SOCIAL_FORMATS.find((f) => f.id === formatId);
+    if (!fmt) return;
+
+    // Calcular tamanho de exibição mantendo proporção
+    const containerW = containerRef.current?.clientWidth ?? 700;
+    const maxW = Math.min(containerW, 700);
+    const displayRatio = fmt.w / fmt.h;
+    const displayW = maxW;
+    const displayH = Math.round(displayW / displayRatio);
+
+    // Escalar fundo para novo tamanho
+    const bg = canvas.getObjects().find(
+      (o) => (o as FabricObject & { name?: string }).name === "__background__"
+    );
+    if (bg) {
+      bg.set({
+        scaleX: displayW / (bg.width ?? displayW),
+        scaleY: displayH / (bg.height ?? displayH),
+      });
+    }
+
+    // Ajustar canvas
+    canvas.setWidth(displayW);
+    canvas.setHeight(displayH);
+    canvas.renderAll();
+    setCanvasSize({ w: displayW, h: displayH });
+
+    toast.success(`Redimensionado para ${fmt.label} (${fmt.ratio})`);
+  }, []);
+
+  // ── Ações gerais ──────────────────────────────────────────────────────────
 
   const deleteSelected = useCallback(() => {
     const canvas = fabricRef.current;
@@ -234,6 +310,7 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     canvas?.remove(obj);
     canvas?.renderAll();
     setSelectedObj(null);
+    setSidePanel("hint");
   }, []);
 
   const bringForward = useCallback(() => {
@@ -252,7 +329,16 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     canvas?.renderAll();
   }, []);
 
-  // ── Exportar PNG ─────────────────────────────────────────────────────────
+  const resetCanvas = useCallback(() => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+    canvas.getObjects()
+      .filter((o) => (o as FabricObject & { name?: string }).name !== "__background__")
+      .forEach((o) => canvas.remove(o));
+    canvas.renderAll();
+    setSelectedObj(null);
+    setSidePanel("hint");
+  }, []);
 
   const exportPNG = useCallback(() => {
     const canvas = fabricRef.current;
@@ -284,73 +370,25 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     toast.success("Flyer baixado!");
   }, []);
 
-  const resetCanvas = useCallback(() => {
-    const canvas = fabricRef.current;
-    if (!canvas) return;
-    const toRemove = canvas.getObjects().filter(
-      (o) => (o as FabricObject & { name?: string }).name !== "__background__"
-    );
-    toRemove.forEach((o) => canvas.remove(o));
-    canvas.renderAll();
-    setSelectedObj(null);
-  }, []);
-
-  // ── Recolorir sticker selecionado no canvas ──────────────────────────────
-
-  const recolorSelectedSticker = useCallback((colorId: StickerColorId) => {
-    const canvas = fabricRef.current;
-    const obj = canvas?.getActiveObject();
-    if (!obj || obj.type !== "image") return;
-
-    const objWithData = obj as FabricObject & { data?: { stickerId: string; originalSvg: string } };
-    const stickerData = objWithData.data;
-    if (!stickerData?.originalSvg) return;
-
-    const colorConfig = VIP_STICKER_COLORS.find((c) => c.id === colorId) ?? VIP_STICKER_COLORS[0];
-    const coloredSvg = recolorSvg(stickerData.originalSvg, colorConfig.hex, colorConfig.textHex);
-    const coloredDataUrl = svgToDataUrl(coloredSvg);
-
-    // Guardar posição e escala atuais
-    const currentLeft = obj.left;
-    const currentTop = obj.top;
-    const currentScaleX = obj.scaleX;
-    const currentScaleY = obj.scaleY;
-    const currentAngle = obj.angle;
-    const currentOriginX = obj.originX;
-    const currentOriginY = obj.originY;
-    const currentName = (obj as FabricObject & { name?: string }).name;
-
-    FabricImage.fromURL(coloredDataUrl).then((newImg) => {
-      newImg.set({
-        left: currentLeft,
-        top: currentTop,
-        scaleX: currentScaleX,
-        scaleY: currentScaleY,
-        angle: currentAngle,
-        originX: currentOriginX,
-        originY: currentOriginY,
-        name: currentName,
-        data: stickerData,
-      } as Parameters<typeof newImg.set>[0]);
-
-      canvas?.remove(obj);
-      canvas?.add(newImg);
-      canvas?.setActiveObject(newImg);
-      canvas?.renderAll();
-      setSelectedObj(newImg);
-    });
-  }, []);
-
-  const isTextSelected = selectedObj?.type === "text";
-  const isStickerSelected = selectedObj?.type === "image" && !!(selectedObj as FabricObject & { name?: string }).name?.startsWith("sticker-");
   const filteredStickers = VIP_STICKERS.filter((s) => s.category === stickerTab);
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col gap-4">
+
       {/* Barra de ferramentas superior */}
       <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-card border border-border">
         <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={addText}>
-          <Plus className="h-3.5 w-3.5" /><Type className="h-3.5 w-3.5" /> Adicionar Texto
+          <Plus className="h-3.5 w-3.5" /><Type className="h-3.5 w-3.5" /> Texto
+        </Button>
+        <Button
+          size="sm"
+          variant={sidePanel === "resize" ? "default" : "outline"}
+          className="h-8 text-xs gap-1.5"
+          onClick={() => setSidePanel(sidePanel === "resize" ? "hint" : "resize")}
+        >
+          <Maximize2 className="h-3.5 w-3.5" /> Formatos
         </Button>
         <div className="h-5 w-px bg-border mx-1" />
         <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={bringForward} disabled={!selectedObj}>
@@ -378,13 +416,14 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
         </Button>
         {onClose && (
           <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={onClose}>
-            Fechar Editor
+            Fechar
           </Button>
         )}
       </div>
 
-      {/* Área principal: canvas + painel de propriedades */}
+      {/* Área principal: canvas + painel lateral */}
       <div className="flex gap-4 items-start">
+
         {/* Canvas */}
         <div ref={containerRef} className="flex-1 min-w-0">
           <div
@@ -394,153 +433,184 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
             <canvas ref={canvasElRef} />
           </div>
           <p className="text-xs text-muted-foreground text-center mt-2 flex items-center justify-center gap-1">
-            <Move className="h-3 w-3" /> Arraste elementos para reposicionar · Duplo clique para editar texto
+            <Move className="h-3 w-3" /> Arraste · <strong>Duplo clique</strong> para editar texto
           </p>
         </div>
 
-        {/* Painel de propriedades do texto */}
-        {isStickerSelected ? (
-          /* Painel de cor do sticker selecionado */
-          <div className="w-56 shrink-0 space-y-3 p-3 rounded-xl bg-card border border-amber-500/40">
-            <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
-              <Palette className="h-3.5 w-3.5 text-amber-400" /> Cor do Sticker
-            </p>
-            <p className="text-xs text-muted-foreground">Selecione a cor do elemento para combinar com o fundo do flyer:</p>
-            <div className="space-y-2">
-              {VIP_STICKER_COLORS.map((color) => (
-                <button
-                  key={color.id}
-                  onClick={() => { setStickerColorId(color.id); recolorSelectedSticker(color.id); }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border-2 transition-all ${
-                    stickerColorId === color.id
-                      ? "border-amber-400 bg-amber-950/30"
-                      : "border-border hover:border-amber-400/40 hover:bg-muted/30"
-                  }`}
-                >
-                  <div
-                    className="w-5 h-5 rounded-full border border-border flex-shrink-0"
-                    style={{ backgroundColor: color.hex }}
+        {/* Painel lateral */}
+        <div className="w-60 shrink-0">
+
+          {/* ── Painel: Propriedades de Texto ── */}
+          {sidePanel === "text" && (
+            <div className="space-y-3 p-3 rounded-xl bg-card border border-border">
+              <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <Palette className="h-3.5 w-3.5 text-amber-400" /> Propriedades do Texto
+              </p>
+
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Conteúdo</Label>
+                <textarea
+                  value={textValue}
+                  rows={3}
+                  onChange={(e) => { setTextValue(e.target.value); applyTextChange({ text: e.target.value }); }}
+                  className="w-full text-xs rounded-md border border-border bg-background px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  placeholder="Digite o texto..."
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Cor</Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color" value={textColor}
+                    onChange={(e) => { setTextColor(e.target.value); applyTextChange({ fill: e.target.value }); }}
+                    className="w-8 h-8 rounded cursor-pointer border border-border bg-transparent"
                   />
-                  <span className="text-xs font-medium text-foreground">{color.label}</span>
-                  <span className="text-[10px] text-muted-foreground font-mono ml-auto">{color.hex}</span>
-                  {stickerColorId === color.id && (
-                    <span className="text-amber-400 text-[10px] font-bold">✓</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            <p className="text-[10px] text-muted-foreground pt-1 border-t border-border">
-              💡 A cor também será aplicada aos próximos stickers adicionados
-            </p>
-          </div>
-        ) : isTextSelected ? (
-          <div className="w-56 shrink-0 space-y-3 p-3 rounded-xl bg-card border border-border">
-            <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
-              <Palette className="h-3.5 w-3.5 text-amber-400" /> Propriedades do Texto
-            </p>
+                  <Input
+                    value={textColor}
+                    onChange={(e) => { setTextColor(e.target.value); applyTextChange({ fill: e.target.value }); }}
+                    className="text-xs h-8 font-mono"
+                    placeholder="#FFFFFF"
+                  />
+                </div>
+                <div className="flex gap-1.5 flex-wrap mt-1">
+                  {["#FFFFFF", "#D4AF37", "#C9A84C", "#F0C040", "#0A0A0A", "#1A1A1A"].map((c) => (
+                    <button
+                      key={c}
+                      className="w-6 h-6 rounded-full border-2 border-border hover:scale-110 transition-transform"
+                      style={{ backgroundColor: c }}
+                      onClick={() => { setTextColor(c); applyTextChange({ fill: c }); }}
+                      title={c}
+                    />
+                  ))}
+                </div>
+              </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Texto</Label>
-              <Input
-                value={textValue}
-                onChange={(e) => { setTextValue(e.target.value); applyTextChange({ text: e.target.value }); }}
-                className="text-xs h-8"
-                placeholder="Digite o texto..."
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Cor do texto</Label>
-              <div className="flex items-center gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Tamanho ({fontSize}px)</Label>
                 <input
-                  type="color"
-                  value={textColor}
-                  onChange={(e) => { setTextColor(e.target.value); applyTextChange({ fill: e.target.value }); }}
-                  className="w-8 h-8 rounded cursor-pointer border border-border bg-transparent"
-                />
-                <Input
-                  value={textColor}
-                  onChange={(e) => { setTextColor(e.target.value); applyTextChange({ fill: e.target.value }); }}
-                  className="text-xs h-8 font-mono"
-                  placeholder="#FFFFFF"
+                  type="range" min={10} max={120} value={fontSize}
+                  onChange={(e) => { const v = Number(e.target.value); setFontSize(v); applyTextChange({ fontSize: v }); }}
+                  className="w-full accent-amber-500"
                 />
               </div>
-              <div className="flex gap-1.5 flex-wrap mt-1">
-                {["#FFFFFF", "#D4AF37", "#C9A84C", "#F0C040", "#0A0A0A", "#1A1A1A"].map((c) => (
+
+              <div className="flex gap-2">
+                <div className="space-y-1 flex-1">
+                  <Label className="text-xs text-muted-foreground">Estilo</Label>
+                  <div className="flex gap-1.5">
+                    <Button size="sm" variant={isBold ? "default" : "outline"} className="h-7 w-7 p-0"
+                      onClick={() => { const n = !isBold; setIsBold(n); applyTextChange({ fontWeight: n ? "bold" : "normal" }); }}>
+                      <Bold className="h-3 w-3" />
+                    </Button>
+                    <Button size="sm" variant={isItalic ? "default" : "outline"} className="h-7 w-7 p-0"
+                      onClick={() => { const n = !isItalic; setIsItalic(n); applyTextChange({ fontStyle: n ? "italic" : "normal" }); }}>
+                      <Italic className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1 flex-1">
+                  <Label className="text-xs text-muted-foreground">Alinhamento</Label>
+                  <div className="flex gap-1">
+                    {(["left", "center", "right"] as const).map((a) => (
+                      <Button key={a} size="sm" variant={textAlign === a ? "default" : "outline"} className="h-7 w-7 p-0"
+                        onClick={() => { setTextAlign(a); applyTextChange({ textAlign: a }); }}>
+                        {a === "left" ? <AlignLeft className="h-3 w-3" /> : a === "center" ? <AlignCenter className="h-3 w-3" /> : <AlignRight className="h-3 w-3" />}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Painel: Cor do Sticker ── */}
+          {sidePanel === "sticker" && (
+            <div className="space-y-3 p-3 rounded-xl bg-card border border-amber-500/40">
+              <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <Palette className="h-3.5 w-3.5 text-amber-400" /> Cor do Sticker
+              </p>
+              <p className="text-xs text-muted-foreground">Selecione a cor para combinar com o fundo:</p>
+              <div className="space-y-2">
+                {VIP_STICKER_COLORS.map((color) => (
                   <button
-                    key={c}
-                    className="w-6 h-6 rounded-full border-2 border-border hover:scale-110 transition-transform"
-                    style={{ backgroundColor: c }}
-                    onClick={() => { setTextColor(c); applyTextChange({ fill: c }); }}
-                    title={c}
-                  />
+                    key={color.id}
+                    onClick={() => { setStickerColorId(color.id); recolorSelectedSticker(color.id); }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border-2 transition-all ${
+                      stickerColorId === color.id
+                        ? "border-amber-400 bg-amber-950/30"
+                        : "border-border hover:border-amber-400/40 hover:bg-muted/30"
+                    }`}
+                  >
+                    <div className="w-5 h-5 rounded-full border border-border flex-shrink-0" style={{ backgroundColor: color.hex }} />
+                    <span className="text-xs font-medium text-foreground">{color.label}</span>
+                    <span className="text-[10px] text-muted-foreground font-mono ml-auto">{color.hex}</span>
+                    {stickerColorId === color.id && <span className="text-amber-400 text-[10px] font-bold">✓</span>}
+                  </button>
                 ))}
               </div>
+              <p className="text-[10px] text-muted-foreground pt-1 border-t border-border">
+                💡 Cor aplicada aos próximos stickers também
+              </p>
             </div>
+          )}
 
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Tamanho ({fontSize}px)</Label>
-              <input
-                type="range" min={10} max={120} value={fontSize}
-                onChange={(e) => { const v = Number(e.target.value); setFontSize(v); applyTextChange({ fontSize: v }); }}
-                className="w-full accent-amber-500"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Estilo</Label>
-              <div className="flex gap-1.5">
-                <Button size="sm" variant={isBold ? "default" : "outline"} className="h-7 w-7 p-0"
-                  onClick={() => { const n = !isBold; setIsBold(n); applyTextChange({ fontWeight: n ? "bold" : "normal" }); }}>
-                  <Bold className="h-3 w-3" />
-                </Button>
-                <Button size="sm" variant={isItalic ? "default" : "outline"} className="h-7 w-7 p-0"
-                  onClick={() => { const n = !isItalic; setIsItalic(n); applyTextChange({ fontStyle: n ? "italic" : "normal" }); }}>
-                  <Italic className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Alinhamento</Label>
-              <div className="flex gap-1.5">
-                {(["left", "center", "right"] as const).map((a) => (
-                  <Button key={a} size="sm" variant={textAlign === a ? "default" : "outline"} className="h-7 w-7 p-0"
-                    onClick={() => { setTextAlign(a); applyTextChange({ textAlign: a }); }}>
-                    {a === "left" ? <AlignLeft className="h-3 w-3" /> : a === "center" ? <AlignCenter className="h-3 w-3" /> : <AlignRight className="h-3 w-3" />}
-                  </Button>
+          {/* ── Painel: Formatos de Redes Sociais ── */}
+          {sidePanel === "resize" && (
+            <div className="space-y-3 p-3 rounded-xl bg-card border border-border">
+              <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <Maximize2 className="h-3.5 w-3.5 text-amber-400" /> Redimensionar
+              </p>
+              <p className="text-xs text-muted-foreground">Adapte o flyer para o formato desejado:</p>
+              <div className="space-y-1.5">
+                {SOCIAL_FORMATS.map((fmt) => (
+                  <button
+                    key={fmt.id}
+                    onClick={() => resizeToFormat(fmt.id)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border border-border hover:border-amber-400/60 hover:bg-amber-950/20 transition-all text-left"
+                  >
+                    <span className="text-base">{fmt.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground truncate">{fmt.label}</p>
+                      <p className="text-[10px] text-muted-foreground">{fmt.ratio} · {fmt.w}×{fmt.h}px</p>
+                    </div>
+                  </button>
                 ))}
               </div>
+              <p className="text-[10px] text-muted-foreground pt-1 border-t border-border">
+                ⚠️ O fundo é esticado para o novo formato. Textos e stickers mantêm posição.
+              </p>
             </div>
-          </div>
-        ) : (
-          /* Dica quando nada está selecionado */
-          // NOTE: fechamento do bloco isStickerSelected ? ... : isTextSelected ? ... :
-          <div className="w-56 shrink-0 p-3 rounded-xl bg-card border border-border">
-            <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
-              <Type className="h-3.5 w-3.5 text-amber-400" /> Editor de Flyer
-            </p>
-            <div className="space-y-2 text-xs text-muted-foreground">
-              <p>• Clique em <strong className="text-foreground">Adicionar Texto</strong> para inserir texto</p>
-              <p>• Clique em um <strong className="text-amber-400">sticker</strong> abaixo para adicionar ao flyer</p>
-              <p>• <strong className="text-foreground">Arraste</strong> elementos para reposicionar</p>
-              <p>• <strong className="text-foreground">Duplo clique</strong> para editar texto</p>
-              <p>• Clique em <strong className="text-amber-400">Salvar Flyer</strong> quando terminar</p>
+          )}
+
+          {/* ── Painel: Dica inicial ── */}
+          {sidePanel === "hint" && (
+            <div className="p-3 rounded-xl bg-card border border-border">
+              <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <Type className="h-3.5 w-3.5 text-amber-400" /> Editor de Flyer
+              </p>
+              <div className="space-y-2 text-xs text-muted-foreground">
+                <p>• Clique em <strong className="text-foreground">Texto</strong> para adicionar texto editável</p>
+                <p>• <strong className="text-foreground">Duplo clique</strong> no texto para editar inline</p>
+                <p>• Clique em <strong className="text-amber-400">Formatos</strong> para redimensionar</p>
+                <p>• Clique em um <strong className="text-amber-400">sticker</strong> abaixo para adicionar</p>
+                <p>• <strong className="text-foreground">Arraste</strong> para reposicionar</p>
+                <p>• Clique em <strong className="text-amber-400">Salvar Flyer</strong> quando terminar</p>
+              </div>
             </div>
-          </div>
-        ) /* fecha isStickerSelected/isTextSelected */}
+          )}
+
+        </div>
       </div>
 
-      {/* ── Biblioteca de Stickers VIP ─────────────────────────────────────── */}
+      {/* ── Biblioteca de Stickers VIP ────────────────────────────────────── */}
       <div className="rounded-xl border border-amber-500/30 bg-card overflow-hidden">
-        {/* Cabeçalho */}
         <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-gradient-to-r from-amber-950/30 to-transparent">
           <Layers className="h-4 w-4 text-amber-400" />
           <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Biblioteca de Elementos VIP</span>
           <span className="text-xs text-muted-foreground ml-1">— clique para adicionar ao flyer</span>
         </div>
 
-        {/* Abas de categoria */}
         <div className="flex gap-0 border-b border-border overflow-x-auto">
           {STICKER_CATEGORIES.map((cat) => (
             <button
@@ -554,14 +624,11 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
             >
               <span>{cat.emoji}</span>
               <span>{cat.label}</span>
-              <span className="text-[10px] opacity-60">
-                ({VIP_STICKERS.filter((s) => s.category === cat.id).length})
-              </span>
+              <span className="text-[10px] opacity-60">({VIP_STICKERS.filter((s) => s.category === cat.id).length})</span>
             </button>
           ))}
         </div>
 
-        {/* Grid de stickers */}
         <div className="p-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
           {filteredStickers.map((sticker) => (
             <button
@@ -570,7 +637,6 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
               className="group flex flex-col items-center gap-1.5 p-2 rounded-lg border border-border hover:border-amber-400/60 hover:bg-amber-950/20 transition-all cursor-pointer"
               title={`Adicionar: ${sticker.name}`}
             >
-              {/* Preview do sticker */}
               <div
                 className="flex items-center justify-center rounded bg-zinc-900 group-hover:bg-zinc-800 transition-colors"
                 style={{ width: 64, height: 64 }}
@@ -578,15 +644,10 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
                 <img
                   src={svgToDataUrl(sticker.svg)}
                   alt={sticker.name}
-                  style={{
-                    width: Math.min(sticker.defaultWidth, 56),
-                    height: Math.min(sticker.defaultHeight, 56),
-                    objectFit: "contain",
-                  }}
+                  style={{ width: Math.min(sticker.defaultWidth, 56), height: Math.min(sticker.defaultHeight, 56), objectFit: "contain" }}
                   draggable={false}
                 />
               </div>
-              {/* Nome */}
               <span className="text-[10px] text-muted-foreground group-hover:text-amber-400 text-center leading-tight line-clamp-2 transition-colors">
                 {sticker.name}
               </span>
@@ -594,6 +655,7 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
           ))}
         </div>
       </div>
+
     </div>
   );
 }
