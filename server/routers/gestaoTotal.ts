@@ -9,7 +9,7 @@ import {
   gtReunioes, gtCargos, gtColaboradores, gtFinanceiro, gtFornecedores,
   gtCompras, gtProblemas, gtOportunidades, gtRiscos, gtDocumentos,
   gtMarketing, gtMarketingCampaigns, gtAdvisorConversations, gtAuditLog,
-  gtContentHistory, gtArtHistory,
+  gtContentHistory, gtArtHistory, gtBrandAssets, gtImageBank,
 } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
@@ -1835,6 +1835,86 @@ Tipo de imagem: ${input.tipoImagem === "upload" ? "Usuário enviou uma imagem" :
         .where(and(eq(gtArtHistory.id, input.id), eq(gtArtHistory.orgId, input.orgId)));
       return { success: true };
     }),
+
+  // ── Gerar Flyer Final ────────────────────────────────────────────────────────
+  generateFlyer: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      unitId: z.number().optional(),
+      // Dados do briefing da arte
+      headline: z.string(),
+      textoSecundario: z.string(),
+      cta: z.string(),
+      conceito: z.string(),
+      direcaoVisual: z.object({
+        cores: z.string(),
+        tipografia: z.string(),
+        estiloImagem: z.string(),
+        elementosVisuais: z.string(),
+      }),
+      // Layout editado pelo usuário
+      layout: z.object({
+        topo: z.string(),
+        centro: z.string(),
+        rodape: z.string(),
+      }),
+      // Imagem base gerada/enviada
+      imagemUrl: z.string().nullable(),
+      // Metadados
+      assunto: z.string(),
+      tipoArte: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      // Buscar logo da organização
+      const db = await getDb();
+      let logoUrl: string | null = null;
+      if (db) {
+        const logoRows = await db.select().from(gtBrandAssets)
+          .where(and(eq(gtBrandAssets.orgId, input.orgId), eq(gtBrandAssets.tipo, "logo")))
+          .limit(1);
+        logoUrl = logoRows[0]?.url ?? null;
+      }
+
+      // Montar prompt de flyer para a IA de imagem
+      const flyerPrompt = [
+        `Create a premium, high-end digital flyer for Barbearia VIP (Brazilian luxury barbershop brand).`,
+        `STYLE: Inspired by luxury fashion brands (Louis Vuitton, YSL). Elegant, minimal, sophisticated.`,
+        `COLOR PALETTE: ${input.direcaoVisual.cores}`,
+        `TYPOGRAPHY STYLE: ${input.direcaoVisual.tipografia}`,
+        `VISUAL ELEMENTS: ${input.direcaoVisual.elementosVisuais}`,
+        ``,
+        `LAYOUT STRUCTURE:`,
+        `- TOP: ${input.layout.topo}`,
+        `- CENTER: ${input.layout.centro}`,
+        `- BOTTOM: ${input.layout.rodape}`,
+        ``,
+        `COPY TO INCLUDE:`,
+        `- Headline: "${input.headline}"`,
+        `- Body text: "${input.textoSecundario}"`,
+        `- CTA: "${input.cta}"`,
+        ``,
+        `CONCEPT: ${input.conceito}`,
+        `FORMAT: ${input.tipoArte === "story" ? "9:16 vertical" : input.tipoArte === "banner" ? "16:9 horizontal" : "1:1 square"}.`,
+        `Ultra-high quality, 8K, professional studio design, dark background with gold/premium accents.`,
+        `The flyer should look like it was designed by a world-class creative agency.`,
+      ].join("\n");
+
+      // Gerar flyer via IA de imagem
+      const originalImages = input.imagemUrl
+        ? [{ url: input.imagemUrl, mimeType: "image/jpeg" as const }]
+        : undefined;
+
+      const imgResult = await generateImage({
+        prompt: flyerPrompt,
+        ...(originalImages ? { originalImages } : {}),
+      });
+
+      return {
+        flyerUrl: imgResult.url ?? null,
+        prompt: flyerPrompt,
+        logoUrl,
+      };
+    }),
 });
 
 // ── IA Conselheiro ────────────────────────────────────────────
@@ -2036,7 +2116,94 @@ const dashboardGtRouter = router({
     }),
 });
 
-// ── Router principal ──────────────────────────────────────────────────────────
+// ── Brand Assets & Image Bank ────────────────────────────────────
+const brandAssetsRouter = router({
+  // Logo da organização
+  getLogo: protectedProcedure
+    .input(z.object({ orgId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const [logo] = await db.select().from(gtBrandAssets)
+        .where(and(eq(gtBrandAssets.orgId, input.orgId), eq(gtBrandAssets.tipo, "logo")))
+        .orderBy(desc(gtBrandAssets.atualizadoEm)).limit(1);
+      return logo ?? null;
+    }),
+
+  saveLogo: protectedProcedure
+    .input(z.object({ orgId: z.number(), url: z.string(), fileKey: z.string(), nome: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      // Remover logo anterior
+      await db.delete(gtBrandAssets).where(and(eq(gtBrandAssets.orgId, input.orgId), eq(gtBrandAssets.tipo, "logo")));
+      // Inserir nova logo
+      const [r] = await db.insert(gtBrandAssets).values({
+        orgId: input.orgId, tipo: "logo",
+        url: input.url, fileKey: input.fileKey, nome: input.nome ?? "Logo",
+      });
+      return { id: (r as { insertId: number }).insertId, url: input.url };
+    }),
+
+  deleteLogo: protectedProcedure
+    .input(z.object({ orgId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await db.delete(gtBrandAssets).where(and(eq(gtBrandAssets.orgId, input.orgId), eq(gtBrandAssets.tipo, "logo")));
+      return { success: true };
+    }),
+
+  // Banco de imagens
+  listImageBank: protectedProcedure
+    .input(z.object({ orgId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db.select().from(gtImageBank)
+        .where(eq(gtImageBank.orgId, input.orgId))
+        .orderBy(desc(gtImageBank.criadoEm));
+    }),
+
+  addImageBank: protectedProcedure
+    .input(z.object({
+      orgId: z.number(), url: z.string(), fileKey: z.string(),
+      nome: z.string().optional(), descricao: z.string().optional(), tags: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const [r] = await db.insert(gtImageBank).values({
+        orgId: input.orgId, url: input.url, fileKey: input.fileKey,
+        nome: input.nome, descricao: input.descricao, tags: input.tags,
+      });
+      return { id: (r as { insertId: number }).insertId, url: input.url };
+    }),
+
+  deleteImageBank: protectedProcedure
+    .input(z.object({ id: z.number(), orgId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await db.delete(gtImageBank).where(and(eq(gtImageBank.id, input.id), eq(gtImageBank.orgId, input.orgId)));
+      return { success: true };
+    }),
+
+  updateImageBank: protectedProcedure
+    .input(z.object({
+      id: z.number(), orgId: z.number(),
+      nome: z.string().optional(), descricao: z.string().optional(), tags: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const { id, orgId, ...data } = input;
+      await db.update(gtImageBank).set(data).where(and(eq(gtImageBank.id, id), eq(gtImageBank.orgId, orgId)));
+      return { success: true };
+    }),
+});
+
+// ── Router principal ────────────────────────────────────────────
 export const gestaoTotalRouter = router({
   dashboard: dashboardGtRouter,
   tarefas: tarefasRouter,
@@ -2056,6 +2223,7 @@ export const gestaoTotalRouter = router({
   documentos: documentosRouter,
   marketing: marketingRouter,
   marketingCampaigns: marketingCampaignsRouter,
+  brandAssets: brandAssetsRouter,
   ia: iaRouter,
   auditoria: auditoriaRouter,
 });

@@ -1519,3 +1519,33 @@ export const gtArtHistory = mysqlTable("gt_art_history", {
 ]);
 export type GtArtHistory = typeof gtArtHistory.$inferSelect;
 export type InsertGtArtHistory = typeof gtArtHistory.$inferInsert;
+
+// ── Brand Assets (logo global da organização) ────────────────────────────────
+export const gtBrandAssets = mysqlTable("gt_brand_assets", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  tipo: varchar("tipo", { length: 50 }).notNull(), // 'logo', 'favicon', etc.
+  url: text("url").notNull(),
+  fileKey: text("fileKey").notNull(),
+  nome: varchar("nome", { length: 255 }),
+  criadoEm: timestamp("criadoEm").defaultNow().notNull(),
+  atualizadoEm: timestamp("atualizadoEm").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_brand_assets_org_tipo").on(t.orgId, t.tipo),
+]);
+export type GtBrandAsset = typeof gtBrandAssets.$inferSelect;
+
+// ── Image Bank (banco de imagens global da organização) ──────────────────────
+export const gtImageBank = mysqlTable("gt_image_bank", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  url: text("url").notNull(),
+  fileKey: text("fileKey").notNull(),
+  nome: varchar("nome", { length: 255 }),
+  descricao: text("descricao"),
+  tags: text("tags"), // JSON array de tags
+  criadoEm: timestamp("criadoEm").defaultNow().notNull(),
+}, (t) => [
+  index("idx_image_bank_org").on(t.orgId),
+]);
+export type GtImageBankItem = typeof gtImageBank.$inferSelect;

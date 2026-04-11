@@ -151,6 +151,9 @@ export default function MarketingPage() {
   // Estado da Criação de Arte
   const [artResult, setArtResult] = useState<{ resultado: ArtResultado; imagemUrl: string | null } | null>(null);
   const [isUploadingArtImage, setIsUploadingArtImage] = useState(false);
+  const [flyerResult, setFlyerResult] = useState<{ flyerUrl: string | null; prompt: string } | null>(null);
+  // Guarda o último resultado da arte para uso no flyer
+  const [lastArtData, setLastArtData] = useState<{ resultado: ArtResultado; imagemUrl: string | null; assunto: string; tipoArte: string } | null>(null);
 
   // Queries
   const manualQ = trpc.gestaoTotal.marketing.list.useQuery(
@@ -245,12 +248,24 @@ export default function MarketingPage() {
 
   // Mutation de Criação de Arte
   const generateArtM = trpc.gestaoTotal.marketingCampaigns.generateArt.useMutation({
-    onSuccess: (data) => {
-      setArtResult({ resultado: data.resultado as ArtResultado, imagemUrl: data.imagemUrl ?? null });
+    onSuccess: (data, variables) => {
+      const res = { resultado: data.resultado as ArtResultado, imagemUrl: data.imagemUrl ?? null };
+      setArtResult(res);
+      setLastArtData({ resultado: data.resultado as ArtResultado, imagemUrl: data.imagemUrl ?? null, assunto: variables.assunto, tipoArte: variables.tipoArte });
+      setFlyerResult(null); // limpa flyer anterior ao gerar nova arte
       utils.gestaoTotal.marketingCampaigns.listArtHistory.invalidate();
       toast.success("Arte criada com sucesso!");
     },
     onError: (err) => toast.error("Erro ao criar arte: " + err.message),
+  });
+
+  // Mutation de Gerar Flyer
+  const generateFlyerM = trpc.gestaoTotal.marketingCampaigns.generateFlyer.useMutation({
+    onSuccess: (data) => {
+      setFlyerResult({ flyerUrl: data.flyerUrl, prompt: data.prompt });
+      toast.success("Flyer gerado com sucesso!");
+    },
+    onError: (err) => toast.error("Erro ao gerar flyer: " + err.message),
   });
 
   // Mutation de exclusão de campanha IA
@@ -510,7 +525,7 @@ export default function MarketingPage() {
             }}
             isGenerating={generateArtM.isPending}
             result={artResult}
-            onReset={() => setArtResult(null)}
+            onReset={() => { setArtResult(null); setFlyerResult(null); setLastArtData(null); }}
             onUploadImage={async (file: File) => {
               setIsUploadingArtImage(true);
               try {
@@ -524,6 +539,24 @@ export default function MarketingPage() {
               }
             }}
             isUploading={isUploadingArtImage}
+            onGenerateFlyer={(layout) => {
+              if (!org?.id || !artResult) return;
+              generateFlyerM.mutate({
+                orgId: org.id,
+                unitId: selectedUnit?.id,
+                headline: artResult.resultado.headline,
+                textoSecundario: artResult.resultado.textoSecundario,
+                cta: artResult.resultado.cta,
+                conceito: artResult.resultado.conceito,
+                direcaoVisual: artResult.resultado.direcaoVisual,
+                layout,
+                imagemUrl: artResult.imagemUrl,
+                assunto: lastArtData?.assunto ?? "",
+                tipoArte: lastArtData?.tipoArte ?? "post",
+              });
+            }}
+            isGeneratingFlyer={generateFlyerM.isPending}
+            flyerResult={flyerResult}
           />
           {org?.id && (
             <ArtHistoryPanel

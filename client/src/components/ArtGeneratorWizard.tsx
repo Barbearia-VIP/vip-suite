@@ -5,11 +5,12 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   ChevronRight, ChevronLeft, Sparkles, Upload, Image as ImageIcon,
   Search, Copy, Check, Palette, Layout, Type, Zap, Target,
-  FileImage, Download, RotateCcw, Star,
+  FileImage, Download, RotateCcw, Star, Edit2, X, Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -49,6 +50,9 @@ type Props = {
   onReset: () => void;
   onUploadImage?: (file: File) => Promise<string>; // retorna URL do S3
   isUploading?: boolean;
+  onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }) => void;
+  isGeneratingFlyer?: boolean;
+  flyerResult?: { flyerUrl: string | null; prompt: string } | null;
 };
 
 // ── Opções das telas ──────────────────────────────────────────────────────────
@@ -125,13 +129,24 @@ function CopyBtn({ text, className = "" }: { text: string; className?: string })
 // ── Resultado da arte ─────────────────────────────────────────────────────────
 
 function ArtResult({
-  resultado, imagemUrl, tipoImagem, onReset,
+  resultado, imagemUrl, tipoImagem, onReset, onGenerateFlyer, isGeneratingFlyer,
 }: {
   resultado: ArtResultado;
   imagemUrl: string | null;
   tipoImagem: "upload" | "ia" | "banco";
   onReset: () => void;
+  onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }) => void;
+  isGeneratingFlyer?: boolean;
 }) {
+  // Estado editável do layout
+  const [layout, setLayout] = useState(resultado.layout);
+  const [editingLayout, setEditingLayout] = useState(false);
+  const [layoutDraft, setLayoutDraft] = useState(resultado.layout);
+
+  const startEditLayout = () => { setLayoutDraft(layout); setEditingLayout(true); };
+  const saveLayout = () => { setLayout(layoutDraft); setEditingLayout(false); toast.success("Layout atualizado!"); };
+  const cancelLayout = () => { setEditingLayout(false); };
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -263,23 +278,74 @@ function ArtResult({
             ))}
           </div>
 
-          {/* Layout */}
+          {/* Layout — editável */}
           <div className="rounded-xl bg-muted/20 border border-border p-3 space-y-2">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Layout className="h-3.5 w-3.5 text-foreground" />
-              <span className="text-xs font-bold text-foreground">Estrutura do Layout</span>
-            </div>
-            {[
-              { label: "Topo", value: resultado.layout.topo, color: "text-blue-400" },
-              { label: "Centro", value: resultado.layout.centro, color: "text-primary" },
-              { label: "Rodapé", value: resultado.layout.rodape, color: "text-muted-foreground" },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="flex items-start gap-2">
-                <span className={`text-xs font-bold w-12 shrink-0 ${color}`}>{label}</span>
-                <span className="text-xs text-foreground flex-1">{value}</span>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5">
+                <Layout className="h-3.5 w-3.5 text-foreground" />
+                <span className="text-xs font-bold text-foreground">Estrutura do Layout</span>
               </div>
-            ))}
+              {!editingLayout ? (
+                <button onClick={startEditLayout} className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded">
+                  <Edit2 className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <div className="flex gap-1">
+                  <button onClick={saveLayout} className="text-green-400 hover:text-green-300 transition-colors p-1 rounded">
+                    <Check className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={cancelLayout} className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+            {editingLayout ? (
+              <div className="space-y-2">
+                {([
+                  { key: "topo" as const, label: "Topo", color: "text-blue-400" },
+                  { key: "centro" as const, label: "Centro", color: "text-primary" },
+                  { key: "rodape" as const, label: "Rodapé", color: "text-muted-foreground" },
+                ] as const).map(({ key, label, color }) => (
+                  <div key={key} className="flex items-start gap-2">
+                    <span className={`text-xs font-bold w-12 shrink-0 pt-2 ${color}`}>{label}</span>
+                    <Textarea
+                      value={layoutDraft[key]}
+                      onChange={(e) => setLayoutDraft(prev => ({ ...prev, [key]: e.target.value }))}
+                      rows={2}
+                      className="text-xs flex-1 resize-none"
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              [
+                { label: "Topo", value: layout.topo, color: "text-blue-400" },
+                { label: "Centro", value: layout.centro, color: "text-primary" },
+                { label: "Rodapé", value: layout.rodape, color: "text-muted-foreground" },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="flex items-start gap-2">
+                  <span className={`text-xs font-bold w-12 shrink-0 ${color}`}>{label}</span>
+                  <span className="text-xs text-foreground flex-1">{value}</span>
+                </div>
+              ))
+            )}
           </div>
+
+          {/* Botão Gerar Flyer */}
+          {imagemUrl && onGenerateFlyer && (
+            <Button
+              className="w-full gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold"
+              onClick={() => onGenerateFlyer(layout)}
+              disabled={isGeneratingFlyer}
+            >
+              {isGeneratingFlyer ? (
+                <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Gerando flyer...</>
+              ) : (
+                <><Wand2 className="h-4 w-4" /> Gerar Flyer com esta Arte</>
+              )}
+            </Button>
+          )}
 
           {/* Prompt de imagem (para referência) */}
           {resultado.promptImagem && (
@@ -302,8 +368,56 @@ function ArtResult({
 
 // ── Wizard principal ──────────────────────────────────────────────────────────
 
+// ── Resultado do Flyer ───────────────────────────────────────────────────────
+
+function FlyerResult({ flyerUrl, prompt }: { flyerUrl: string | null; prompt: string }) {
+  if (!flyerUrl) return (
+    <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-4 text-center">
+      <p className="text-sm text-amber-400 font-semibold">Flyer gerado sem imagem</p>
+      <p className="text-xs text-muted-foreground mt-1">A IA não conseguiu gerar a imagem desta vez. Tente novamente.</p>
+    </div>
+  );
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
+      <div className="p-3 flex items-center justify-between border-b border-amber-500/20">
+        <div className="flex items-center gap-2">
+          <Wand2 className="h-4 w-4 text-amber-400" />
+          <span className="text-sm font-bold text-amber-400">Flyer Gerado!</span>
+        </div>
+        <a
+          href={flyerUrl}
+          download={`flyer-vip-${Date.now()}.jpg`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 border-amber-500/40 hover:bg-amber-500/10">
+            <Download className="h-3 w-3" /> Baixar Flyer
+          </Button>
+        </a>
+      </div>
+      <div className="relative group">
+        <img src={flyerUrl} alt="Flyer gerado" className="w-full object-contain max-h-[600px]" />
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center">
+          <a
+            href={flyerUrl}
+            download={`flyer-vip-${Date.now()}.jpg`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-2 bg-white/90 text-gray-900 font-semibold text-sm px-4 py-2 rounded-full shadow-lg hover:bg-white"
+          >
+            <Download className="h-4 w-4" /> Baixar Flyer
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Wizard principal ──────────────────────────────────────────────────────────
+
 export default function ArtGeneratorWizard({
   onGenerate, isGenerating, result, onReset, onUploadImage, isUploading,
+  onGenerateFlyer, isGeneratingFlyer, flyerResult,
 }: Props) {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<Partial<ArtWizardData>>({});
@@ -355,13 +469,43 @@ export default function ArtGeneratorWizard({
   // Se já tem resultado, exibe
   if (result) {
     return (
-      <div className="glass-card border-purple-500/20 bg-purple-500/5 p-5">
-        <ArtResult
-          resultado={result.resultado}
-          imagemUrl={result.imagemUrl}
-          tipoImagem={data.tipoImagem ?? "ia"}
-          onReset={() => { onReset(); setStep(1); setData({}); setUploadedImageUrl(null); }}
-        />
+      <div className="space-y-4">
+        <div className="glass-card border-purple-500/20 bg-purple-500/5 p-5">
+          <ArtResult
+            resultado={result.resultado}
+            imagemUrl={result.imagemUrl}
+            tipoImagem={data.tipoImagem ?? "ia"}
+            onReset={() => { onReset(); setStep(1); setData({}); setUploadedImageUrl(null); }}
+            onGenerateFlyer={onGenerateFlyer}
+            isGeneratingFlyer={isGeneratingFlyer}
+          />
+        </div>
+        {/* Flyer gerado */}
+        {isGeneratingFlyer && (
+          <div className="glass-card border-amber-500/20 bg-amber-500/5 p-8">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/20 flex items-center justify-center animate-pulse">
+                <Wand2 className="h-7 w-7 text-amber-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">Gerando seu flyer...</p>
+                <p className="text-sm text-muted-foreground mt-1">A IA está montando o flyer com base no briefing e na imagem</p>
+              </div>
+              <div className="flex gap-1.5">
+                {[0, 1, 2].map(i => (
+                  <div key={i} className="w-2 h-2 rounded-full bg-amber-400 animate-bounce"
+                    style={{ animationDelay: `${i * 0.15}s` }} />
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">Pode levar até 20 segundos</p>
+            </div>
+          </div>
+        )}
+        {flyerResult && !isGeneratingFlyer && (
+          <div className="glass-card border-amber-500/20 bg-amber-500/5 p-5">
+            <FlyerResult flyerUrl={flyerResult.flyerUrl} prompt={flyerResult.prompt} />
+          </div>
+        )}
       </div>
     );
   }

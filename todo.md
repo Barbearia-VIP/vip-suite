@@ -1175,3 +1175,7 @@
 - [x] Criação de Arte: endpoint /api/upload-art-image para upload de imagem de referência para S3
 - [x] Criação de Arte: painel ArtHistoryPanel com miniaturas, favoritos e reutilizar
 - [x] Criação de Arte: botão de download na miniatura (ArtHistoryPanel) e no resultado expandido (ArtGeneratorWizard)
+- [ ] Criação de Arte: botão "Gerar Flyer" no resultado usando imagem + estrutura de layout editável
+- [ ] Criação de Arte: campos editáveis na estrutura de layout (Topo, Centro, Rodapé) antes de gerar flyer
+- [ ] Configurações: upload de logo global da Barbearia VIP (disponível para todas as unidades)
+- [ ] Configurações: banco de imagens global (upload de múltiplas imagens de referência para todas as unidades)

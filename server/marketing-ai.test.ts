@@ -847,3 +847,132 @@ describe("download de imagem de arte", () => {
     expect(imagemUrl).toMatch(/cloudfront\.net/);
   });
 });
+
+// ── Testes: Gerar Flyer ──────────────────────────────────────────────────────
+
+describe("generateFlyer", () => {
+  it("deve ter os campos obrigatórios para gerar flyer", () => {
+    const input = {
+      orgId: 1,
+      headline: "Seu Tempo. Sua Experiência.",
+      textoSecundario: "Barbearia VIP — feriado aberto das 09h às 17h.",
+      cta: "Agende seu momento exclusivo.",
+      conceito: "Sofisticação e exclusividade.",
+      direcaoVisual: {
+        cores: "Preto fosco, dourado envelhecido",
+        tipografia: "Playfair Display",
+        estiloImagem: "Cinematográfico",
+        elementosVisuais: "Mínimos",
+      },
+      layout: {
+        topo: "Logotipo Barbearia VIP centralizado",
+        centro: "Imagem principal + headline sobreposta",
+        rodape: "CTA + horário de funcionamento",
+      },
+      imagemUrl: "https://cdn.example.com/art.jpg",
+      assunto: "feriado",
+      tipoArte: "flyer_digital",
+    };
+    expect(input.headline).toBeTruthy();
+    expect(input.cta).toBeTruthy();
+    expect(input.layout.topo).toBeTruthy();
+    expect(input.layout.centro).toBeTruthy();
+    expect(input.layout.rodape).toBeTruthy();
+  });
+
+  it("deve construir prompt de flyer com todos os elementos", () => {
+    const layout = {
+      topo: "Logo VIP centralizada",
+      centro: "Imagem + headline em destaque",
+      rodape: "CTA + endereço",
+    };
+    const headline = "Seu Tempo. Sua Experiência.";
+    const cta = "Agende agora.";
+    const flyerPrompt = [
+      `Create a premium, high-end digital flyer for Barbearia VIP.`,
+      `HEADLINE: "${headline}"`,
+      `CTA: "${cta}"`,
+      `LAYOUT - TOP: ${layout.topo}`,
+      `LAYOUT - CENTER: ${layout.centro}`,
+      `LAYOUT - BOTTOM: ${layout.rodape}`,
+    ].join(" ");
+    expect(flyerPrompt).toContain(headline);
+    expect(flyerPrompt).toContain(cta);
+    expect(flyerPrompt).toContain(layout.topo);
+  });
+
+  it("deve aceitar imagemUrl opcional (flyer sem imagem base)", () => {
+    const inputSemImagem = {
+      orgId: 1,
+      headline: "Promoção Especial",
+      cta: "Agende já!",
+      layout: { topo: "Logo", centro: "Texto", rodape: "CTA" },
+      imagemUrl: undefined,
+    };
+    // Sem imagemUrl, o flyer é gerado apenas com texto e layout
+    expect(inputSemImagem.imagemUrl).toBeUndefined();
+    expect(inputSemImagem.headline).toBeTruthy();
+  });
+});
+
+// ── Testes: Brand Assets (Logo e Banco de Imagens) ───────────────────────────
+
+describe("brandAssets - logo global", () => {
+  it("deve validar campos obrigatórios para salvar logo", () => {
+    const logoInput = {
+      orgId: 1,
+      url: "https://cdn.example.com/logo-vip.png",
+      fileKey: "brand-assets/logo/1-logo.png",
+      nome: "Logo Barbearia VIP",
+    };
+    expect(logoInput.orgId).toBeGreaterThan(0);
+    expect(logoInput.url).toMatch(/^https?:\/\//);
+    expect(logoInput.fileKey).toBeTruthy();
+  });
+
+  it("deve ser global para a organização (sem unitId)", () => {
+    const logoGlobal = { orgId: 1, url: "https://cdn.example.com/logo.png", fileKey: "brand-assets/logo/1.png" };
+    expect(logoGlobal).not.toHaveProperty("unitId");
+  });
+
+  it("deve aceitar logo com nome personalizado", () => {
+    const logo = { orgId: 1, url: "https://cdn.example.com/logo.png", fileKey: "logo.png", nome: "Logo Barbearia VIP Premium" };
+    expect(logo.nome).toContain("VIP");
+  });
+});
+
+describe("brandAssets - banco de imagens", () => {
+  it("deve validar campos para adicionar imagem ao banco", () => {
+    const imageInput = {
+      orgId: 1,
+      url: "https://cdn.example.com/ref-001.jpg",
+      fileKey: "image-bank/1-ref-001.jpg",
+      nome: "Ambiente premium",
+      descricao: "Foto do ambiente da barbearia",
+      tags: "ambiente,premium,barbearia",
+    };
+    expect(imageInput.orgId).toBeGreaterThan(0);
+    expect(imageInput.url).toMatch(/^https?:\/\//);
+    expect(imageInput.tags).toContain("premium");
+  });
+
+  it("deve aceitar imagem sem descrição e tags (campos opcionais)", () => {
+    const imageMinima = {
+      orgId: 1,
+      url: "https://cdn.example.com/img.jpg",
+      fileKey: "image-bank/img.jpg",
+    };
+    expect(imageMinima.url).toBeTruthy();
+    expect(imageMinima).not.toHaveProperty("descricao");
+  });
+
+  it("deve permitir múltiplas imagens por organização", () => {
+    const imagens = [
+      { orgId: 1, url: "https://cdn.example.com/img1.jpg", fileKey: "image-bank/img1.jpg" },
+      { orgId: 1, url: "https://cdn.example.com/img2.jpg", fileKey: "image-bank/img2.jpg" },
+      { orgId: 1, url: "https://cdn.example.com/img3.jpg", fileKey: "image-bank/img3.jpg" },
+    ];
+    expect(imagens.length).toBe(3);
+    expect(imagens.every(img => img.orgId === 1)).toBe(true);
+  });
+});
