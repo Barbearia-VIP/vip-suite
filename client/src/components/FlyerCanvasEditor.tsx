@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Canvas, FabricImage, Textbox, type FabricObject } from "fabric";
+import { Canvas, FabricImage, IText, type FabricObject } from "fabric";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Type, Palette, Download, Trash2, Bold, Italic,
   AlignLeft, AlignCenter, AlignRight, Plus, Move,
-  ChevronUp, ChevronDown, RotateCcw, Layers, Maximize2,
+  ChevronUp, ChevronDown, RotateCcw, Layers, Maximize2, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { VIP_STICKERS, STICKER_CATEGORIES, type StickerCategory } from "@/lib/vipStickers";
@@ -38,12 +38,12 @@ const SOCIAL_FORMATS = [
 // ── Recolorir SVG ─────────────────────────────────────────────────────────────
 
 function recolorSvg(svg: string, primaryColor: string, secondaryColor: string): string {
-  const originalPrimary = ["#D4AF37", "#F0C040", "#C9A84C"];
+  const originalPrimary   = ["#D4AF37", "#F0C040", "#C9A84C"];
   const originalSecondary = ["#0A0A0A", "#1A1A1A"];
-  const originalWhite = ["#FFFFFF"];
+  const originalWhite     = ["#FFFFFF"];
 
   let result = svg;
-  for (const c of originalPrimary) result = result.replaceAll(c, primaryColor);
+  for (const c of originalPrimary)   result = result.replaceAll(c, primaryColor);
   for (const c of originalSecondary) result = result.replaceAll(c, secondaryColor);
   if (primaryColor === "#FFFFFF") {
     for (const c of originalWhite) result = result.replaceAll(c, secondaryColor);
@@ -63,23 +63,25 @@ interface FlyerCanvasEditorProps {
   onClose?: () => void;
 }
 
+type SidePanel = "text" | "sticker" | "resize" | "hint";
+
 // ── Componente principal ──────────────────────────────────────────────────────
 
 export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCanvasEditorProps) {
-  const canvasElRef = useRef<HTMLCanvasElement>(null);
-  const fabricRef   = useRef<Canvas | null>(null);
+  const canvasElRef  = useRef<HTMLCanvasElement>(null);
+  const fabricRef    = useRef<Canvas | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Seleção
   const [selectedObj, setSelectedObj] = useState<FabricObject | null>(null);
 
   // Propriedades de texto
-  const [textValue, setTextValue]   = useState("");
-  const [textColor, setTextColor]   = useState("#FFFFFF");
-  const [fontSize,  setFontSize]    = useState(36);
-  const [isBold,    setIsBold]      = useState(false);
-  const [isItalic,  setIsItalic]    = useState(false);
-  const [textAlign, setTextAlign]   = useState<"left" | "center" | "right">("center");
+  const [textValue, setTextValue] = useState("");
+  const [textColor, setTextColor] = useState("#FFFFFF");
+  const [fontSize,  setFontSize]  = useState(36);
+  const [isBold,    setIsBold]    = useState(false);
+  const [isItalic,  setIsItalic]  = useState(false);
+  const [textAlign, setTextAlign] = useState<"left" | "center" | "right">("center");
 
   // Canvas
   const [canvasSize, setCanvasSize] = useState({ w: 540, h: 540 });
@@ -88,8 +90,8 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
   const [stickerTab,     setStickerTab]     = useState<StickerCategory>("selos");
   const [stickerColorId, setStickerColorId] = useState<StickerColorId>("gold");
 
-  // Painel ativo no sidebar
-  const [sidePanel, setSidePanel] = useState<"text" | "sticker" | "resize" | "hint">("hint");
+  // Painel lateral
+  const [sidePanel, setSidePanel] = useState<SidePanel>("hint");
 
   // ── Inicializar canvas ────────────────────────────────────────────────────
 
@@ -99,11 +101,11 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
-      const ratio = img.naturalWidth / img.naturalHeight;
+      const ratio     = img.naturalWidth / img.naturalHeight;
       const containerW = containerRef.current?.clientWidth ?? 700;
-      const maxW = Math.min(containerW, 700);
-      const w = maxW;
-      const h = Math.round(w / ratio);
+      const maxW      = Math.min(containerW, 680);
+      const w         = maxW;
+      const h         = Math.round(w / ratio);
       setCanvasSize({ w, h });
 
       const canvas = new Canvas(canvasElRef.current!, {
@@ -111,15 +113,18 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
         height: h,
         selection: true,
         preserveObjectStacking: true,
+        enableRetinaScaling: false,
       });
       fabricRef.current = canvas;
 
+      // Carregar imagem de fundo
       FabricImage.fromURL(flyerUrl, { crossOrigin: "anonymous" }).then((fabricImg) => {
         fabricImg.set({
           left: 0, top: 0,
           scaleX: w / img.naturalWidth,
           scaleY: h / img.naturalHeight,
-          selectable: false, evented: false,
+          selectable: false,
+          evented: false,
           name: "__background__",
         });
         canvas.add(fabricImg);
@@ -127,14 +132,25 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
         canvas.renderAll();
       });
 
+      // Eventos de seleção
       canvas.on("selection:created", (e) => handleSelect(e.selected?.[0] ?? null));
       canvas.on("selection:updated", (e) => handleSelect(e.selected?.[0] ?? null));
       canvas.on("selection:cleared", () => { setSelectedObj(null); setSidePanel("hint"); });
 
       // Sincronizar painel de texto ao editar inline
       canvas.on("text:changed", (e) => {
-        const t = e.target as Textbox;
+        const t = e.target as IText;
         setTextValue(t.text ?? "");
+      });
+
+      // Duplo clique: entrar em modo de edição
+      canvas.on("mouse:dblclick", (e) => {
+        const target = e.target;
+        if (target && target.type === "i-text") {
+          (target as IText).enterEditing();
+          (target as IText).selectAll();
+          canvas.renderAll();
+        }
       });
 
       return () => { canvas.dispose(); fabricRef.current = null; };
@@ -149,8 +165,8 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     setSelectedObj(obj);
     if (!obj) { setSidePanel("hint"); return; }
 
-    if (obj.type === "textbox") {
-      const t = obj as Textbox;
+    if (obj.type === "i-text") {
+      const t = obj as IText;
       setTextValue(t.text ?? "");
       setTextColor(typeof t.fill === "string" ? t.fill : "#FFFFFF");
       setFontSize(t.fontSize ?? 36);
@@ -158,7 +174,10 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
       setIsItalic(t.fontStyle === "italic");
       setTextAlign((t.textAlign as "left" | "center" | "right") ?? "center");
       setSidePanel("text");
-    } else if (obj.type === "image" && (obj as FabricObject & { name?: string }).name?.startsWith("sticker-")) {
+    } else if (
+      obj.type === "image" &&
+      (obj as FabricObject & { name?: string }).name?.startsWith("sticker-")
+    ) {
       setSidePanel("sticker");
     }
   };
@@ -169,54 +188,70 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     const canvas = fabricRef.current;
     if (!canvas) return;
 
-    const tb = new Textbox("Clique duas vezes para editar", {
-      left: canvasSize.w / 2,
-      top: canvasSize.h / 2,
-      originX: "center",
-      originY: "center",
-      width: Math.round(canvasSize.w * 0.7),
-      fontSize: 36,
+    const itext = new IText("Toque duas vezes para editar", {
+      left:       canvasSize.w / 2,
+      top:        canvasSize.h / 2,
+      originX:    "center",
+      originY:    "center",
+      fontSize:   36,
       fontFamily: "Oswald, sans-serif",
-      fill: "#FFFFFF",
+      fill:       "#FFFFFF",
       fontWeight: "bold",
-      textAlign: "center",
-      editable: true,
-      splitByGrapheme: false,
+      textAlign:  "center",
+      editable:   true,
     });
 
-    canvas.add(tb);
-    canvas.setActiveObject(tb);
+    canvas.add(itext);
+    canvas.setActiveObject(itext);
     canvas.renderAll();
     setSidePanel("text");
+
+    // Entrar em modo de edição automaticamente
+    setTimeout(() => {
+      itext.enterEditing();
+      itext.selectAll();
+      canvas.renderAll();
+    }, 100);
   }, [canvasSize]);
 
-  // ── Atualizar texto selecionado ───────────────────────────────────────────
+  // ── Aplicar mudanças de texto ─────────────────────────────────────────────
 
   const applyTextChange = useCallback((changes: Partial<{
     text: string; fill: string; fontSize: number;
     fontWeight: string; fontStyle: string; textAlign: string;
   }>) => {
     const canvas = fabricRef.current;
-    const obj = canvas?.getActiveObject();
-    if (!obj || obj.type !== "textbox") return;
-    obj.set(changes as Partial<Textbox>);
+    const obj    = canvas?.getActiveObject();
+    if (!obj || obj.type !== "i-text") return;
+    (obj as IText).set(changes as Partial<IText>);
+    canvas?.renderAll();
+  }, []);
+
+  // Ativar edição do texto selecionado via botão
+  const startEditingText = useCallback(() => {
+    const canvas = fabricRef.current;
+    const obj    = canvas?.getActiveObject();
+    if (!obj || obj.type !== "i-text") return;
+    const itext = obj as IText;
+    itext.enterEditing();
+    itext.selectAll();
     canvas?.renderAll();
   }, []);
 
   // ── Adicionar sticker ─────────────────────────────────────────────────────
 
   const addSticker = useCallback((stickerId: string) => {
-    const canvas = fabricRef.current;
+    const canvas  = fabricRef.current;
     if (!canvas) return;
 
     const sticker = VIP_STICKERS.find((s) => s.id === stickerId);
     if (!sticker) return;
 
     const colorConfig = VIP_STICKER_COLORS.find((c) => c.id === stickerColorId) ?? VIP_STICKER_COLORS[0];
-    const coloredSvg = recolorSvg(sticker.svg, colorConfig.hex, colorConfig.textHex);
+    const coloredSvg  = recolorSvg(sticker.svg, colorConfig.hex, colorConfig.textHex);
 
     FabricImage.fromURL(svgToDataUrl(coloredSvg)).then((img) => {
-      const scaleX = sticker.defaultWidth / (img.width ?? sticker.defaultWidth);
+      const scaleX = sticker.defaultWidth  / (img.width  ?? sticker.defaultWidth);
       const scaleY = sticker.defaultHeight / (img.height ?? sticker.defaultHeight);
       img.set({
         left: canvasSize.w / 2, top: canvasSize.h / 2,
@@ -237,14 +272,17 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
 
   const recolorSelectedSticker = useCallback((colorId: StickerColorId) => {
     const canvas = fabricRef.current;
-    const obj = canvas?.getActiveObject();
+    const obj    = canvas?.getActiveObject();
     if (!obj || obj.type !== "image") return;
 
-    const objWithData = obj as FabricObject & { data?: { stickerId: string; originalSvg: string }; name?: string };
+    const objWithData = obj as FabricObject & {
+      data?: { stickerId: string; originalSvg: string };
+      name?: string;
+    };
     if (!objWithData.data?.originalSvg) return;
 
     const colorConfig = VIP_STICKER_COLORS.find((c) => c.id === colorId) ?? VIP_STICKER_COLORS[0];
-    const coloredSvg = recolorSvg(objWithData.data.originalSvg, colorConfig.hex, colorConfig.textHex);
+    const coloredSvg  = recolorSvg(objWithData.data.originalSvg, colorConfig.hex, colorConfig.textHex);
 
     const saved = {
       left: obj.left, top: obj.top,
@@ -265,7 +303,7 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     });
   }, []);
 
-  // ── Redimensionar canvas para formato de rede social ─────────────────────
+  // ── Redimensionar canvas ──────────────────────────────────────────────────
 
   const resizeToFormat = useCallback((formatId: string) => {
     const canvas = fabricRef.current;
@@ -274,30 +312,26 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     const fmt = SOCIAL_FORMATS.find((f) => f.id === formatId);
     if (!fmt) return;
 
-    // Calcular tamanho de exibição mantendo proporção
     const containerW = containerRef.current?.clientWidth ?? 700;
-    const maxW = Math.min(containerW, 700);
+    const maxW       = Math.min(containerW, 680);
     const displayRatio = fmt.w / fmt.h;
-    const displayW = maxW;
-    const displayH = Math.round(displayW / displayRatio);
+    const displayW   = maxW;
+    const displayH   = Math.round(displayW / displayRatio);
 
-    // Escalar fundo para novo tamanho
     const bg = canvas.getObjects().find(
       (o) => (o as FabricObject & { name?: string }).name === "__background__"
     );
     if (bg) {
       bg.set({
-        scaleX: displayW / (bg.width ?? displayW),
+        scaleX: displayW / (bg.width  ?? displayW),
         scaleY: displayH / (bg.height ?? displayH),
       });
     }
 
-    // Ajustar canvas
     canvas.setWidth(displayW);
     canvas.setHeight(displayH);
     canvas.renderAll();
     setCanvasSize({ w: displayW, h: displayH });
-
     toast.success(`Redimensionado para ${fmt.label} (${fmt.ratio})`);
   }, []);
 
@@ -305,7 +339,7 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
 
   const deleteSelected = useCallback(() => {
     const canvas = fabricRef.current;
-    const obj = canvas?.getActiveObject();
+    const obj    = canvas?.getActiveObject();
     if (!obj || (obj as FabricObject & { name?: string }).name === "__background__") return;
     canvas?.remove(obj);
     canvas?.renderAll();
@@ -315,7 +349,7 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
 
   const bringForward = useCallback(() => {
     const canvas = fabricRef.current;
-    const obj = canvas?.getActiveObject();
+    const obj    = canvas?.getActiveObject();
     if (!obj) return;
     canvas?.bringObjectForward(obj);
     canvas?.renderAll();
@@ -323,7 +357,7 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
 
   const sendBackward = useCallback(() => {
     const canvas = fabricRef.current;
-    const obj = canvas?.getActiveObject();
+    const obj    = canvas?.getActiveObject();
     if (!obj) return;
     canvas?.sendObjectBackwards(obj);
     canvas?.renderAll();
@@ -343,6 +377,10 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
   const exportPNG = useCallback(() => {
     const canvas = fabricRef.current;
     if (!canvas) return;
+    const activeObj = canvas.getActiveObject();
+    if (activeObj && activeObj.type === "i-text") {
+      (activeObj as IText).exitEditing();
+    }
     canvas.discardActiveObject();
     canvas.renderAll();
     const dataUrl = canvas.toDataURL({ format: "png", multiplier: 2 });
@@ -354,12 +392,16 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
       a.download = `flyer-vip-editado-${Date.now()}.png`;
       a.click();
     }
-    toast.success("Flyer salvo com sucesso!");
+    toast.success("Flyer salvo!");
   }, [onSave]);
 
   const downloadEdited = useCallback(() => {
     const canvas = fabricRef.current;
     if (!canvas) return;
+    const activeObj = canvas.getActiveObject();
+    if (activeObj && activeObj.type === "i-text") {
+      (activeObj as IText).exitEditing();
+    }
     canvas.discardActiveObject();
     canvas.renderAll();
     const dataUrl = canvas.toDataURL({ format: "png", multiplier: 2 });
@@ -371,6 +413,9 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
   }, []);
 
   const filteredStickers = VIP_STICKERS.filter((s) => s.category === stickerTab);
+  const isTextSelected    = selectedObj?.type === "i-text";
+  const isStickerSelected = selectedObj?.type === "image" &&
+    !!(selectedObj as FabricObject & { name?: string }).name?.startsWith("sticker-");
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -382,6 +427,11 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
         <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={addText}>
           <Plus className="h-3.5 w-3.5" /><Type className="h-3.5 w-3.5" /> Texto
         </Button>
+        {isTextSelected && (
+          <Button size="sm" variant="default" className="h-8 text-xs gap-1.5 bg-amber-500 hover:bg-amber-600 text-black" onClick={startEditingText}>
+            <Pencil className="h-3.5 w-3.5" /> Editar Texto
+          </Button>
+        )}
         <Button
           size="sm"
           variant={sidePanel === "resize" ? "default" : "outline"}
@@ -433,15 +483,15 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
             <canvas ref={canvasElRef} />
           </div>
           <p className="text-xs text-muted-foreground text-center mt-2 flex items-center justify-center gap-1">
-            <Move className="h-3 w-3" /> Arraste · <strong>Duplo clique</strong> para editar texto
+            <Move className="h-3 w-3" /> Arraste · Selecione texto e clique <strong className="text-amber-400 mx-1">Editar Texto</strong> ou duplo clique
           </p>
         </div>
 
         {/* Painel lateral */}
         <div className="w-60 shrink-0">
 
-          {/* ── Painel: Propriedades de Texto ── */}
-          {sidePanel === "text" && (
+          {/* ── Painel: Texto ── */}
+          {(sidePanel === "text" || isTextSelected) && isTextSelected && (
             <div className="space-y-3 p-3 rounded-xl bg-card border border-border">
               <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
                 <Palette className="h-3.5 w-3.5 text-amber-400" /> Propriedades do Texto
@@ -452,10 +502,20 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
                 <textarea
                   value={textValue}
                   rows={3}
-                  onChange={(e) => { setTextValue(e.target.value); applyTextChange({ text: e.target.value }); }}
+                  onChange={(e) => {
+                    setTextValue(e.target.value);
+                    applyTextChange({ text: e.target.value });
+                  }}
                   className="w-full text-xs rounded-md border border-border bg-background px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
                   placeholder="Digite o texto..."
                 />
+                <Button
+                  size="sm"
+                  className="w-full h-7 text-xs gap-1.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold mt-1"
+                  onClick={startEditingText}
+                >
+                  <Pencil className="h-3 w-3" /> Editar inline no canvas
+                </Button>
               </div>
 
               <div className="space-y-1">
@@ -490,7 +550,11 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
                 <Label className="text-xs text-muted-foreground">Tamanho ({fontSize}px)</Label>
                 <input
                   type="range" min={10} max={120} value={fontSize}
-                  onChange={(e) => { const v = Number(e.target.value); setFontSize(v); applyTextChange({ fontSize: v }); }}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setFontSize(v);
+                    applyTextChange({ fontSize: v });
+                  }}
                   className="w-full accent-amber-500"
                 />
               </div>
@@ -524,8 +588,8 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
             </div>
           )}
 
-          {/* ── Painel: Cor do Sticker ── */}
-          {sidePanel === "sticker" && (
+          {/* ── Painel: Sticker ── */}
+          {isStickerSelected && (
             <div className="space-y-3 p-3 rounded-xl bg-card border border-amber-500/40">
               <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
                 <Palette className="h-3.5 w-3.5 text-amber-400" /> Cor do Sticker
@@ -549,14 +613,11 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] text-muted-foreground pt-1 border-t border-border">
-                💡 Cor aplicada aos próximos stickers também
-              </p>
             </div>
           )}
 
-          {/* ── Painel: Formatos de Redes Sociais ── */}
-          {sidePanel === "resize" && (
+          {/* ── Painel: Formatos ── */}
+          {sidePanel === "resize" && !isTextSelected && !isStickerSelected && (
             <div className="space-y-3 p-3 rounded-xl bg-card border border-border">
               <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
                 <Maximize2 className="h-3.5 w-3.5 text-amber-400" /> Redimensionar
@@ -577,25 +638,22 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] text-muted-foreground pt-1 border-t border-border">
-                ⚠️ O fundo é esticado para o novo formato. Textos e stickers mantêm posição.
-              </p>
             </div>
           )}
 
-          {/* ── Painel: Dica inicial ── */}
-          {sidePanel === "hint" && (
+          {/* ── Painel: Dica ── */}
+          {sidePanel === "hint" && !isTextSelected && !isStickerSelected && (
             <div className="p-3 rounded-xl bg-card border border-border">
               <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
                 <Type className="h-3.5 w-3.5 text-amber-400" /> Editor de Flyer
               </p>
               <div className="space-y-2 text-xs text-muted-foreground">
-                <p>• Clique em <strong className="text-foreground">Texto</strong> para adicionar texto editável</p>
-                <p>• <strong className="text-foreground">Duplo clique</strong> no texto para editar inline</p>
-                <p>• Clique em <strong className="text-amber-400">Formatos</strong> para redimensionar</p>
-                <p>• Clique em um <strong className="text-amber-400">sticker</strong> abaixo para adicionar</p>
-                <p>• <strong className="text-foreground">Arraste</strong> para reposicionar</p>
-                <p>• Clique em <strong className="text-amber-400">Salvar Flyer</strong> quando terminar</p>
+                <p>1. Clique em <strong className="text-foreground">Texto</strong> para adicionar</p>
+                <p>2. Selecione o texto e clique <strong className="text-amber-400">Editar Texto</strong></p>
+                <p>3. Ou dê <strong className="text-foreground">duplo clique</strong> no texto no canvas</p>
+                <p>4. Clique em <strong className="text-amber-400">Formatos</strong> para redimensionar</p>
+                <p>5. Adicione <strong className="text-amber-400">stickers</strong> abaixo</p>
+                <p>6. Clique em <strong className="text-amber-400">Salvar Flyer</strong> quando terminar</p>
               </div>
             </div>
           )}
@@ -644,7 +702,11 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
                 <img
                   src={svgToDataUrl(sticker.svg)}
                   alt={sticker.name}
-                  style={{ width: Math.min(sticker.defaultWidth, 56), height: Math.min(sticker.defaultHeight, 56), objectFit: "contain" }}
+                  style={{
+                    width:  Math.min(sticker.defaultWidth,  56),
+                    height: Math.min(sticker.defaultHeight, 56),
+                    objectFit: "contain",
+                  }}
                   draggable={false}
                 />
               </div>
