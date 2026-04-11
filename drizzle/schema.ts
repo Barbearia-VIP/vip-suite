@@ -1495,3 +1495,27 @@ export const gtContentHistory = mysqlTable("gt_content_history", {
 ]);
 export type GtContentHistory = typeof gtContentHistory.$inferSelect;
 export type InsertGtContentHistory = typeof gtContentHistory.$inferInsert;
+
+// ── Histórico de Artes Geradas (Criação de Arte - Marketing) ──────────────────
+export const gtArtHistory = mysqlTable("gt_art_history", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  createdBy: int("createdBy").notNull(),
+  assunto: varchar("assunto", { length: 100 }).notNull(),
+  tipoArte: varchar("tipoArte", { length: 100 }).notNull(),
+  objetivo: varchar("objetivo", { length: 100 }).notNull(),
+  tema: varchar("tema", { length: 100 }).notNull(),
+  descricao: text("descricao").notNull(),
+  briefing: text("briefing").notNull(),
+  tipoImagem: varchar("tipoImagem", { length: 20 }).notNull(), // upload | ia | banco
+  imagemUrl: text("imagemUrl"),
+  resultado: json("resultado").notNull(),
+  favoritado: boolean("favoritado").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_art_history_org").on(t.orgId),
+  index("idx_art_history_unit").on(t.unitId),
+]);
+export type GtArtHistory = typeof gtArtHistory.$inferSelect;
+export type InsertGtArtHistory = typeof gtArtHistory.$inferInsert;

@@ -1167,3 +1167,8 @@
 - [x] Marketing - Gerador de Conteúdo: tabela gt_content_history no schema e migração
 - [x] Marketing - Gerador de Conteúdo: procedures tRPC saveContent e listContentHistory
 - [x] Marketing - Gerador de Conteúdo: painel de histórico com visualização e reutilização
+- [x] Marketing - Criação de Arte: tabela gt_art_history no schema e migração
+- [x] Marketing - Criação de Arte: procedure tRPC generateArt com prompt mestre VIP
+- [x] Marketing - Criação de Arte: wizard de 7 telas ArtGeneratorWizard no frontend
+- [x] Marketing - Criação de Arte: geração de imagem via IA (nano banana) e exibição do resultado
+- [x] Marketing - Criação de Arte: histórico de artes geradas

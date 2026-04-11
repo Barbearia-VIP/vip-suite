@@ -9,10 +9,11 @@ import {
   gtReunioes, gtCargos, gtColaboradores, gtFinanceiro, gtFornecedores,
   gtCompras, gtProblemas, gtOportunidades, gtRiscos, gtDocumentos,
   gtMarketing, gtMarketingCampaigns, gtAdvisorConversations, gtAuditLog,
-  gtContentHistory,
+  gtContentHistory, gtArtHistory,
 } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
+import { generateImage } from "../_core/imageGeneration";
 
 // ── Helper para parse robusto de JSON da IA ──────────────────────────────────
 function parseJsonSafe(raw: string): unknown {
@@ -1626,6 +1627,213 @@ RETORNE OBRIGATORIAMENTE um JSON válido com a estrutura abaixo (sem markdown, s
       const raw = typeof rawContent === "string" ? rawContent : "{}";
       const parsed = parseJsonSafe(raw) as { ideias: unknown[] };
       return { ideias: parsed.ideias ?? [] };
+    }),
+
+  // ── Criação de Arte ────────────────────────────────────────────────────────
+  generateArt: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      unitId: z.number().optional(),
+      companyName: z.string(),
+      assunto: z.string(),
+      tipoArte: z.string(),
+      objetivo: z.string(),
+      tema: z.string(),
+      descricao: z.string(),
+      briefing: z.string(),
+      tipoImagem: z.enum(["upload", "ia", "banco"]),
+      imagemUrl: z.string().optional(), // URL da imagem enviada (upload)
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+
+      // 1. Gerar o briefing criativo via GPT
+      const systemPrompt = `Você é um diretor de arte e copywriter especialista em marketing para barbearias premium.
+
+Seu objetivo é criar um flyer completo, moderno e visualmente atrativo, baseado no padrão da Barbearia VIP — a maior rede de barbearias da América Latina, conhecida por seu posicionamento premium, experiência diferenciada e ambiente sofisticado.
+
+DIRETRIZ DE MARCA (ESSENCIAL):
+- Não é só corte → é experiência
+- Sensação de exclusividade
+- Ambiente premium
+- Homem que se valoriza
+- Estilo de vida VIP
+
+REGRAS:
+- Evitar aparência de promoção barata
+- Manter padrão premium (inspiração: Louis Vuitton, Gucci, YSL aplicados ao universo masculino)
+- Focar em desejo e experiência
+- Visual limpo e elegante
+- Texto direto (sem poluição)
+
+Retorne SOMENTE um JSON válido com esta estrutura exata:
+{
+  "conceito": "string (2-3 linhas de direção criativa)",
+  "direcaoVisual": {
+    "cores": "string",
+    "tipografia": "string",
+    "estiloImagem": "string",
+    "elementosVisuais": "string"
+  },
+  "headline": "string (frase principal forte)",
+  "textoSecundario": "string (complemento)",
+  "cta": "string (chamada para ação)",
+  "layout": {
+    "topo": "string",
+    "centro": "string",
+    "rodape": "string"
+  },
+  "sugestaoImagem": "string (descrição detalhada para gerar ou buscar imagem)",
+  "promptImagem": "string (prompt detalhado em inglês para geração de imagem por IA, estilo fotográfico realista premium)"
+}`;
+
+      const userPrompt = `Crie um flyer completo para:
+
+Empresa: ${input.companyName}
+Assunto: ${input.assunto}
+Tipo de arte: ${input.tipoArte}
+Objetivo: ${input.objetivo}
+Tema visual: ${input.tema}
+Descrição do material: ${input.descricao}
+Briefing: ${input.briefing}
+Tipo de imagem: ${input.tipoImagem === "upload" ? "Usuário enviou uma imagem" : input.tipoImagem === "ia" ? "Gerar imagem com IA" : "Buscar em banco de imagens"}`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "art_briefing",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                conceito: { type: "string" },
+                direcaoVisual: {
+                  type: "object",
+                  properties: {
+                    cores: { type: "string" },
+                    tipografia: { type: "string" },
+                    estiloImagem: { type: "string" },
+                    elementosVisuais: { type: "string" },
+                  },
+                  required: ["cores", "tipografia", "estiloImagem", "elementosVisuais"],
+                  additionalProperties: false,
+                },
+                headline: { type: "string" },
+                textoSecundario: { type: "string" },
+                cta: { type: "string" },
+                layout: {
+                  type: "object",
+                  properties: {
+                    topo: { type: "string" },
+                    centro: { type: "string" },
+                    rodape: { type: "string" },
+                  },
+                  required: ["topo", "centro", "rodape"],
+                  additionalProperties: false,
+                },
+                sugestaoImagem: { type: "string" },
+                promptImagem: { type: "string" },
+              },
+              required: ["conceito", "direcaoVisual", "headline", "textoSecundario", "cta", "layout", "sugestaoImagem", "promptImagem"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const rawContent = response?.choices?.[0]?.message?.content;
+      const raw = typeof rawContent === "string" ? rawContent : "{}";
+      const resultado = parseJsonSafe(raw) as {
+        conceito: string;
+        direcaoVisual: { cores: string; tipografia: string; estiloImagem: string; elementosVisuais: string };
+        headline: string;
+        textoSecundario: string;
+        cta: string;
+        layout: { topo: string; centro: string; rodape: string };
+        sugestaoImagem: string;
+        promptImagem: string;
+      };
+
+      // 2. Gerar imagem via IA se solicitado
+      let imagemGeradaUrl: string | null = null;
+      if (input.tipoImagem === "ia" && resultado.promptImagem) {
+        try {
+          const imgResult = await generateImage({
+            prompt: resultado.promptImagem,
+            ...(input.imagemUrl ? { originalImages: [{ url: input.imagemUrl, mimeType: "image/jpeg" as const }] } : {}),
+          });
+          imagemGeradaUrl = imgResult.url ?? null;
+        } catch (e) {
+          console.error("[generateArt] Erro ao gerar imagem:", e);
+        }
+      } else if (input.tipoImagem === "upload" && input.imagemUrl) {
+        imagemGeradaUrl = input.imagemUrl;
+      }
+
+      // 3. Salvar no histórico
+      const [insertResult] = await db.insert(gtArtHistory).values({
+        orgId: input.orgId,
+        unitId: input.unitId,
+        createdBy: ctx.user!.id,
+        assunto: input.assunto,
+        tipoArte: input.tipoArte,
+        objetivo: input.objetivo,
+        tema: input.tema,
+        descricao: input.descricao,
+        briefing: input.briefing,
+        tipoImagem: input.tipoImagem,
+        imagemUrl: imagemGeradaUrl,
+        resultado,
+      });
+      const id = (insertResult as { insertId: number }).insertId;
+
+      return { id, resultado, imagemUrl: imagemGeradaUrl };
+    }),
+
+  listArtHistory: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      unitId: z.number().optional(),
+      limit: z.number().default(20),
+      somentesFavoritos: z.boolean().default(false),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const conds = [eq(gtArtHistory.orgId, input.orgId)];
+      if (input.unitId) conds.push(eq(gtArtHistory.unitId, input.unitId));
+      if (input.somentesFavoritos) conds.push(eq(gtArtHistory.favoritado, true));
+      return db.select().from(gtArtHistory)
+        .where(and(...conds))
+        .orderBy(desc(gtArtHistory.createdAt))
+        .limit(input.limit);
+    }),
+
+  toggleArtFavorite: protectedProcedure
+    .input(z.object({ id: z.number(), orgId: z.number(), favoritado: z.boolean() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await db.update(gtArtHistory)
+        .set({ favoritado: input.favoritado })
+        .where(and(eq(gtArtHistory.id, input.id), eq(gtArtHistory.orgId, input.orgId)));
+      return { success: true };
+    }),
+
+  deleteArtHistory: protectedProcedure
+    .input(z.object({ id: z.number(), orgId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await db.delete(gtArtHistory)
+        .where(and(eq(gtArtHistory.id, input.id), eq(gtArtHistory.orgId, input.orgId)));
+      return { success: true };
     }),
 });
 

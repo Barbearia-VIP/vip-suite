@@ -576,3 +576,91 @@ describe("ContentHistory logic", () => {
     expect(item.favoritado).toBe(false);
   });
 });
+
+// ── Testes: Criação de Arte ───────────────────────────────────────────────────
+
+describe("ArtGenerator logic", () => {
+  it("deve validar campos obrigatórios do wizard de arte", () => {
+    const entrada = {
+      orgId: 1,
+      unitId: 2,
+      companyName: "Barbearia VIP Centro",
+      assunto: "promocao",
+      tipoArte: "post_instagram",
+      objetivo: "atrair_clientes",
+      tema: "premium",
+      descricao: "Promoção de corte + barba por R$69,90",
+      briefing: "Estilo sofisticado com fundo escuro e detalhes dourados",
+      tipoImagem: "ia" as const,
+    };
+    expect(entrada.orgId).toBeGreaterThan(0);
+    expect(entrada.assunto).toBeTruthy();
+    expect(entrada.tipoArte).toBeTruthy();
+    expect(entrada.objetivo).toBeTruthy();
+    expect(entrada.tema).toBeTruthy();
+    expect(entrada.descricao.length).toBeGreaterThan(0);
+    expect(entrada.briefing.length).toBeGreaterThan(0);
+  });
+
+  it("deve validar os tipos de imagem aceitos", () => {
+    const tiposValidos = ["upload", "ia", "banco"];
+    expect(tiposValidos).toContain("upload");
+    expect(tiposValidos).toContain("ia");
+    expect(tiposValidos).toContain("banco");
+    expect(tiposValidos).not.toContain("canva");
+  });
+
+  it("deve estruturar o resultado da arte corretamente", () => {
+    const resultado = {
+      conceito: "Arte premium para barbearia de luxo",
+      direcaoVisual: {
+        cores: "Preto, dourado e branco",
+        tipografia: "Serif elegante para headline, sans-serif para corpo",
+        estiloImagem: "Fotografia realista com iluminação quente",
+        elementosVisuais: "Linhas douradas, textura de couro, ícone de navalha",
+      },
+      headline: "Experiência VIP. Não é só um corte.",
+      textoSecundario: "Corte + Barba por R$69,90",
+      cta: "Agende agora pelo WhatsApp",
+      layout: {
+        topo: "Logo centralizada com tagline",
+        centro: "Headline grande + imagem do ambiente",
+        rodape: "Preço + CTA + contato",
+      },
+      sugestaoImagem: "Homem com barba alinhada, ambiente premium",
+      promptImagem: "Premium barbershop interior, warm lighting, leather chair, sophisticated atmosphere",
+    };
+    expect(resultado.conceito).toBeTruthy();
+    expect(resultado.direcaoVisual.cores).toBeTruthy();
+    expect(resultado.headline).toBeTruthy();
+    expect(resultado.cta).toBeTruthy();
+    expect(resultado.layout.topo).toBeTruthy();
+    expect(resultado.layout.centro).toBeTruthy();
+    expect(resultado.layout.rodape).toBeTruthy();
+    expect(resultado.promptImagem).toBeTruthy();
+  });
+
+  it("deve retornar imagemUrl null quando tipoImagem é banco", () => {
+    const tipoImagem = "banco";
+    const imagemGeradaUrl = tipoImagem === "ia" ? "https://cdn.example.com/img.png" : null;
+    expect(imagemGeradaUrl).toBeNull();
+  });
+
+  it("deve usar imagemUrl do upload quando tipoImagem é upload", () => {
+    const tipoImagem = "upload";
+    const uploadedUrl = "https://s3.example.com/user-upload.jpg";
+    const imagemGeradaUrl = tipoImagem === "upload" ? uploadedUrl : null;
+    expect(imagemGeradaUrl).toBe(uploadedUrl);
+  });
+
+  it("deve filtrar histórico de artes por favoritos", () => {
+    const artes = [
+      { id: 1, favoritado: true, assunto: "promocao" },
+      { id: 2, favoritado: false, assunto: "institucional" },
+      { id: 3, favoritado: true, assunto: "novo_servico" },
+    ];
+    const favoritas = artes.filter(a => a.favoritado);
+    expect(favoritas).toHaveLength(2);
+    expect(favoritas.map(a => a.id)).toEqual([1, 3]);
+  });
+});

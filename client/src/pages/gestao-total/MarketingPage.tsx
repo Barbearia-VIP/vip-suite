@@ -25,6 +25,7 @@ import CampaignPreview from "@/components/CampaignPreview";
 import AssignCampaignModal from "@/components/AssignCampaignModal";
 import ContentGeneratorWizard, { type ContentWizardData } from "@/components/ContentGeneratorWizard";
 import ContentHistoryPanel from "@/components/ContentHistoryPanel";
+import ArtGeneratorWizard, { type ArtWizardData, type ArtResultado } from "@/components/ArtGeneratorWizard";
 
 type Campanha = {
   id: number; orgId: number; unitId: number | null;
@@ -146,6 +147,10 @@ export default function MarketingPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [contentResult, setContentResult] = useState<any[] | null>(null);
 
+  // Estado da Criação de Arte
+  const [artResult, setArtResult] = useState<{ resultado: ArtResultado; imagemUrl: string | null } | null>(null);
+  const [isUploadingArtImage, setIsUploadingArtImage] = useState(false);
+
   // Queries
   const manualQ = trpc.gestaoTotal.marketing.list.useQuery(
     { orgId: org?.id ?? 0, unitId: selectedUnit?.id, status: filterStatus !== "todos" ? filterStatus : undefined },
@@ -235,6 +240,16 @@ export default function MarketingPage() {
     onError: (err) => {
       toast.error("Erro ao gerar campanha: " + err.message);
     },
+  });
+
+  // Mutation de Criação de Arte
+  const generateArtM = trpc.gestaoTotal.marketingCampaigns.generateArt.useMutation({
+    onSuccess: (data) => {
+      setArtResult({ resultado: data.resultado as ArtResultado, imagemUrl: data.imagemUrl ?? null });
+      utils.gestaoTotal.marketingCampaigns.listArtHistory.invalidate();
+      toast.success("Arte criada com sucesso!");
+    },
+    onError: (err) => toast.error("Erro ao criar arte: " + err.message),
   });
 
   // Mutation de exclusão de campanha IA
@@ -481,28 +496,34 @@ export default function MarketingPage() {
         </TabsContent>
 
         {/* ABA: Criação de Arte */}
-        <TabsContent value="arte" className="mt-4">
-          <div className="glass-card border-purple-500/20 bg-purple-500/5">
-            <div className="p-8 flex flex-col items-center text-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-purple-500/20 flex items-center justify-center">
-                <Palette className="h-7 w-7 text-purple-400" />
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-lg font-semibold text-foreground">Criação de Arte</h2>
-                <p className="text-sm text-muted-foreground max-w-md">
-                  Crie artes prontas para publicação: posts, stories, banners, capas e materiais visuais personalizados com a identidade da sua unidade, gerados por IA.
-                </p>
-              </div>
-              <div className="flex flex-wrap justify-center gap-2 text-xs">
-                {["Post Feed", "Story", "Banner Promoção", "Capa de Destaque", "Card de Serviço", "Flyer Digital"].map(tag => (
-                  <span key={tag} className="px-3 py-1 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-400 font-medium">{tag}</span>
-                ))}
-              </div>
-              <div className="mt-2 px-4 py-3 rounded-lg bg-muted/40 border border-border text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">Em breve</span> — a lógica de geração de artes será implementada nesta aba.
-              </div>
-            </div>
-          </div>
+        <TabsContent value="arte" className="mt-4 space-y-4">
+          <ArtGeneratorWizard
+            onGenerate={(wizardData: ArtWizardData) => {
+              if (!org?.id) return;
+              generateArtM.mutate({
+                orgId: org.id,
+                unitId: selectedUnit?.id,
+                companyName: org.name,
+                ...wizardData,
+              });
+            }}
+            isGenerating={generateArtM.isPending}
+            result={artResult}
+            onReset={() => setArtResult(null)}
+            onUploadImage={async (file: File) => {
+              setIsUploadingArtImage(true);
+              try {
+                const formData = new FormData();
+                formData.append("file", file);
+                const res = await fetch("/api/upload-art-image", { method: "POST", body: formData });
+                const json = await res.json() as { url: string };
+                return json.url;
+              } finally {
+                setIsUploadingArtImage(false);
+              }
+            }}
+            isUploading={isUploadingArtImage}
+          />
         </TabsContent>
       </Tabs>
 
