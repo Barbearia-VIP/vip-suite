@@ -3,6 +3,7 @@
  * Gera briefing criativo + imagem via IA com padrão premium Barbearia VIP
  */
 import { useState, useRef } from "react";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,7 @@ export type ArtWizardData = {
   tema: string;
   descricao: string;
   briefing: string;
-  tipoImagem: "upload" | "ia" | "banco";
+  tipoImagem: "upload" | "ia" | "banco" | "banco-vip";
   imagemUrl?: string;
 };
 
@@ -50,9 +51,10 @@ type Props = {
   onReset: () => void;
   onUploadImage?: (file: File) => Promise<string>; // retorna URL do S3
   isUploading?: boolean;
-  onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }) => void;
+  onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }, logoId?: number) => void;
   isGeneratingFlyer?: boolean;
   flyerResult?: { flyerUrl: string | null; prompt: string; logoUrl?: string | null; allLogos?: { url: string; nome: string | null }[]; logoWarning?: string | null } | null;
+  orgId?: number; // para buscar imagens do Banco VIP
 };
 
 // ── Opções das telas ──────────────────────────────────────────────────────────
@@ -129,23 +131,48 @@ function CopyBtn({ text, className = "" }: { text: string; className?: string })
 // ── Resultado da arte ─────────────────────────────────────────────────────────
 
 function ArtResult({
-  resultado, imagemUrl, tipoImagem, onReset, onGenerateFlyer, isGeneratingFlyer,
+  resultado, imagemUrl, tipoImagem, onReset, onGenerateFlyer, isGeneratingFlyer, orgId,
 }: {
   resultado: ArtResultado;
   imagemUrl: string | null;
-  tipoImagem: "upload" | "ia" | "banco";
+  tipoImagem: "upload" | "ia" | "banco" | "banco-vip";
   onReset: () => void;
-  onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }) => void;
+  onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }, logoId?: number) => void;
   isGeneratingFlyer?: boolean;
+  orgId?: number;
 }) {
   // Estado editável do layout
   const [layout, setLayout] = useState(resultado.layout);
   const [editingLayout, setEditingLayout] = useState(false);
   const [layoutDraft, setLayoutDraft] = useState(resultado.layout);
+  // Seleção de logo para o flyer
+  const [showLogoSelector, setShowLogoSelector] = useState(false);
+  const [selectedLogoId, setSelectedLogoId] = useState<number | undefined>(undefined);
+  // Buscar logos cadastradas
+  const logosQ = trpc.gestaoTotal.brandAssets.listLogos.useQuery(
+    { orgId: orgId ?? 0 },
+    { enabled: !!orgId && showLogoSelector }
+  );
 
   const startEditLayout = () => { setLayoutDraft(layout); setEditingLayout(true); };
   const saveLayout = () => { setLayout(layoutDraft); setEditingLayout(false); toast.success("Layout atualizado!"); };
   const cancelLayout = () => { setEditingLayout(false); };
+  const handleGenerateFlyerClick = () => {
+    if (!onGenerateFlyer) return;
+    // Se há logos cadastradas, mostrar seletor; senão gerar direto
+    if (logosQ.data && logosQ.data.length > 1) {
+      setShowLogoSelector(true);
+    } else {
+      // Gerar com a única logo ou sem logo
+      const logoId = logosQ.data?.[0]?.id;
+      onGenerateFlyer(layout, logoId);
+    }
+  };
+  const confirmLogoAndGenerate = () => {
+    if (!onGenerateFlyer) return;
+    setShowLogoSelector(false);
+    onGenerateFlyer(layout, selectedLogoId);
+  };
 
   return (
     <div className="space-y-5">
@@ -334,17 +361,75 @@ function ArtResult({
 
           {/* Botão Gerar Flyer */}
           {imagemUrl && onGenerateFlyer && (
-            <Button
-              className="w-full gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold"
-              onClick={() => onGenerateFlyer(layout)}
-              disabled={isGeneratingFlyer}
-            >
-              {isGeneratingFlyer ? (
-                <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Gerando flyer...</>
-              ) : (
-                <><Wand2 className="h-4 w-4" /> Gerar Flyer com esta Arte</>
+            <div className="space-y-3">
+              <Button
+                className="w-full gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold"
+                onClick={handleGenerateFlyerClick}
+                disabled={isGeneratingFlyer}
+              >
+                {isGeneratingFlyer ? (
+                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Gerando flyer...</>
+                ) : (
+                  <><Wand2 className="h-4 w-4" /> Gerar Flyer com esta Arte</>
+                )}
+              </Button>
+              {/* Seletor de logo */}
+              {showLogoSelector && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-amber-400">Escolha a logo para o flyer</p>
+                    <button onClick={() => setShowLogoSelector(false)} className="text-muted-foreground hover:text-foreground p-1 rounded">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {logosQ.isLoading ? (
+                    <div className="flex items-center gap-2 py-2">
+                      <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs text-muted-foreground">Carregando logos...</span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {logosQ.data?.map((logo) => (
+                        <button
+                          key={logo.id}
+                          onClick={() => setSelectedLogoId(logo.id)}
+                          className={`relative rounded-lg border-2 p-3 transition-all flex flex-col items-center gap-2 ${
+                            selectedLogoId === logo.id
+                              ? "border-amber-400 bg-amber-500/10"
+                              : "border-border bg-muted/20 hover:border-amber-500/40"
+                          }`}
+                        >
+                          <img src={logo.url} alt={logo.nome ?? "Logo"} className="h-12 w-auto object-contain" />
+                          <span className="text-xs text-foreground font-medium">{logo.nome ?? "Logo"}</span>
+                          {selectedLogoId === logo.id && (
+                            <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center">
+                              <Check className="h-3 w-3 text-black" />
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm" variant="outline"
+                      className="flex-1 h-8 text-xs"
+                      onClick={() => { setSelectedLogoId(undefined); confirmLogoAndGenerate(); }}
+                    >
+                      Gerar sem logo específica
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="flex-1 h-8 text-xs bg-amber-500 hover:bg-amber-600 text-white"
+                      onClick={confirmLogoAndGenerate}
+                      disabled={!selectedLogoId}
+                    >
+                      <Check className="h-3.5 w-3.5 mr-1" /> Confirmar
+                    </Button>
+                  </div>
+                </div>
               )}
-            </Button>
+            </div>
           )}
 
           {/* Prompt de imagem (para referência) */}
@@ -445,12 +530,18 @@ function FlyerResult({ flyerUrl, prompt, allLogos, logoWarning }: { flyerUrl: st
 
 export default function ArtGeneratorWizard({
   onGenerate, isGenerating, result, onReset, onUploadImage, isUploading,
-  onGenerateFlyer, isGeneratingFlyer, flyerResult,
+  onGenerateFlyer, isGeneratingFlyer, flyerResult, orgId,
 }: Props) {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<Partial<ArtWizardData>>({});
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [selectedBancoVipUrl, setSelectedBancoVipUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Buscar imagens do Banco VIP
+  const imageBankQ = trpc.gestaoTotal.brandAssets.listImageBank.useQuery(
+    { orgId: orgId ?? 0 },
+    { enabled: !!orgId && step === 7 }
+  );
   const TOTAL_STEPS = 7;
 
   const set = (field: keyof ArtWizardData, value: string) =>
@@ -463,7 +554,10 @@ export default function ArtGeneratorWizard({
     if (step === 4) return !!data.tema;
     if (step === 5) return !!(data.descricao?.trim());
     if (step === 6) return !!(data.briefing?.trim());
-    if (step === 7) return !!data.tipoImagem;
+    if (step === 7) {
+      if (data.tipoImagem === "banco-vip") return !!selectedBancoVipUrl;
+      return !!data.tipoImagem;
+    }
     return false;
   };
 
@@ -490,7 +584,7 @@ export default function ArtGeneratorWizard({
       descricao: data.descricao!,
       briefing: data.briefing!,
       tipoImagem: data.tipoImagem!,
-      imagemUrl: uploadedImageUrl ?? undefined,
+      imagemUrl: data.tipoImagem === "banco-vip" ? (selectedBancoVipUrl ?? undefined) : (uploadedImageUrl ?? undefined),
     });
   };
 
@@ -503,9 +597,10 @@ export default function ArtGeneratorWizard({
             resultado={result.resultado}
             imagemUrl={result.imagemUrl}
             tipoImagem={data.tipoImagem ?? "ia"}
-            onReset={() => { onReset(); setStep(1); setData({}); setUploadedImageUrl(null); }}
-            onGenerateFlyer={onGenerateFlyer}
+            onReset={() => { onReset(); setStep(1); setData({}); setUploadedImageUrl(null); setSelectedBancoVipUrl(null); }}
+            onGenerateFlyer={onGenerateFlyer ? (layout, logoId) => onGenerateFlyer(layout, logoId) : undefined}
             isGeneratingFlyer={isGeneratingFlyer}
+            orgId={orgId}
           />
         </div>
         {/* Flyer gerado */}
@@ -771,9 +866,86 @@ export default function ArtGeneratorWizard({
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
 
-            {/* Opção: Banco */}
+            {/* Opção: Banco VIP */}
             <button
-              onClick={() => { set("tipoImagem", "banco"); setUploadedImageUrl(null); }}
+              onClick={() => { set("tipoImagem", "banco-vip"); setUploadedImageUrl(null); }}
+              className={`w-full text-left p-4 rounded-xl border transition-all ${
+                data.tipoImagem === "banco-vip"
+                  ? "border-amber-500/60 bg-amber-500/10"
+                  : "border-border bg-muted/20 hover:border-amber-500/30"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-amber-500/20 flex items-center justify-center shrink-0">
+                  <ImageIcon className="h-4.5 w-4.5 text-amber-400" />
+                </div>
+                <div className="flex-1">
+                  <p className={`text-sm font-semibold ${data.tipoImagem === "banco-vip" ? "text-amber-300" : "text-foreground"}`}>
+                    Banco VIP — Imagens da empresa
+                  </p>
+                  <p className="text-xs text-muted-foreground">Use uma imagem do seu banco de imagens cadastrado nas Configurações</p>
+                </div>
+                {data.tipoImagem === "banco-vip" && (
+                  <Badge className="ml-auto bg-amber-500/20 text-amber-300 border-amber-500/30 text-xs">Selecionado</Badge>
+                )}
+              </div>
+            </button>
+            {/* Grid de imagens do Banco VIP */}
+            {data.tipoImagem === "banco-vip" && (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                {imageBankQ.isLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs text-muted-foreground ml-2">Carregando imagens...</span>
+                  </div>
+                ) : !imageBankQ.data || imageBankQ.data.length === 0 ? (
+                  <div className="text-center py-4">
+                    <p className="text-xs font-semibold text-amber-400">Nenhuma imagem no Banco VIP</p>
+                    <p className="text-xs text-muted-foreground mt-1">Acesse Configurações → Banco de Imagens para adicionar fotos da empresa</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xs font-semibold text-amber-400 mb-2">Selecione uma imagem de referência:</p>
+                    <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                      {imageBankQ.data.map((img) => (
+                        <button
+                          key={img.id}
+                          onClick={() => {
+                            setSelectedBancoVipUrl(img.url);
+                            set("imagemUrl", img.url);
+                          }}
+                          className={`relative rounded-lg overflow-hidden border-2 transition-all ${
+                            selectedBancoVipUrl === img.url
+                              ? "border-amber-400 ring-2 ring-amber-400/30"
+                              : "border-transparent hover:border-amber-500/40"
+                          }`}
+                        >
+                          <img src={img.url} alt={img.nome ?? "Imagem"} className="w-full h-20 object-cover" />
+                          {selectedBancoVipUrl === img.url && (
+                            <div className="absolute inset-0 bg-amber-500/20 flex items-center justify-center">
+                              <div className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center">
+                                <Check className="h-3.5 w-3.5 text-black" />
+                              </div>
+                            </div>
+                          )}
+                          {img.nome && (
+                            <div className="absolute bottom-0 inset-x-0 bg-black/60 px-1.5 py-0.5">
+                              <p className="text-xs text-white truncate">{img.nome}</p>
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    {selectedBancoVipUrl && (
+                      <p className="text-xs text-amber-400 mt-2">✓ Imagem selecionada — a IA usará como referência visual</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Opção: Banco externo */}
+            <button
+              onClick={() => { set("tipoImagem", "banco"); setUploadedImageUrl(null); setSelectedBancoVipUrl(null); }}
               className={`w-full text-left p-4 rounded-xl border transition-all ${
                 data.tipoImagem === "banco"
                   ? "border-green-500/60 bg-green-500/10"
@@ -786,7 +958,7 @@ export default function ArtGeneratorWizard({
                 </div>
                 <div>
                   <p className={`text-sm font-semibold ${data.tipoImagem === "banco" ? "text-green-300" : "text-foreground"}`}>
-                    Quero sugestões de banco de imagens
+                    Sugestões de banco externo
                   </p>
                   <p className="text-xs text-muted-foreground">A IA sugere palavras-chave para buscar no Unsplash, Pexels, etc.</p>
                 </div>

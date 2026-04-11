@@ -151,7 +151,7 @@ export default function MarketingPage() {
   // Estado da Criação de Arte
   const [artResult, setArtResult] = useState<{ resultado: ArtResultado; imagemUrl: string | null } | null>(null);
   const [isUploadingArtImage, setIsUploadingArtImage] = useState(false);
-  const [flyerResult, setFlyerResult] = useState<{ flyerUrl: string | null; prompt: string } | null>(null);
+  const [flyerResult, setFlyerResult] = useState<{ flyerUrl: string | null; prompt: string; logoUrl?: string | null; allLogos?: { url: string; nome: string | null }[]; logoWarning?: string | null } | null>(null);
   // Guarda o último resultado da arte para uso no flyer
   const [lastArtData, setLastArtData] = useState<{ resultado: ArtResultado; imagemUrl: string | null; assunto: string; tipoArte: string } | null>(null);
 
@@ -262,7 +262,7 @@ export default function MarketingPage() {
   // Mutation de Gerar Flyer
   const generateFlyerM = trpc.gestaoTotal.marketingCampaigns.generateFlyer.useMutation({
     onSuccess: (data) => {
-      setFlyerResult({ flyerUrl: data.flyerUrl, prompt: data.prompt });
+      setFlyerResult({ flyerUrl: data.flyerUrl, prompt: data.prompt, logoUrl: data.logoUrl, allLogos: data.allLogos, logoWarning: data.logoWarning });
       toast.success("Flyer gerado com sucesso!");
     },
     onError: (err) => toast.error("Erro ao gerar flyer: " + err.message),
@@ -514,13 +514,22 @@ export default function MarketingPage() {
         {/* ABA: Criação de Arte */}
         <TabsContent value="arte" className="mt-4 space-y-4">
           <ArtGeneratorWizard
+            orgId={org?.id}
             onGenerate={(wizardData: ArtWizardData) => {
               if (!org?.id) return;
               generateArtM.mutate({
                 orgId: org.id,
                 unitId: selectedUnit?.id,
                 companyName: org.name,
-                ...wizardData,
+                assunto: wizardData.assunto,
+                tipoArte: wizardData.tipoArte,
+                objetivo: wizardData.objetivo,
+                tema: wizardData.tema,
+                descricao: wizardData.descricao,
+                briefing: wizardData.briefing,
+                tipoImagem: wizardData.tipoImagem === "banco-vip" ? "banco-vip" : wizardData.tipoImagem,
+                imagemUrl: wizardData.tipoImagem !== "banco-vip" ? wizardData.imagemUrl : undefined,
+                bancoVipImageUrl: wizardData.tipoImagem === "banco-vip" ? wizardData.imagemUrl : undefined,
               });
             }}
             isGenerating={generateArtM.isPending}
@@ -539,7 +548,7 @@ export default function MarketingPage() {
               }
             }}
             isUploading={isUploadingArtImage}
-            onGenerateFlyer={(layout) => {
+            onGenerateFlyer={(layout, logoId) => {
               if (!org?.id || !artResult) return;
               generateFlyerM.mutate({
                 orgId: org.id,
@@ -553,6 +562,7 @@ export default function MarketingPage() {
                 imagemUrl: artResult.imagemUrl,
                 assunto: lastArtData?.assunto ?? "",
                 tipoArte: lastArtData?.tipoArte ?? "post",
+                logoId, // logo específica selecionada pelo usuário
               });
             }}
             isGeneratingFlyer={generateFlyerM.isPending}

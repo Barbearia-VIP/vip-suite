@@ -1641,8 +1641,9 @@ RETORNE OBRIGATORIAMENTE um JSON válido com a estrutura abaixo (sem markdown, s
       tema: z.string(),
       descricao: z.string(),
       briefing: z.string(),
-      tipoImagem: z.enum(["upload", "ia", "banco"]),
+      tipoImagem: z.enum(["upload", "ia", "banco", "banco-vip"]),
       imagemUrl: z.string().optional(), // URL da imagem enviada (upload)
+      bancoVipImageUrl: z.string().optional(), // URL da imagem selecionada do Banco VIP
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -1651,21 +1652,51 @@ RETORNE OBRIGATORIAMENTE um JSON válido com a estrutura abaixo (sem markdown, s
       // 1. Gerar o briefing criativo via GPT
       const systemPrompt = `Você é um diretor de arte e copywriter especialista em marketing para barbearias premium.
 
-Seu objetivo é criar um flyer completo, moderno e visualmente atrativo, baseado no padrão da Barbearia VIP — a maior rede de barbearias da América Latina, conhecida por seu posicionamento premium, experiência diferenciada e ambiente sofisticado.
+Seu objetivo é criar um briefing criativo completo, moderno e visualmente atrativo, baseado no padrão da Barbearia VIP — a maior rede de barbearias da América Latina, conhecida por seu posicionamento premium, experiência diferenciada e ambiente sofisticado.
 
-DIRETRIZ DE MARCA (ESSENCIAL):
+=== IDENTIDADE VISUAL BARBEARIA VIP (OBRIGATÓRIO) ===
+
+CONCEITO DE MARCA:
 - Não é só corte → é experiência
-- Sensação de exclusividade
-- Ambiente premium
-- Homem que se valoriza
-- Estilo de vida VIP
+- "O homem VIP vive experiências"
+- Exclusividade, sofisticação, confiança, lifestyle masculino premium
 
-REGRAS:
-- Evitar aparência de promoção barata
-- Manter padrão premium (inspiração: Louis Vuitton, Gucci, YSL aplicados ao universo masculino)
-- Focar em desejo e experiência
-- Visual limpo e elegante
-- Texto direto (sem poluição)
+PALETA DE CORES (PADRÃO VIP):
+- Fundo predominantemente escuro: preto (#0A0A0A), grafite (#1A1A1A) ou degrâdê escuro
+- Destaque em dourado/amarelo VIP: #C9A84C, #D4AF37, #F0C040
+- Texto principal: branco puro ou off-white
+- EVITAR: cores vibrantes (vermelho, azul forte, verde), tons pasteis, fundos claros
+
+TIPOGRAFIA:
+- Títulos: fonte condensada, forte, moderna, CAIXA ALTA (estilo Bebas Neue, Oswald, Montserrat Condensed)
+- Subtítulos: fonte limpa e moderna
+- Corpo: minimalista, sem excesso
+- Hierarquia clara: pouco texto, destaque em palavras-chave
+
+ESTILO DE IMAGEM:
+- Homens bem cuidados (barba, cabelo, estilo)
+- Ambiente premium (barbearia sofisticada, carro de luxo, lifestyle)
+- Iluminação cinematográfica (luz quente, contraste, sombras)
+- Expressão de confiança e postura forte
+- EVITAR: imagens genéricas, fotos amadoras, ambientes simples
+
+ESTRUTURA VISUAL (LAYOUT VIP):
+- Opção A: Lado esquerdo com texto (headline + apoio), lado direito com imagem forte
+- Opção B: Fundo com imagem escura + texto sobreposto com contraste alto
+- Elementos gráficos: caixas com bordas suaves, destaques em dourado, linhas finas elegantes
+- Blocos informativos com números/dados em destaque dourado
+
+REGRAS CRÍTICAS:
+- NÃO parecer arte promocional comum ou panfleto
+- NÃO usar estética de "liquidarão" ou cores de supermercado
+- NÃO exagerar em informações ou exclamarções
+- PRIORIZAR: impacto visual, desejo, sensação de exclusividade
+- Inspiração: Louis Vuitton, Gucci, YSL aplicados ao universo masculino
+
+COMUNICAÇÃO:
+- Linguagem: exclusiva, sofisticada, confiante
+- Evitar: linguagem popular, promoções baratas, excesso de exclamarções
+- Foco: desejo, experiência, estilo de vida
 
 Retorne SOMENTE um JSON válido com esta estrutura exata:
 {
@@ -1688,7 +1719,7 @@ Retorne SOMENTE um JSON válido com esta estrutura exata:
   "promptImagem": "string (prompt detalhado em inglês para geração de imagem por IA, estilo fotográfico realista premium)"
 }`;
 
-      const userPrompt = `Crie um flyer completo para:
+      const userPrompt = `Crie um briefing criativo completo seguindo RIGOROSAMENTE a identidade visual da Barbearia VIP para:
 
 Empresa: ${input.companyName}
 Assunto: ${input.assunto}
@@ -1696,8 +1727,10 @@ Tipo de arte: ${input.tipoArte}
 Objetivo: ${input.objetivo}
 Tema visual: ${input.tema}
 Descrição do material: ${input.descricao}
-Briefing: ${input.briefing}
-Tipo de imagem: ${input.tipoImagem === "upload" ? "Usuário enviou uma imagem" : input.tipoImagem === "ia" ? "Gerar imagem com IA" : "Buscar em banco de imagens"}`;
+Briefing do cliente: ${input.briefing}
+Tipo de imagem: ${input.tipoImagem === "upload" ? "Usuário enviou uma imagem (usar como referência de ambiente/produto)" : input.tipoImagem === "ia" ? "Gerar imagem com IA (seguir padrão VIP: homem premium, ambiente sofisticado, iluminação cinematográfica)" : input.tipoImagem === "banco-vip" ? "Imagem do Banco VIP da empresa (usar como referência visual principal)" : "Buscar em banco externo (sugerir palavras-chave para imagem premium masculina)"}
+
+LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado, tipografia condensada forte, estilo masculino premium. O promptImagem deve gerar uma imagem cinematográfica de alta qualidade, nunca genérica.`;
 
       const response = await invokeLLM({
         messages: [
@@ -1761,11 +1794,13 @@ Tipo de imagem: ${input.tipoImagem === "upload" ? "Usuário enviou uma imagem" :
       };
 
       // 2. Gerar imagem via IA se solicitado
+      // Prefixo de identidade visual VIP obrigatório para todas as imagens geradas
+      const VIP_IMAGE_PREFIX = `Barbearia VIP premium brand photography. MANDATORY: dark background (deep black or dark charcoal), gold/yellow accents (#D4AF37), cinematic dramatic lighting, high contrast. Well-groomed man with confident posture in luxury environment. Ultra-high quality, 8K, professional studio photography. Style: luxury fashion brand (Louis Vuitton, YSL applied to masculine universe). NOT a cheap barbershop photo. `;
       let imagemGeradaUrl: string | null = null;
       if (input.tipoImagem === "ia" && resultado.promptImagem) {
         try {
           const imgResult = await generateImage({
-            prompt: resultado.promptImagem,
+            prompt: VIP_IMAGE_PREFIX + resultado.promptImagem,
             ...(input.imagemUrl ? { originalImages: [{ url: input.imagemUrl, mimeType: "image/jpeg" as const }] } : {}),
           });
           imagemGeradaUrl = imgResult.url ?? null;
@@ -1774,6 +1809,18 @@ Tipo de imagem: ${input.tipoImagem === "upload" ? "Usuário enviou uma imagem" :
         }
       } else if (input.tipoImagem === "upload" && input.imagemUrl) {
         imagemGeradaUrl = input.imagemUrl;
+      } else if (input.tipoImagem === "banco-vip" && input.bancoVipImageUrl) {
+        // Usa a imagem do Banco VIP como referência e gera uma arte com ela
+        try {
+          const imgResult = await generateImage({
+            prompt: VIP_IMAGE_PREFIX + resultado.promptImagem,
+            originalImages: [{ url: input.bancoVipImageUrl, mimeType: "image/jpeg" as const }],
+          });
+          imagemGeradaUrl = imgResult.url ?? null;
+        } catch (e) {
+          console.error("[generateArt] Erro ao gerar imagem com Banco VIP:", e);
+          imagemGeradaUrl = input.bancoVipImageUrl; // fallback: usa a imagem original
+        }
       }
 
       // 3. Salvar no histórico
@@ -1863,21 +1910,37 @@ Tipo de imagem: ${input.tipoImagem === "upload" ? "Usuário enviou uma imagem" :
       // Metadados
       assunto: z.string(),
       tipoArte: z.string(),
+      logoId: z.number().optional(), // ID da logo específica selecionada pelo usuário
     }))
     .mutation(async ({ input }) => {
-      // Buscar TODAS as logos da organização (obrigatório para identidade da marca)
+      // Buscar logos da organização (obrigatório para identidade da marca)
       const db = await getDb();
       let logoUrl: string | null = null;
       let allLogos: { url: string; nome: string | null }[] = [];
       if (db) {
-        const logoRows = await db.select({
-          url: gtBrandAssets.url,
-          nome: gtBrandAssets.nome,
-        }).from(gtBrandAssets)
-          .where(and(eq(gtBrandAssets.orgId, input.orgId), eq(gtBrandAssets.tipo, "logo")))
-          .orderBy(gtBrandAssets.criadoEm);
-        allLogos = logoRows;
-        logoUrl = logoRows[0]?.url ?? null;
+        if (input.logoId) {
+          // Usar apenas a logo específica selecionada
+          const [specificLogo] = await db.select({
+            url: gtBrandAssets.url,
+            nome: gtBrandAssets.nome,
+          }).from(gtBrandAssets)
+            .where(and(eq(gtBrandAssets.id, input.logoId), eq(gtBrandAssets.orgId, input.orgId)))
+            .limit(1);
+          if (specificLogo) {
+            allLogos = [specificLogo];
+            logoUrl = specificLogo.url;
+          }
+        } else {
+          // Buscar TODAS as logos da organização
+          const logoRows = await db.select({
+            url: gtBrandAssets.url,
+            nome: gtBrandAssets.nome,
+          }).from(gtBrandAssets)
+            .where(and(eq(gtBrandAssets.orgId, input.orgId), eq(gtBrandAssets.tipo, "logo")))
+            .orderBy(gtBrandAssets.criadoEm);
+          allLogos = logoRows;
+          logoUrl = logoRows[0]?.url ?? null;
+        }
       }
 
       // Aviso explícito se não houver logo cadastrada
@@ -1890,32 +1953,70 @@ Tipo de imagem: ${input.tipoImagem === "upload" ? "Usuário enviou uma imagem" :
 
       // Montar prompt de flyer para a IA de imagem
       const flyerPrompt = [
-        `Create a premium, high-end digital flyer for Barbearia VIP (Brazilian luxury barbershop brand).`,
-        `STYLE: Inspired by luxury fashion brands (Louis Vuitton, YSL). Elegant, minimal, sophisticated.`,
+        `Create a PREMIUM, ULTRA-HIGH-END digital flyer for Barbearia VIP — Brazil's largest luxury barbershop franchise.`,
         ``,
+        `=== BARBEARIA VIP BRAND IDENTITY (MANDATORY — DO NOT DEVIATE) ===`,
+        ``,
+        `BRAND CONCEPT: "The VIP man lives experiences" — exclusivity, sophistication, confidence, premium masculine lifestyle.`,
+        ``,
+        `COLOR PALETTE (STRICT VIP STANDARD):`,
+        `- Background: DARK ONLY — deep black (#0A0A0A), dark charcoal (#1A1A1A), or dark gradient`,
+        `- Accent/Highlight: GOLD/VIP YELLOW — #C9A84C, #D4AF37, #F0C040`,
+        `- Text: Pure white or off-white`,
+        `- FORBIDDEN: vibrant colors (red, bright blue, green), pastels, light/white backgrounds`,
+        ``,
+        `TYPOGRAPHY (VIP STANDARD):`,
+        `- Headlines: CONDENSED, BOLD, UPPERCASE font (Bebas Neue, Oswald, or Montserrat Condensed style)`,
+        `- Subheadings: Clean, modern, readable`,
+        `- Body: Minimalist — FEW WORDS, maximum impact`,
+        `- Key words highlighted in GOLD`,
+        ``,
+        `IMAGE STYLE (VIP STANDARD):`,
+        `- Well-groomed men (beard, hair, style) with confident posture`,
+        `- Premium environment (luxury barbershop, luxury car, high-end lifestyle)`,
+        `- Cinematic lighting (warm light, high contrast, dramatic shadows)`,
+        `- FORBIDDEN: generic stock photos, amateur photos, simple/cheap environments`,
+        ``,
+        `LAYOUT STRUCTURE (VIP PATTERN):`,
+        `- Option A: Left side — text (headline + support), Right side — strong lifestyle image`,
+        `- Option B: Dark image as full background + overlaid text with high contrast`,
+        `- Graphic elements: soft-border boxes, gold accents, thin elegant separator lines`,
+        `- Informational blocks with numbers/data highlighted in gold`,
+        ``,
+        `CRITICAL RULES:`,
+        `- MUST NOT look like a cheap promotional flyer or supermarket pamphlet`,
+        `- MUST NOT use sale/discount aesthetics`,
+        `- MUST NOT overload with text or exclamation marks`,
+        `- MUST prioritize: visual impact, desire, sense of exclusivity`,
+        `- Inspired by: Louis Vuitton, Gucci, YSL applied to masculine universe`,
+        ``,
+        `=== LOGO RULES (CRITICAL) ===`,
         allLogos.length > 0
-          ? `BRAND LOGO — MANDATORY RULE: The official Barbearia VIP logo MUST appear on this flyer exactly as provided in the reference image(s). DO NOT create, invent, or replace the logo with any other graphic, text, or symbol. You may ONLY adjust the logo color/tint to harmonize with the flyer color palette (e.g., white version on dark background, gold tint on dark background). Available logo versions: ${logoNames}.`
+          ? `BRAND LOGO — MANDATORY: The official Barbearia VIP logo MUST appear on this flyer EXACTLY as provided in the reference image(s). DO NOT create, invent, or replace the logo with any other graphic, text, or symbol. You MAY ONLY adjust the logo color/tint to harmonize with the dark background (e.g., white version on dark background, gold tint). Available logo versions: ${logoNames}.`
           : `BRAND LOGO: No official logo provided. Leave the logo area empty — DO NOT invent any logo, wordmark, or brand symbol.`,
         ``,
-        `COLOR PALETTE: ${input.direcaoVisual.cores}`,
-        `TYPOGRAPHY STYLE: ${input.direcaoVisual.tipografia}`,
+        `=== CONTENT TO INCLUDE ===`,
+        ``,
+        `COLOR PALETTE DIRECTION: ${input.direcaoVisual.cores}`,
+        `TYPOGRAPHY DIRECTION: ${input.direcaoVisual.tipografia}`,
         `VISUAL ELEMENTS: ${input.direcaoVisual.elementosVisuais}`,
         ``,
-        `LAYOUT STRUCTURE:`,
+        `LAYOUT:`,
         `- TOP: ${input.layout.topo}`,
         `- CENTER: ${input.layout.centro}`,
         `- BOTTOM: ${input.layout.rodape}`,
         ``,
-        `COPY TO INCLUDE:`,
+        `COPY:`,
         `- Headline: "${input.headline}"`,
         `- Body text: "${input.textoSecundario}"`,
         `- CTA: "${input.cta}"`,
         ``,
-        `CONCEPT: ${input.conceito}`,
-        `FORMAT: ${input.tipoArte === "story" ? "9:16 vertical" : input.tipoArte === "banner" ? "16:9 horizontal" : "1:1 square"}.`,
-        `Ultra-high quality, 8K, professional studio design.`,
-        `The flyer should look like it was designed by a world-class creative agency for a luxury brand.`,
-        `CRITICAL: Never generate a new logo. Only use the provided official logo reference.`,
+        `CREATIVE CONCEPT: ${input.conceito}`,
+        `FORMAT: ${input.tipoArte === "story" ? "9:16 vertical (Instagram Story)" : input.tipoArte === "banner" ? "16:9 horizontal (Banner)" : "1:1 square (Instagram Post)"}.`,
+        ``,
+        `FINAL QUALITY: Ultra-high quality, 8K resolution, professional studio design.`,
+        `This flyer MUST look like it was designed by a world-class luxury creative agency.`,
+        `The result should make the viewer feel they are looking at a premium brand, not a local barbershop.`,
       ].join("\n");
 
       // Montar referências de imagem: logo(s) primeiro, depois imagem base da arte
