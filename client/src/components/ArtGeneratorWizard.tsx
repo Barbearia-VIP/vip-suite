@@ -53,6 +53,7 @@ type Props = {
   onUploadImage?: (file: File) => Promise<string>; // retorna URL do S3
   isUploading?: boolean;
   onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }, logoId?: number, textos?: { headline: string; textoSecundario: string; cta: string }) => void;
+  onRegenerateFlyer?: () => void;
   isGeneratingFlyer?: boolean;
   flyerResult?: { flyerUrl: string | null; prompt: string; logoUrl?: string | null; allLogos?: { url: string; nome: string | null }[]; logoWarning?: string | null } | null;
   orgId?: number; // para buscar imagens do Banco VIP
@@ -633,7 +634,15 @@ function ArtResult({
 
 // ── Resultado do Flyer ───────────────────────────────────────────────────────
 
-function FlyerResult({ flyerUrl, prompt, allLogos, logoWarning }: { flyerUrl: string | null; prompt: string; logoUrl?: string | null; allLogos?: { url: string; nome: string | null }[]; logoWarning?: string | null }) {
+function FlyerResult({ flyerUrl, prompt, allLogos, logoWarning, onRegenerate, isRegenerating }: {
+  flyerUrl: string | null;
+  prompt: string;
+  logoUrl?: string | null;
+  allLogos?: { url: string; nome: string | null }[];
+  logoWarning?: string | null;
+  onRegenerate?: () => void;
+  isRegenerating?: boolean;
+}) {
   return (
     <div className="space-y-3">
       {/* Aviso se não houver logo cadastrada */}
@@ -673,16 +682,33 @@ function FlyerResult({ flyerUrl, prompt, allLogos, logoWarning }: { flyerUrl: st
               <Wand2 className="h-4 w-4 text-amber-400" />
               <span className="text-sm font-bold text-amber-400">Flyer Gerado!</span>
             </div>
-            <a
-              href={flyerUrl}
-              download={`flyer-vip-${Date.now()}.jpg`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 border-amber-500/40 hover:bg-amber-500/10">
-                <Download className="h-3 w-3" /> Baixar Flyer
-              </Button>
-            </a>
+            <div className="flex items-center gap-2">
+              {onRegenerate && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs gap-1.5 border-amber-500/40 hover:bg-amber-500/10 text-amber-400"
+                  onClick={onRegenerate}
+                  disabled={isRegenerating}
+                >
+                  {isRegenerating ? (
+                    <><div className="w-3 h-3 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" /> Gerando...</>
+                  ) : (
+                    <><RotateCcw className="h-3 w-3" /> Regenerar</>
+                  )}
+                </Button>
+              )}
+              <a
+                href={flyerUrl}
+                download={`flyer-vip-${Date.now()}.jpg`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 border-amber-500/40 hover:bg-amber-500/10">
+                  <Download className="h-3 w-3" /> Baixar
+                </Button>
+              </a>
+            </div>
           </div>
           <div className="relative group">
             <img src={flyerUrl} alt="Flyer gerado" className="w-full object-contain max-h-[600px]" />
@@ -708,7 +734,7 @@ function FlyerResult({ flyerUrl, prompt, allLogos, logoWarning }: { flyerUrl: st
 
 export default function ArtGeneratorWizard({
   onGenerate, isGenerating, result, onReset, onUploadImage, isUploading,
-  onGenerateFlyer, isGeneratingFlyer, flyerResult, orgId,
+  onGenerateFlyer, onRegenerateFlyer, isGeneratingFlyer, flyerResult, orgId,
 }: Props) {
   const [step, setStep] = useState(1);
   const [data, setData] = useState<Partial<ArtWizardData>>({});
@@ -805,7 +831,15 @@ export default function ArtGeneratorWizard({
         )}
         {flyerResult && !isGeneratingFlyer && (
           <div className="glass-card border-amber-500/20 bg-amber-500/5 p-5">
-            <FlyerResult flyerUrl={flyerResult.flyerUrl} prompt={flyerResult.prompt} logoUrl={flyerResult.logoUrl} allLogos={flyerResult.allLogos} logoWarning={flyerResult.logoWarning} />
+            <FlyerResult
+              flyerUrl={flyerResult.flyerUrl}
+              prompt={flyerResult.prompt}
+              logoUrl={flyerResult.logoUrl}
+              allLogos={flyerResult.allLogos}
+              logoWarning={flyerResult.logoWarning}
+              onRegenerate={onRegenerateFlyer}
+              isRegenerating={isGeneratingFlyer}
+            />
           </div>
         )}
       </div>

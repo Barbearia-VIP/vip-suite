@@ -154,6 +154,15 @@ export default function MarketingPage() {
   const [flyerResult, setFlyerResult] = useState<{ flyerUrl: string | null; prompt: string; logoUrl?: string | null; allLogos?: { url: string; nome: string | null }[]; logoWarning?: string | null } | null>(null);
   // Guarda o último resultado da arte para uso no flyer
   const [lastArtData, setLastArtData] = useState<{ resultado: ArtResultado; imagemUrl: string | null; assunto: string; tipoArte: string } | null>(null);
+  // Guarda os parâmetros do último flyer gerado para regeneração
+  const [lastFlyerParams, setLastFlyerParams] = useState<{
+    orgId: number; unitId?: number;
+    headline: string; textoSecundario: string; cta: string;
+    conceito: string; direcaoVisual: { cores: string; tipografia: string; estiloImagem: string; elementosVisuais: string };
+    layout: { topo: string; centro: string; rodape: string };
+    imagemUrl: string | null; assunto: string; tipoArte: string;
+    logoId?: number;
+  } | null>(null);
 
   // Queries
   const manualQ = trpc.gestaoTotal.marketing.list.useQuery(
@@ -554,7 +563,7 @@ export default function MarketingPage() {
               const headline = textos?.headline ?? artResult.resultado.headline;
               const textoSecundario = textos?.textoSecundario ?? artResult.resultado.textoSecundario;
               const cta = textos?.cta ?? artResult.resultado.cta;
-              generateFlyerM.mutate({
+              const params = {
                 orgId: org.id,
                 unitId: selectedUnit?.id,
                 headline,
@@ -566,8 +575,16 @@ export default function MarketingPage() {
                 imagemUrl: artResult.imagemUrl,
                 assunto: lastArtData?.assunto ?? "",
                 tipoArte: lastArtData?.tipoArte ?? "post",
-                logoId, // logo específica selecionada pelo usuário
-              });
+                logoId,
+              };
+              // Guarda os parâmetros para regeneração
+              setLastFlyerParams(params);
+              generateFlyerM.mutate(params);
+            }}
+            onRegenerateFlyer={() => {
+              if (!lastFlyerParams) return;
+              // Regenera com os mesmos parâmetros mas a IA varia a composição visual
+              generateFlyerM.mutate(lastFlyerParams);
             }}
             isGeneratingFlyer={generateFlyerM.isPending}
             flyerResult={flyerResult}
