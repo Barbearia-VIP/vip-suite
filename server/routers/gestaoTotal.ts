@@ -1374,16 +1374,42 @@ REGRAS:
     .input(z.object({
       id: z.number(),
       orgId: z.number(),
+      unitId: z.number().optional(),
       assignedToId: z.number().optional(),
       assignedToName: z.string(),
+      campaignName: z.string().optional(),
+      createTask: z.boolean().default(true),
+      taskPrazo: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
+
+      // 1. Atualizar a campanha com o responsável
       await db.update(gtMarketingCampaigns)
         .set({ assignedToId: input.assignedToId, assignedToName: input.assignedToName, assignedAt: new Date() })
         .where(and(eq(gtMarketingCampaigns.id, input.id), eq(gtMarketingCampaigns.orgId, input.orgId)));
-      return { success: true };
+
+      // 2. Criar tarefa para o colaborador se solicitado
+      let tarefaId: number | undefined;
+      if (input.createTask) {
+        const titulo = `Campanha de Marketing: ${input.campaignName ?? `#${input.id}`}`;
+        const descricao = `Campanha de marketing destinada para execução. Responsável: ${input.assignedToName}.`;
+        const [result] = await db.insert(gtTarefas).values({
+          orgId: input.orgId,
+          unitId: input.unitId,
+          titulo,
+          descricao,
+          prioridade: "media",
+          responsavel: input.assignedToName,
+          prazo: input.taskPrazo ? new Date(input.taskPrazo) : undefined,
+          createdBy: ctx.user!.id,
+        });
+        tarefaId = (result as { insertId: number }).insertId;
+        await logAudit(input.orgId, input.unitId, ctx.user!.id, ctx.user!.name ?? "", "created", "tarefa", tarefaId, `Tarefa criada via campanha de marketing: ${titulo}`);
+      }
+
+      return { success: true, tarefaId };
     }),
 
   deleteCampaign: protectedProcedure

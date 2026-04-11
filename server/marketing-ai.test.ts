@@ -270,3 +270,102 @@ describe("estrutura de saída esperada da IA", () => {
     expect(mockCampaignOutput.messages.pillars.length).toBeGreaterThan(0);
   });
 });
+
+// ── Testes para destinação de campanha para colaborador ───────────────────────
+
+function buildAssignPayload(
+  campaignId: number,
+  orgId: number,
+  colaborador: { id: number; nome: string },
+  options: { createTask?: boolean; taskPrazo?: string; unitId?: number } = {}
+) {
+  return {
+    id: campaignId,
+    orgId,
+    unitId: options.unitId,
+    assignedToId: colaborador.id,
+    assignedToName: colaborador.nome,
+    createTask: options.createTask ?? true,
+    taskPrazo: options.taskPrazo,
+  };
+}
+
+function buildTaskFromCampaign(
+  campaignId: number,
+  campaignName: string,
+  responsavel: string,
+  orgId: number,
+  unitId?: number,
+  prazo?: string
+) {
+  return {
+    orgId,
+    unitId,
+    titulo: `Campanha de Marketing: ${campaignName}`,
+    descricao: `Campanha de marketing destinada para execução. Responsável: ${responsavel}.`,
+    prioridade: "media",
+    responsavel,
+    prazo: prazo ? new Date(prazo) : undefined,
+  };
+}
+
+describe("assignCampaign — lógica de destinação", () => {
+  it("deve montar payload correto com colaborador selecionado", () => {
+    const colaborador = { id: 5, nome: "João Silva" };
+    const payload = buildAssignPayload(42, 1, colaborador, { createTask: true, unitId: 3 });
+
+    expect(payload.id).toBe(42);
+    expect(payload.orgId).toBe(1);
+    expect(payload.unitId).toBe(3);
+    expect(payload.assignedToId).toBe(5);
+    expect(payload.assignedToName).toBe("João Silva");
+    expect(payload.createTask).toBe(true);
+  });
+
+  it("deve montar payload sem criar tarefa quando createTask=false", () => {
+    const colaborador = { id: 7, nome: "Maria Souza" };
+    const payload = buildAssignPayload(10, 2, colaborador, { createTask: false });
+
+    expect(payload.createTask).toBe(false);
+    expect(payload.taskPrazo).toBeUndefined();
+  });
+
+  it("deve incluir prazo quando informado", () => {
+    const colaborador = { id: 3, nome: "Carlos Lima" };
+    const payload = buildAssignPayload(15, 1, colaborador, {
+      createTask: true,
+      taskPrazo: "2026-05-31T00:00:00.000Z",
+    });
+
+    expect(payload.taskPrazo).toBe("2026-05-31T00:00:00.000Z");
+  });
+
+  it("deve gerar tarefa com título correto baseado no nome da campanha", () => {
+    const tarefa = buildTaskFromCampaign(42, "Promoção de Verão", "João Silva", 1, 3);
+
+    expect(tarefa.titulo).toBe("Campanha de Marketing: Promoção de Verão");
+    expect(tarefa.responsavel).toBe("João Silva");
+    expect(tarefa.prioridade).toBe("media");
+    expect(tarefa.orgId).toBe(1);
+    expect(tarefa.unitId).toBe(3);
+  });
+
+  it("deve gerar tarefa sem prazo quando não informado", () => {
+    const tarefa = buildTaskFromCampaign(42, "Campanha de Natal", "Ana Costa", 1, 2);
+    expect(tarefa.prazo).toBeUndefined();
+  });
+
+  it("deve gerar tarefa com prazo quando informado", () => {
+    const tarefa = buildTaskFromCampaign(42, "Black Friday", "Pedro Alves", 1, 2, "2026-11-29T00:00:00.000Z");
+    expect(tarefa.prazo).toBeInstanceOf(Date);
+    expect(tarefa.prazo?.getFullYear()).toBe(2026);
+  });
+
+  it("deve aceitar destinação sem unitId (nível de organização)", () => {
+    const colaborador = { id: 9, nome: "Fernanda Rocha" };
+    const payload = buildAssignPayload(20, 1, colaborador);
+
+    expect(payload.unitId).toBeUndefined();
+    expect(payload.assignedToName).toBe("Fernanda Rocha");
+  });
+});
