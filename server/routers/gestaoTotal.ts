@@ -2137,6 +2137,11 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
         `- CTA: "${cta}"`,
         ``,
         `CREATIVE CONCEPT: ${input.conceito}`,
+        ``,
+        input.imagemUrl
+          ? `REFERENCE IMAGE: The first image provided is the BASE VISUAL REFERENCE for this flyer. You MUST incorporate this image (or its visual style, mood, and subjects) prominently in the composition. The image shows the main visual element — use it as the hero image of the flyer.`
+          : `REFERENCE IMAGE: No base image provided. Generate a premium VIP barbershop lifestyle image following the brand guidelines above.`,
+        ``,
         `FORMAT — ABSOLUTELY CRITICAL AND NON-NEGOTIABLE:`,
         `- Aspect ratio: ${formato.ratio}`,
         `- Exact dimensions: ${formato.dims}`,
@@ -2151,18 +2156,22 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
         `The result should make the viewer feel they are looking at a premium brand, not a local barbershop.`,
       ].join("\n");
 
-      // Montar referências de imagem: logo(s) primeiro, depois imagem base da arte
+      // Montar referências de imagem:
+      // ORDEM: 1º imagem da arte (banco VIP ou upload) — 2º logos da marca
+      // A imagem da arte vem primeiro para ser a referência visual principal
       const originalImages: { url: string; mimeType: "image/jpeg" }[] = [];
-      // Adicionar logo(s) como referência obrigatória
-      for (const logo of allLogos.slice(0, 2)) { // máx 2 logos como referência
-        originalImages.push({ url: logo.url, mimeType: "image/jpeg" as const });
-      }
-      // Adicionar imagem base da arte (se existir) — SEMPRE incluir mesmo que seja do Banco VIP
+
+      // 1º: Imagem base da arte (banco VIP, upload ou gerada por IA) — referência visual principal
       if (input.imagemUrl) {
         originalImages.push({ url: input.imagemUrl, mimeType: "image/jpeg" as const });
-        console.log(`[generateFlyer] Usando imagem base: ${input.imagemUrl.substring(0, 80)}...`);
+        console.log(`[generateFlyer] Imagem base (1º referência): ${input.imagemUrl.substring(0, 80)}...`);
       } else {
-        console.log(`[generateFlyer] Nenhuma imagem base fornecida — flyer gerado apenas com logos`);
+        console.log(`[generateFlyer] AVISO: Nenhuma imagem base fornecida — flyer gerado apenas com logos`);
+      }
+
+      // 2º: Logo(s) da marca como referência de identidade visual
+      for (const logo of allLogos.slice(0, 2)) { // máx 2 logos
+        originalImages.push({ url: logo.url, mimeType: "image/jpeg" as const });
       }
 
       const imgResult = await generateImage({

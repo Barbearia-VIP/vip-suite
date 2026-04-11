@@ -746,26 +746,28 @@ function FlyerResult({ flyerUrl, prompt, allLogos, logoWarning, onRegenerate, is
         </div>
       )}
 
-      {/* Modal do Editor Canvas */}
+      {/* Modal do Editor Canvas — quase tela cheia */}
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="max-w-5xl w-full p-4">
-          <DialogHeader>
+        <DialogContent className="!max-w-[98vw] !w-[98vw] !h-[96vh] p-0 flex flex-col overflow-hidden">
+          <DialogHeader className="px-4 pt-4 pb-2 border-b border-border shrink-0">
             <DialogTitle className="flex items-center gap-2 text-sm">
               <Edit2 className="h-4 w-4 text-purple-400" /> Editor de Flyer
               <span className="text-xs text-muted-foreground font-normal ml-1">Adicione textos, mude cores e salve o resultado final</span>
             </DialogTitle>
           </DialogHeader>
-          {(flyerUrl || savedFlyerUrl) && (
-            <FlyerCanvasEditor
-              flyerUrl={savedFlyerUrl ?? flyerUrl!}
-              onSave={(dataUrl) => {
-                setSavedFlyerUrl(dataUrl);
-                setEditorOpen(false);
-                toast.success("Flyer salvo com suas edições!");
-              }}
-              onClose={() => setEditorOpen(false)}
-            />
-          )}
+          <div className="flex-1 overflow-y-auto p-4">
+            {(flyerUrl || savedFlyerUrl) && (
+              <FlyerCanvasEditor
+                flyerUrl={savedFlyerUrl ?? flyerUrl!}
+                onSave={(dataUrl) => {
+                  setSavedFlyerUrl(dataUrl);
+                  setEditorOpen(false);
+                  toast.success("Flyer salvo com suas edições!");
+                }}
+                onClose={() => setEditorOpen(false)}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

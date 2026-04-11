@@ -153,7 +153,7 @@ export default function MarketingPage() {
   const [isUploadingArtImage, setIsUploadingArtImage] = useState(false);
   const [flyerResult, setFlyerResult] = useState<{ flyerUrl: string | null; prompt: string; logoUrl?: string | null; allLogos?: { url: string; nome: string | null }[]; logoWarning?: string | null } | null>(null);
   // Guarda o último resultado da arte para uso no flyer
-  const [lastArtData, setLastArtData] = useState<{ resultado: ArtResultado; imagemUrl: string | null; assunto: string; tipoArte: string } | null>(null);
+  const [lastArtData, setLastArtData] = useState<{ resultado: ArtResultado; imagemUrl: string | null; assunto: string; tipoArte: string; tipoImagem?: string; bancoVipImageUrl?: string } | null>(null);
   // Guarda os parâmetros do último flyer gerado para regeneração
   const [lastFlyerParams, setLastFlyerParams] = useState<{
     orgId: number; unitId?: number;
@@ -260,7 +260,14 @@ export default function MarketingPage() {
     onSuccess: (data, variables) => {
       const res = { resultado: data.resultado as ArtResultado, imagemUrl: data.imagemUrl ?? null };
       setArtResult(res);
-      setLastArtData({ resultado: data.resultado as ArtResultado, imagemUrl: data.imagemUrl ?? null, assunto: variables.assunto, tipoArte: variables.tipoArte });
+      setLastArtData({
+        resultado: data.resultado as ArtResultado,
+        imagemUrl: data.imagemUrl ?? null,
+        assunto: variables.assunto,
+        tipoArte: variables.tipoArte,
+        tipoImagem: variables.tipoImagem,
+        bancoVipImageUrl: variables.bancoVipImageUrl, // URL original do banco VIP
+      });
       setFlyerResult(null); // limpa flyer anterior ao gerar nova arte
       utils.gestaoTotal.marketingCampaigns.listArtHistory.invalidate();
       toast.success("Arte criada com sucesso!");
@@ -563,6 +570,15 @@ export default function MarketingPage() {
               const headline = textos?.headline ?? artResult.resultado.headline;
               const textoSecundario = textos?.textoSecundario ?? artResult.resultado.textoSecundario;
               const cta = textos?.cta ?? artResult.resultado.cta;
+              // Garantir que a imagem seja passada: usa a refinada, ou a original do banco VIP como fallback
+              const imagemParaFlyer = artResult.imagemUrl
+                ?? lastArtData?.bancoVipImageUrl  // fallback: imagem original do banco VIP
+                ?? null;
+
+              console.log("[generateFlyer] imagemUrl:", imagemParaFlyer?.substring(0, 80));
+              console.log("[generateFlyer] tipoImagem:", lastArtData?.tipoImagem);
+              console.log("[generateFlyer] tipoArte:", lastArtData?.tipoArte);
+
               const params = {
                 orgId: org.id,
                 unitId: selectedUnit?.id,
@@ -572,9 +588,9 @@ export default function MarketingPage() {
                 conceito: artResult.resultado.conceito,
                 direcaoVisual: artResult.resultado.direcaoVisual,
                 layout,
-                imagemUrl: artResult.imagemUrl,
+                imagemUrl: imagemParaFlyer,
                 assunto: lastArtData?.assunto ?? "",
-                tipoArte: lastArtData?.tipoArte ?? "post",
+                tipoArte: lastArtData?.tipoArte ?? "post_instagram",
                 logoId,
               };
               // Guarda os parâmetros para regeneração

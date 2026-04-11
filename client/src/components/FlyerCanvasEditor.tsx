@@ -44,7 +44,9 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     img.crossOrigin = "anonymous";
     img.onload = () => {
       const ratio = img.naturalWidth / img.naturalHeight;
-      const maxW = Math.min(containerRef.current?.clientWidth ?? 540, 540);
+      // No modal fullscreen, usar largura maior disponível
+      const containerW = containerRef.current?.clientWidth ?? 700;
+      const maxW = Math.min(containerW, 700);
       const w = maxW;
       const h = Math.round(w / ratio);
       setCanvasSize({ w, h });
