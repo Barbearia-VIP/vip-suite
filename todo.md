@@ -1180,3 +1180,4 @@
 - [ ] Configurações: upload de logo global da Barbearia VIP (disponível para todas as unidades)
 - [ ] Configurações: banco de imagens global (upload de múltiplas imagens de referência para todas as unidades)
 - [x] Configurações: suporte a múltiplas logos (até 4 versões) com nome e descrição
+- [x] Criação de Arte: flyer sempre usa logo salva nas Configurações (gt_brand_assets) como referência obrigatória — nunca cria logo nova

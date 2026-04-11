@@ -1865,20 +1865,38 @@ Tipo de imagem: ${input.tipoImagem === "upload" ? "Usuário enviou uma imagem" :
       tipoArte: z.string(),
     }))
     .mutation(async ({ input }) => {
-      // Buscar logo da organização
+      // Buscar TODAS as logos da organização (obrigatório para identidade da marca)
       const db = await getDb();
       let logoUrl: string | null = null;
+      let allLogos: { url: string; nome: string | null }[] = [];
       if (db) {
-        const logoRows = await db.select().from(gtBrandAssets)
+        const logoRows = await db.select({
+          url: gtBrandAssets.url,
+          nome: gtBrandAssets.nome,
+        }).from(gtBrandAssets)
           .where(and(eq(gtBrandAssets.orgId, input.orgId), eq(gtBrandAssets.tipo, "logo")))
-          .limit(1);
+          .orderBy(gtBrandAssets.criadoEm);
+        allLogos = logoRows;
         logoUrl = logoRows[0]?.url ?? null;
       }
+
+      // Aviso explícito se não houver logo cadastrada
+      const logoWarning = allLogos.length === 0
+        ? "WARNING: No brand logo found in system. Flyer generated without official logo — please upload logos in Configurações."
+        : null;
+
+      // Nomes das logos disponíveis para o prompt
+      const logoNames = allLogos.map((l, i) => l.nome ? `${i + 1}. ${l.nome}` : `Logo ${i + 1}`).join(", ");
 
       // Montar prompt de flyer para a IA de imagem
       const flyerPrompt = [
         `Create a premium, high-end digital flyer for Barbearia VIP (Brazilian luxury barbershop brand).`,
         `STYLE: Inspired by luxury fashion brands (Louis Vuitton, YSL). Elegant, minimal, sophisticated.`,
+        ``,
+        allLogos.length > 0
+          ? `BRAND LOGO — MANDATORY RULE: The official Barbearia VIP logo MUST appear on this flyer exactly as provided in the reference image(s). DO NOT create, invent, or replace the logo with any other graphic, text, or symbol. You may ONLY adjust the logo color/tint to harmonize with the flyer color palette (e.g., white version on dark background, gold tint on dark background). Available logo versions: ${logoNames}.`
+          : `BRAND LOGO: No official logo provided. Leave the logo area empty — DO NOT invent any logo, wordmark, or brand symbol.`,
+        ``,
         `COLOR PALETTE: ${input.direcaoVisual.cores}`,
         `TYPOGRAPHY STYLE: ${input.direcaoVisual.tipografia}`,
         `VISUAL ELEMENTS: ${input.direcaoVisual.elementosVisuais}`,
@@ -1895,24 +1913,33 @@ Tipo de imagem: ${input.tipoImagem === "upload" ? "Usuário enviou uma imagem" :
         ``,
         `CONCEPT: ${input.conceito}`,
         `FORMAT: ${input.tipoArte === "story" ? "9:16 vertical" : input.tipoArte === "banner" ? "16:9 horizontal" : "1:1 square"}.`,
-        `Ultra-high quality, 8K, professional studio design, dark background with gold/premium accents.`,
-        `The flyer should look like it was designed by a world-class creative agency.`,
+        `Ultra-high quality, 8K, professional studio design.`,
+        `The flyer should look like it was designed by a world-class creative agency for a luxury brand.`,
+        `CRITICAL: Never generate a new logo. Only use the provided official logo reference.`,
       ].join("\n");
 
-      // Gerar flyer via IA de imagem
-      const originalImages = input.imagemUrl
-        ? [{ url: input.imagemUrl, mimeType: "image/jpeg" as const }]
-        : undefined;
+      // Montar referências de imagem: logo(s) primeiro, depois imagem base da arte
+      const originalImages: { url: string; mimeType: "image/jpeg" }[] = [];
+      // Adicionar logo(s) como referência obrigatória
+      for (const logo of allLogos.slice(0, 2)) { // máx 2 logos como referência
+        originalImages.push({ url: logo.url, mimeType: "image/jpeg" as const });
+      }
+      // Adicionar imagem base da arte (se existir)
+      if (input.imagemUrl) {
+        originalImages.push({ url: input.imagemUrl, mimeType: "image/jpeg" as const });
+      }
 
       const imgResult = await generateImage({
         prompt: flyerPrompt,
-        ...(originalImages ? { originalImages } : {}),
+        ...(originalImages.length > 0 ? { originalImages } : {}),
       });
 
       return {
         flyerUrl: imgResult.url ?? null,
         prompt: flyerPrompt,
         logoUrl,
+        allLogos,
+        logoWarning,
       };
     }),
 });

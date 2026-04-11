@@ -52,7 +52,7 @@ type Props = {
   isUploading?: boolean;
   onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }) => void;
   isGeneratingFlyer?: boolean;
-  flyerResult?: { flyerUrl: string | null; prompt: string } | null;
+  flyerResult?: { flyerUrl: string | null; prompt: string; logoUrl?: string | null; allLogos?: { url: string; nome: string | null }[]; logoWarning?: string | null } | null;
 };
 
 // ── Opções das telas ──────────────────────────────────────────────────────────
@@ -370,45 +370,73 @@ function ArtResult({
 
 // ── Resultado do Flyer ───────────────────────────────────────────────────────
 
-function FlyerResult({ flyerUrl, prompt }: { flyerUrl: string | null; prompt: string }) {
-  if (!flyerUrl) return (
-    <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-4 text-center">
-      <p className="text-sm text-amber-400 font-semibold">Flyer gerado sem imagem</p>
-      <p className="text-xs text-muted-foreground mt-1">A IA não conseguiu gerar a imagem desta vez. Tente novamente.</p>
-    </div>
-  );
+function FlyerResult({ flyerUrl, prompt, allLogos, logoWarning }: { flyerUrl: string | null; prompt: string; logoUrl?: string | null; allLogos?: { url: string; nome: string | null }[]; logoWarning?: string | null }) {
   return (
-    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
-      <div className="p-3 flex items-center justify-between border-b border-amber-500/20">
-        <div className="flex items-center gap-2">
-          <Wand2 className="h-4 w-4 text-amber-400" />
-          <span className="text-sm font-bold text-amber-400">Flyer Gerado!</span>
+    <div className="space-y-3">
+      {/* Aviso se não houver logo cadastrada */}
+      {logoWarning && (
+        <div className="rounded-lg bg-orange-500/10 border border-orange-500/30 p-3 flex items-start gap-2">
+          <span className="text-orange-400 text-lg leading-none mt-0.5">⚠️</span>
+          <div>
+            <p className="text-sm font-semibold text-orange-400">Nenhuma logo cadastrada</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Acesse Configurações → Logos para adicionar a logo oficial da Barbearia VIP. O flyer foi gerado sem logo.</p>
+          </div>
         </div>
-        <a
-          href={flyerUrl}
-          download={`flyer-vip-${Date.now()}.jpg`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 border-amber-500/40 hover:bg-amber-500/10">
-            <Download className="h-3 w-3" /> Baixar Flyer
-          </Button>
-        </a>
-      </div>
-      <div className="relative group">
-        <img src={flyerUrl} alt="Flyer gerado" className="w-full object-contain max-h-[600px]" />
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center">
-          <a
-            href={flyerUrl}
-            download={`flyer-vip-${Date.now()}.jpg`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-2 bg-white/90 text-gray-900 font-semibold text-sm px-4 py-2 rounded-full shadow-lg hover:bg-white"
-          >
-            <Download className="h-4 w-4" /> Baixar Flyer
-          </a>
+      )}
+      {/* Logos usadas como referência */}
+      {allLogos && allLogos.length > 0 && (
+        <div className="rounded-lg bg-green-500/10 border border-green-500/30 p-3">
+          <p className="text-xs font-semibold text-green-400 mb-2">✓ Logo(s) oficial(is) usada(s) como referência:</p>
+          <div className="flex flex-wrap gap-2">
+            {allLogos.map((logo, i) => (
+              <div key={i} className="flex items-center gap-1.5 bg-green-500/10 rounded px-2 py-1">
+                <img src={logo.url} alt={logo.nome ?? `Logo ${i + 1}`} className="h-6 w-auto object-contain" />
+                <span className="text-xs text-green-300">{logo.nome ?? `Logo ${i + 1}`}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+      {/* Flyer gerado */}
+      {!flyerUrl ? (
+        <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-4 text-center">
+          <p className="text-sm text-amber-400 font-semibold">Flyer gerado sem imagem</p>
+          <p className="text-xs text-muted-foreground mt-1">A IA não conseguiu gerar a imagem desta vez. Tente novamente.</p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
+          <div className="p-3 flex items-center justify-between border-b border-amber-500/20">
+            <div className="flex items-center gap-2">
+              <Wand2 className="h-4 w-4 text-amber-400" />
+              <span className="text-sm font-bold text-amber-400">Flyer Gerado!</span>
+            </div>
+            <a
+              href={flyerUrl}
+              download={`flyer-vip-${Date.now()}.jpg`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 border-amber-500/40 hover:bg-amber-500/10">
+                <Download className="h-3 w-3" /> Baixar Flyer
+              </Button>
+            </a>
+          </div>
+          <div className="relative group">
+            <img src={flyerUrl} alt="Flyer gerado" className="w-full object-contain max-h-[600px]" />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center">
+              <a
+                href={flyerUrl}
+                download={`flyer-vip-${Date.now()}.jpg`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-2 bg-white/90 text-gray-900 font-semibold text-sm px-4 py-2 rounded-full shadow-lg hover:bg-white"
+              >
+                <Download className="h-4 w-4" /> Baixar Flyer
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -503,7 +531,7 @@ export default function ArtGeneratorWizard({
         )}
         {flyerResult && !isGeneratingFlyer && (
           <div className="glass-card border-amber-500/20 bg-amber-500/5 p-5">
-            <FlyerResult flyerUrl={flyerResult.flyerUrl} prompt={flyerResult.prompt} />
+            <FlyerResult flyerUrl={flyerResult.flyerUrl} prompt={flyerResult.prompt} logoUrl={flyerResult.logoUrl} allLogos={flyerResult.allLogos} logoWarning={flyerResult.logoWarning} />
           </div>
         )}
       </div>
