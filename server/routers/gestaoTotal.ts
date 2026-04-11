@@ -1810,16 +1810,18 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
       } else if (input.tipoImagem === "upload" && input.imagemUrl) {
         imagemGeradaUrl = input.imagemUrl;
       } else if (input.tipoImagem === "banco-vip" && input.bancoVipImageUrl) {
-        // Usa a imagem do Banco VIP como referência e gera uma arte com ela
+        // Usa a imagem do Banco VIP como base e refina apenas tonalidade para padrão VIP
+        // NÃO gera nova imagem — apenas ajusta cor/tonalidade para identidade visual da marca
+        const REFINEMENT_PROMPT = `Refine this image to match Barbearia VIP brand identity. IMPORTANT: Keep the original image composition, subjects, and content EXACTLY as they are. Only apply these tonal adjustments if they improve the result: 1) Slightly darken the background to deep black or dark charcoal tones if it is currently light. 2) Add subtle warm gold/amber tint (#D4AF37) to highlights and light areas. 3) Enhance cinematic contrast and dramatic lighting. 4) Increase overall sophistication and premium feel. DO NOT change the people, objects, or composition. DO NOT generate a new image. This is a color grading and tonal refinement only.`;
         try {
           const imgResult = await generateImage({
-            prompt: VIP_IMAGE_PREFIX + resultado.promptImagem,
+            prompt: REFINEMENT_PROMPT,
             originalImages: [{ url: input.bancoVipImageUrl, mimeType: "image/jpeg" as const }],
           });
           imagemGeradaUrl = imgResult.url ?? null;
         } catch (e) {
-          console.error("[generateArt] Erro ao gerar imagem com Banco VIP:", e);
-          imagemGeradaUrl = input.bancoVipImageUrl; // fallback: usa a imagem original
+          console.error("[generateArt] Erro ao refinar imagem do Banco VIP:", e);
+          imagemGeradaUrl = input.bancoVipImageUrl; // fallback: usa a imagem original sem refinamento
         }
       }
 
@@ -1945,11 +1947,67 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
 
       // Aviso explícito se não houver logo cadastrada
       const logoWarning = allLogos.length === 0
-        ? "WARNING: No brand logo found in system. Flyer generated without official logo — please upload logos in Configurações."
+        ? "WARNING: No brand logo found in system. Flyer generated without official logo — please upload logos em Configurações."
         : null;
 
       // Nomes das logos disponíveis para o prompt
       const logoNames = allLogos.map((l, i) => l.nome ? `${i + 1}. ${l.nome}` : `Logo ${i + 1}`).join(", ");
+
+      // Verificar e corrigir ortografia dos textos em português antes de gerar o flyer
+      let headline = input.headline;
+      let textoSecundario = input.textoSecundario;
+      let cta = input.cta;
+      try {
+        const spellCheckResponse = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `Você é um revisor ortográfico especializado em português do Brasil. Sua única função é corrigir erros ortográficos, de acento e de pontuação nos textos fornecidos, mantendo o sentido, estilo e tom original. Não altere o conteúdo, apenas corrija erros de escrita. Retorne SOMENTE um JSON válido com os campos: headline, textoSecundario, cta.`,
+            },
+            {
+              role: "user",
+              content: `Revise a ortografia destes textos em português do Brasil:\n\nheadline: "${input.headline}"\ntextoSecundario: "${input.textoSecundario}"\ncta: "${input.cta}"`,
+            },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "spell_check",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  headline: { type: "string" },
+                  textoSecundario: { type: "string" },
+                  cta: { type: "string" },
+                },
+                required: ["headline", "textoSecundario", "cta"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+        const rawSpell = spellCheckResponse?.choices?.[0]?.message?.content;
+        const spellChecked = JSON.parse(typeof rawSpell === "string" ? rawSpell : "{}") as { headline?: string; textoSecundario?: string; cta?: string };
+        if (spellChecked.headline) headline = spellChecked.headline;
+        if (spellChecked.textoSecundario) textoSecundario = spellChecked.textoSecundario;
+        if (spellChecked.cta) cta = spellChecked.cta;
+      } catch (e) {
+        console.error("[generateFlyer] Erro na verificação ortográfica:", e);
+        // Continua com os textos originais em caso de erro
+      }
+
+      // Determinar dimensões e formato exato baseado no tipoArte
+      const formatoMap: Record<string, { ratio: string; desc: string; dims: string }> = {
+        story: { ratio: "9:16", desc: "Instagram Story / Reels vertical", dims: "1080x1920px" },
+        reels_capa: { ratio: "9:16", desc: "Capa de Reels vertical", dims: "1080x1920px" },
+        post_instagram: { ratio: "1:1", desc: "Post Instagram quadrado", dims: "1080x1080px" },
+        banner_whatsapp: { ratio: "16:9", desc: "Banner WhatsApp horizontal", dims: "1280x720px" },
+        banner: { ratio: "16:9", desc: "Banner horizontal", dims: "1280x720px" },
+        flyer_digital: { ratio: "4:5", desc: "Flyer digital", dims: "1080x1350px" },
+        card_servico: { ratio: "1:1", desc: "Card de serviço quadrado", dims: "1080x1080px" },
+      };
+      const formato = formatoMap[input.tipoArte] ?? { ratio: "1:1", desc: "Post quadrado", dims: "1080x1080px" };
 
       // Montar prompt de flyer para a IA de imagem
       const flyerPrompt = [
@@ -2006,13 +2064,13 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
         `- CENTER: ${input.layout.centro}`,
         `- BOTTOM: ${input.layout.rodape}`,
         ``,
-        `COPY:`,
-        `- Headline: "${input.headline}"`,
-        `- Body text: "${input.textoSecundario}"`,
-        `- CTA: "${input.cta}"`,
+        `COPY (orthographically reviewed in Brazilian Portuguese):`,
+        `- Headline: "${headline}"`,
+        `- Body text: "${textoSecundario}"`,
+        `- CTA: "${cta}"`,
         ``,
         `CREATIVE CONCEPT: ${input.conceito}`,
-        `FORMAT: ${input.tipoArte === "story" ? "9:16 vertical (Instagram Story)" : input.tipoArte === "banner" ? "16:9 horizontal (Banner)" : "1:1 square (Instagram Post)"}.`,
+        `FORMAT — CRITICAL: The flyer MUST be generated in ${formato.ratio} aspect ratio (${formato.desc}, ${formato.dims}). This is NON-NEGOTIABLE. All visual elements, text placement, and composition MUST be designed for this exact format.`,
         ``,
         `FINAL QUALITY: Ultra-high quality, 8K resolution, professional studio design.`,
         `This flyer MUST look like it was designed by a world-class luxury creative agency.`,

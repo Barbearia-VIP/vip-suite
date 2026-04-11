@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   ChevronRight, ChevronLeft, Sparkles, Upload, Image as ImageIcon,
   Search, Copy, Check, Palette, Layout, Type, Zap, Target,
-  FileImage, Download, RotateCcw, Star, Edit2, X, Wand2,
+  FileImage, Download, RotateCcw, Star, Edit2, X, Wand2, ZoomIn,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -536,6 +536,7 @@ export default function ArtGeneratorWizard({
   const [data, setData] = useState<Partial<ArtWizardData>>({});
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [selectedBancoVipUrl, setSelectedBancoVipUrl] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null); // lightbox para visualizar imagem ampliada
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Buscar imagens do Banco VIP
   const imageBankQ = trpc.gestaoTotal.brandAssets.listImageBank.useQuery(
@@ -663,6 +664,7 @@ export default function ArtGeneratorWizard({
   }
 
   return (
+    <>
     <div className="glass-card border-purple-500/20 bg-purple-500/5 p-5">
       {/* Header */}
       <div className="flex items-center gap-3 mb-5">
@@ -906,38 +908,50 @@ export default function ArtGeneratorWizard({
                 ) : (
                   <div>
                     <p className="text-xs font-semibold text-amber-400 mb-2">Selecione uma imagem de referência:</p>
-                    <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                    <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1">
                       {imageBankQ.data.map((img) => (
-                        <button
-                          key={img.id}
-                          onClick={() => {
-                            setSelectedBancoVipUrl(img.url);
-                            set("imagemUrl", img.url);
-                          }}
-                          className={`relative rounded-lg overflow-hidden border-2 transition-all ${
-                            selectedBancoVipUrl === img.url
-                              ? "border-amber-400 ring-2 ring-amber-400/30"
-                              : "border-transparent hover:border-amber-500/40"
-                          }`}
-                        >
-                          <img src={img.url} alt={img.nome ?? "Imagem"} className="w-full h-20 object-cover" />
-                          {selectedBancoVipUrl === img.url && (
-                            <div className="absolute inset-0 bg-amber-500/20 flex items-center justify-center">
-                              <div className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center">
-                                <Check className="h-3.5 w-3.5 text-black" />
+                        <div key={img.id} className="relative group">
+                          {/* Botão de seleção (cobre toda a área quadrada) */}
+                          <button
+                            onClick={() => {
+                              setSelectedBancoVipUrl(img.url);
+                              set("imagemUrl", img.url);
+                            }}
+                            className={`relative w-full aspect-square rounded-lg overflow-hidden border-2 transition-all block ${
+                              selectedBancoVipUrl === img.url
+                                ? "border-amber-400 ring-2 ring-amber-400/30"
+                                : "border-border hover:border-amber-500/40"
+                            }`}
+                          >
+                            <img src={img.url} alt={img.nome ?? "Imagem"} className="w-full h-full object-cover" />
+                            {/* Overlay de selecionado */}
+                            {selectedBancoVipUrl === img.url && (
+                              <div className="absolute inset-0 bg-amber-500/20 flex items-center justify-center">
+                                <div className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center">
+                                  <Check className="h-3.5 w-3.5 text-black" />
+                                </div>
                               </div>
-                            </div>
-                          )}
-                          {img.nome && (
-                            <div className="absolute bottom-0 inset-x-0 bg-black/60 px-1.5 py-0.5">
-                              <p className="text-xs text-white truncate">{img.nome}</p>
-                            </div>
-                          )}
-                        </button>
+                            )}
+                            {/* Nome da imagem */}
+                            {img.nome && (
+                              <div className="absolute bottom-0 inset-x-0 bg-black/70 px-1.5 py-0.5">
+                                <p className="text-[10px] text-white truncate">{img.nome}</p>
+                              </div>
+                            )}
+                          </button>
+                          {/* Botão de lupa (canto superior direito, aparece no hover) */}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setLightboxUrl(img.url); }}
+                            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 hover:bg-black/90 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                            title="Ver imagem ampliada"
+                          >
+                            <ZoomIn className="h-3.5 w-3.5 text-white" />
+                          </button>
+                        </div>
                       ))}
                     </div>
                     {selectedBancoVipUrl && (
-                      <p className="text-xs text-amber-400 mt-2">✓ Imagem selecionada — a IA usará como referência visual</p>
+                      <p className="text-xs text-amber-400 mt-2">✓ Imagem selecionada — será refinada com identidade visual VIP</p>
                     )}
                   </div>
                 )}
@@ -1006,5 +1020,27 @@ export default function ArtGeneratorWizard({
         )}
       </div>
     </div>
+    {/* Lightbox para visualizar imagem do Banco VIP ampliada */}
+    {lightboxUrl && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+        onClick={() => setLightboxUrl(null)}
+      >
+        <div className="relative max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => setLightboxUrl(null)}
+            className="absolute -top-10 right-0 text-white/70 hover:text-white flex items-center gap-1.5 text-sm"
+          >
+            <X className="h-4 w-4" /> Fechar
+          </button>
+          <img
+            src={lightboxUrl}
+            alt="Visualização ampliada"
+            className="w-full h-auto max-h-[80vh] object-contain rounded-xl shadow-2xl"
+          />
+        </div>
+      </div>
+    )}
+    </>
   );
 }
