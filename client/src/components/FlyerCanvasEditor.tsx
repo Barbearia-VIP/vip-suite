@@ -6,9 +6,10 @@ import { Label } from "@/components/ui/label";
 import {
   Type, Palette, Download, Trash2, Bold, Italic,
   AlignLeft, AlignCenter, AlignRight, Plus, Move,
-  ChevronUp, ChevronDown, RotateCcw,
+  ChevronUp, ChevronDown, RotateCcw, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
+import { VIP_STICKERS, STICKER_CATEGORIES, type StickerCategory } from "@/lib/vipStickers";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -16,6 +17,13 @@ interface FlyerCanvasEditorProps {
   flyerUrl: string;
   onSave?: (dataUrl: string) => void;
   onClose?: () => void;
+}
+
+// ── Utilitário: SVG string → data URL ────────────────────────────────────────
+
+function svgToDataUrl(svg: string): string {
+  const encoded = encodeURIComponent(svg);
+  return `data:image/svg+xml;charset=utf-8,${encoded}`;
 }
 
 // ── Componente principal ─────────────────────────────────────────────────────
@@ -34,17 +42,18 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
   const [textAlign, setTextAlign] = useState<"left" | "center" | "right">("center");
   const [canvasSize, setCanvasSize] = useState({ w: 540, h: 540 });
 
+  // Stickers
+  const [stickerTab, setStickerTab] = useState<StickerCategory>("selos");
+
   // ── Inicializar canvas ───────────────────────────────────────────────────
 
   useEffect(() => {
     if (!canvasElRef.current) return;
 
-    // Detectar proporção da imagem para definir tamanho do canvas
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
       const ratio = img.naturalWidth / img.naturalHeight;
-      // No modal fullscreen, usar largura maior disponível
       const containerW = containerRef.current?.clientWidth ?? 700;
       const maxW = Math.min(containerW, 700);
       const w = maxW;
@@ -59,15 +68,12 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
       });
       fabricRef.current = canvas;
 
-      // Carregar imagem de fundo
       FabricImage.fromURL(flyerUrl, { crossOrigin: "anonymous" }).then((fabricImg) => {
         fabricImg.set({
-          left: 0,
-          top: 0,
+          left: 0, top: 0,
           scaleX: w / img.naturalWidth,
           scaleY: h / img.naturalHeight,
-          selectable: false,
-          evented: false,
+          selectable: false, evented: false,
           name: "__background__",
         });
         canvas.add(fabricImg);
@@ -75,21 +81,17 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
         canvas.renderAll();
       });
 
-      // Listeners de seleção
       canvas.on("selection:created", (e) => updateSelection(e.selected?.[0] ?? null));
       canvas.on("selection:updated", (e) => updateSelection(e.selected?.[0] ?? null));
       canvas.on("selection:cleared", () => setSelectedObj(null));
 
-      return () => {
-        canvas.dispose();
-        fabricRef.current = null;
-      };
+      return () => { canvas.dispose(); fabricRef.current = null; };
     };
     img.src = flyerUrl;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flyerUrl]);
 
-  // ── Atualizar painel lateral ao selecionar objeto ────────────────────────
+  // ── Atualizar painel ao selecionar objeto ────────────────────────────────
 
   const updateSelection = (obj: FabricObject | null) => {
     setSelectedObj(obj);
@@ -110,22 +112,50 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     const canvas = fabricRef.current;
     if (!canvas) return;
     const text = new FabricText("Clique para editar", {
-      left: canvasSize.w / 2,
-      top: canvasSize.h / 2,
-      originX: "center",
-      originY: "center",
-      fontSize: 36,
-      fontFamily: "Oswald, sans-serif",
-      fill: "#FFFFFF",
-      fontWeight: "bold",
-      textAlign: "center",
-      // shadow aplicado via set após criação para evitar erro de tipo
-
+      left: canvasSize.w / 2, top: canvasSize.h / 2,
+      originX: "center", originY: "center",
+      fontSize: 36, fontFamily: "Oswald, sans-serif",
+      fill: "#FFFFFF", fontWeight: "bold", textAlign: "center",
       editable: true,
     });
     canvas.add(text);
     canvas.setActiveObject(text);
     canvas.renderAll();
+  }, [canvasSize]);
+
+  // ── Adicionar sticker ao canvas ──────────────────────────────────────────
+
+  const addSticker = useCallback((stickerId: string) => {
+    const canvas = fabricRef.current;
+    if (!canvas) return;
+
+    const sticker = VIP_STICKERS.find((s) => s.id === stickerId);
+    if (!sticker) return;
+
+    const dataUrl = svgToDataUrl(sticker.svg);
+
+    FabricImage.fromURL(dataUrl).then((img) => {
+      // Escalar para o tamanho padrão do sticker
+      const scaleX = sticker.defaultWidth / (img.width ?? sticker.defaultWidth);
+      const scaleY = sticker.defaultHeight / (img.height ?? sticker.defaultHeight);
+
+      img.set({
+        left: canvasSize.w / 2,
+        top: canvasSize.h / 2,
+        originX: "center",
+        originY: "center",
+        scaleX,
+        scaleY,
+        name: `sticker-${stickerId}`,
+      });
+
+      canvas.add(img);
+      canvas.setActiveObject(img);
+      canvas.renderAll();
+      toast.success(`"${sticker.name}" adicionado ao flyer`);
+    }).catch(() => {
+      toast.error("Erro ao adicionar sticker");
+    });
   }, [canvasSize]);
 
   // ── Atualizar texto selecionado ──────────────────────────────────────────
@@ -152,8 +182,6 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     setSelectedObj(null);
   }, []);
 
-  // ── Mover para frente/trás ───────────────────────────────────────────────
-
   const bringForward = useCallback(() => {
     const canvas = fabricRef.current;
     const obj = canvas?.getActiveObject();
@@ -175,14 +203,12 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
   const exportPNG = useCallback(() => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    // Deselecionar antes de exportar
     canvas.discardActiveObject();
     canvas.renderAll();
     const dataUrl = canvas.toDataURL({ format: "png", multiplier: 2 });
     if (onSave) {
       onSave(dataUrl);
     } else {
-      // Download direto
       const a = document.createElement("a");
       a.href = dataUrl;
       a.download = `flyer-vip-editado-${Date.now()}.png`;
@@ -190,8 +216,6 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     }
     toast.success("Flyer salvo com sucesso!");
   }, [onSave]);
-
-  // ── Download direto ──────────────────────────────────────────────────────
 
   const downloadEdited = useCallback(() => {
     const canvas = fabricRef.current;
@@ -206,8 +230,6 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     toast.success("Flyer baixado!");
   }, []);
 
-  // ── Resetar (remover todos os textos adicionados) ────────────────────────
-
   const resetCanvas = useCallback(() => {
     const canvas = fabricRef.current;
     if (!canvas) return;
@@ -220,6 +242,7 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
   }, []);
 
   const isTextSelected = selectedObj?.type === "text";
+  const filteredStickers = VIP_STICKERS.filter((s) => s.category === stickerTab);
 
   return (
     <div className="flex flex-col gap-4">
@@ -259,6 +282,7 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
         )}
       </div>
 
+      {/* Área principal: canvas + painel de propriedades */}
       <div className="flex gap-4 items-start">
         {/* Canvas */}
         <div ref={containerRef} className="flex-1 min-w-0">
@@ -269,55 +293,43 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
             <canvas ref={canvasElRef} />
           </div>
           <p className="text-xs text-muted-foreground text-center mt-2 flex items-center justify-center gap-1">
-            <Move className="h-3 w-3" /> Arraste textos para reposicionar · Duplo clique para editar texto
+            <Move className="h-3 w-3" /> Arraste elementos para reposicionar · Duplo clique para editar texto
           </p>
         </div>
 
-        {/* Painel de propriedades */}
-        {isTextSelected && (
+        {/* Painel de propriedades do texto */}
+        {isTextSelected ? (
           <div className="w-56 shrink-0 space-y-3 p-3 rounded-xl bg-card border border-border">
             <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
               <Palette className="h-3.5 w-3.5 text-amber-400" /> Propriedades do Texto
             </p>
 
-            {/* Texto */}
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Texto</Label>
               <Input
                 value={textValue}
-                onChange={(e) => {
-                  setTextValue(e.target.value);
-                  applyTextChange({ text: e.target.value });
-                }}
+                onChange={(e) => { setTextValue(e.target.value); applyTextChange({ text: e.target.value }); }}
                 className="text-xs h-8"
                 placeholder="Digite o texto..."
               />
             </div>
 
-            {/* Cor */}
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Cor do texto</Label>
               <div className="flex items-center gap-2">
                 <input
                   type="color"
                   value={textColor}
-                  onChange={(e) => {
-                    setTextColor(e.target.value);
-                    applyTextChange({ fill: e.target.value });
-                  }}
+                  onChange={(e) => { setTextColor(e.target.value); applyTextChange({ fill: e.target.value }); }}
                   className="w-8 h-8 rounded cursor-pointer border border-border bg-transparent"
                 />
                 <Input
                   value={textColor}
-                  onChange={(e) => {
-                    setTextColor(e.target.value);
-                    applyTextChange({ fill: e.target.value });
-                  }}
+                  onChange={(e) => { setTextColor(e.target.value); applyTextChange({ fill: e.target.value }); }}
                   className="text-xs h-8 font-mono"
                   placeholder="#FFFFFF"
                 />
               </div>
-              {/* Cores rápidas VIP */}
               <div className="flex gap-1.5 flex-wrap mt-1">
                 {["#FFFFFF", "#D4AF37", "#C9A84C", "#F0C040", "#0A0A0A", "#1A1A1A"].map((c) => (
                   <button
@@ -331,92 +343,120 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
               </div>
             </div>
 
-            {/* Tamanho */}
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Tamanho ({fontSize}px)</Label>
               <input
-                type="range"
-                min={10}
-                max={120}
-                value={fontSize}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setFontSize(v);
-                  applyTextChange({ fontSize: v });
-                }}
+                type="range" min={10} max={120} value={fontSize}
+                onChange={(e) => { const v = Number(e.target.value); setFontSize(v); applyTextChange({ fontSize: v }); }}
                 className="w-full accent-amber-500"
               />
             </div>
 
-            {/* Estilo */}
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Estilo</Label>
               <div className="flex gap-1.5">
-                <Button
-                  size="sm"
-                  variant={isBold ? "default" : "outline"}
-                  className="h-7 w-7 p-0"
-                  onClick={() => {
-                    const next = !isBold;
-                    setIsBold(next);
-                    applyTextChange({ fontWeight: next ? "bold" : "normal" });
-                  }}
-                >
+                <Button size="sm" variant={isBold ? "default" : "outline"} className="h-7 w-7 p-0"
+                  onClick={() => { const n = !isBold; setIsBold(n); applyTextChange({ fontWeight: n ? "bold" : "normal" }); }}>
                   <Bold className="h-3 w-3" />
                 </Button>
-                <Button
-                  size="sm"
-                  variant={isItalic ? "default" : "outline"}
-                  className="h-7 w-7 p-0"
-                  onClick={() => {
-                    const next = !isItalic;
-                    setIsItalic(next);
-                    applyTextChange({ fontStyle: next ? "italic" : "normal" });
-                  }}
-                >
+                <Button size="sm" variant={isItalic ? "default" : "outline"} className="h-7 w-7 p-0"
+                  onClick={() => { const n = !isItalic; setIsItalic(n); applyTextChange({ fontStyle: n ? "italic" : "normal" }); }}>
                   <Italic className="h-3 w-3" />
                 </Button>
               </div>
             </div>
 
-            {/* Alinhamento */}
             <div className="space-y-1">
               <Label className="text-xs text-muted-foreground">Alinhamento</Label>
               <div className="flex gap-1.5">
                 {(["left", "center", "right"] as const).map((a) => (
-                  <Button
-                    key={a}
-                    size="sm"
-                    variant={textAlign === a ? "default" : "outline"}
-                    className="h-7 w-7 p-0"
-                    onClick={() => {
-                      setTextAlign(a);
-                      applyTextChange({ textAlign: a });
-                    }}
-                  >
+                  <Button key={a} size="sm" variant={textAlign === a ? "default" : "outline"} className="h-7 w-7 p-0"
+                    onClick={() => { setTextAlign(a); applyTextChange({ textAlign: a }); }}>
                     {a === "left" ? <AlignLeft className="h-3 w-3" /> : a === "center" ? <AlignCenter className="h-3 w-3" /> : <AlignRight className="h-3 w-3" />}
                   </Button>
                 ))}
               </div>
             </div>
           </div>
-        )}
-
-        {/* Dica quando nada está selecionado */}
-        {!isTextSelected && (
+        ) : (
+          /* Dica quando nada está selecionado */
           <div className="w-56 shrink-0 p-3 rounded-xl bg-card border border-border">
             <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
               <Type className="h-3.5 w-3.5 text-amber-400" /> Editor de Flyer
             </p>
             <div className="space-y-2 text-xs text-muted-foreground">
-              <p>• Clique em <strong className="text-foreground">Adicionar Texto</strong> para inserir um novo texto</p>
-              <p>• <strong className="text-foreground">Arraste</strong> os textos para reposicionar</p>
-              <p>• <strong className="text-foreground">Duplo clique</strong> para editar o conteúdo</p>
-              <p>• Selecione um texto para ver as opções de cor, tamanho e estilo</p>
+              <p>• Clique em <strong className="text-foreground">Adicionar Texto</strong> para inserir texto</p>
+              <p>• Clique em um <strong className="text-amber-400">sticker</strong> abaixo para adicionar ao flyer</p>
+              <p>• <strong className="text-foreground">Arraste</strong> elementos para reposicionar</p>
+              <p>• <strong className="text-foreground">Duplo clique</strong> para editar texto</p>
               <p>• Clique em <strong className="text-amber-400">Salvar Flyer</strong> quando terminar</p>
             </div>
           </div>
         )}
+      </div>
+
+      {/* ── Biblioteca de Stickers VIP ─────────────────────────────────────── */}
+      <div className="rounded-xl border border-amber-500/30 bg-card overflow-hidden">
+        {/* Cabeçalho */}
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-gradient-to-r from-amber-950/30 to-transparent">
+          <Layers className="h-4 w-4 text-amber-400" />
+          <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Biblioteca de Elementos VIP</span>
+          <span className="text-xs text-muted-foreground ml-1">— clique para adicionar ao flyer</span>
+        </div>
+
+        {/* Abas de categoria */}
+        <div className="flex gap-0 border-b border-border overflow-x-auto">
+          {STICKER_CATEGORIES.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setStickerTab(cat.id)}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium whitespace-nowrap transition-colors border-b-2 ${
+                stickerTab === cat.id
+                  ? "border-amber-400 text-amber-400 bg-amber-950/20"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
+              }`}
+            >
+              <span>{cat.emoji}</span>
+              <span>{cat.label}</span>
+              <span className="text-[10px] opacity-60">
+                ({VIP_STICKERS.filter((s) => s.category === cat.id).length})
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Grid de stickers */}
+        <div className="p-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2">
+          {filteredStickers.map((sticker) => (
+            <button
+              key={sticker.id}
+              onClick={() => addSticker(sticker.id)}
+              className="group flex flex-col items-center gap-1.5 p-2 rounded-lg border border-border hover:border-amber-400/60 hover:bg-amber-950/20 transition-all cursor-pointer"
+              title={`Adicionar: ${sticker.name}`}
+            >
+              {/* Preview do sticker */}
+              <div
+                className="flex items-center justify-center rounded bg-zinc-900 group-hover:bg-zinc-800 transition-colors"
+                style={{ width: 64, height: 64 }}
+              >
+                <img
+                  src={svgToDataUrl(sticker.svg)}
+                  alt={sticker.name}
+                  style={{
+                    width: Math.min(sticker.defaultWidth, 56),
+                    height: Math.min(sticker.defaultHeight, 56),
+                    objectFit: "contain",
+                  }}
+                  draggable={false}
+                />
+              </div>
+              {/* Nome */}
+              <span className="text-[10px] text-muted-foreground group-hover:text-amber-400 text-center leading-tight line-clamp-2 transition-colors">
+                {sticker.name}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
