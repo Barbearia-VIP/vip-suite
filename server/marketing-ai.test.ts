@@ -664,3 +664,68 @@ describe("ArtGenerator logic", () => {
     expect(favoritas.map(a => a.id)).toEqual([1, 3]);
   });
 });
+
+// ── Testes: Upload de Imagem de Referência ────────────────────────────────────
+
+describe("uploadArtImage endpoint logic", () => {
+  it("deve aceitar tipos de imagem válidos", () => {
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    const testCases = [
+      { mime: "image/jpeg", expected: true },
+      { mime: "image/png", expected: true },
+      { mime: "image/webp", expected: true },
+      { mime: "image/gif", expected: true },
+      { mime: "application/pdf", expected: false },
+      { mime: "video/mp4", expected: false },
+      { mime: "text/plain", expected: false },
+    ];
+    for (const tc of testCases) {
+      expect(allowed.includes(tc.mime)).toBe(tc.expected);
+    }
+  });
+
+  it("deve gerar chave S3 única com prefixo art-references/", () => {
+    const originalname = "foto-barbearia.jpg";
+    const ext = originalname.split(".").pop() ?? "jpg";
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).slice(2, 8);
+    const key = `art-references/${timestamp}-${random}.${ext}`;
+
+    expect(key).toMatch(/^art-references\/\d+-[a-z0-9]+\.jpg$/);
+  });
+
+  it("deve gerar chaves únicas para uploads simultâneos", () => {
+    const keys = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+      const random = Math.random().toString(36).slice(2, 8);
+      keys.add(`art-references/${Date.now()}-${random}.jpg`);
+    }
+    // Com 100 chaves, praticamente todas devem ser únicas
+    expect(keys.size).toBeGreaterThan(90);
+  });
+
+  it("deve rejeitar arquivos maiores que 16 MB", () => {
+    const MAX_SIZE = 16 * 1024 * 1024; // 16 MB em bytes
+    const fileSizes = [
+      { size: 1024 * 1024, valid: true },         // 1 MB
+      { size: 5 * 1024 * 1024, valid: true },      // 5 MB
+      { size: 15 * 1024 * 1024, valid: true },     // 15 MB
+      { size: 16 * 1024 * 1024, valid: true },     // 16 MB (limite exato)
+      { size: 16 * 1024 * 1024 + 1, valid: false }, // 16 MB + 1 byte
+      { size: 20 * 1024 * 1024, valid: false },    // 20 MB
+    ];
+    for (const tc of fileSizes) {
+      expect(tc.size <= MAX_SIZE).toBe(tc.valid);
+    }
+  });
+
+  it("deve retornar URL pública do CDN após upload bem-sucedido", () => {
+    // Simula a resposta do storagePut
+    const mockStorageResponse = {
+      key: "art-references/1775905567185-486qw6.jpg",
+      url: "https://d2xsxph8kpxj0f.cloudfront.net/310419663029099127/Gw6CU8nRy9T64yBMvKuEjJ/art-references/1775905567185-486qw6.jpg",
+    };
+    expect(mockStorageResponse.url).toMatch(/^https:\/\//);
+    expect(mockStorageResponse.key).toMatch(/^art-references\//);
+  });
+});

@@ -1172,3 +1172,4 @@
 - [x] Marketing - Criação de Arte: wizard de 7 telas ArtGeneratorWizard no frontend
 - [x] Marketing - Criação de Arte: geração de imagem via IA (nano banana) e exibição do resultado
 - [x] Marketing - Criação de Arte: histórico de artes geradas
+- [x] Criação de Arte: endpoint /api/upload-art-image para upload de imagem de referência para S3
