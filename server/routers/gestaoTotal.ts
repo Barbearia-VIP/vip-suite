@@ -2137,7 +2137,14 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
         `- CTA: "${cta}"`,
         ``,
         `CREATIVE CONCEPT: ${input.conceito}`,
-        `FORMAT — CRITICAL: The flyer MUST be generated in ${formato.ratio} aspect ratio (${formato.desc}, ${formato.dims}). This is NON-NEGOTIABLE. All visual elements, text placement, and composition MUST be designed for this exact format.`,
+        `FORMAT — ABSOLUTELY CRITICAL AND NON-NEGOTIABLE:`,
+        `- Aspect ratio: ${formato.ratio}`,
+        `- Exact dimensions: ${formato.dims}`,
+        `- Format type: ${formato.desc}`,
+        `- The ENTIRE canvas MUST be filled in ${formato.ratio} ratio — no letterboxing, no pillarboxing, no white/black borders`,
+        `- ${formato.ratio === "9:16" ? "VERTICAL orientation — tall and narrow, like a phone screen. Width is MUCH smaller than height." : formato.ratio === "16:9" ? "HORIZONTAL orientation — wide and short, like a landscape banner. Width is MUCH larger than height." : "SQUARE orientation — equal width and height."}`,
+        `- All text, logo, and visual elements MUST be positioned and sized for ${formato.dims} canvas`,
+        `- FAILURE TO RESPECT THIS FORMAT IS NOT ACCEPTABLE`,
         ``,
         `FINAL QUALITY: Ultra-high quality, 8K resolution, professional studio design.`,
         `This flyer MUST look like it was designed by a world-class luxury creative agency.`,
@@ -2150,9 +2157,12 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
       for (const logo of allLogos.slice(0, 2)) { // máx 2 logos como referência
         originalImages.push({ url: logo.url, mimeType: "image/jpeg" as const });
       }
-      // Adicionar imagem base da arte (se existir)
+      // Adicionar imagem base da arte (se existir) — SEMPRE incluir mesmo que seja do Banco VIP
       if (input.imagemUrl) {
         originalImages.push({ url: input.imagemUrl, mimeType: "image/jpeg" as const });
+        console.log(`[generateFlyer] Usando imagem base: ${input.imagemUrl.substring(0, 80)}...`);
+      } else {
+        console.log(`[generateFlyer] Nenhuma imagem base fornecida — flyer gerado apenas com logos`);
       }
 
       const imgResult = await generateImage({

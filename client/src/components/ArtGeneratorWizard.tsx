@@ -9,12 +9,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
   ChevronRight, ChevronLeft, Sparkles, Upload, Image as ImageIcon,
   Search, Copy, Check, Palette, Layout, Type, Zap, Target,
   FileImage, Download, RotateCcw, Star, Edit2, X, Wand2, ZoomIn,
   AlertCircle, CheckCircle2, PenLine,
 } from "lucide-react";
 import { toast } from "sonner";
+import FlyerCanvasEditor from "@/components/FlyerCanvasEditor";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -643,6 +647,11 @@ function FlyerResult({ flyerUrl, prompt, allLogos, logoWarning, onRegenerate, is
   onRegenerate?: () => void;
   isRegenerating?: boolean;
 }) {
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [savedFlyerUrl, setSavedFlyerUrl] = useState<string | null>(null);
+
+  const displayUrl = savedFlyerUrl ?? flyerUrl;
+
   return (
     <div className="space-y-3">
       {/* Aviso se não houver logo cadastrada */}
@@ -670,7 +679,7 @@ function FlyerResult({ flyerUrl, prompt, allLogos, logoWarning, onRegenerate, is
         </div>
       )}
       {/* Flyer gerado */}
-      {!flyerUrl ? (
+      {!displayUrl ? (
         <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-4 text-center">
           <p className="text-sm text-amber-400 font-semibold">Flyer gerado sem imagem</p>
           <p className="text-xs text-muted-foreground mt-1">A IA não conseguiu gerar a imagem desta vez. Tente novamente.</p>
@@ -680,7 +689,12 @@ function FlyerResult({ flyerUrl, prompt, allLogos, logoWarning, onRegenerate, is
           <div className="p-3 flex items-center justify-between border-b border-amber-500/20">
             <div className="flex items-center gap-2">
               <Wand2 className="h-4 w-4 text-amber-400" />
-              <span className="text-sm font-bold text-amber-400">Flyer Gerado!</span>
+              <span className="text-sm font-bold text-amber-400">
+                {savedFlyerUrl ? "Flyer Editado!" : "Flyer Gerado!"}
+              </span>
+              {savedFlyerUrl && (
+                <span className="text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">editado</span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {onRegenerate && (
@@ -698,9 +712,17 @@ function FlyerResult({ flyerUrl, prompt, allLogos, logoWarning, onRegenerate, is
                   )}
                 </Button>
               )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1.5 border-purple-500/40 hover:bg-purple-500/10 text-purple-400"
+                onClick={() => setEditorOpen(true)}
+              >
+                <Edit2 className="h-3 w-3" /> Editar
+              </Button>
               <a
-                href={flyerUrl}
-                download={`flyer-vip-${Date.now()}.jpg`}
+                href={displayUrl ?? ""}
+                download={`flyer-vip-${Date.now()}.png`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -711,21 +733,41 @@ function FlyerResult({ flyerUrl, prompt, allLogos, logoWarning, onRegenerate, is
             </div>
           </div>
           <div className="relative group">
-            <img src={flyerUrl} alt="Flyer gerado" className="w-full object-contain max-h-[600px]" />
+            <img src={displayUrl ?? ""} alt="Flyer gerado" className="w-full object-contain max-h-[600px]" />
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center">
-              <a
-                href={flyerUrl}
-                download={`flyer-vip-${Date.now()}.jpg`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={() => setEditorOpen(true)}
                 className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-2 bg-white/90 text-gray-900 font-semibold text-sm px-4 py-2 rounded-full shadow-lg hover:bg-white"
               >
-                <Download className="h-4 w-4" /> Baixar Flyer
-              </a>
+                <Edit2 className="h-4 w-4" /> Editar Flyer
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Modal do Editor Canvas */}
+      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
+        <DialogContent className="max-w-5xl w-full p-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sm">
+              <Edit2 className="h-4 w-4 text-purple-400" /> Editor de Flyer
+              <span className="text-xs text-muted-foreground font-normal ml-1">Adicione textos, mude cores e salve o resultado final</span>
+            </DialogTitle>
+          </DialogHeader>
+          {(flyerUrl || savedFlyerUrl) && (
+            <FlyerCanvasEditor
+              flyerUrl={savedFlyerUrl ?? flyerUrl!}
+              onSave={(dataUrl) => {
+                setSavedFlyerUrl(dataUrl);
+                setEditorOpen(false);
+                toast.success("Flyer salvo com suas edições!");
+              }}
+              onClose={() => setEditorOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
