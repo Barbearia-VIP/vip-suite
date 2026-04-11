@@ -2066,15 +2066,17 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
 
       // Determinar dimensões e formato exato baseado no tipoArte
       const formatoMap: Record<string, { ratio: string; desc: string; dims: string }> = {
-        story: { ratio: "9:16", desc: "Instagram Story / Reels vertical", dims: "1080x1920px" },
-        reels_capa: { ratio: "9:16", desc: "Capa de Reels vertical", dims: "1080x1920px" },
-        post_instagram: { ratio: "1:1", desc: "Post Instagram quadrado", dims: "1080x1080px" },
-        banner_whatsapp: { ratio: "16:9", desc: "Banner WhatsApp horizontal", dims: "1280x720px" },
-        banner: { ratio: "16:9", desc: "Banner horizontal", dims: "1280x720px" },
-        flyer_digital: { ratio: "4:5", desc: "Flyer digital", dims: "1080x1350px" },
-        card_servico: { ratio: "1:1", desc: "Card de serviço quadrado", dims: "1080x1080px" },
+        story:            { ratio: "9:16",  desc: "Instagram Story / Reels vertical",  dims: "1080x1920px" },
+        reels_capa:       { ratio: "9:16",  desc: "Capa de Reels vertical",            dims: "1080x1920px" },
+        post_instagram:   { ratio: "1:1",   desc: "Post Instagram quadrado",           dims: "1080x1080px" },
+        banner_whatsapp:  { ratio: "16:9",  desc: "Banner WhatsApp horizontal",        dims: "1600x900px" },
+        banner:           { ratio: "16:9",  desc: "Banner horizontal",                 dims: "1280x720px" },
+        flyer_digital:    { ratio: "4:5",   desc: "Flyer digital",                     dims: "1080x1350px" },
+        card_servico:     { ratio: "1:1",   desc: "Card de serviço quadrado",          dims: "1080x1080px" },
+        carrossel:        { ratio: "1:1",   desc: "Carrossel Instagram quadrado",      dims: "1080x1080px" },
       };
       const formato = formatoMap[input.tipoArte] ?? { ratio: "1:1", desc: "Post quadrado", dims: "1080x1080px" };
+      console.log(`[generateFlyer] tipoArte recebido: "${input.tipoArte}" → formato: ${formato.ratio} (${formato.dims})`);
 
       // Montar prompt de flyer para a IA de imagem
       const flyerPrompt = [
@@ -2166,6 +2168,16 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
         `FINAL QUALITY: Ultra-high quality, 8K resolution, professional studio design.`,
         `This flyer MUST look like it was designed by a world-class luxury creative agency.`,
         `The result should make the viewer feel they are looking at a premium brand, not a local barbershop.`,
+        ``,
+        `=== FINAL REMINDER: CANVAS SIZE ===`,
+        `OUTPUT IMAGE SIZE: ${formato.dims} — ${formato.ratio} aspect ratio.`,
+        formato.ratio === "9:16"
+          ? `THIS IS A STORY/REELS FORMAT. The image must be PORTRAIT VERTICAL. If you generate anything other than a tall vertical image (9 wide : 16 tall), you have FAILED this task.`
+          : formato.ratio === "16:9"
+          ? `THIS IS A BANNER FORMAT. The image must be LANDSCAPE HORIZONTAL. If you generate anything other than a wide horizontal image (16 wide : 9 tall), you have FAILED this task.`
+          : formato.ratio === "4:5"
+          ? `THIS IS A PORTRAIT FORMAT. The image must be slightly taller than wide (4 wide : 5 tall). If you generate a square or horizontal image, you have FAILED this task.`
+          : `THIS IS A SQUARE FORMAT. The image must have EQUAL width and height (1:1). If you generate a vertical or horizontal image, you have FAILED this task.`,
       ].join("\n");
 
       // Montar referências de imagem:
