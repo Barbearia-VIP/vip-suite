@@ -11,6 +11,48 @@ import {
 import { toast } from "sonner";
 import { VIP_STICKERS, STICKER_CATEGORIES, type StickerCategory } from "@/lib/vipStickers";
 
+// ── Paleta de cores VIP para stickers ────────────────────────────────────────
+
+const VIP_STICKER_COLORS = [
+  { id: "gold",    label: "Dourado",  hex: "#D4AF37", textHex: "#0A0A0A" },
+  { id: "white",   label: "Branco",   hex: "#FFFFFF", textHex: "#0A0A0A" },
+  { id: "black",   label: "Preto",    hex: "#0A0A0A", textHex: "#D4AF37" },
+  { id: "graphite",label: "Grafite",  hex: "#3A3A3A", textHex: "#D4AF37" },
+  { id: "silver",  label: "Prata",    hex: "#C0C0C0", textHex: "#0A0A0A" },
+] as const;
+
+type StickerColorId = typeof VIP_STICKER_COLORS[number]["id"];
+
+/**
+ * Recolore um SVG substituindo as cores originais da paleta VIP pela nova cor.
+ * Mantém a estrutura do SVG intacta, apenas troca as cores de preenchimento e stroke.
+ */
+function recolorSvg(svg: string, primaryColor: string, secondaryColor: string): string {
+  // Cores originais da paleta VIP que serão substituídas
+  const originalPrimary = ["#D4AF37", "#F0C040", "#C9A84C"];
+  const originalSecondary = ["#0A0A0A", "#1A1A1A"];
+  const originalWhite = ["#FFFFFF"];
+
+  let result = svg;
+
+  // Substituir cores primárias (dourado → nova cor primária)
+  for (const c of originalPrimary) {
+    result = result.replaceAll(c, primaryColor);
+  }
+  // Substituir cores escuras (preto/grafite → nova cor secundária)
+  for (const c of originalSecondary) {
+    result = result.replaceAll(c, secondaryColor);
+  }
+  // Branco: manter se cor primária não for branco, senão usar secundária
+  if (primaryColor === "#FFFFFF") {
+    for (const c of originalWhite) {
+      result = result.replaceAll(c, secondaryColor);
+    }
+  }
+
+  return result;
+}
+
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
 interface FlyerCanvasEditorProps {
@@ -44,6 +86,10 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
 
   // Stickers
   const [stickerTab, setStickerTab] = useState<StickerCategory>("selos");
+  const [stickerColorId, setStickerColorId] = useState<StickerColorId>("gold");
+
+  // Referência ao sticker selecionado no canvas (para saber qual sticker é)
+  const selectedStickerIdRef = useRef<string | null>(null);
 
   // ── Inicializar canvas ───────────────────────────────────────────────────
 
@@ -134,7 +180,12 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
 
     const dataUrl = svgToDataUrl(sticker.svg);
 
-    FabricImage.fromURL(dataUrl).then((img) => {
+    // Aplicar cor selecionada ao SVG antes de adicionar
+    const colorConfig = VIP_STICKER_COLORS.find((c) => c.id === stickerColorId) ?? VIP_STICKER_COLORS[0];
+    const coloredSvg = recolorSvg(sticker.svg, colorConfig.hex, colorConfig.textHex);
+    const coloredDataUrl = svgToDataUrl(coloredSvg);
+
+    FabricImage.fromURL(coloredDataUrl).then((img) => {
       // Escalar para o tamanho padrão do sticker
       const scaleX = sticker.defaultWidth / (img.width ?? sticker.defaultWidth);
       const scaleY = sticker.defaultHeight / (img.height ?? sticker.defaultHeight);
@@ -147,11 +198,14 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
         scaleX,
         scaleY,
         name: `sticker-${stickerId}`,
-      });
+        // Guardar metadados para recoloração posterior
+        data: { stickerId, originalSvg: sticker.svg },
+      } as Parameters<typeof img.set>[0]);
 
       canvas.add(img);
       canvas.setActiveObject(img);
       canvas.renderAll();
+      selectedStickerIdRef.current = stickerId;
       toast.success(`"${sticker.name}" adicionado ao flyer`);
     }).catch(() => {
       toast.error("Erro ao adicionar sticker");
@@ -241,7 +295,54 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     setSelectedObj(null);
   }, []);
 
+  // ── Recolorir sticker selecionado no canvas ──────────────────────────────
+
+  const recolorSelectedSticker = useCallback((colorId: StickerColorId) => {
+    const canvas = fabricRef.current;
+    const obj = canvas?.getActiveObject();
+    if (!obj || obj.type !== "image") return;
+
+    const objWithData = obj as FabricObject & { data?: { stickerId: string; originalSvg: string } };
+    const stickerData = objWithData.data;
+    if (!stickerData?.originalSvg) return;
+
+    const colorConfig = VIP_STICKER_COLORS.find((c) => c.id === colorId) ?? VIP_STICKER_COLORS[0];
+    const coloredSvg = recolorSvg(stickerData.originalSvg, colorConfig.hex, colorConfig.textHex);
+    const coloredDataUrl = svgToDataUrl(coloredSvg);
+
+    // Guardar posição e escala atuais
+    const currentLeft = obj.left;
+    const currentTop = obj.top;
+    const currentScaleX = obj.scaleX;
+    const currentScaleY = obj.scaleY;
+    const currentAngle = obj.angle;
+    const currentOriginX = obj.originX;
+    const currentOriginY = obj.originY;
+    const currentName = (obj as FabricObject & { name?: string }).name;
+
+    FabricImage.fromURL(coloredDataUrl).then((newImg) => {
+      newImg.set({
+        left: currentLeft,
+        top: currentTop,
+        scaleX: currentScaleX,
+        scaleY: currentScaleY,
+        angle: currentAngle,
+        originX: currentOriginX,
+        originY: currentOriginY,
+        name: currentName,
+        data: stickerData,
+      } as Parameters<typeof newImg.set>[0]);
+
+      canvas?.remove(obj);
+      canvas?.add(newImg);
+      canvas?.setActiveObject(newImg);
+      canvas?.renderAll();
+      setSelectedObj(newImg);
+    });
+  }, []);
+
   const isTextSelected = selectedObj?.type === "text";
+  const isStickerSelected = selectedObj?.type === "image" && !!(selectedObj as FabricObject & { name?: string }).name?.startsWith("sticker-");
   const filteredStickers = VIP_STICKERS.filter((s) => s.category === stickerTab);
 
   return (
@@ -298,7 +399,41 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
         </div>
 
         {/* Painel de propriedades do texto */}
-        {isTextSelected ? (
+        {isStickerSelected ? (
+          /* Painel de cor do sticker selecionado */
+          <div className="w-56 shrink-0 space-y-3 p-3 rounded-xl bg-card border border-amber-500/40">
+            <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
+              <Palette className="h-3.5 w-3.5 text-amber-400" /> Cor do Sticker
+            </p>
+            <p className="text-xs text-muted-foreground">Selecione a cor do elemento para combinar com o fundo do flyer:</p>
+            <div className="space-y-2">
+              {VIP_STICKER_COLORS.map((color) => (
+                <button
+                  key={color.id}
+                  onClick={() => { setStickerColorId(color.id); recolorSelectedSticker(color.id); }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border-2 transition-all ${
+                    stickerColorId === color.id
+                      ? "border-amber-400 bg-amber-950/30"
+                      : "border-border hover:border-amber-400/40 hover:bg-muted/30"
+                  }`}
+                >
+                  <div
+                    className="w-5 h-5 rounded-full border border-border flex-shrink-0"
+                    style={{ backgroundColor: color.hex }}
+                  />
+                  <span className="text-xs font-medium text-foreground">{color.label}</span>
+                  <span className="text-[10px] text-muted-foreground font-mono ml-auto">{color.hex}</span>
+                  {stickerColorId === color.id && (
+                    <span className="text-amber-400 text-[10px] font-bold">✓</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground pt-1 border-t border-border">
+              💡 A cor também será aplicada aos próximos stickers adicionados
+            </p>
+          </div>
+        ) : isTextSelected ? (
           <div className="w-56 shrink-0 space-y-3 p-3 rounded-xl bg-card border border-border">
             <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
               <Palette className="h-3.5 w-3.5 text-amber-400" /> Propriedades do Texto
@@ -380,6 +515,7 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
           </div>
         ) : (
           /* Dica quando nada está selecionado */
+          // NOTE: fechamento do bloco isStickerSelected ? ... : isTextSelected ? ... :
           <div className="w-56 shrink-0 p-3 rounded-xl bg-card border border-border">
             <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
               <Type className="h-3.5 w-3.5 text-amber-400" /> Editor de Flyer
@@ -392,7 +528,7 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
               <p>• Clique em <strong className="text-amber-400">Salvar Flyer</strong> quando terminar</p>
             </div>
           </div>
-        )}
+        ) /* fecha isStickerSelected/isTextSelected */}
       </div>
 
       {/* ── Biblioteca de Stickers VIP ─────────────────────────────────────── */}
