@@ -12,6 +12,7 @@ import {
   ChevronRight, ChevronLeft, Sparkles, Upload, Image as ImageIcon,
   Search, Copy, Check, Palette, Layout, Type, Zap, Target,
   FileImage, Download, RotateCcw, Star, Edit2, X, Wand2, ZoomIn,
+  AlertCircle, CheckCircle2, PenLine,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -51,7 +52,7 @@ type Props = {
   onReset: () => void;
   onUploadImage?: (file: File) => Promise<string>; // retorna URL do S3
   isUploading?: boolean;
-  onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }, logoId?: number) => void;
+  onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }, logoId?: number, textos?: { headline: string; textoSecundario: string; cta: string }) => void;
   isGeneratingFlyer?: boolean;
   flyerResult?: { flyerUrl: string | null; prompt: string; logoUrl?: string | null; allLogos?: { url: string; nome: string | null }[]; logoWarning?: string | null } | null;
   orgId?: number; // para buscar imagens do Banco VIP
@@ -130,6 +131,14 @@ function CopyBtn({ text, className = "" }: { text: string; className?: string })
 
 // ── Resultado da arte ─────────────────────────────────────────────────────────
 
+// Tipos para o spell-check
+type SpellCheckResult = {
+  original: { headline: string; textoSecundario: string; cta: string };
+  corrected: { headline: string; textoSecundario: string; cta: string };
+  changes: { headlineChanged: boolean; textoSecundarioChanged: boolean; ctaChanged: boolean };
+  totalCorrections: number;
+};
+
 function ArtResult({
   resultado, imagemUrl, tipoImagem, onReset, onGenerateFlyer, isGeneratingFlyer, orgId,
 }: {
@@ -137,7 +146,7 @@ function ArtResult({
   imagemUrl: string | null;
   tipoImagem: "upload" | "ia" | "banco" | "banco-vip";
   onReset: () => void;
-  onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }, logoId?: number) => void;
+  onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }, logoId?: number, textos?: { headline: string; textoSecundario: string; cta: string }) => void;
   isGeneratingFlyer?: boolean;
   orgId?: number;
 }) {
@@ -148,30 +157,69 @@ function ArtResult({
   // Seleção de logo para o flyer
   const [showLogoSelector, setShowLogoSelector] = useState(false);
   const [selectedLogoId, setSelectedLogoId] = useState<number | undefined>(undefined);
+  // Spell-check e prévia editável
+  const [showSpellPreview, setShowSpellPreview] = useState(false);
+  const [spellResult, setSpellResult] = useState<SpellCheckResult | null>(null);
+  const [editedTextos, setEditedTextos] = useState<{ headline: string; textoSecundario: string; cta: string } | null>(null);
+  const [pendingLogoId, setPendingLogoId] = useState<number | undefined>(undefined);
+
   // Buscar logos cadastradas
   const logosQ = trpc.gestaoTotal.brandAssets.listLogos.useQuery(
     { orgId: orgId ?? 0 },
     { enabled: !!orgId && showLogoSelector }
   );
+  // Mutation de spell-check
+  const spellCheckMutation = trpc.gestaoTotal.marketingCampaigns.spellCheckFlyer.useMutation({
+    onSuccess: (data: SpellCheckResult) => {
+      setSpellResult(data);
+      setEditedTextos({ ...data.corrected });
+      setShowSpellPreview(true);
+      setShowLogoSelector(false);
+    },
+    onError: () => {
+      toast.error("Erro ao verificar ortografia. Gerando flyer com textos originais.");
+      // Gera direto sem spell-check
+      if (onGenerateFlyer) onGenerateFlyer(layout, pendingLogoId);
+    },
+  });
 
   const startEditLayout = () => { setLayoutDraft(layout); setEditingLayout(true); };
   const saveLayout = () => { setLayout(layoutDraft); setEditingLayout(false); toast.success("Layout atualizado!"); };
   const cancelLayout = () => { setEditingLayout(false); };
+
+  // Inicia o fluxo: logo (se necessário) → spell-check → prévia → gerar
   const handleGenerateFlyerClick = () => {
     if (!onGenerateFlyer) return;
-    // Se há logos cadastradas, mostrar seletor; senão gerar direto
     if (logosQ.data && logosQ.data.length > 1) {
       setShowLogoSelector(true);
     } else {
-      // Gerar com a única logo ou sem logo
       const logoId = logosQ.data?.[0]?.id;
-      onGenerateFlyer(layout, logoId);
+      setPendingLogoId(logoId);
+      runSpellCheck(logoId);
     }
   };
-  const confirmLogoAndGenerate = () => {
-    if (!onGenerateFlyer) return;
+  const confirmLogoAndRunSpellCheck = () => {
     setShowLogoSelector(false);
-    onGenerateFlyer(layout, selectedLogoId);
+    setPendingLogoId(selectedLogoId);
+    runSpellCheck(selectedLogoId);
+  };
+  const runSpellCheck = (logoId?: number) => {
+    setPendingLogoId(logoId);
+    spellCheckMutation.mutate({
+      headline: resultado.headline,
+      textoSecundario: resultado.textoSecundario,
+      cta: resultado.cta,
+    });
+  };
+  const confirmAndGenerate = () => {
+    if (!onGenerateFlyer || !editedTextos) return;
+    setShowSpellPreview(false);
+    onGenerateFlyer(layout, pendingLogoId, editedTextos);
+  };
+  const cancelSpellPreview = () => {
+    setShowSpellPreview(false);
+    setSpellResult(null);
+    setEditedTextos(null);
   };
 
   return (
@@ -414,14 +462,14 @@ function ArtResult({
                     <Button
                       size="sm" variant="outline"
                       className="flex-1 h-8 text-xs"
-                      onClick={() => { setSelectedLogoId(undefined); confirmLogoAndGenerate(); }}
+                      onClick={() => { setSelectedLogoId(undefined); confirmLogoAndRunSpellCheck(); }}
                     >
                       Gerar sem logo específica
                     </Button>
                     <Button
                       size="sm"
                       className="flex-1 h-8 text-xs bg-amber-500 hover:bg-amber-600 text-white"
-                      onClick={confirmLogoAndGenerate}
+                      onClick={confirmLogoAndRunSpellCheck}
                       disabled={!selectedLogoId}
                     >
                       <Check className="h-3.5 w-3.5 mr-1" /> Confirmar
@@ -429,6 +477,136 @@ function ArtResult({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Painel de prévia ortográfica editável */}
+          {showSpellPreview && spellResult && editedTextos && (
+            <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4 space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                    <PenLine className="h-3.5 w-3.5 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-blue-400">Revisão ortográfica</p>
+                    <p className="text-xs text-muted-foreground">
+                      {spellResult.totalCorrections > 0
+                        ? `${spellResult.totalCorrections} correção${spellResult.totalCorrections > 1 ? "ões" : ""} encontrada${spellResult.totalCorrections > 1 ? "s" : ""} — edite se necessário`
+                        : "Nenhuma correção necessária — textos estão corretos"}
+                    </p>
+                  </div>
+                </div>
+                <button onClick={cancelSpellPreview} className="text-muted-foreground hover:text-foreground p-1 rounded">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Campos editáveis */}
+              <div className="space-y-3">
+                {/* Headline */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wide">Headline</span>
+                    {spellResult.changes.headlineChanged ? (
+                      <span className="flex items-center gap-1 text-xs text-amber-400">
+                        <AlertCircle className="h-3 w-3" /> corrigido
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs text-green-400">
+                        <CheckCircle2 className="h-3 w-3" /> ok
+                      </span>
+                    )}
+                  </div>
+                  {spellResult.changes.headlineChanged && (
+                    <p className="text-xs text-muted-foreground line-through opacity-60">{spellResult.original.headline}</p>
+                  )}
+                  <Input
+                    value={editedTextos.headline}
+                    onChange={(e) => setEditedTextos(prev => prev ? { ...prev, headline: e.target.value } : prev)}
+                    className="text-sm font-semibold h-9"
+                  />
+                </div>
+
+                {/* Texto Secundário */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wide">Texto secundário</span>
+                    {spellResult.changes.textoSecundarioChanged ? (
+                      <span className="flex items-center gap-1 text-xs text-amber-400">
+                        <AlertCircle className="h-3 w-3" /> corrigido
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs text-green-400">
+                        <CheckCircle2 className="h-3 w-3" /> ok
+                      </span>
+                    )}
+                  </div>
+                  {spellResult.changes.textoSecundarioChanged && (
+                    <p className="text-xs text-muted-foreground line-through opacity-60">{spellResult.original.textoSecundario}</p>
+                  )}
+                  <Textarea
+                    value={editedTextos.textoSecundario}
+                    onChange={(e) => setEditedTextos(prev => prev ? { ...prev, textoSecundario: e.target.value } : prev)}
+                    rows={2}
+                    className="text-sm resize-none"
+                  />
+                </div>
+
+                {/* CTA */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wide">CTA</span>
+                    {spellResult.changes.ctaChanged ? (
+                      <span className="flex items-center gap-1 text-xs text-amber-400">
+                        <AlertCircle className="h-3 w-3" /> corrigido
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs text-green-400">
+                        <CheckCircle2 className="h-3 w-3" /> ok
+                      </span>
+                    )}
+                  </div>
+                  {spellResult.changes.ctaChanged && (
+                    <p className="text-xs text-muted-foreground line-through opacity-60">{spellResult.original.cta}</p>
+                  )}
+                  <Input
+                    value={editedTextos.cta}
+                    onChange={(e) => setEditedTextos(prev => prev ? { ...prev, cta: e.target.value } : prev)}
+                    className="text-sm h-9"
+                  />
+                </div>
+              </div>
+
+              {/* Botões de confirmação */}
+              <div className="flex gap-2 pt-1">
+                <Button
+                  size="sm" variant="outline"
+                  className="flex-1 h-9 text-xs"
+                  onClick={cancelSpellPreview}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  className="flex-1 h-9 text-xs bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold gap-1.5"
+                  onClick={confirmAndGenerate}
+                >
+                  <Wand2 className="h-3.5 w-3.5" /> Confirmar e Gerar Flyer
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Estado de carregamento do spell-check */}
+          {spellCheckMutation.isPending && (
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 flex items-center gap-3">
+              <div className="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-blue-400">Verificando ortografia...</p>
+                <p className="text-xs text-muted-foreground">Revisando textos em português do Brasil</p>
+              </div>
             </div>
           )}
 
@@ -599,7 +777,7 @@ export default function ArtGeneratorWizard({
             imagemUrl={result.imagemUrl}
             tipoImagem={data.tipoImagem ?? "ia"}
             onReset={() => { onReset(); setStep(1); setData({}); setUploadedImageUrl(null); setSelectedBancoVipUrl(null); }}
-            onGenerateFlyer={onGenerateFlyer ? (layout, logoId) => onGenerateFlyer(layout, logoId) : undefined}
+            onGenerateFlyer={onGenerateFlyer ? (layout, logoId, textos) => onGenerateFlyer(layout, logoId, textos) : undefined}
             isGeneratingFlyer={isGeneratingFlyer}
             orgId={orgId}
           />

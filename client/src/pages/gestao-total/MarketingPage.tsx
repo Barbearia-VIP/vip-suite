@@ -548,14 +548,18 @@ export default function MarketingPage() {
               }
             }}
             isUploading={isUploadingArtImage}
-            onGenerateFlyer={(layout, logoId) => {
+            onGenerateFlyer={(layout, logoId, textos) => {
               if (!org?.id || !artResult) return;
+              // Usa textos editados pelo usuário na prévia ortográfica, ou os originais
+              const headline = textos?.headline ?? artResult.resultado.headline;
+              const textoSecundario = textos?.textoSecundario ?? artResult.resultado.textoSecundario;
+              const cta = textos?.cta ?? artResult.resultado.cta;
               generateFlyerM.mutate({
                 orgId: org.id,
                 unitId: selectedUnit?.id,
-                headline: artResult.resultado.headline,
-                textoSecundario: artResult.resultado.textoSecundario,
-                cta: artResult.resultado.cta,
+                headline,
+                textoSecundario,
+                cta,
                 conceito: artResult.resultado.conceito,
                 direcaoVisual: artResult.resultado.direcaoVisual,
                 layout,

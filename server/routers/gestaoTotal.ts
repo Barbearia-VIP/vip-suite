@@ -1885,7 +1885,74 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
       return { success: true };
     }),
 
-  // ── Gerar Flyer Final ────────────────────────────────────────────────────────
+  // ── Verificar Ortografia dos Textos do Flyer ──────────────────────────────
+  spellCheckFlyer: protectedProcedure
+    .input(z.object({
+      headline: z.string(),
+      textoSecundario: z.string(),
+      cta: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `Você é um revisor ortográfico especializado em português do Brasil. Corrija APENAS erros ortográficos, de acento e de pontuação. Não altere o conteúdo, estilo ou tom. Para cada campo, indique se houve correção (changed: true) ou não (changed: false). Retorne JSON válido.`,
+            },
+            {
+              role: "user",
+              content: `Revise a ortografia em português do Brasil:\n\nheadline: "${input.headline}"\ntextoSecundario: "${input.textoSecundario}"\ncta: "${input.cta}"`,
+            },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "spell_check_preview",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  headline: { type: "string" },
+                  headlineChanged: { type: "boolean" },
+                  textoSecundario: { type: "string" },
+                  textoSecundarioChanged: { type: "boolean" },
+                  cta: { type: "string" },
+                  ctaChanged: { type: "boolean" },
+                  totalCorrections: { type: "number" },
+                },
+                required: ["headline", "headlineChanged", "textoSecundario", "textoSecundarioChanged", "cta", "ctaChanged", "totalCorrections"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+        const raw = response?.choices?.[0]?.message?.content;
+        const result = JSON.parse(typeof raw === "string" ? raw : "{}") as {
+          headline: string; headlineChanged: boolean;
+          textoSecundario: string; textoSecundarioChanged: boolean;
+          cta: string; ctaChanged: boolean;
+          totalCorrections: number;
+        };
+        return {
+          original: { headline: input.headline, textoSecundario: input.textoSecundario, cta: input.cta },
+          corrected: { headline: result.headline, textoSecundario: result.textoSecundario, cta: result.cta },
+          changes: { headlineChanged: result.headlineChanged, textoSecundarioChanged: result.textoSecundarioChanged, ctaChanged: result.ctaChanged },
+          totalCorrections: result.totalCorrections ?? 0,
+        };
+      } catch (e) {
+        console.error("[spellCheckFlyer] Erro:", e);
+        // Retorna textos originais sem correção em caso de erro
+        return {
+          original: { headline: input.headline, textoSecundario: input.textoSecundario, cta: input.cta },
+          corrected: { headline: input.headline, textoSecundario: input.textoSecundario, cta: input.cta },
+          changes: { headlineChanged: false, textoSecundarioChanged: false, ctaChanged: false },
+          totalCorrections: 0,
+        };
+      }
+    }),
+
+  // ── Gerar Flyer Final ────────────────────────────────────────────
   generateFlyer: protectedProcedure
     .input(z.object({
       orgId: z.number(),
