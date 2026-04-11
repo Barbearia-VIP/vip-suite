@@ -9,6 +9,7 @@ import {
   gtReunioes, gtCargos, gtColaboradores, gtFinanceiro, gtFornecedores,
   gtCompras, gtProblemas, gtOportunidades, gtRiscos, gtDocumentos,
   gtMarketing, gtMarketingCampaigns, gtAdvisorConversations, gtAuditLog,
+  gtContentHistory,
 } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
@@ -1419,6 +1420,91 @@ REGRAS:
       if (!db) throw new Error("DB unavailable");
       await db.delete(gtMarketingCampaigns)
         .where(and(eq(gtMarketingCampaigns.id, input.id), eq(gtMarketingCampaigns.orgId, input.orgId)));
+      return { success: true };
+    }),
+
+  // ── Histórico de Conteúdos Gerados ──────────────────────────────────────────────
+  saveContent: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      unitId: z.number().optional(),
+      objetivo: z.string(),
+      formato: z.string(),
+      tipoEntrega: z.string(),
+      publico: z.string(),
+      diferenciais: z.string(),
+      tom: z.string(),
+      ideias: z.array(z.any()),
+      titulo: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const [result] = await db.insert(gtContentHistory).values({
+        orgId: input.orgId,
+        unitId: input.unitId,
+        createdBy: ctx.user!.id,
+        objetivo: input.objetivo,
+        formato: input.formato,
+        tipoEntrega: input.tipoEntrega,
+        publico: input.publico,
+        diferenciais: input.diferenciais,
+        tom: input.tom,
+        ideias: input.ideias,
+        titulo: input.titulo ?? (input.ideias[0] as { titulo?: string })?.titulo ?? null,
+      });
+      const id = (result as { insertId: number }).insertId;
+      return { success: true, id };
+    }),
+
+  listContentHistory: protectedProcedure
+    .input(z.object({
+      orgId: z.number(),
+      unitId: z.number().optional(),
+      limit: z.number().default(20),
+      somentesFavoritos: z.boolean().default(false),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const conds = [eq(gtContentHistory.orgId, input.orgId)];
+      if (input.unitId) conds.push(eq(gtContentHistory.unitId, input.unitId));
+      if (input.somentesFavoritos) conds.push(eq(gtContentHistory.favoritado, true));
+      return db.select({
+        id: gtContentHistory.id,
+        objetivo: gtContentHistory.objetivo,
+        formato: gtContentHistory.formato,
+        tipoEntrega: gtContentHistory.tipoEntrega,
+        publico: gtContentHistory.publico,
+        tom: gtContentHistory.tom,
+        titulo: gtContentHistory.titulo,
+        favoritado: gtContentHistory.favoritado,
+        ideias: gtContentHistory.ideias,
+        createdAt: gtContentHistory.createdAt,
+      }).from(gtContentHistory)
+        .where(and(...conds))
+        .orderBy(desc(gtContentHistory.createdAt))
+        .limit(input.limit);
+    }),
+
+  toggleContentFavorite: protectedProcedure
+    .input(z.object({ id: z.number(), orgId: z.number(), favoritado: z.boolean() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await db.update(gtContentHistory)
+        .set({ favoritado: input.favoritado })
+        .where(and(eq(gtContentHistory.id, input.id), eq(gtContentHistory.orgId, input.orgId)));
+      return { success: true };
+    }),
+
+  deleteContentHistory: protectedProcedure
+    .input(z.object({ id: z.number(), orgId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      await db.delete(gtContentHistory)
+        .where(and(eq(gtContentHistory.id, input.id), eq(gtContentHistory.orgId, input.orgId)));
       return { success: true };
     }),
 

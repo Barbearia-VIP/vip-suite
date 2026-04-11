@@ -1468,3 +1468,30 @@ export const raioXCacheSyncLog = mysqlTable("raio_x_cache_sync_log", {
 ]);
 export type RaioXCacheSyncLog = typeof raioXCacheSyncLog.$inferSelect;
 export type InsertRaioXCacheSyncLog = typeof raioXCacheSyncLog.$inferInsert;
+
+// ── Histórico de Conteúdos Gerados (Gerador de Conteúdo - Marketing) ──────────
+export const gtContentHistory = mysqlTable("gt_content_history", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  createdBy: int("createdBy").notNull(),
+  // Parâmetros do wizard
+  objetivo: varchar("objetivo", { length: 255 }).notNull(),
+  formato: varchar("formato", { length: 100 }).notNull(),
+  tipoEntrega: varchar("tipoEntrega", { length: 100 }).notNull(),
+  publico: varchar("publico", { length: 255 }).notNull(),
+  diferenciais: text("diferenciais").notNull(),
+  tom: varchar("tom", { length: 100 }).notNull(),
+  // Resultado gerado (array de ideias em JSON)
+  ideias: json("ideias").notNull(),
+  // Metadados
+  titulo: varchar("titulo", { length: 255 }), // título da primeira ideia (para exibição na lista)
+  favoritado: boolean("favoritado").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_content_history_org").on(t.orgId),
+  index("idx_content_history_unit").on(t.unitId),
+  index("idx_content_history_created").on(t.createdAt),
+]);
+export type GtContentHistory = typeof gtContentHistory.$inferSelect;
+export type InsertGtContentHistory = typeof gtContentHistory.$inferInsert;

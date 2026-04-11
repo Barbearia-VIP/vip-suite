@@ -17,13 +17,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Plus, Trash2, Edit2, Megaphone, Wand2, Eye, UserCheck,
-  Calendar, Target, Sparkles, PenLine, Palette,
+  Calendar, Target, Sparkles, PenLine, Palette, History, Star, ChevronDown, ChevronUp, RefreshCw,
 } from "lucide-react";
 import MarketingCampaignWizard, { type WizardData } from "@/components/MarketingCampaignWizard";
 import { DatePicker } from "@/components/DatePicker";
 import CampaignPreview from "@/components/CampaignPreview";
 import AssignCampaignModal from "@/components/AssignCampaignModal";
 import ContentGeneratorWizard, { type ContentWizardData } from "@/components/ContentGeneratorWizard";
+import ContentHistoryPanel from "@/components/ContentHistoryPanel";
 
 type Campanha = {
   id: number; orgId: number; unitId: number | null;
@@ -169,11 +170,32 @@ export default function MarketingPage() {
   });
 
   // Mutation de Gerador de Conteúdo
+  // Guarda os dados do wizard para salvar junto com o resultado
+  const [lastWizardData, setLastWizardData] = useState<ContentWizardData | null>(null);
+
+  const saveContentM = trpc.gestaoTotal.marketingCampaigns.saveContent.useMutation({
+    onSuccess: () => utils.gestaoTotal.marketingCampaigns.listContentHistory.invalidate(),
+  });
+
   const generateContentM = trpc.gestaoTotal.marketingCampaigns.generateContent.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       if (data.ideias && data.ideias.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setContentResult(data.ideias as any[]);
+        // Salvar automaticamente no histórico
+        if (org?.id) {
+          saveContentM.mutate({
+            orgId: org.id,
+            unitId: selectedUnit?.id,
+            objetivo: variables.objetivo,
+            formato: variables.formato,
+            tipoEntrega: variables.tipoEntrega,
+            publico: variables.publico,
+            diferenciais: variables.diferenciais,
+            tom: variables.tom,
+            ideias: data.ideias,
+          });
+        }
       } else {
         toast.error("Nenhuma ideia foi gerada. Tente novamente.");
       }
@@ -183,6 +205,7 @@ export default function MarketingPage() {
 
   function handleGenerateContent(wizardData: ContentWizardData) {
     if (!org?.id) return;
+    setLastWizardData(wizardData);
     generateContentM.mutate({
       orgId: org.id,
       unitId: selectedUnit?.id,
@@ -447,13 +470,14 @@ export default function MarketingPage() {
         </TabsContent>
 
         {/* ABA: Gerador de Conteúdo */}
-        <TabsContent value="conteudo" className="mt-4">
+        <TabsContent value="conteudo" className="mt-4 space-y-6">
           <ContentGeneratorWizard
             onGenerate={handleGenerateContent}
             isGenerating={generateContentM.isPending}
             result={contentResult}
             onReset={() => setContentResult(null)}
           />
+          <ContentHistoryPanel orgId={org?.id ?? 0} unitId={selectedUnit?.id} onReuse={(ideias: unknown[]) => setContentResult(ideias)} />
         </TabsContent>
 
         {/* ABA: Criação de Arte */}

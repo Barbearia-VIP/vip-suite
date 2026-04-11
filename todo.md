@@ -1164,3 +1164,6 @@
 - [x] Marketing - Gerador de Conteúdo: wizard 6 telas (objetivo, formato, entrega, público, diferencial, tom)
 - [x] Marketing - Gerador de Conteúdo: procedure tRPC com prompt mestre Barbearia VIP
 - [x] Marketing - Gerador de Conteúdo: exibir 3 ideias geradas com roteiro, legenda e CTA
+- [x] Marketing - Gerador de Conteúdo: tabela gt_content_history no schema e migração
+- [x] Marketing - Gerador de Conteúdo: procedures tRPC saveContent e listContentHistory
+- [x] Marketing - Gerador de Conteúdo: painel de histórico com visualização e reutilização

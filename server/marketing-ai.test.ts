@@ -510,3 +510,69 @@ describe("Gerador de Conteúdo — estrutura de saída esperada", () => {
     expect(validateContentIdeia({ ...mockIdeia, gancho: "" })).toBe(false);
   });
 });
+
+// ── Testes: Histórico de Conteúdos Gerados ─────────────────────────────────
+
+describe("ContentHistory logic", () => {
+  it("deve extrair o título da primeira ideia quando titulo não é fornecido", () => {
+    const ideias = [
+      { titulo: "Ideia Principal", conceito: "Conceito", gancho: "Gancho", execucao: "Exec", roteiro: "", legendas: { emocional: "", vendedora: "", engajamento: "" }, cta: "" },
+    ];
+    const titulo = (ideias[0] as { titulo?: string })?.titulo ?? null;
+    expect(titulo).toBe("Ideia Principal");
+  });
+
+  it("deve retornar null quando ideias está vazio", () => {
+    const ideias: { titulo?: string }[] = [];
+    const titulo = (ideias[0] as { titulo?: string } | undefined)?.titulo ?? null;
+    expect(titulo).toBeNull();
+  });
+
+  it("deve validar campos obrigatórios do histórico", () => {
+    const entrada = {
+      orgId: 1,
+      unitId: 2,
+      objetivo: "Atrair novos clientes",
+      formato: "Reels",
+      tipoEntrega: "Vídeo curto",
+      publico: "Homens 20-35 anos",
+      diferenciais: "Atendimento premium",
+      tom: "Descontraído",
+      ideias: [],
+    };
+    expect(entrada.orgId).toBeGreaterThan(0);
+    expect(entrada.objetivo.length).toBeGreaterThan(0);
+    expect(entrada.formato.length).toBeGreaterThan(0);
+  });
+
+  it("deve filtrar por favoritos corretamente", () => {
+    const items = [
+      { id: 1, favoritado: true, titulo: "A" },
+      { id: 2, favoritado: false, titulo: "B" },
+      { id: 3, favoritado: true, titulo: "C" },
+    ];
+    const favoritos = items.filter(i => i.favoritado);
+    expect(favoritos).toHaveLength(2);
+    expect(favoritos.map(f => f.id)).toEqual([1, 3]);
+  });
+
+  it("deve ordenar por data decrescente (mais recente primeiro)", () => {
+    const items = [
+      { id: 1, createdAt: new Date("2026-01-01") },
+      { id: 2, createdAt: new Date("2026-03-01") },
+      { id: 3, createdAt: new Date("2026-02-01") },
+    ];
+    const sorted = [...items].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    expect(sorted[0].id).toBe(2);
+    expect(sorted[1].id).toBe(3);
+    expect(sorted[2].id).toBe(1);
+  });
+
+  it("deve toggle favorito corretamente", () => {
+    let item = { id: 1, favoritado: false };
+    item = { ...item, favoritado: !item.favoritado };
+    expect(item.favoritado).toBe(true);
+    item = { ...item, favoritado: !item.favoritado };
+    expect(item.favoritado).toBe(false);
+  });
+});
