@@ -1159,3 +1159,5 @@
 - [x] Corrigir lógica de routing: Só 1 barbeiro, Multi-barbeiro e Média barb/cliente devem usar barbeiros distintos NO PERÍODO (não histórico total)
 - [x] Corrigir cache persistente Raio-X: dados históricos devem ser servidos EXCLUSIVAMENTE do cache local, sem disparar queries SSH
 - [x] Gestão Total - Marketing: corrigir seletor de colaboradores na destinação de campanha (não consegue selecionar colaborador cadastrado) e criar tarefa para o colaborador selecionado
+- [x] Marketing - Adicionar aba 'Gerador de Conteúdo' no menu de Marketing (estrutura pronta para lógica futura)
+- [x] Marketing - Adicionar aba 'Criação de Arte' no menu de Marketing (estrutura pronta para lógica futura)

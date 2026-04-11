@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   Plus, Trash2, Edit2, Megaphone, Wand2, Eye, UserCheck,
-  Calendar, Target, Sparkles,
+  Calendar, Target, Sparkles, PenLine, Palette,
 } from "lucide-react";
 import MarketingCampaignWizard, { type WizardData } from "@/components/MarketingCampaignWizard";
 import { DatePicker } from "@/components/DatePicker";
@@ -247,7 +247,7 @@ export default function MarketingPage() {
       </div>
 
       <Tabs defaultValue="estrategias">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="estrategias" className="gap-1.5">
             <Sparkles className="h-3.5 w-3.5" /> Estratégias com IA
             {aiCampaigns.length > 0 && <Badge variant="secondary" className="ml-1 text-xs">{aiCampaigns.length}</Badge>}
@@ -255,6 +255,12 @@ export default function MarketingPage() {
           <TabsTrigger value="campanhas" className="gap-1.5">
             <Megaphone className="h-3.5 w-3.5" /> Campanhas Manuais
             {campanhas.length > 0 && <Badge variant="secondary" className="ml-1 text-xs">{campanhas.length}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="conteudo" className="gap-1.5">
+            <PenLine className="h-3.5 w-3.5" /> Gerador de Conteúdo
+          </TabsTrigger>
+          <TabsTrigger value="arte" className="gap-1.5">
+            <Palette className="h-3.5 w-3.5" /> Criação de Arte
           </TabsTrigger>
         </TabsList>
 
@@ -410,6 +416,56 @@ export default function MarketingPage() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        {/* ABA: Gerador de Conteúdo */}
+        <TabsContent value="conteudo" className="mt-4">
+          <div className="glass-card border-primary/20 bg-primary/5">
+            <div className="p-8 flex flex-col items-center text-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-primary/20 flex items-center justify-center">
+                <PenLine className="h-7 w-7 text-primary" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold text-foreground">Gerador de Conteúdo</h2>
+                <p className="text-sm text-muted-foreground max-w-md">
+                  Gere legendas, posts, roteiros para Reels, textos para e-mail marketing e muito mais com auxílio da IA — adaptados ao tom de voz e identidade da sua unidade.
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-2 text-xs">
+                {["Legendas para Instagram", "Posts para Facebook", "Roteiro de Reels", "E-mail Marketing", "WhatsApp em massa", "Blog / SEO"].map(tag => (
+                  <span key={tag} className="px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary font-medium">{tag}</span>
+                ))}
+              </div>
+              <div className="mt-2 px-4 py-3 rounded-lg bg-muted/40 border border-border text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">Em breve</span> — a lógica de geração de conteúdo será implementada nesta aba.
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ABA: Criação de Arte */}
+        <TabsContent value="arte" className="mt-4">
+          <div className="glass-card border-purple-500/20 bg-purple-500/5">
+            <div className="p-8 flex flex-col items-center text-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-purple-500/20 flex items-center justify-center">
+                <Palette className="h-7 w-7 text-purple-400" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold text-foreground">Criação de Arte</h2>
+                <p className="text-sm text-muted-foreground max-w-md">
+                  Crie artes prontas para publicação: posts, stories, banners, capas e materiais visuais personalizados com a identidade da sua unidade, gerados por IA.
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-2 text-xs">
+                {["Post Feed", "Story", "Banner Promoção", "Capa de Destaque", "Card de Serviço", "Flyer Digital"].map(tag => (
+                  <span key={tag} className="px-3 py-1 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-400 font-medium">{tag}</span>
+                ))}
+              </div>
+              <div className="mt-2 px-4 py-3 rounded-lg bg-muted/40 border border-border text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">Em breve</span> — a lógica de geração de artes será implementada nesta aba.
+              </div>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
 
