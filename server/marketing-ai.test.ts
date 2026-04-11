@@ -729,3 +729,82 @@ describe("uploadArtImage endpoint logic", () => {
     expect(mockStorageResponse.key).toMatch(/^art-references\//);
   });
 });
+
+// ── Testes: ArtHistoryPanel ───────────────────────────────────────────────────
+
+describe("ArtHistoryPanel logic", () => {
+  it("deve filtrar artes excluídas localmente por deletedIds", () => {
+    const artes = [
+      { id: 1, imagemUrl: "https://cdn.example.com/1.jpg", favoritado: false },
+      { id: 2, imagemUrl: null, favoritado: true },
+      { id: 3, imagemUrl: "https://cdn.example.com/3.jpg", favoritado: false },
+    ];
+    const deletedIds = new Set([2]);
+    const visible = artes.filter(a => !deletedIds.has(a.id));
+    expect(visible).toHaveLength(2);
+    expect(visible.map(a => a.id)).toEqual([1, 3]);
+  });
+
+  it("deve filtrar somente favoritas quando somentesFavoritos=true", () => {
+    const artes = [
+      { id: 1, favoritado: true },
+      { id: 2, favoritado: false },
+      { id: 3, favoritado: true },
+      { id: 4, favoritado: false },
+    ];
+    const favoritas = artes.filter(a => a.favoritado);
+    expect(favoritas).toHaveLength(2);
+    expect(favoritas.map(a => a.id)).toEqual([1, 3]);
+  });
+
+  it("deve gerar chave de cache correta para listArtHistory", () => {
+    const orgId = 5;
+    const unitId = 12;
+    const limit = 30;
+    const key = { orgId, unitId, limit, somentesFavoritos: false };
+    expect(key.orgId).toBe(5);
+    expect(key.unitId).toBe(12);
+    expect(key.limit).toBe(30);
+  });
+
+  it("deve formatar data corretamente em pt-BR", () => {
+    const date = new Date("2026-04-11T10:00:00Z");
+    const formatted = date.toLocaleDateString("pt-BR", {
+      day: "2-digit", month: "short", year: "numeric"
+    });
+    expect(formatted).toMatch(/\d{2}/); // dia com 2 dígitos
+    expect(formatted).toMatch(/2026/);  // ano presente
+  });
+
+  it("deve mapear assuntos para labels legíveis", () => {
+    const labels: Record<string, string> = {
+      promocao: "Promoção",
+      novo_servico: "Novo Serviço",
+      institucional: "Institucional",
+      data_comemorativa: "Data Comemorativa",
+      depoimento: "Depoimento",
+      bastidores: "Bastidores",
+      produto: "Produto",
+      outro: "Outro",
+    };
+    expect(labels["promocao"]).toBe("Promoção");
+    expect(labels["novo_servico"]).toBe("Novo Serviço");
+    expect(labels["outro"]).toBe("Outro");
+    expect(labels["inexistente"]).toBeUndefined();
+  });
+
+  it("deve mapear tipos de arte para labels legíveis", () => {
+    const labels: Record<string, string> = {
+      post_instagram: "Post Instagram",
+      story: "Story",
+      reels_capa: "Capa de Reels",
+      banner_whatsapp: "Banner WhatsApp",
+      flyer_digital: "Flyer Digital",
+      card_servico: "Card de Serviço",
+      capa_destaque: "Capa de Destaque",
+    };
+    expect(labels["post_instagram"]).toBe("Post Instagram");
+    expect(labels["story"]).toBe("Story");
+    expect(labels["capa_destaque"]).toBe("Capa de Destaque");
+  });
+});

@@ -26,6 +26,7 @@ import AssignCampaignModal from "@/components/AssignCampaignModal";
 import ContentGeneratorWizard, { type ContentWizardData } from "@/components/ContentGeneratorWizard";
 import ContentHistoryPanel from "@/components/ContentHistoryPanel";
 import ArtGeneratorWizard, { type ArtWizardData, type ArtResultado } from "@/components/ArtGeneratorWizard";
+import ArtHistoryPanel from "@/components/ArtHistoryPanel";
 
 type Campanha = {
   id: number; orgId: number; unitId: number | null;
@@ -524,6 +525,16 @@ export default function MarketingPage() {
             }}
             isUploading={isUploadingArtImage}
           />
+          {org?.id && (
+            <ArtHistoryPanel
+              orgId={org.id}
+              unitId={selectedUnit?.id}
+              onReuse={({ wizardData, resultado, imagemUrl }) => {
+                setArtResult({ resultado, imagemUrl });
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            />
+          )}
         </TabsContent>
       </Tabs>
 

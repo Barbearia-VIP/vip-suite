@@ -1173,3 +1173,4 @@
 - [x] Marketing - Criação de Arte: geração de imagem via IA (nano banana) e exibição do resultado
 - [x] Marketing - Criação de Arte: histórico de artes geradas
 - [x] Criação de Arte: endpoint /api/upload-art-image para upload de imagem de referência para S3
+- [x] Criação de Arte: painel ArtHistoryPanel com miniaturas, favoritos e reutilizar
