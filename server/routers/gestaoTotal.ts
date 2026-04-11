@@ -2128,6 +2128,8 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
         `- MUST NOT overload with text or exclamation marks`,
         `- MUST prioritize: visual impact, desire, sense of exclusivity`,
         `- Inspired by: Louis Vuitton, Gucci, YSL applied to masculine universe`,
+        `- WEBSITE/DOMAIN: If you include a website URL on the flyer, use ONLY: barbeariavip.com.br — DO NOT invent, guess, or use any other domain. If unsure, omit the URL entirely.`,
+        `- DO NOT invent any phone numbers, addresses, or contact information not provided in the content below`,
         ``,
         `=== LOGO RULES (CRITICAL) ===`,
         allLogos.length > 0
@@ -2203,8 +2205,41 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
         ...(originalImages.length > 0 ? { originalImages } : {}),
       });
 
+      // Pós-processamento: garantir dimensões exatas do formato solicitado
+      let finalFlyerUrl = imgResult.url ?? null;
+      if (finalFlyerUrl) {
+        try {
+          const [targetW, targetH] = formato.dims.replace("px", "").split("x").map(Number);
+          // Baixar a imagem gerada
+          const imgResponse = await fetch(finalFlyerUrl);
+          const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
+          // Usar sharp para redimensionar mantendo aspect ratio e fazendo crop centralizado
+          const sharp = (await import("sharp")).default;
+          const resizedBuffer = await sharp(imgBuffer)
+            .resize(targetW, targetH, {
+              fit: "cover",       // crop centralizado para preencher exatamente as dimensões
+              position: "centre", // centralizar o crop
+            })
+            .png()
+            .toBuffer();
+          // Subir a versão redimensionada para o storage
+          const { storagePut } = await import("../storage");
+          const timestamp = Date.now();
+          const { url: resizedUrl } = await storagePut(
+            `flyers/${timestamp}-${input.tipoArte}.png`,
+            resizedBuffer,
+            "image/png"
+          );
+          finalFlyerUrl = resizedUrl;
+          console.log(`[generateFlyer] Pós-processamento: ${formato.dims} aplicado com sucesso → ${resizedUrl.substring(0, 80)}...`);
+        } catch (e) {
+          console.error("[generateFlyer] Erro no pós-processamento de dimensões:", e);
+          // Mantém a URL original em caso de erro
+        }
+      }
+
       return {
-        flyerUrl: imgResult.url ?? null,
+        flyerUrl: finalFlyerUrl,
         prompt: flyerPrompt,
         logoUrl,
         allLogos,
