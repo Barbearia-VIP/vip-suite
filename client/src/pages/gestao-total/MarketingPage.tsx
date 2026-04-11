@@ -564,7 +564,7 @@ export default function MarketingPage() {
               }
             }}
             isUploading={isUploadingArtImage}
-            onGenerateFlyer={(layout, logoId, textos) => {
+            onGenerateFlyer={(layout, logoId, textos, tipoArteOverride) => {
               if (!org?.id || !artResult) return;
               // Usa textos editados pelo usuário na prévia ortográfica, ou os originais
               const headline = textos?.headline ?? artResult.resultado.headline;
@@ -590,7 +590,7 @@ export default function MarketingPage() {
                 layout,
                 imagemUrl: imagemParaFlyer,
                 assunto: lastArtData?.assunto ?? "",
-                tipoArte: lastArtData?.tipoArte ?? "post_instagram",
+                tipoArte: tipoArteOverride ?? lastArtData?.tipoArte ?? "post_instagram",
                 logoId,
               };
               // Guarda os parâmetros para regeneração

@@ -15,7 +15,7 @@ import {
   ChevronRight, ChevronLeft, Sparkles, Upload, Image as ImageIcon,
   Search, Copy, Check, Palette, Layout, Type, Zap, Target,
   FileImage, Download, RotateCcw, Star, Edit2, X, Wand2, ZoomIn,
-  AlertCircle, CheckCircle2, PenLine,
+  AlertCircle, CheckCircle2, PenLine, LayoutGrid, ChevronDown as ChevronDownIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import FlyerCanvasEditor from "@/components/FlyerCanvasEditor";
@@ -56,7 +56,7 @@ type Props = {
   onReset: () => void;
   onUploadImage?: (file: File) => Promise<string>; // retorna URL do S3
   isUploading?: boolean;
-  onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }, logoId?: number, textos?: { headline: string; textoSecundario: string; cta: string }) => void;
+  onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }, logoId?: number, textos?: { headline: string; textoSecundario: string; cta: string }, tipoArte?: string) => void;
   onRegenerateFlyer?: () => void;
   isGeneratingFlyer?: boolean;
   flyerResult?: { flyerUrl: string | null; prompt: string; logoUrl?: string | null; allLogos?: { url: string; nome: string | null }[]; logoWarning?: string | null } | null;
@@ -144,14 +144,26 @@ type SpellCheckResult = {
   totalCorrections: number;
 };
 
+// Mapa de formatos com dimensões para exibição
+const FORMATO_INFO: Record<string, { label: string; dims: string; ratio: string; emoji: string }> = {
+  post_instagram: { label: "Post Instagram", dims: "1080×1080px", ratio: "1:1", emoji: "📸" },
+  story:          { label: "Story / Reels",  dims: "1080×1920px", ratio: "9:16", emoji: "📱" },
+  banner:         { label: "Banner",         dims: "1280×720px",  ratio: "16:9", emoji: "🖼️" },
+  banner_whatsapp:{ label: "Banner WhatsApp",dims: "1600×900px",  ratio: "16:9", emoji: "💬" },
+  flyer_digital:  { label: "Flyer Digital",  dims: "1080×1350px", ratio: "4:5",  emoji: "📄" },
+  card_servico:   { label: "Card Serviço",   dims: "1080×1080px", ratio: "1:1",  emoji: "🎴" },
+  carrossel:      { label: "Carrossel",      dims: "1080×1080px", ratio: "1:1",  emoji: "🎠" },
+};
+
 function ArtResult({
-  resultado, imagemUrl, tipoImagem, onReset, onGenerateFlyer, isGeneratingFlyer, orgId,
+  resultado, imagemUrl, tipoImagem, tipoArte, onReset, onGenerateFlyer, isGeneratingFlyer, orgId,
 }: {
   resultado: ArtResultado;
   imagemUrl: string | null;
   tipoImagem: "upload" | "ia" | "banco" | "banco-vip";
+  tipoArte?: string;
   onReset: () => void;
-  onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }, logoId?: number, textos?: { headline: string; textoSecundario: string; cta: string }) => void;
+  onGenerateFlyer?: (layout: { topo: string; centro: string; rodape: string }, logoId?: number, textos?: { headline: string; textoSecundario: string; cta: string }, tipoArte?: string) => void;
   isGeneratingFlyer?: boolean;
   orgId?: number;
 }) {
@@ -167,6 +179,9 @@ function ArtResult({
   const [spellResult, setSpellResult] = useState<SpellCheckResult | null>(null);
   const [editedTextos, setEditedTextos] = useState<{ headline: string; textoSecundario: string; cta: string } | null>(null);
   const [pendingLogoId, setPendingLogoId] = useState<number | undefined>(undefined);
+  // Formato/dimensão do flyer
+  const [selectedTipoArte, setSelectedTipoArte] = useState<string>(tipoArte ?? "post_instagram");
+  const [showFormatSelector, setShowFormatSelector] = useState(false);
 
   // Buscar logos cadastradas
   const logosQ = trpc.gestaoTotal.brandAssets.listLogos.useQuery(
@@ -219,7 +234,7 @@ function ArtResult({
   const confirmAndGenerate = () => {
     if (!onGenerateFlyer || !editedTextos) return;
     setShowSpellPreview(false);
-    onGenerateFlyer(layout, pendingLogoId, editedTextos);
+    onGenerateFlyer(layout, pendingLogoId, editedTextos, selectedTipoArte);
   };
   const cancelSpellPreview = () => {
     setShowSpellPreview(false);
@@ -506,6 +521,63 @@ function ArtResult({
                 <button onClick={cancelSpellPreview} className="text-muted-foreground hover:text-foreground p-1 rounded">
                   <X className="h-4 w-4" />
                 </button>
+              </div>
+
+              {/* Seletor de formato/dimensão */}
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <LayoutGrid className="h-3.5 w-3.5 text-amber-400" />
+                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wide">Formato do Flyer</span>
+                  </div>
+                  <button
+                    onClick={() => setShowFormatSelector(!showFormatSelector)}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <span>Alterar</span>
+                    <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform ${showFormatSelector ? "rotate-180" : ""}`} />
+                  </button>
+                </div>
+                {/* Formato atual selecionado */}
+                {(() => {
+                  const fmt = FORMATO_INFO[selectedTipoArte] ?? FORMATO_INFO["post_instagram"];
+                  return (
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{fmt.emoji}</span>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{fmt.label}</p>
+                        <p className="text-xs text-muted-foreground">{fmt.ratio} · {fmt.dims}</p>
+                      </div>
+                      <div className="ml-auto flex items-center gap-1.5">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-mono font-bold">{fmt.ratio}</span>
+                        <span className="text-xs text-muted-foreground">{fmt.dims}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+                {/* Lista de formatos para alterar */}
+                {showFormatSelector && (
+                  <div className="grid grid-cols-2 gap-1.5 pt-1">
+                    {Object.entries(FORMATO_INFO).map(([key, fmt]) => (
+                      <button
+                        key={key}
+                        onClick={() => { setSelectedTipoArte(key); setShowFormatSelector(false); }}
+                        className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border text-left transition-all ${
+                          selectedTipoArte === key
+                            ? "border-amber-400 bg-amber-950/40 text-amber-400"
+                            : "border-border hover:border-amber-400/40 hover:bg-muted/30 text-foreground"
+                        }`}
+                      >
+                        <span className="text-base">{fmt.emoji}</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium truncate">{fmt.label}</p>
+                          <p className="text-[10px] text-muted-foreground">{fmt.ratio} · {fmt.dims}</p>
+                        </div>
+                        {selectedTipoArte === key && <Check className="h-3 w-3 ml-auto shrink-0 text-amber-400" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Campos editáveis */}
@@ -846,8 +918,9 @@ export default function ArtGeneratorWizard({
             resultado={result.resultado}
             imagemUrl={result.imagemUrl}
             tipoImagem={data.tipoImagem ?? "ia"}
+            tipoArte={data.tipoArte}
             onReset={() => { onReset(); setStep(1); setData({}); setUploadedImageUrl(null); setSelectedBancoVipUrl(null); }}
-            onGenerateFlyer={onGenerateFlyer ? (layout, logoId, textos) => onGenerateFlyer(layout, logoId, textos) : undefined}
+            onGenerateFlyer={onGenerateFlyer ? (layout, logoId, textos, tipoArteOverride) => onGenerateFlyer(layout, logoId, textos, tipoArteOverride) : undefined}
             isGeneratingFlyer={isGeneratingFlyer}
             orgId={orgId}
           />
