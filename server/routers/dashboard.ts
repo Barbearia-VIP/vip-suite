@@ -201,6 +201,19 @@ export const dashboardRouter = router({
         ? Math.round(((faturamentoMes - faturamentoAnterior) / faturamentoAnterior) * 100)
         : null;
 
+      // ── SYNC STATUS: buscar última sincronização do sync_controle ──
+      let ultimaSync: string | null = null;
+      let syncAtiva = false;
+      try {
+        const syncCtrlRows = await queryLocal<{ ultima_sync: string | null; status: string; updated_at: string }>(
+          `SELECT ultima_sync, status, updated_at FROM sync_controle ORDER BY updated_at DESC LIMIT 1`
+        );
+        if (syncCtrlRows.length > 0) {
+          ultimaSync = syncCtrlRows[0].ultima_sync ? String(syncCtrlRows[0].ultima_sync) : null;
+          syncAtiva = syncCtrlRows[0].status === 'syncing';
+        }
+      } catch { /* ignora erro de sync_controle */ }
+
       // ── GESTÃO TOTAL: usa gt_tarefas (tabela correta do módulo GT) ──
       const [gtTarefasStats] = await db.select({
         abertas: count(gtTarefas.id),
@@ -347,6 +360,8 @@ export const dashboardRouter = router({
           trendFaturamento,
           totalClientes,
           hasData: faturamentoMes > 0 || atendimentos > 0,
+          ultimaSync,
+          syncAtiva,
         },
         gestaoTotal: {
           tarefasAbertas: Number(gtTarefasStats?.abertas ?? 0),

@@ -8,6 +8,7 @@ import {
   CheckSquare, Wifi, WifiOff, Settings, TrendingDown,
   Users, AlertTriangle, CalendarDays, DollarSign, Smile,
   MessageCircle, ThumbsUp, Clock, Zap, Activity, Meh, Frown, ImagePlay,
+  DatabaseZap, Loader2,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useOrg } from "@/hooks/useOrg";
@@ -245,6 +246,113 @@ const MODULE_KPI_MAP: Record<ModuleKey, "dataVip" | "gestaoTotal" | "vipCam" | "
   data_vip: "dataVip", gestao_total: "gestaoTotal", vip_cam: "vipCam",
   reputacao: "reputacao", auto_instagram: "autoInstagram", we_send: "weSend",
 };
+
+// ─── Syncing Placeholder ────────────────────────────────────────────────────
+function SyncingPlaceholder({
+  ultimaSync,
+  syncAtiva,
+  compact = false,
+  height,
+}: {
+  ultimaSync: string | null;
+  syncAtiva: boolean;
+  compact?: boolean;
+  height?: number;
+}) {
+  function fmtUltimaSync(raw: string | null): string {
+    if (!raw) return "";
+    try {
+      const d = new Date(raw);
+      const diffMs = Date.now() - d.getTime();
+      const diffMin = Math.floor(diffMs / 60000);
+      const diffH = Math.floor(diffMin / 60);
+      if (diffMin < 2) return "agora mesmo";
+      if (diffMin < 60) return `há ${diffMin} min`;
+      if (diffH < 24) return `há ${diffH}h`;
+      return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    } catch { return ""; }
+  }
+
+  const syncLabel = fmtUltimaSync(ultimaSync);
+  const pulseColor = "oklch(0.65 0.15 200)";
+
+  if (compact) {
+    return (
+      <div className="py-3 flex flex-col items-center gap-2">
+        <div className="relative flex items-center justify-center">
+          <div
+            className="absolute w-10 h-10 rounded-full animate-ping opacity-20"
+            style={{ background: pulseColor }}
+          />
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center"
+            style={{ background: `${pulseColor}18`, border: `1px solid ${pulseColor}35` }}
+          >
+            <DatabaseZap className="w-4 h-4" style={{ color: pulseColor }} />
+          </div>
+        </div>
+        <div className="text-center">
+          <p className="text-xs font-medium" style={{ color: pulseColor }}>
+            {syncAtiva ? "Sincronizando dados…" : "Aguardando dados"}
+          </p>
+          {syncLabel && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Última sync: {syncLabel}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-3 text-center"
+      style={{ height: height ?? 200 }}
+    >
+      {/* Anel pulsante animado */}
+      <div className="relative flex items-center justify-center">
+        <div
+          className="absolute w-16 h-16 rounded-full animate-ping opacity-15"
+          style={{ background: pulseColor }}
+        />
+        <div
+          className="absolute w-12 h-12 rounded-full animate-pulse opacity-25"
+          style={{ background: pulseColor }}
+        />
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center"
+          style={{ background: `${pulseColor}18`, border: `1px solid ${pulseColor}40` }}
+        >
+          {syncAtiva
+            ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: pulseColor }} />
+            : <DatabaseZap className="w-5 h-5" style={{ color: pulseColor }} />}
+        </div>
+      </div>
+
+      {/* Barra de progresso animada */}
+      <div className="w-32 h-1 rounded-full overflow-hidden" style={{ background: `${pulseColor}15` }}>
+        <div
+          className="h-full rounded-full animate-pulse"
+          style={{ background: `linear-gradient(90deg, ${pulseColor}60, ${pulseColor})`, width: "60%" }}
+        />
+      </div>
+
+      <div>
+        <p className="text-sm font-medium" style={{ color: pulseColor }}>
+          {syncAtiva ? "Sincronizando dados…" : "Dados sendo carregados"}
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {syncAtiva
+            ? "Importando registros do sistema"
+            : syncLabel
+              ? `Última atualização: ${syncLabel}`
+              : "Os dados aparecerão em instantes"}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 // ─── Tooltip customizado ─────────────────────────────────────────────────────
 function PremiumTooltip({ active, payload, label }: any) {
@@ -564,10 +672,11 @@ export default function DashboardPage() {
               )}
             </>
           ) : (
-            <div className="py-2 text-center">
-              <p className="text-xs text-muted-foreground">Sem dados no período</p>
-              <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/data-vip")}>Sincronizar Data VIP →</Button>
-            </div>
+            <SyncingPlaceholder
+              ultimaSync={kpis?.dataVip.ultimaSync ?? null}
+              syncAtiva={kpis?.dataVip.syncAtiva ?? false}
+              compact
+            />
           )}
         </ModuleCard>
 
@@ -848,13 +957,11 @@ export default function DashboardPage() {
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[200px] flex flex-col items-center justify-center text-center">
-                <BarChart3 className="w-8 h-8 text-muted-foreground/20 mb-2" />
-                <p className="text-sm text-muted-foreground">Sem dados de faturamento</p>
-                <Button variant="link" size="sm" className="text-xs mt-1" onClick={() => navigate("/data-vip")}>
-                  Sincronizar Data VIP →
-                </Button>
-              </div>
+              <SyncingPlaceholder
+                ultimaSync={kpis?.dataVip.ultimaSync ?? null}
+                syncAtiva={kpis?.dataVip.syncAtiva ?? false}
+                height={200}
+              />
             )}
           </div>
         </div>

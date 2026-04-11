@@ -1181,3 +1181,4 @@
 - [ ] Configurações: banco de imagens global (upload de múltiplas imagens de referência para todas as unidades)
 - [x] Configurações: suporte a múltiplas logos (até 4 versões) com nome e descrição
 - [x] Criação de Arte: flyer sempre usa logo salva nas Configurações (gt_brand_assets) como referência obrigatória — nunca cria logo nova
+- [x] Dashboard: substituir mensagem 'Sem dados no período / Sincronizar Data VIP' por estado visual amigável de sincronização (ícone animado, pulse, texto 'Aguardando dados' / 'Sincronizando dados…' com última sync)
