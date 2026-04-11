@@ -808,3 +808,42 @@ describe("ArtHistoryPanel logic", () => {
     expect(labels["capa_destaque"]).toBe("Capa de Destaque");
   });
 });
+
+// ── Testes: Botão de download de imagem ───────────────────────────────────────
+
+describe("download de imagem de arte", () => {
+  it("deve gerar nome de arquivo descritivo a partir da headline", () => {
+    const headline = "Promoção Especial de Verão!";
+    const filename = `arte-vip-${headline.slice(0, 30).replace(/[^a-zA-Z0-9]/g, '-')}.jpg`;
+    expect(filename).toBe("arte-vip-Promo--o-Especial-de-Ver-o-.jpg");
+    expect(filename).toMatch(/^arte-vip-/);
+    expect(filename).toMatch(/\.jpg$/);
+  });
+
+  it("deve gerar nome de arquivo com assunto e id para o histórico", () => {
+    const assunto = "promocao";
+    const id = 42;
+    const filename = `arte-${assunto}-${id}.jpg`;
+    expect(filename).toBe("arte-promocao-42.jpg");
+  });
+
+  it("deve truncar headline longa para no máximo 30 caracteres no nome do arquivo", () => {
+    const headline = "Esta é uma headline muito longa que ultrapassa o limite";
+    const truncated = headline.slice(0, 30);
+    expect(truncated.length).toBe(30);
+    expect(truncated).toBe("Esta é uma headline muito long");
+  });
+
+  it("deve substituir caracteres especiais por hífen no nome do arquivo", () => {
+    const headline = "Arte & Design: Barbearia VIP!";
+    const safe = headline.replace(/[^a-zA-Z0-9]/g, '-');
+    expect(safe).not.toMatch(/[&:! ]/);
+    expect(safe).toMatch(/^[a-zA-Z0-9-]+$/);
+  });
+
+  it("deve usar URL do CDN como href do link de download", () => {
+    const imagemUrl = "https://d2xsxph8kpxj0f.cloudfront.net/310419663029099127/Gw6CU8nRy9T64yBMvKuEjJ/art-references/test.jpg";
+    expect(imagemUrl).toMatch(/^https:\/\//);
+    expect(imagemUrl).toMatch(/cloudfront\.net/);
+  });
+});

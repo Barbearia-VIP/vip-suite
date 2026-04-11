@@ -200,13 +200,31 @@ function ArtResult({
         <div className="space-y-3">
           {/* Imagem gerada */}
           {imagemUrl && (
-            <div className="rounded-xl overflow-hidden border border-border">
+            <div className="rounded-xl overflow-hidden border border-border group relative">
               <img src={imagemUrl} alt="Arte gerada" className="w-full object-cover max-h-64" />
+              {/* Overlay de download ao hover */}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center">
+                <a
+                  href={imagemUrl}
+                  download={`arte-vip-${resultado.headline.slice(0, 30).replace(/[^a-zA-Z0-9]/g, '-')}.jpg`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-2 bg-white/90 text-gray-900 font-semibold text-sm px-4 py-2 rounded-full shadow-lg hover:bg-white"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Download className="h-4 w-4" /> Baixar Imagem
+                </a>
+              </div>
               <div className="p-2 flex items-center justify-between bg-muted/20">
                 <span className="text-xs text-muted-foreground">
                   {tipoImagem === "ia" ? "Imagem gerada por IA" : tipoImagem === "upload" ? "Imagem enviada" : "Imagem de referência"}
                 </span>
-                <a href={imagemUrl} target="_blank" rel="noopener noreferrer" download>
+                <a
+                  href={imagemUrl}
+                  download={`arte-vip-${resultado.headline.slice(0, 30).replace(/[^a-zA-Z0-9]/g, '-')}.jpg`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   <Button size="sm" variant="outline" className="h-6 text-xs gap-1 px-2">
                     <Download className="h-3 w-3" /> Baixar
                   </Button>

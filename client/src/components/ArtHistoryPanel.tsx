@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   Star, Trash2, RefreshCw, ChevronDown, ChevronUp,
-  ImageIcon, Palette, Copy, History,
+  ImageIcon, Palette, Copy, History, Download,
 } from "lucide-react";
 import type { ArtWizardData, ArtResultado } from "@/components/ArtGeneratorWizard";
 
@@ -230,17 +230,33 @@ function ArtHistoryCard({
             <span className="text-[10px] opacity-50">Sem imagem</span>
           </div>
         )}
-        {/* Badge de favorito sobre a imagem */}
-        <button
-          onClick={() => toggleFavM.mutate({ id: item.id, orgId, favoritado: item.favoritado })}
-          className={`absolute top-2 right-2 p-1.5 rounded-full backdrop-blur-sm transition-colors ${
-            item.favoritado
-              ? "bg-yellow-500/90 text-white"
-              : "bg-black/40 text-white/70 hover:bg-black/60"
-          }`}
-        >
-          <Star className={`h-3.5 w-3.5 ${item.favoritado ? "fill-current" : ""}`} />
-        </button>
+        {/* Botões sobre a imagem: download + favorito */}
+        <div className="absolute top-2 right-2 flex flex-col gap-1.5">
+          {item.imagemUrl && (
+            <a
+              href={item.imagemUrl}
+              download={`arte-${item.assunto}-${item.id}.jpg`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 rounded-full bg-black/40 text-white/70 hover:bg-black/70 hover:text-white backdrop-blur-sm transition-colors"
+              title="Baixar imagem"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Download className="h-3.5 w-3.5" />
+            </a>
+          )}
+          <button
+            onClick={() => toggleFavM.mutate({ id: item.id, orgId, favoritado: item.favoritado })}
+            className={`p-1.5 rounded-full backdrop-blur-sm transition-colors ${
+              item.favoritado
+                ? "bg-yellow-500/90 text-white"
+                : "bg-black/40 text-white/70 hover:bg-black/60"
+            }`}
+            title={item.favoritado ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+          >
+            <Star className={`h-3.5 w-3.5 ${item.favoritado ? "fill-current" : ""}`} />
+          </button>
+        </div>
       </div>
 
       {/* Conteúdo do card */}
