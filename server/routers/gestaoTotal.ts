@@ -2213,15 +2213,34 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
           // Baixar a imagem gerada
           const imgResponse = await fetch(finalFlyerUrl);
           const imgBuffer = Buffer.from(await imgResponse.arrayBuffer());
-          // Usar sharp para redimensionar mantendo aspect ratio e fazendo crop centralizado
+          // Usar sharp para redimensionar preservando todo o conteúdo (sem cortar textos)
+          // Estratégia: contain + fundo preto (#0A0A0A) para manter o conteúdo inteiro
           const sharp = (await import("sharp")).default;
-          const resizedBuffer = await sharp(imgBuffer)
-            .resize(targetW, targetH, {
-              fit: "cover",       // crop centralizado para preencher exatamente as dimensões
-              position: "centre", // centralizar o crop
-            })
-            .png()
-            .toBuffer();
+          // Verificar dimensões originais da imagem
+          const metadata = await sharp(imgBuffer).metadata();
+          const origW = metadata.width ?? targetW;
+          const origH = metadata.height ?? targetH;
+          const origRatio = origW / origH;
+          const targetRatio = targetW / targetH;
+          let resizedBuffer: Buffer;
+          if (Math.abs(origRatio - targetRatio) < 0.05) {
+            // Proporções muito próximas: apenas redimensionar
+            resizedBuffer = await sharp(imgBuffer)
+              .resize(targetW, targetH, { fit: "fill" })
+              .png()
+              .toBuffer();
+          } else {
+            // Proporções diferentes: usar contain com fundo preto para não cortar conteúdo
+            resizedBuffer = await sharp(imgBuffer)
+              .resize(targetW, targetH, {
+                fit: "contain",
+                background: { r: 10, g: 10, b: 10, alpha: 1 }, // #0A0A0A (preto VIP)
+              })
+              .png()
+              .toBuffer();
+          }
+          console.log(`[generateFlyer] Dimensões originais: ${origW}x${origH} → alvo: ${targetW}x${targetH} (ratio orig: ${origRatio.toFixed(2)}, alvo: ${targetRatio.toFixed(2)})`);
+
           // Subir a versão redimensionada para o storage
           const { storagePut } = await import("../storage");
           const timestamp = Date.now();
