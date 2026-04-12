@@ -787,20 +787,158 @@ const financeiroGtRouter = router({
       vencimento: z.string().optional(), pago: z.boolean().default(false),
       formaPagamento: z.string().optional(), referencia: z.string().optional(),
       observacoes: z.string().optional(),
+      // Recorrência
+      recorrente: z.boolean().default(false),
+      recorrenciaMeses: z.number().int().min(1).max(120).optional(), // null = indefinido
+      recorrenciaDia: z.number().int().min(1).max(31).optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("DB unavailable");
-      const { id, valor, vencimento, pago, ...rest } = input;
+      const { id, valor, vencimento, pago, recorrente, recorrenciaMeses, recorrenciaDia, ...rest } = input;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const dbData: any = { ...rest, valor: valor.toString(), pago: pago ? 1 : 0 };
+      const dbData: any = {
+        ...rest,
+        valor: valor.toString(),
+        pago: pago ? 1 : 0,
+        recorrente: recorrente ? 1 : 0,
+        recorrenciaMeses: recorrente ? (recorrenciaMeses ?? null) : null,
+        recorrenciaDia: recorrente ? (recorrenciaDia ?? null) : null,
+      };
       if (vencimento) dbData.vencimento = new Date(vencimento);
       if (id) {
         await db.update(gtFinanceiro).set(dbData).where(and(eq(gtFinanceiro.id, id), eq(gtFinanceiro.orgId, input.orgId)));
         return { id };
       }
       const [r] = await db.insert(gtFinanceiro).values(dbData);
-      return { id: (r as { insertId: number }).insertId };
+      const parentId = (r as { insertId: number }).insertId;
+
+      // Se recorrente, gerar parcelas para os próximos meses já
+      if (recorrente && parentId) {
+        const mesesParaGerar = recorrenciaMeses ? Math.min(recorrenciaMeses - 1, 23) : 11; // gera até 12 meses à frente
+        const baseRef = input.referencia ?? (() => {
+          const d = new Date();
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        })();
+        const [baseYear, baseMonth] = baseRef.split("-").map(Number);
+        const dia = recorrenciaDia ?? (vencimento ? new Date(vencimento).getDate() : 1);
+        const parcelas: any[] = [];
+        for (let i = 1; i <= mesesParaGerar; i++) {
+          const totalMonths = (baseMonth - 1) + i;
+          const y = baseYear + Math.floor(totalMonths / 12);
+          const m = (totalMonths % 12) + 1;
+          const ref = `${y}-${String(m).padStart(2, "0")}`;
+          const lastDay = new Date(y, m, 0).getDate();
+          const diaVenc = Math.min(dia, lastDay);
+          const vencDate = new Date(y, m - 1, diaVenc);
+          const recRef = `${parentId}:${ref}`;
+          parcelas.push({
+            orgId: input.orgId,
+            unitId: input.unitId ?? null,
+            tipo: input.tipo,
+            categoria: input.categoria ?? null,
+            descricao: input.descricao,
+            valor: valor.toString(),
+            vencimento: vencDate,
+            pago: 0,
+            formaPagamento: input.formaPagamento ?? null,
+            referencia: ref,
+            observacoes: input.observacoes ?? null,
+            recorrente: 0, // parcelas filhas não são templates
+            recorrenciaParentId: parentId,
+            recorrenciaDia: dia,
+            recorrenciaRef: recRef,
+          });
+        }
+        if (parcelas.length > 0) {
+          // INSERT IGNORE via ON DUPLICATE KEY UPDATE para evitar duplicação
+          for (const p of parcelas) {
+            try {
+              await db.insert(gtFinanceiro).values(p);
+            } catch { /* ignora duplicação */ }
+          }
+        }
+      }
+
+      return { id: parentId };
+    }),
+
+  // Lista os templates recorrentes ativos
+  listRecorrentes: protectedProcedure
+    .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const conds = [eq(gtFinanceiro.orgId, input.orgId), eq(gtFinanceiro.recorrente, 1)];
+      if (input.unitId) conds.push(eq(gtFinanceiro.unitId, input.unitId));
+      return db.select().from(gtFinanceiro).where(and(...conds)).orderBy(gtFinanceiro.descricao);
+    }),
+
+  // Cancela recorrência (remove o template e parcelas futuras não pagas)
+  cancelarRecorrencia: protectedProcedure
+    .input(z.object({ id: z.number(), orgId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      // Remove parcelas futuras não pagas
+      const hoje = new Date();
+      const refAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+      await db.delete(gtFinanceiro).where(
+        and(
+          eq(gtFinanceiro.recorrenciaParentId, input.id),
+          eq(gtFinanceiro.orgId, input.orgId),
+          eq(gtFinanceiro.pago, 0),
+          // só remove meses futuros
+        )
+      );
+      // Desativa o template
+      await db.update(gtFinanceiro)
+        .set({ recorrente: 0 })
+        .where(and(eq(gtFinanceiro.id, input.id), eq(gtFinanceiro.orgId, input.orgId)));
+      return { success: true };
+    }),
+
+  // Gera parcela do mês atual para todos os templates recorrentes de uma org (chamado pelo scheduler)
+  gerarParcelasRecorrentes: protectedProcedure
+    .input(z.object({ orgId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const templates = await db.select().from(gtFinanceiro)
+        .where(and(eq(gtFinanceiro.orgId, input.orgId), eq(gtFinanceiro.recorrente, 1)));
+      const hoje = new Date();
+      const y = hoje.getFullYear();
+      const m = hoje.getMonth() + 1;
+      const ref = `${y}-${String(m).padStart(2, "0")}`;
+      let geradas = 0;
+      for (const t of templates) {
+        const recRef = `${t.id}:${ref}`;
+        const dia = t.recorrenciaDia ?? 1;
+        const lastDay = new Date(y, m, 0).getDate();
+        const diaVenc = Math.min(dia, lastDay);
+        const vencDate = new Date(y, m - 1, diaVenc);
+        try {
+          await db.insert(gtFinanceiro).values({
+            orgId: t.orgId,
+            unitId: t.unitId,
+            tipo: t.tipo,
+            categoria: t.categoria,
+            descricao: t.descricao,
+            valor: t.valor,
+            vencimento: vencDate,
+            pago: 0,
+            formaPagamento: t.formaPagamento,
+            referencia: ref,
+            observacoes: t.observacoes,
+            recorrente: 0,
+            recorrenciaParentId: t.id,
+            recorrenciaDia: dia,
+            recorrenciaRef: recRef,
+          });
+          geradas++;
+        } catch { /* ignora duplicação */ }
+      }
+      return { geradas };
     }),
 
   delete: protectedProcedure

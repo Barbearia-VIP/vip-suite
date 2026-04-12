@@ -1184,3 +1184,4 @@
 - [x] Dashboard: substituir mensagem 'Sem dados no período / Sincronizar Data VIP' por estado visual amigável de sincronização (ícone animado, pulse, texto 'Aguardando dados' / 'Sincronizando dados…' com última sync)
 - [x] Gestão Total: remover Problemas, Oportunidades, Riscos e Compras do menu lateral
 - [x] Gestão Total: reordenar menu lateral — Financeiro sobe para antes de Indicadores
+- [x] Financeiro: despesas recorrentes — campo no formulário, geração automática mensal e aba Recorrentes

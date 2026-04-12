@@ -784,12 +784,20 @@ export const gtFinanceiro = mysqlTable("gt_financeiro", {
   referencia: varchar("referencia", { length: 7 }), // YYYY-MM
   observacoes: text("observacoes"),
   dataVipRef: varchar("dataVipRef", { length: 100 }), // 'datavip:{unitId}:{YYYY-MM-DD}' — controle de duplicação
+  // Recorrência
+  recorrente: int("recorrente").default(0).notNull(), // 0=não | 1=sim (template)
+  recorrenciaMeses: int("recorrenciaMeses"),           // null=indefinido | N=número de meses restantes
+  recorrenciaParentId: int("recorrenciaParentId"),     // ID do template pai
+  recorrenciaDia: int("recorrenciaDia"),               // dia do mês para vencimento (1-31)
+  recorrenciaRef: varchar("recorrenciaRef", { length: 30 }), // chave única para evitar duplicação: '{parentId}:{YYYY-MM}'
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (t) => [
   index("idx_gt_fin_org_ref").on(t.orgId, t.referencia),
   index("idx_gt_fin_tipo").on(t.tipo),
   uniqueIndex("uq_datavip_ref").on(t.dataVipRef),
+  index("idx_gt_fin_recorrente").on(t.recorrente),
+  uniqueIndex("uq_recorrencia_ref").on(t.recorrenciaRef),
 ]);
 
 // ─────────────────────────────────────────────
