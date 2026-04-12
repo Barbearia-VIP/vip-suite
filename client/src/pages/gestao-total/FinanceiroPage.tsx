@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+
 import { toast } from "sonner";
 import {
   Plus, Trash2, Edit2, TrendingUp, TrendingDown, DollarSign,
@@ -167,16 +167,23 @@ function FormLancamento({ initial, onSave, onClose }: {
       {/* ── Seção de Recorrência ── */}
       {!isEditing && (
         <div className={`rounded-lg border p-3 space-y-3 transition-colors ${recorrente ? "border-amber-500/40 bg-amber-500/5" : "border-white/10 bg-white/3"}`}>
-          <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setRecorrente(v => !v)}
+            className="w-full flex items-center justify-between cursor-pointer"
+          >
             <div className="flex items-center gap-2">
               <Repeat2 className={`w-4 h-4 ${recorrente ? "text-amber-400" : "text-muted-foreground"}`} />
-              <div>
+              <div className="text-left">
                 <p className={`text-xs font-medium ${recorrente ? "text-amber-300" : "text-foreground"}`}>Vencimento recorrente</p>
                 <p className="text-[10px] text-muted-foreground">Lança automaticamente todo mês</p>
               </div>
             </div>
-            <Switch checked={recorrente} onCheckedChange={setRecorrente} />
-          </div>
+            {/* Toggle visual */}
+            <div className={`relative inline-flex h-6 w-11 items-center rounded-full border-2 border-transparent transition-colors ${recorrente ? "bg-amber-500" : "bg-input"}`}>
+              <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${recorrente ? "translate-x-5" : "translate-x-0"}`} />
+            </div>
+          </button>
 
           {recorrente && (
             <div className="grid grid-cols-2 gap-3 pt-1">
