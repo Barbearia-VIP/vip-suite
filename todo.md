@@ -1187,3 +1187,4 @@
 - [x] Financeiro: despesas recorrentes — campo no formulário, geração automática mensal e aba Recorrentes
 - [x] Financeiro: corrigir toggle 'Vencimento recorrente' que não responde ao clique no formulário
 - [x] Financeiro: toggle vencimento recorrente ainda não funciona — substituir Switch por botão nativo
+- [x] Dashboard: ajustar queries de faturamento para usar sync_vendas_produtos.valor_total (alinhamento com sistema de origem)
