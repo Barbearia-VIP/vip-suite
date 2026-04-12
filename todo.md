@@ -1185,3 +1185,4 @@
 - [x] Gestão Total: remover Problemas, Oportunidades, Riscos e Compras do menu lateral
 - [x] Gestão Total: reordenar menu lateral — Financeiro sobe para antes de Indicadores
 - [x] Financeiro: despesas recorrentes — campo no formulário, geração automática mensal e aba Recorrentes
+- [x] Financeiro: corrigir toggle 'Vencimento recorrente' que não responde ao clique no formulário
