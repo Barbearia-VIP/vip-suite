@@ -1183,3 +1183,4 @@
 - [x] Criação de Arte: flyer sempre usa logo salva nas Configurações (gt_brand_assets) como referência obrigatória — nunca cria logo nova
 - [x] Dashboard: substituir mensagem 'Sem dados no período / Sincronizar Data VIP' por estado visual amigável de sincronização (ícone animado, pulse, texto 'Aguardando dados' / 'Sincronizando dados…' com última sync)
 - [x] Gestão Total: remover Problemas, Oportunidades, Riscos e Compras do menu lateral
+- [x] Gestão Total: reordenar menu lateral — Financeiro sobe para antes de Indicadores
