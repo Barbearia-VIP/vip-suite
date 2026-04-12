@@ -69,7 +69,7 @@ function KpiBar({ acumulado, media, maximo, minimo }: KpiBarProps) {
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
           <Zap className="w-3 h-3 text-yellow-500" /> Acumulado
         </div>
-        <div className="text-lg font-bold text-yellow-400">{fmt(acumulado)}</div>
+        <div className="text-lg font-bold" style={{ color: GOLD }}>{fmt(acumulado)}</div>
       </div>
       <div>
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
@@ -81,14 +81,14 @@ function KpiBar({ acumulado, media, maximo, minimo }: KpiBarProps) {
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
           <TrendingUp className="w-3 h-3 text-green-500" /> Máximo
         </div>
-        <div className="text-lg font-bold text-green-400">{fmt(maximo.valor)}</div>
+        <div className="text-lg font-bold text-green-600 dark:text-green-400">{fmt(maximo.valor)}</div>
         {maximo.label && <div className="text-[10px] text-muted-foreground truncate">{maximo.label}</div>}
       </div>
       <div>
         <div className="flex items-center gap-1 text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">
           <TrendingDown className="w-3 h-3 text-red-500" /> Mínimo
         </div>
-        <div className="text-lg font-bold text-red-400">{fmt(minimo.valor)}</div>
+        <div className="text-lg font-bold text-red-600 dark:text-red-400">{fmt(minimo.valor)}</div>
         {minimo.label && <div className="text-[10px] text-muted-foreground truncate">{minimo.label}</div>}
       </div>
     </div>
@@ -134,7 +134,7 @@ function ChartArea({ data, chartType, media, mediaSply, media6m, height = 280 }:
         className="rounded-xl p-2 text-xs"
         style={{
           background: ct.cardBgSolid,
-          border: "1px solid oklch(0.28 0.015 260 / 0.6)",
+          border: ct.border,
           backdropFilter: "blur(16px)",
           boxShadow: "0 8px 32px -8px oklch(0 0 0 / 0.6)",
         }}
@@ -170,11 +170,11 @@ function ChartArea({ data, chartType, media, mediaSply, media6m, height = 280 }:
               <stop offset="95%" stopColor={GOLD} stopOpacity={0.02} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.4)" vertical={false} />
-          <XAxis dataKey="label" tick={{ fontSize: 10, fill: "oklch(0.55 0.01 260)" }} tickLine={false} axisLine={false} />
-          <YAxis tickFormatter={fmtShort} tick={{ fontSize: 10, fill: "oklch(0.55 0.01 260)" }} tickLine={false} axisLine={false} width={48} />
+          <CartesianGrid strokeDasharray="3 3" stroke={ct.gridStroke} vertical={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 10, fill: ct.axisColor }} tickLine={false} axisLine={false} />
+          <YAxis tickFormatter={fmtShort} tick={{ fontSize: 10, fill: ct.axisColor }} tickLine={false} axisLine={false} width={48} />
           <Tooltip content={<CustomTooltip />} cursor={{ stroke: "oklch(0.76 0.145 72 / 0.3)", strokeWidth: 1, strokeDasharray: "4 2" }} />
-          <ReferenceLine y={media} stroke="oklch(0.55 0.01 260)" strokeDasharray="4 3" label={{ value: "Média", position: "right", fontSize: 10, fill: "oklch(0.55 0.01 260)" }} />
+          <ReferenceLine y={media} stroke={ct.axisColor} strokeDasharray="4 3" label={{ value: "Média", position: "right", fontSize: 10, fill: ct.axisColor }} />
           {mediaSply !== undefined && mediaSply > 0 && <ReferenceLine y={mediaSply} stroke="oklch(0.76 0.145 72 / 0.7)" strokeDasharray="4 3" label={{ value: "Méd. SPLY", position: "right", fontSize: 9, fill: "oklch(0.76 0.145 72 / 0.7)" }} />}
           {media6m !== undefined && media6m > 0 && <ReferenceLine y={media6m} stroke="oklch(0.65 0.15 200 / 0.7)" strokeDasharray="4 3" label={{ value: "Méd. 6m", position: "right", fontSize: 9, fill: "oklch(0.65 0.15 200 / 0.7)" }} />}
           <Area type="monotone" dataKey="valor" stroke={GOLD} strokeWidth={2} fill="url(#areaGold)" dot={false} activeDot={{ r: 4, fill: GOLD }} />
@@ -192,11 +192,11 @@ function ChartArea({ data, chartType, media, mediaSply, media6m, height = 280 }:
             <stop offset="100%" stopColor={GOLD} stopOpacity={0.55} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.4)" vertical={false} />
-        <XAxis dataKey="label" tick={{ fontSize: 10, fill: "oklch(0.55 0.01 260)" }} tickLine={false} axisLine={false} />
-        <YAxis tickFormatter={fmtShort} tick={{ fontSize: 10, fill: "oklch(0.55 0.01 260)" }} tickLine={false} axisLine={false} width={48} />
-        <Tooltip content={<CustomTooltip />} cursor={{ fill: "oklch(0.76 0.145 72 / 0.06)" }} />
-        <ReferenceLine y={media} stroke="oklch(0.55 0.01 260)" strokeDasharray="4 3" label={{ value: "Média", position: "right", fontSize: 10, fill: "oklch(0.55 0.01 260)" }} />
+        <CartesianGrid strokeDasharray="3 3" stroke={ct.gridStroke} vertical={false} />
+        <XAxis dataKey="label" tick={{ fontSize: 10, fill: ct.axisColor }} tickLine={false} axisLine={false} />
+        <YAxis tickFormatter={fmtShort} tick={{ fontSize: 10, fill: ct.axisColor }} tickLine={false} axisLine={false} width={48} />
+        <Tooltip content={<CustomTooltip />} cursor={{ fill: ct.cursorFill }} />
+        <ReferenceLine y={media} stroke={ct.axisColor} strokeDasharray="4 3" label={{ value: "Média", position: "right", fontSize: 10, fill: ct.axisColor }} />
         {mediaSply !== undefined && mediaSply > 0 && <ReferenceLine y={mediaSply} stroke="oklch(0.76 0.145 72 / 0.7)" strokeDasharray="4 3" label={{ value: "Méd. SPLY", position: "right", fontSize: 9, fill: "oklch(0.76 0.145 72 / 0.7)" }} />}
         {media6m !== undefined && media6m > 0 && <ReferenceLine y={media6m} stroke="oklch(0.65 0.15 200 / 0.7)" strokeDasharray="4 3" label={{ value: "Méd. 6m", position: "right", fontSize: 9, fill: "oklch(0.65 0.15 200 / 0.7)" }} />}
         <Bar dataKey="valor" fill="url(#barGoldAbert)" radius={[5, 5, 0, 0]} maxBarSize={48} />
@@ -227,13 +227,13 @@ function RankingTable({ items, title }: RankingTableProps) {
                 <span className="text-xs truncate">{item.label}</span>
                 <div className="flex items-center gap-2 shrink-0 ml-2">
                   {item.extra && <span className="text-[10px] text-muted-foreground">{item.extra}</span>}
-                  <span className="text-xs font-semibold text-yellow-400">{fmt(item.valor)}</span>
+                  <span className="text-xs font-semibold" style={{ color: GOLD }}>{fmt(item.valor)}</span>
                   {item.pct !== undefined && (
                     <span className="text-[10px] text-muted-foreground w-10 text-right">{item.pct.toFixed(1)}%</span>
                   )}
                 </div>
               </div>
-              <div className="h-1 rounded-full overflow-hidden" style={{ background: "oklch(0.22 0.014 260 / 0.5)" }}>
+              <div className="h-1 rounded-full overflow-hidden bg-muted">
                 <div className="h-full rounded-full transition-all" style={{ width: `${(item.valor / maxVal) * 100}%`, background: GOLD }} />
               </div>
             </div>
@@ -341,7 +341,7 @@ function TabPeriodo({ orgId, unitId, dataInicio, dataFim }: AberturasChartProps)
       {/* Legenda das linhas de referência */}
       <div className="flex items-center justify-between mt-2">
         <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
-          <span className="flex items-center gap-1"><span className="inline-block w-6 h-px border-t-2 border-dashed border-zinc-400"></span>Média Atual: {fmt(media)}</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-6 h-px border-t-2 border-dashed border-border"></span>Média Atual: {fmt(media)}</span>
           {mediaSply > 0 && <span className="flex items-center gap-1"><span className="inline-block w-6 h-px border-t-2 border-dashed border-yellow-500"></span>Méd. SPLY: {fmt(mediaSply)}</span>}
           {media6m > 0 && <span className="flex items-center gap-1"><span className="inline-block w-6 h-px border-t-2 border-dashed border-blue-400"></span>Méd. 6m: {fmt(media6m)}</span>}
         </div>
@@ -416,7 +416,7 @@ export function AberturasChart({ orgId, unitId, dataInicio, dataFim }: Aberturas
   const activeView = VIEWS.find(v => v.id === view)!;
 
   return (
-    <Card className="bg-zinc-900 border-zinc-800">
+    <Card className="bg-card border-border">
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2 mb-3">
           <BarChart2 className="w-4 h-4 text-yellow-500" />
