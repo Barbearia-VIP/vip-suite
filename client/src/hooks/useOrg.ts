@@ -8,18 +8,18 @@ import { useSysUser } from "@/contexts/SysUserContext";
  * Loads the user's first organization and available units,
  * then syncs them into AppContext.
  *
- * Queries are only enabled for OAuth (Master) users.
- * Unit users (sysUser) do not use these OAuth-protected endpoints.
+ * - OAuth (Master) users: uses protected orgs.list / orgs.units / orgs.myProfile
+ * - SysUser (unit login): uses public sysUsers.getOrgById to populate org context
  */
 export function useOrg() {
-  const { setOrganization, setAvailableUnits, setUserRole, selectedUnit } = useApp();
+  const { setOrganization, setAvailableUnits, setUserRole, organization } = useApp();
   const { isAuthenticated } = useAuth();
   const { sysUser } = useSysUser();
 
   // Só executa queries OAuth se o usuário Master estiver autenticado
-  // Usuários de unidade (sysUser) não têm acesso a essas rotas protegidas
   const isOAuthUser = isAuthenticated && !sysUser;
 
+  // ── OAuth path ────────────────────────────────────────────────────────────
   const orgsQuery = trpc.orgs.list.useQuery(undefined, {
     enabled: isOAuthUser,
     staleTime: 5 * 60 * 1000,
@@ -37,6 +37,17 @@ export function useOrg() {
     { enabled: isOAuthUser && !!firstOrg?.id }
   );
 
+  // ── SysUser path ──────────────────────────────────────────────────────────
+  // Busca a organização pelo orgId do sysUser via endpoint público
+  const sysOrgQuery = trpc.sysUsers.getOrgById.useQuery(
+    { orgId: sysUser?.orgId ?? 0 },
+    {
+      enabled: !!sysUser && (sysUser.orgId ?? 0) > 0,
+      staleTime: 10 * 60 * 1000,
+    }
+  );
+
+  // ── Effects: OAuth ────────────────────────────────────────────────────────
   useEffect(() => {
     if (firstOrg) {
       setOrganization({
@@ -70,10 +81,34 @@ export function useOrg() {
     }
   }, [profileQuery.data]);
 
+  // ── Effects: SysUser ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (sysUser && sysOrgQuery.data) {
+      const o = sysOrgQuery.data;
+      setOrganization({
+        id: o.id,
+        name: o.name,
+        slug: o.slug,
+        logoUrl: o.logoUrl ?? undefined,
+        primaryColor: o.primaryColor ?? undefined,
+      });
+      // Usuários de unidade têm papel de gestor de unidade
+      setUserRole("unit_manager");
+    }
+  }, [sysUser, sysOrgQuery.data]);
+
+  // ── Return ────────────────────────────────────────────────────────────────
+  // Para sysUser: retorna o org do sysOrgQuery; para OAuth: retorna firstOrg
+  const effectiveOrg = sysUser
+    ? (sysOrgQuery.data ?? organization ?? undefined)
+    : (firstOrg ?? organization ?? undefined);
+
   return {
-    org: firstOrg,
+    org: effectiveOrg,
     units: unitsQuery.data ?? [],
     profile: profileQuery.data,
-    loading: orgsQuery.isLoading || unitsQuery.isLoading,
+    loading: sysUser
+      ? sysOrgQuery.isLoading
+      : (orgsQuery.isLoading || unitsQuery.isLoading),
   };
 }

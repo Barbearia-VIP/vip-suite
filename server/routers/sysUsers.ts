@@ -267,6 +267,33 @@ export const sysUsersRouter = router({
       return rows;
     }),
 
+  // ── Buscar organização por ID (pública — usada por sysUser sem OAuth) ──
+  getOrgById: publicProcedure
+    .input(z.object({ orgId: z.number().int().positive() }))
+    .query(async ({ input, ctx }) => {
+      // Valida que o chamador tem sessão de sysUser para este orgId
+      const cookies = ctx.req.headers.cookie ?? "";
+      const match = cookies.split(";").find((c: string) => c.trim().startsWith(`${SYS_COOKIE}=`));
+      const token = match?.split("=").slice(1).join("=").trim();
+      const session = await verifySysSession(token);
+      const isAuthorized = (session && session.orgId === input.orgId) || !!ctx.user;
+      if (!isAuthorized) return null;
+
+      const db = await requireDb();
+      const [org] = await db
+        .select({
+          id: organizations.id,
+          name: organizations.name,
+          slug: organizations.slug,
+          logoUrl: organizations.logoUrl,
+          primaryColor: organizations.primaryColor,
+        })
+        .from(organizations)
+        .where(eq(organizations.id, input.orgId))
+        .limit(1);
+      return org ?? null;
+    }),
+
   // ── CRUD de Usuários ─────────────────────────────────────────────────────
   listUsers: protectedProcedure.query(async ({ ctx }) => {
     const orgId = await getOrgId(ctx.user!.id);
