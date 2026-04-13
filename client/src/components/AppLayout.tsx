@@ -586,7 +586,23 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 {syncDefasagemLabel}
               </button>
             )}
-            {/* Unit selector */}
+            {/* Unit selector: somente leitura para sysUser com uma única unidade */}
+            {sysUser && (sysUser.allowedUnitIds.length === 1 || (sysUser.allowedUnitIds.length === 0 && availableUnits.length <= 1)) ? (
+              <div
+                className="h-8 text-xs gap-1.5 hidden sm:flex items-center px-3 rounded-md"
+                style={{
+                  background: isDark ? "oklch(0.155 0.012 260 / 0.8)" : "oklch(0.96 0.004 80 / 0.9)",
+                  border: isDark ? "1px solid oklch(0.28 0.015 260 / 0.6)" : "1px solid oklch(0.85 0.006 260 / 0.8)",
+                  color: isDark ? "oklch(0.85 0.006 80)" : "oklch(0.25 0.010 260)",
+                }}
+                title="Sua unidade vinculada"
+              >
+                <Building2 className="w-3.5 h-3.5 opacity-70" />
+                <span className="max-w-[120px] truncate">
+                  {selectedUnit ? selectedUnit.name : "Minha Unidade"}
+                </span>
+              </div>
+            ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -631,6 +647,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+            )}
 
             {/* Theme toggle */}
             <Button

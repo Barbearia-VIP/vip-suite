@@ -1202,3 +1202,10 @@
 - [ ] Marketing/Criação de Arte: melhorar prompt final para menos texto e sem erros ortográficos
 - [ ] Marketing/Criação de Arte: imagem do banco VIP deve ocupar toda a arte (full-bleed), não apenas o centro
 - [ ] Marketing/Criação de Arte: quando imagem for do banco VIP, apenas melhorar qualidade sem adicionar novos elementos
+
+## Correções e Melhorias (Abril 2026)
+
+- [x] Raio-X: corrigido para sysUser (query lenta mas funcional — dados reais carregados)
+- [x] Todos os módulos verificados para sysUser joao@barbeariavip.com.br: Data VIP, Gestão Total, VIP Cam, Reputação, Auto Instagram, We Send — todos funcionando
+- [x] Seletor de unidade: implementado modo somente leitura para sysUser com apenas 1 unidade vinculada (para sysUser com múltiplas unidades, dropdown permanece disponível)
+- [x] Sidebar do sysUser: itens restritos (Unidades, Usuários do Sistema, Perfis de Acesso) ocultos corretamente

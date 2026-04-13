@@ -98,8 +98,14 @@ async function resolveUnitFilter(
   userId: number,
   userRole: string,
   orgId?: number,
-  unitId?: number
+  unitId?: number,
+  sysUser?: { id: number; orgId: number; allowedUnitIds: number[] } | null
 ): Promise<{ orgFilter: number | null; unitFilter: number | null; isAdmin: boolean }> {
+  // sysUser (e-mail/senha): usa orgId e allowedUnitIds diretamente
+  if (sysUser) {
+    const unitFilter = unitId ?? (sysUser.allowedUnitIds.length === 1 ? sysUser.allowedUnitIds[0] : (sysUser.allowedUnitIds.length > 0 ? (unitId ?? sysUser.allowedUnitIds[0]) : null));
+    return { orgFilter: sysUser.orgId, unitFilter: unitFilter ?? null, isAdmin: false };
+  }
   const isAdmin = userRole === "admin";
   if (isAdmin && !orgId && !unitId) return { orgFilter: null, unitFilter: null, isAdmin };
   if (isAdmin && orgId) return { orgFilter: orgId, unitFilter: unitId || null, isAdmin };
@@ -118,9 +124,10 @@ async function resolveExternalIds(
   userId: number,
   userRole: string,
   orgId?: number,
-  unitId?: number
+  unitId?: number,
+  sysUser?: { id: number; orgId: number; allowedUnitIds: number[] } | null
 ): Promise<{ extIds: number[]; isAdmin: boolean; unitFilter: number | null; orgFilter: number | null }> {
-  const { orgFilter, unitFilter, isAdmin } = await resolveUnitFilter(userId, userRole, orgId, unitId);
+  const { orgFilter, unitFilter, isAdmin } = await resolveUnitFilter(userId, userRole, orgId, unitId, sysUser);
   const db = await getDb();
   if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -177,7 +184,7 @@ export const raioXRouter = router({
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds, unitFilter } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
@@ -819,7 +826,7 @@ export const raioXRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
       const dataFimDate = new Date(dataFim + "T00:00:00Z");
@@ -954,7 +961,7 @@ export const raioXRouter = router({
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
       // Base 12m: clientes com visita nos 12 meses anteriores a dataFim
@@ -1136,7 +1143,7 @@ export const raioXRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds, unitFilter } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
 
       const diasPeriodo = input.periodo === "30d" ? 30
@@ -1375,7 +1382,7 @@ export const raioXRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       if (extIds.length === 0) return { barbeiros: [] };
 
@@ -1511,7 +1518,7 @@ export const raioXRouter = router({
     .input(baseInput.extend({ colaboradorId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       if (extIds.length === 0) {
         return { cohortMensal: [], analiseNovos: null, distribuicao: null, cohortHistorico: [], cohortPorBarbeiro: [] };
@@ -1824,7 +1831,7 @@ export const raioXRouter = router({
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const unitCond = extIds.length === 0 ? "1=1"
         : extIds.length === 1 ? `v.unidade_id = ${extIds[0]}`
@@ -1945,7 +1952,7 @@ export const raioXRouter = router({
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
 
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
@@ -2271,7 +2278,7 @@ export const raioXRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
 
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
@@ -2363,7 +2370,7 @@ export const raioXRouter = router({
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds, unitFilter } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       if (extIds.length === 0) return { kpis: null, barbeiros: [], segmentosGeral: null, evolucao: [] };
 
