@@ -12,6 +12,7 @@ import {
   gtContentHistory, gtArtHistory, gtBrandAssets, gtImageBank,
 } from "../../drizzle/schema";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
+import { finConfigRouter } from "./finConfig";
 import { invokeLLM } from "../_core/llm";
 import { generateImage } from "../_core/imageGeneration";
 
@@ -2770,4 +2771,5 @@ export const gestaoTotalRouter = router({
   brandAssets: brandAssetsRouter,
   ia: iaRouter,
   auditoria: auditoriaRouter,
+  finConfig: finConfigRouter,
 });

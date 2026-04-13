@@ -58,6 +58,7 @@ import DocumentosPage from "./pages/gestao-total/DocumentosPage";
 import MarketingPage from "./pages/gestao-total/MarketingPage";
 import PlanejamentoPage from "./pages/gestao-total/PlanejamentoPage";
 import ConfiguracoesGtPage from "./pages/gestao-total/ConfiguracoesGtPage";
+import ConfiguracaoFinanceiraPage from "./pages/gestao-total/ConfiguracaoFinanceiraPage";
 import PrivilegiosPage from "./pages/gestao-total/PrivilegiosPage";
 import GuiaSistemaPage from "./pages/gestao-total/GuiaSistemaPage";
 
@@ -232,6 +233,9 @@ function Router() {
       </Route>
       <Route path="/gestao-total/financeiro">
         <ProtectedLayout><FinanceiroPage /></ProtectedLayout>
+      </Route>
+      <Route path="/gestao-total/configuracao-financeira">
+        <ProtectedLayout><ConfiguracaoFinanceiraPage /></ProtectedLayout>
       </Route>
       <Route path="/gestao-total/compras">
         <ProtectedLayout><ComprasPage /></ProtectedLayout>

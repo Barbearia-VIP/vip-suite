@@ -1558,3 +1558,37 @@ export const gtImageBank = mysqlTable("gt_image_bank", {
   index("idx_image_bank_org").on(t.orgId),
 ]);
 export type GtImageBankItem = typeof gtImageBank.$inferSelect;
+
+// ── Configuração Financeira — Taxas de Cartão e Taxa Bancária ─────────────────
+export const gtFinConfig = mysqlTable("gt_fin_config", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  taxaCredito: decimal("taxaCredito", { precision: 5, scale: 2 }).default("0").notNull(),
+  taxaDebito:  decimal("taxaDebito",  { precision: 5, scale: 2 }).default("0").notNull(),
+  taxaBancaria: decimal("taxaBancaria", { precision: 10, scale: 2 }).default("0").notNull(),
+  taxaBancariaAtiva: int("taxaBancariaAtiva").default(0).notNull(),
+  taxaBancariaDia: int("taxaBancariaDia").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_fin_config_org").on(t.orgId, t.unitId),
+]);
+export type GtFinConfig = typeof gtFinConfig.$inferSelect;
+
+// ── Configuração Financeira — Funcionários CLT ────────────────────────────────
+export const gtFuncionariosClt = mysqlTable("gt_funcionarios_clt", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  unitId: int("unitId"),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  cargo: varchar("cargo", { length: 255 }),
+  salario: decimal("salario", { precision: 10, scale: 2 }).notNull(),
+  diaPagamento: int("diaPagamento").default(5).notNull(),
+  ativo: int("ativo").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_gt_func_clt_org").on(t.orgId, t.unitId),
+]);
+export type GtFuncionarioClt = typeof gtFuncionariosClt.$inferSelect;

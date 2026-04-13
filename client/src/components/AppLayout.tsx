@@ -179,7 +179,10 @@ const SIDEBAR_ITEMS: Record<ModuleId, SidebarItem[]> = {
       { label: "Cargos", path: "/gestao-total/cargos", icon: Briefcase },
       { label: "Colaboradores", path: "/gestao-total/colaboradores", icon: UserCheck },
     ]},
-    { label: "Financeiro", path: "/gestao-total/financeiro", icon: DollarSign },
+    { type: "group", label: "Financeiro", icon: DollarSign, children: [
+      { label: "Financeiro", path: "/gestao-total/financeiro", icon: DollarSign },
+      { label: "Configuração Financeira", path: "/gestao-total/configuracao-financeira", icon: Settings },
+    ]},
     { label: "Indicadores", path: "/gestao-total/indicadores", icon: BarChart3 },
     { label: "Documentos", path: "/gestao-total/documentos", icon: FileText },
     { label: "Marketing", path: "/gestao-total/marketing", icon: Megaphone },
