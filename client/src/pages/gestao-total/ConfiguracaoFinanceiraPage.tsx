@@ -102,9 +102,16 @@ export default function ConfiguracaoFinanceiraPage() {
 
   const utils = trpc.useUtils();
   const saveTaxas = trpc.gestaoTotal.finConfig.saveTaxas.useMutation({
-    onSuccess: () => {
-      toast.success("Taxas salvas com sucesso!");
+    onSuccess: (r) => {
+      if (r.lancamentos > 0) {
+        toast.success(`Taxas salvas! ${r.lancamentos} saída(s) lançadas no Financeiro.`);
+      } else if (r.msg) {
+        toast.success(r.msg);
+      } else {
+        toast.success("Taxas salvas com sucesso!");
+      }
       utils.gestaoTotal.finConfig.getTaxas.invalidate();
+      utils.gestaoTotal.finConfig.resumoLancamentos.invalidate();
     },
     onError: (e) => toast.error("Erro ao salvar taxas: " + e.message),
   });
@@ -306,7 +313,7 @@ export default function ConfiguracaoFinanceiraPage() {
           <div className="flex items-center gap-3 pt-2">
             <Button
               size="sm"
-              variant="outline"
+              className="gap-1.5"
               onClick={() =>
                 saveTaxas.mutate({
                   orgId,
@@ -320,25 +327,10 @@ export default function ConfiguracaoFinanceiraPage() {
               }
               disabled={saveTaxas.isPending}
             >
-              {saveTaxas.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
-              Salvar Taxas
+              {saveTaxas.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Zap className="w-3.5 h-3.5" />}
+              Salvar e Lançar Saídas do Mês
             </Button>
-            <Button
-              size="sm"
-              className="gap-1.5"
-              onClick={() => {
-                const { inicio, fim } = currentMonthRange();
-                aplicarTaxas.mutate({ orgId, unitId, inicio, fim });
-              }}
-              disabled={aplicarTaxas.isPending}
-            >
-              {aplicarTaxas.isPending ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Zap className="w-3.5 h-3.5" />
-              )}
-              Aplicar Taxas do Mês Atual
-            </Button>
+            <p className="text-xs text-muted-foreground">As saídas de taxa são calculadas dia a dia com base nas vendas do Data VIP.</p>
           </div>
         </CardContent>
       </Card>
