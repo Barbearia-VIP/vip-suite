@@ -1,58 +1,77 @@
 /**
- * finConfigScheduler.ts — Job Mensal de Taxas de Cartão
+ * finConfigScheduler.ts — Jobs Mensais de Configuração Financeira
  *
- * Roda no primeiro dia de cada mês às 06:00 BRT (09:00 UTC).
- * Para cada unidade com taxas de cartão configuradas (crédito > 0 ou débito > 0):
- *   1. Calcula o intervalo do mês anterior (inicio e fim)
- *   2. Busca vendas por forma de pagamento (crédito/débito) no banco externo
- *   3. Lança despesas de taxa dia a dia no gt_financeiro (upsert por dataVipRef)
+ * Dois jobs automáticos:
  *
- * Também reagenda a si mesmo para o próximo mês usando setTimeout preciso,
- * garantindo que o job rode mesmo após reinicializações do servidor.
+ * 1. TAXAS DE CARTÃO (dia 1 de cada mês às 06:00 BRT = 09:00 UTC)
+ *    Para cada unidade com taxas configuradas:
+ *    - Busca vendas por cartão (crédito/débito) no Data VIP do mês anterior
+ *    - Lança despesas dia a dia no gt_financeiro (upsert por dataVipRef)
+ *
+ * 2. SALÁRIOS CLT (diário às 07:00 BRT = 10:00 UTC)
+ *    Para cada funcionário CLT ativo cujo diaPagamento == dia atual do mês:
+ *    - Lança o salário como despesa no gt_financeiro do mês atual (upsert)
+ *
+ * Ambos os jobs se reagendam automaticamente após execução.
  */
 
 import { getDb } from "./db";
-import { gtFinConfig } from "../drizzle/schema";
-import { gt, sql } from "drizzle-orm";
+import { gtFinConfig, gtFuncionariosClt } from "../drizzle/schema";
+import { eq, and, sql } from "drizzle-orm";
 import { queryLocal } from "./db-local";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Retorna o intervalo completo do mês anterior: { inicio: "YYYY-MM-DD", fim: "YYYY-MM-DD" } */
+/** Retorna o intervalo completo do mês anterior */
 function prevMonthRange(): { inicio: string; fim: string; referencia: string } {
   const now = new Date();
   const y = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-  const m = now.getMonth() === 0 ? 12 : now.getMonth(); // mês anterior (1-based)
+  const m = now.getMonth() === 0 ? 12 : now.getMonth();
   const inicio = `${y}-${String(m).padStart(2, "0")}-01`;
   const fim = new Date(y, m, 0).toISOString().slice(0, 10);
   const referencia = `${y}-${String(m).padStart(2, "0")}`;
   return { inicio, fim, referencia };
 }
 
-/** Retorna quantos ms faltam até o próximo dia 1 às 09:00 UTC */
+/** Retorna o mês atual no formato YYYY-MM */
+function currentMonthRef(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** ms até o próximo dia 1 às 09:00 UTC (taxas de cartão) */
 function msUntilNextFirstOfMonth(): number {
   const now = new Date();
   const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 9, 0, 0, 0));
   return next.getTime() - now.getTime();
 }
 
-// ── Job principal ─────────────────────────────────────────────────────────────
+/** ms até o próximo 10:00 UTC de hoje (ou amanhã se já passou) */
+function msUntilNext10UTC(): number {
+  const now = new Date();
+  const todayAt10 = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 10, 0, 0, 0));
+  if (todayAt10.getTime() > now.getTime()) {
+    return todayAt10.getTime() - now.getTime();
+  }
+  // já passou hoje — agendar para amanhã
+  const tomorrowAt10 = new Date(todayAt10.getTime() + 24 * 60 * 60 * 1000);
+  return tomorrowAt10.getTime() - now.getTime();
+}
+
+// ── Job 1: Taxas de Cartão ────────────────────────────────────────────────────
 
 export async function runFinConfigMonthlyJob(): Promise<void> {
   console.log("[FinConfig] Iniciando job mensal de taxas de cartão...");
   const db = await getDb();
   if (!db) {
-    console.warn("[FinConfig] Banco indisponível, job abortado.");
+    console.warn("[FinConfig] Banco indisponível, job de taxas abortado.");
     return;
   }
 
-  // Buscar todas as configs com pelo menos uma taxa > 0
   const configs = await db
     .select()
     .from(gtFinConfig)
-    .where(
-      sql`(CAST(taxaCredito AS DECIMAL(10,4)) > 0 OR CAST(taxaDebito AS DECIMAL(10,4)) > 0)`
-    );
+    .where(sql`(CAST(taxaCredito AS DECIMAL(10,4)) > 0 OR CAST(taxaDebito AS DECIMAL(10,4)) > 0)`);
 
   if (configs.length === 0) {
     console.log("[FinConfig] Nenhuma unidade com taxas configuradas.");
@@ -72,7 +91,6 @@ export async function runFinConfigMonthlyJob(): Promise<void> {
       const taxaDebitoRate = parseFloat(String(config.taxaDebito)) / 100;
       if (taxaCreditoRate === 0 && taxaDebitoRate === 0) continue;
 
-      // Buscar externalId da unidade
       const [extRows] = await db.execute(
         sql`SELECT externalId FROM units WHERE id = ${unitId} AND externalId IS NOT NULL`
       ) as any;
@@ -83,12 +101,7 @@ export async function runFinConfigMonthlyJob(): Promise<void> {
       }
       const extId = Number(extIdRaw);
 
-      // Buscar vendas por forma de pagamento (crédito/débito) por dia
-      const rows = await queryLocal<{
-        dia: string;
-        tipo: string;
-        total: number;
-      }>(`
+      const rows = await queryLocal<{ dia: string; tipo: string; total: number }>(`
         SELECT
           DATE(v.data_criacao) AS dia,
           LOWER(fp.tipo) AS tipo,
@@ -142,35 +155,121 @@ export async function runFinConfigMonthlyJob(): Promise<void> {
     }
   }
 
-  console.log(`[FinConfig] Job concluído. Total: ${totalLancamentos} lançamento(s).`);
+  console.log(`[FinConfig] Job taxas concluído. Total: ${totalLancamentos} lançamento(s).`);
 }
 
-// ── Agendamento preciso ───────────────────────────────────────────────────────
+// ── Job 2: Salários CLT ───────────────────────────────────────────────────────
 
-let jobTimer: ReturnType<typeof setTimeout> | null = null;
+export async function runSalariosCltJob(): Promise<void> {
+  const now = new Date();
+  const diaAtual = now.getDate(); // dia do mês atual (1-31)
+  const referencia = currentMonthRef();
 
-function scheduleNextRun(): void {
+  console.log(`[FinConfig] Verificando salários CLT para o dia ${diaAtual} (${referencia})...`);
+
+  const db = await getDb();
+  if (!db) {
+    console.warn("[FinConfig] Banco indisponível, job de salários abortado.");
+    return;
+  }
+
+  // Buscar funcionários ativos cujo diaPagamento == hoje
+  const funcionarios = await db
+    .select()
+    .from(gtFuncionariosClt)
+    .where(
+      and(
+        eq(gtFuncionariosClt.ativo, 1),
+        eq(gtFuncionariosClt.diaPagamento, diaAtual)
+      )
+    );
+
+  if (funcionarios.length === 0) {
+    console.log(`[FinConfig] Nenhum funcionário CLT com pagamento no dia ${diaAtual}.`);
+    return;
+  }
+
+  let totalLancamentos = 0;
+
+  for (const func of funcionarios) {
+    try {
+      const salario = parseFloat(String(func.salario));
+      if (salario <= 0) continue;
+
+      // Data de vencimento: dia configurado no mês atual
+      const y = now.getFullYear();
+      const m = now.getMonth() + 1;
+      const maxDia = new Date(y, m, 0).getDate(); // último dia do mês
+      const diaPag = Math.min(func.diaPagamento, maxDia);
+      const vencimento = `${y}-${String(m).padStart(2, "0")}-${String(diaPag).padStart(2, "0")}`;
+
+      // Chave única: salário do funcionário no mês
+      const dataVipRef = `salario_clt:${func.id}:${referencia}`;
+      const cargo = func.cargo ? ` (${func.cargo})` : "";
+      const descricao = `Salário CLT — ${func.nome}${cargo} — ${referencia}`;
+
+      await db.execute(sql`
+        INSERT INTO gt_financeiro
+          (orgId, unitId, tipo, categoria, descricao, valor, vencimento, pago, paidAt, referencia, dataVipRef)
+        VALUES
+          (${func.orgId}, ${func.unitId ?? null}, 'despesa', 'Salário CLT', ${descricao}, ${salario}, ${vencimento}, 0, NULL, ${referencia}, ${dataVipRef})
+        ON DUPLICATE KEY UPDATE
+          valor = VALUES(valor),
+          descricao = VALUES(descricao),
+          vencimento = VALUES(vencimento),
+          updatedAt = NOW()
+      `);
+      totalLancamentos++;
+      console.log(`[FinConfig] Salário lançado: ${func.nome} — R$ ${salario.toFixed(2)} (venc. ${vencimento})`);
+    } catch (err) {
+      console.error(`[FinConfig] Erro ao lançar salário de ${func.nome}:`, err);
+    }
+  }
+
+  console.log(`[FinConfig] Job salários CLT concluído. Total: ${totalLancamentos} lançamento(s).`);
+}
+
+// ── Agendamento ───────────────────────────────────────────────────────────────
+
+let taxasTimer: ReturnType<typeof setTimeout> | null = null;
+let salariosTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Agenda o job de taxas de cartão para o dia 1 do próximo mês às 06:00 BRT */
+function scheduleTaxasNextRun(): void {
   const ms = msUntilNextFirstOfMonth();
   const nextDate = new Date(Date.now() + ms);
-  console.log(`[FinConfig] Próxima execução agendada para ${nextDate.toISOString()} (em ${Math.round(ms / 1000 / 60 / 60)}h)`);
+  console.log(`[FinConfig] Próxima execução de taxas: ${nextDate.toISOString()} (em ${Math.round(ms / 1000 / 60 / 60)}h)`);
 
-  if (jobTimer) clearTimeout(jobTimer);
-  jobTimer = setTimeout(async () => {
+  if (taxasTimer) clearTimeout(taxasTimer);
+  taxasTimer = setTimeout(async () => {
     await runFinConfigMonthlyJob();
-    scheduleNextRun(); // reagendar para o mês seguinte
+    scheduleTaxasNextRun();
   }, ms);
 }
 
-/** Inicia o scheduler mensal. Chamar uma vez no boot do servidor. */
+/** Agenda o job de salários CLT para as 07:00 BRT (10:00 UTC) de cada dia */
+function scheduleSalariosNextRun(): void {
+  const ms = msUntilNext10UTC();
+  const nextDate = new Date(Date.now() + ms);
+  console.log(`[FinConfig] Próxima verificação de salários CLT: ${nextDate.toISOString()} (em ${Math.round(ms / 1000 / 60 / 60)}h)`);
+
+  if (salariosTimer) clearTimeout(salariosTimer);
+  salariosTimer = setTimeout(async () => {
+    await runSalariosCltJob();
+    scheduleSalariosNextRun(); // reagendar para o próximo dia
+  }, ms);
+}
+
+/** Inicia ambos os schedulers. Chamar uma vez no boot do servidor. */
 export function startFinConfigScheduler(): void {
   console.log("[FinConfig] Scheduler mensal de taxas de cartão iniciado.");
-  scheduleNextRun();
+  console.log("[FinConfig] Scheduler diário de salários CLT iniciado.");
+  scheduleTaxasNextRun();
+  scheduleSalariosNextRun();
 }
 
 export function stopFinConfigScheduler(): void {
-  if (jobTimer) {
-    clearTimeout(jobTimer);
-    jobTimer = null;
-    console.log("[FinConfig] Scheduler mensal parado.");
-  }
+  if (taxasTimer) { clearTimeout(taxasTimer); taxasTimer = null; }
+  if (salariosTimer) { clearTimeout(salariosTimer); salariosTimer = null; }
+  console.log("[FinConfig] Schedulers parados.");
 }
