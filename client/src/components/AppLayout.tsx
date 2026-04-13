@@ -329,6 +329,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   const { canViewPath } = useSysPermissions();
 
+  // Sincroniza o módulo ativo com a URL ao navegar diretamente (ex: link externo, refresh ou link no sidebar)
+  useEffect(() => {
+    const matched = [...MODULES]
+      .sort((a, b) => b.path.length - a.path.length)
+      .find(m => location === m.path || location.startsWith(m.path + "/"));
+    if (matched && matched.id !== activeModule) {
+      setActiveModule(matched.id);
+    }
+  }, [location]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const currentModule = MODULES.find((m) => m.id === activeModule) ?? MODULES[0];
   const sidebarItems = SIDEBAR_ITEMS[activeModule].filter((item) => {
     if (item.type === "separator") return true;
