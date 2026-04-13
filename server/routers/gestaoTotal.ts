@@ -2514,12 +2514,7 @@ const auditoriaRouter = router({
 // ── Dashboard GT ──────────────────────────────────────────────────────────────
 const dashboardGtRouter = router({
   kpis: protectedProcedure
-    .input(z.object({
-      orgId: z.number(),
-      unitId: z.number().optional(),
-      dateFrom: z.string().optional(), // ISO date string YYYY-MM-DD
-      dateTo: z.string().optional(),   // ISO date string YYYY-MM-DD
-    }))
+    .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return {
@@ -2530,81 +2525,63 @@ const dashboardGtRouter = router({
         processosCount: 0, tarefasDestinadas: 0,
       };
 
-      const hoje = new Date();
-      // Janela de período — padrão: mês atual
-      const periodoFrom = input.dateFrom ? new Date(input.dateFrom + "T00:00:00") : new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-      const periodoTo   = input.dateTo   ? new Date(input.dateTo   + "T23:59:59") : new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0, 23, 59, 59);
+      const orgCond = input.unitId
+        ? and(eq(gtTarefas.orgId, input.orgId), eq(gtTarefas.unitId, input.unitId))
+        : eq(gtTarefas.orgId, input.orgId);
 
-      // ── Tarefas (filtradas por createdAt no período) ──────────────────────
-      const tarefasConds = input.unitId
-        ? [eq(gtTarefas.orgId, input.orgId), eq(gtTarefas.unitId, input.unitId)]
-        : [eq(gtTarefas.orgId, input.orgId)];
-      tarefasConds.push(gte(gtTarefas.createdAt, periodoFrom));
-      tarefasConds.push(lte(gtTarefas.createdAt, periodoTo));
-      const tarefas = await db.select().from(gtTarefas).where(and(...tarefasConds));
+      const tarefas = await db.select().from(gtTarefas).where(orgCond);
       const tarefasPendentes = tarefas.filter(t => t.status === "pendente").length;
       const tarefasAndamento = tarefas.filter(t => t.status === "em_andamento").length;
       const tarefasConcluidas = tarefas.filter(t => t.status === "concluida").length;
 
-      // ── Problemas (filtrados por createdAt) ───────────────────────────────
-      const probConds = input.unitId
-        ? [eq(gtProblemas.orgId, input.orgId), eq(gtProblemas.unitId, input.unitId)]
-        : [eq(gtProblemas.orgId, input.orgId)];
-      probConds.push(gte(gtProblemas.createdAt, periodoFrom));
-      probConds.push(lte(gtProblemas.createdAt, periodoTo));
-      const problemas = await db.select().from(gtProblemas).where(and(...probConds));
+      const probCond = input.unitId
+        ? and(eq(gtProblemas.orgId, input.orgId), eq(gtProblemas.unitId, input.unitId))
+        : eq(gtProblemas.orgId, input.orgId);
+      const problemas = await db.select().from(gtProblemas).where(probCond);
       const problemasAbertos = problemas.filter(p => p.status === "aberto" || p.status === "em_analise").length;
 
-      // ── Reuniões (filtradas por data no período) ──────────────────────────
-      const reunConds = input.unitId
-        ? [eq(gtReunioes.orgId, input.orgId), eq(gtReunioes.unitId, input.unitId)]
-        : [eq(gtReunioes.orgId, input.orgId)];
-      reunConds.push(gte(gtReunioes.data, periodoFrom));
-      reunConds.push(lte(gtReunioes.data, periodoTo));
-      const reunioes = await db.select().from(gtReunioes).where(and(...reunConds));
-      // "Reuniões Hoje" mostra o total no período selecionado
-      const reunioesHoje = reunioes.length;
+      const hoje = new Date();
+      const inicioDia = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+      const fimDia = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 23, 59, 59);
+      const reunCond = input.unitId
+        ? and(eq(gtReunioes.orgId, input.orgId), eq(gtReunioes.unitId, input.unitId))
+        : eq(gtReunioes.orgId, input.orgId);
+      const reunioes = await db.select().from(gtReunioes).where(reunCond);
+      const reunioesHoje = reunioes.filter(r => r.data >= inicioDia && r.data <= fimDia).length;
 
-      // ── Colaboradores (sempre total ativo — não filtrado por período) ─────
       const colabCond = input.unitId
         ? and(eq(gtColaboradores.orgId, input.orgId), eq(gtColaboradores.unitId, input.unitId))
         : eq(gtColaboradores.orgId, input.orgId);
       const colaboradores = await db.select().from(gtColaboradores).where(colabCond);
       const colaboradoresAtivos = colaboradores.filter(c => c.status === "ativo").length;
 
-      // ── Financeiro (filtrado por vencimento no período) ───────────────────
-      const finConds = input.unitId
-        ? [eq(gtFinanceiro.orgId, input.orgId), eq(gtFinanceiro.unitId, input.unitId)]
-        : [eq(gtFinanceiro.orgId, input.orgId)];
-      finConds.push(gte(gtFinanceiro.vencimento, periodoFrom));
-      finConds.push(lte(gtFinanceiro.vencimento, periodoTo));
-      const financeiro = await db.select().from(gtFinanceiro).where(and(...finConds));
+      const refAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+      const finCond = input.unitId
+        ? and(eq(gtFinanceiro.orgId, input.orgId), eq(gtFinanceiro.unitId, input.unitId), eq(gtFinanceiro.referencia, refAtual))
+        : and(eq(gtFinanceiro.orgId, input.orgId), eq(gtFinanceiro.referencia, refAtual));
+      const financeiro = await db.select().from(gtFinanceiro).where(finCond);
       const receitasMes = financeiro.filter(f => f.tipo === "receita").reduce((s, f) => s + Number(f.valor), 0);
       const despesasMes = financeiro.filter(f => f.tipo === "despesa").reduce((s, f) => s + Number(f.valor), 0);
 
-      // ── Compras (sempre pendentes — não filtrado por período) ─────────────
       const comprCond = input.unitId
         ? and(eq(gtCompras.orgId, input.orgId), eq(gtCompras.unitId, input.unitId), eq(gtCompras.status, "aguardando_aprovacao"))
         : and(eq(gtCompras.orgId, input.orgId), eq(gtCompras.status, "aguardando_aprovacao"));
       const comprasPendentes = await db.select().from(gtCompras).where(comprCond);
 
-      // ── Riscos (sempre total — não filtrado por período) ──────────────────
       const riscoCond = input.unitId
         ? and(eq(gtRiscos.orgId, input.orgId), eq(gtRiscos.unitId, input.unitId))
         : eq(gtRiscos.orgId, input.orgId);
       const riscos = await db.select().from(gtRiscos).where(riscoCond);
       const riscosAltos = riscos.filter(r => r.probabilidade === "alta" && r.impacto === "alto" && r.status !== "mitigado").length;
 
-      // ── Processos criados no período ──────────────────────────────────────
-      const procConds = input.unitId
-        ? [eq(gtProcessos.orgId, input.orgId), eq(gtProcessos.unitId, input.unitId)]
-        : [eq(gtProcessos.orgId, input.orgId)];
-      procConds.push(gte(gtProcessos.createdAt, periodoFrom));
-      procConds.push(lte(gtProcessos.createdAt, periodoTo));
-      const processos = await db.select({ id: gtProcessos.id }).from(gtProcessos).where(and(...procConds));
+      // Processos criados
+      const procCond = input.unitId
+        ? and(eq(gtProcessos.orgId, input.orgId), eq(gtProcessos.unitId, input.unitId))
+        : eq(gtProcessos.orgId, input.orgId);
+      const processos = await db.select({ id: gtProcessos.id }).from(gtProcessos).where(procCond);
       const processosCount = processos.length;
 
-      // ── Tarefas destinadas (com responsavel preenchido e não concluídas, no período) ──
+      // Tarefas destinadas (com responsavel preenchido e não concluídas)
       const tarefasDestinadas = tarefas.filter(
         t => t.responsavel && t.responsavel.trim() !== "" && t.status !== "concluida"
       ).length;

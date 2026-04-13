@@ -1,8 +1,7 @@
 /**
  * GestaoTotalDashboard.tsx — Dashboard principal do módulo Gestão Total
- * KPIs reais com filtro de período: Hoje / Semana / Mês atual / Trimestre
+ * KPIs reais: tarefas, reuniões, colaboradores, financeiro (mês atual)
  */
-import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
@@ -15,59 +14,10 @@ import {
   ClipboardList, Clock, CheckCircle2, ArrowRight, Target,
 } from "lucide-react";
 
-// ── Tipos de período ──────────────────────────────────────────────────────────
-type Periodo = "hoje" | "semana" | "mes" | "trimestre";
-
-const PERIODOS: { key: Periodo; label: string }[] = [
-  { key: "hoje",      label: "Hoje" },
-  { key: "semana",    label: "Semana" },
-  { key: "mes",       label: "Mês atual" },
-  { key: "trimestre", label: "Trimestre" },
-];
-
-function calcPeriodo(p: Periodo): { dateFrom: string; dateTo: string } {
-  const hoje = new Date();
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-
-  if (p === "hoje") {
-    const s = fmt(hoje);
-    return { dateFrom: s, dateTo: s };
-  }
-  if (p === "semana") {
-    const dow = hoje.getDay(); // 0=dom
-    const seg = new Date(hoje); seg.setDate(hoje.getDate() - ((dow + 6) % 7));
-    const dom = new Date(seg);  dom.setDate(seg.getDate() + 6);
-    return { dateFrom: fmt(seg), dateTo: fmt(dom) };
-  }
-  if (p === "mes") {
-    const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-    const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
-    return { dateFrom: fmt(ini), dateTo: fmt(fim) };
-  }
-  // trimestre
-  const q = Math.floor(hoje.getMonth() / 3);
-  const ini = new Date(hoje.getFullYear(), q * 3, 1);
-  const fim = new Date(hoje.getFullYear(), q * 3 + 3, 0);
-  return { dateFrom: fmt(ini), dateTo: fmt(fim) };
-}
-
-// Labels dinâmicos por período
-const KPI_LABELS: Record<Periodo, {
-  receitas: string; despesas: string; resultado: string;
-  reunioes: string; tarefas: string; processos: string;
-}> = {
-  hoje:      { receitas: "Receitas Hoje",      despesas: "Despesas Hoje",      resultado: "Resultado Hoje",      reunioes: "Reuniões Hoje",      tarefas: "Tarefas Hoje",      processos: "Processos Hoje"      },
-  semana:    { receitas: "Receitas da Semana",  despesas: "Despesas da Semana",  resultado: "Resultado da Semana",  reunioes: "Reuniões da Semana",  tarefas: "Tarefas da Semana",  processos: "Processos da Semana"  },
-  mes:       { receitas: "Receitas do Mês",     despesas: "Despesas do Mês",     resultado: "Resultado do Mês",     reunioes: "Reuniões do Mês",     tarefas: "Tarefas do Mês",     processos: "Processos do Mês"     },
-  trimestre: { receitas: "Receitas do Trim.",   despesas: "Despesas do Trim.",   resultado: "Resultado do Trim.",   reunioes: "Reuniões do Trim.",   tarefas: "Tarefas do Trim.",   processos: "Processos do Trim."   },
-};
-
-// ── Helpers de formatação ─────────────────────────────────────────────────────
 function fmt(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
 }
 
-// ── Componentes auxiliares ────────────────────────────────────────────────────
 function KpiCard({ title, value, sub, icon: Icon, color, href }: {
   title: string; value: string | number; sub?: string;
   icon: React.ElementType; color: string; href?: string;
@@ -94,10 +44,10 @@ function KpiCard({ title, value, sub, icon: Icon, color, href }: {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; color: string }> = {
-    pendente:    { label: "Pendente",    color: "bg-yellow-500/20 text-yellow-400" },
-    em_andamento:{ label: "Em Andamento",color: "bg-blue-500/20 text-blue-400" },
-    em_revisao:  { label: "Em Revisão",  color: "bg-purple-500/20 text-purple-400" },
-    concluida:   { label: "Concluída",   color: "bg-green-500/20 text-green-400" },
+    pendente:     { label: "Pendente",     color: "bg-yellow-500/20 text-yellow-400" },
+    em_andamento: { label: "Em Andamento", color: "bg-blue-500/20 text-blue-400" },
+    em_revisao:   { label: "Em Revisão",   color: "bg-purple-500/20 text-purple-400" },
+    concluida:    { label: "Concluída",    color: "bg-green-500/20 text-green-400" },
   };
   const s = map[status] ?? { label: status, color: "bg-muted text-muted-foreground" };
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.color}`}>{s.label}</span>;
@@ -113,18 +63,12 @@ function PrioridadeBadge({ prioridade }: { prioridade: string }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${map[prioridade] ?? "bg-muted text-muted-foreground"}`}>{prioridade}</span>;
 }
 
-// ── Componente principal ──────────────────────────────────────────────────────
 export default function GestaoTotalDashboard() {
   const { selectedUnit } = useApp();
   const { org } = useOrg();
 
-  // Período selecionado — padrão: mês atual
-  const [periodo, setPeriodo] = useState<Periodo>("mes");
-  const { dateFrom, dateTo } = useMemo(() => calcPeriodo(periodo), [periodo]);
-  const labels = KPI_LABELS[periodo];
-
   const kpisQ = trpc.gestaoTotal.dashboard.kpis.useQuery(
-    { orgId: org?.id ?? 0, unitId: selectedUnit?.id, dateFrom, dateTo },
+    { orgId: org?.id ?? 0, unitId: selectedUnit?.id },
     { enabled: !!org?.id }
   );
   const tarefasQ = trpc.gestaoTotal.dashboard.tarefasRecentes.useQuery(
@@ -138,7 +82,7 @@ export default function GestaoTotalDashboard() {
   return (
     <div className="p-6 space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Gestão Total</h1>
           <p className="text-sm text-muted-foreground">
@@ -152,28 +96,6 @@ export default function GestaoTotalDashboard() {
         </Link>
       </div>
 
-      {/* Seletor de período */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-muted-foreground font-medium mr-1">Período:</span>
-        {PERIODOS.map(p => (
-          <button
-            key={p.key}
-            onClick={() => setPeriodo(p.key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              periodo === p.key
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted/40 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
-            }`}
-          >
-            {p.label}
-          </button>
-        ))}
-        {/* Indicador de intervalo */}
-        <span className="text-xs text-muted-foreground ml-auto hidden sm:block">
-          {dateFrom === dateTo ? dateFrom : `${dateFrom} → ${dateTo}`}
-        </span>
-      </div>
-
       {/* KPIs principais */}
       {kpisQ.isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -181,14 +103,14 @@ export default function GestaoTotalDashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <KpiCard title={labels.tarefas + " Pendentes"} value={k?.tarefasPendentes ?? 0} sub={`${k?.tarefasAndamento ?? 0} em andamento`} icon={CheckSquare} color="oklch(0.65 0.15 145)" href="/gestao-total/tarefas" />
-          <KpiCard title="Tarefas Destinadas" value={k?.tarefasDestinadas ?? 0} sub="com responsável ativo" icon={UserCheck} color="oklch(0.65 0.15 200)" href="/gestao-total/tarefas" />
-          <KpiCard title={labels.reunioes} value={k?.reunioesHoje ?? 0} sub="agendadas no período" icon={Calendar} color="oklch(0.65 0.15 260)" href="/gestao-total/reunioes" />
-          <KpiCard title="Colaboradores Ativos" value={k?.colaboradoresAtivos ?? 0} sub="na equipe" icon={Users} color="oklch(0.65 0.15 200)" href="/gestao-total/colaboradores" />
-          <KpiCard title={labels.receitas} value={fmt(k?.receitasMes ?? 0)} sub="entradas registradas" icon={TrendingUp} color="oklch(0.65 0.15 145)" href="/gestao-total/financeiro" />
-          <KpiCard title={labels.despesas} value={fmt(k?.despesasMes ?? 0)} sub="saídas registradas" icon={TrendingDown} color="oklch(0.65 0.18 30)" href="/gestao-total/financeiro" />
-          <KpiCard title={labels.processos} value={k?.processosCount ?? 0} sub="mapeados no sistema" icon={GitBranch} color="oklch(0.65 0.15 60)" href="/gestao-total/processos" />
-          <KpiCard title="Tarefas Concluídas" value={k?.tarefasConcluidas ?? 0} sub="finalizadas no período" icon={CheckCircle2} color="oklch(0.65 0.18 145)" href="/gestao-total/tarefas" />
+          <KpiCard title="Tarefas Pendentes"   value={k?.tarefasPendentes ?? 0}  sub={`${k?.tarefasAndamento ?? 0} em andamento`} icon={CheckSquare} color="oklch(0.65 0.15 145)" href="/gestao-total/tarefas" />
+          <KpiCard title="Tarefas Destinadas"  value={k?.tarefasDestinadas ?? 0} sub="com responsável ativo"                       icon={UserCheck}   color="oklch(0.65 0.15 200)" href="/gestao-total/tarefas" />
+          <KpiCard title="Reuniões do Mês"     value={k?.reunioesHoje ?? 0}      sub="agendadas"                                   icon={Calendar}    color="oklch(0.65 0.15 260)" href="/gestao-total/reunioes" />
+          <KpiCard title="Colaboradores Ativos"value={k?.colaboradoresAtivos ?? 0} sub="na equipe"                                 icon={Users}       color="oklch(0.65 0.15 200)" href="/gestao-total/colaboradores" />
+          <KpiCard title="Receitas do Mês"     value={fmt(k?.receitasMes ?? 0)}  sub="entradas registradas"                        icon={TrendingUp}  color="oklch(0.65 0.15 145)" href="/gestao-total/financeiro" />
+          <KpiCard title="Despesas do Mês"     value={fmt(k?.despesasMes ?? 0)}  sub="saídas registradas"                          icon={TrendingDown}color="oklch(0.65 0.18 30)"  href="/gestao-total/financeiro" />
+          <KpiCard title="Processos Criados"   value={k?.processosCount ?? 0}    sub="mapeados no sistema"                         icon={GitBranch}   color="oklch(0.65 0.15 60)"  href="/gestao-total/processos" />
+          <KpiCard title="Tarefas Concluídas"  value={k?.tarefasConcluidas ?? 0} sub="finalizadas"                                 icon={CheckCircle2}color="oklch(0.65 0.18 145)" href="/gestao-total/tarefas" />
         </div>
       )}
 
@@ -196,9 +118,9 @@ export default function GestaoTotalDashboard() {
       {k && (
         <div className="glass-card bg-white/5 border-white/10">
           <div className="p-4">
-            <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground">{labels.resultado}</p>
+                <p className="text-xs text-muted-foreground">Resultado do Mês</p>
                 <p className={`text-2xl font-bold ${k.lucroMes >= 0 ? "text-green-400" : "text-red-400"}`}>
                   {fmt(k.lucroMes)}
                 </p>
@@ -267,10 +189,10 @@ export default function GestaoTotalDashboard() {
       {/* Atalhos de módulos */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Processos",   href: "/gestao-total/processos",   icon: ClipboardList, color: "oklch(0.65 0.15 145)" },
-          { label: "Indicadores", href: "/gestao-total/indicadores", icon: TrendingUp,    color: "oklch(0.65 0.15 260)" },
-          { label: "Planejamento",href: "/gestao-total/planejamento",icon: Target,        color: "oklch(0.65 0.15 200)" },
-          { label: "Marketing",   href: "/gestao-total/marketing",   icon: TrendingUp,    color: "oklch(0.65 0.15 60)"  },
+          { label: "Processos",    href: "/gestao-total/processos",   icon: ClipboardList, color: "oklch(0.65 0.15 145)" },
+          { label: "Indicadores",  href: "/gestao-total/indicadores", icon: TrendingUp,    color: "oklch(0.65 0.15 260)" },
+          { label: "Planejamento", href: "/gestao-total/planejamento",icon: Target,        color: "oklch(0.65 0.15 200)" },
+          { label: "Marketing",    href: "/gestao-total/marketing",   icon: TrendingUp,    color: "oklch(0.65 0.15 60)"  },
         ].map(item => (
           <Link key={item.href} href={item.href}>
             <div className="glass-card bg-white/5 border-white/10 hover:border-primary/40 transition-colors cursor-pointer">
