@@ -2522,6 +2522,7 @@ const dashboardGtRouter = router({
         problemasAbertos: 0, reunioesHoje: 0, colaboradoresAtivos: 0,
         receitasMes: 0, despesasMes: 0, lucroMes: 0,
         comprasPendentes: 0, riscosAltos: 0, totalTarefas: 0, totalProblemas: 0,
+        processosCount: 0, tarefasDestinadas: 0,
       };
 
       const orgCond = input.unitId
@@ -2573,12 +2574,25 @@ const dashboardGtRouter = router({
       const riscos = await db.select().from(gtRiscos).where(riscoCond);
       const riscosAltos = riscos.filter(r => r.probabilidade === "alta" && r.impacto === "alto" && r.status !== "mitigado").length;
 
+      // Processos criados
+      const procCond = input.unitId
+        ? and(eq(gtProcessos.orgId, input.orgId), eq(gtProcessos.unitId, input.unitId))
+        : eq(gtProcessos.orgId, input.orgId);
+      const processos = await db.select({ id: gtProcessos.id }).from(gtProcessos).where(procCond);
+      const processosCount = processos.length;
+
+      // Tarefas destinadas (com responsavel preenchido e não concluídas)
+      const tarefasDestinadas = tarefas.filter(
+        t => t.responsavel && t.responsavel.trim() !== "" && t.status !== "concluida"
+      ).length;
+
       return {
         tarefasPendentes, tarefasAndamento, tarefasConcluidas,
         problemasAbertos, reunioesHoje, colaboradoresAtivos,
         receitasMes, despesasMes, lucroMes: receitasMes - despesasMes,
         comprasPendentes: comprasPendentes.length,
         riscosAltos, totalTarefas: tarefas.length, totalProblemas: problemas.length,
+        processosCount, tarefasDestinadas,
       };
     }),
 

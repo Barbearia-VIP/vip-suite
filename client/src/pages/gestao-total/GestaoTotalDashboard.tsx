@@ -9,9 +9,9 @@ import { useOrg } from "@/hooks/useOrg";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  CheckSquare, AlertTriangle, Users, Calendar,
-  TrendingUp, TrendingDown, ShoppingCart, Shield,
-  ClipboardList, Clock, CheckCircle2, ArrowRight,
+  CheckSquare, Users, Calendar,
+  TrendingUp, TrendingDown, GitBranch, UserCheck,
+  ClipboardList, Clock, CheckCircle2, ArrowRight, Target,
 } from "lucide-react";
 
 function fmt(v: number) {
@@ -104,13 +104,13 @@ export default function GestaoTotalDashboard() {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <KpiCard title="Tarefas Pendentes" value={k?.tarefasPendentes ?? 0} sub={`${k?.tarefasAndamento ?? 0} em andamento`} icon={CheckSquare} color="oklch(0.65 0.15 145)" href="/gestao-total/tarefas" />
-          <KpiCard title="Problemas Abertos" value={k?.problemasAbertos ?? 0} sub={`${k?.totalProblemas ?? 0} total`} icon={AlertTriangle} color="oklch(0.65 0.18 30)" href="/gestao-total/problemas" />
+          <KpiCard title="Tarefas Destinadas" value={k?.tarefasDestinadas ?? 0} sub="com responsável ativo" icon={UserCheck} color="oklch(0.65 0.15 200)" href="/gestao-total/tarefas" />
           <KpiCard title="Reuniões Hoje" value={k?.reunioesHoje ?? 0} sub="agendadas" icon={Calendar} color="oklch(0.65 0.15 260)" href="/gestao-total/reunioes" />
           <KpiCard title="Colaboradores Ativos" value={k?.colaboradoresAtivos ?? 0} sub="na equipe" icon={Users} color="oklch(0.65 0.15 200)" href="/gestao-total/colaboradores" />
           <KpiCard title="Receitas do Mês" value={fmt(k?.receitasMes ?? 0)} sub="entradas registradas" icon={TrendingUp} color="oklch(0.65 0.15 145)" href="/gestao-total/financeiro" />
           <KpiCard title="Despesas do Mês" value={fmt(k?.despesasMes ?? 0)} sub="saídas registradas" icon={TrendingDown} color="oklch(0.65 0.18 30)" href="/gestao-total/financeiro" />
-          <KpiCard title="Compras Pendentes" value={k?.comprasPendentes ?? 0} sub="aguardando aprovação" icon={ShoppingCart} color="oklch(0.65 0.15 60)" href="/gestao-total/compras" />
-          <KpiCard title="Riscos Críticos" value={k?.riscosAltos ?? 0} sub="alta prob. + alto impacto" icon={Shield} color="oklch(0.65 0.18 10)" href="/gestao-total/riscos" />
+          <KpiCard title="Processos Criados" value={k?.processosCount ?? 0} sub="mapeados no sistema" icon={GitBranch} color="oklch(0.65 0.15 60)" href="/gestao-total/processos" />
+          <KpiCard title="Tarefas Concluídas" value={k?.tarefasConcluidas ?? 0} sub="finalizadas" icon={CheckCircle2} color="oklch(0.65 0.18 145)" href="/gestao-total/tarefas" />
         </div>
       )}
 
@@ -191,7 +191,7 @@ export default function GestaoTotalDashboard() {
         {[
           { label: "Processos", href: "/gestao-total/processos", icon: ClipboardList, color: "oklch(0.65 0.15 145)" },
           { label: "Indicadores", href: "/gestao-total/indicadores", icon: TrendingUp, color: "oklch(0.65 0.15 260)" },
-          { label: "Planejamento", href: "/gestao-total/planejamento", icon: Shield, color: "oklch(0.65 0.15 200)" },
+          { label: "Planejamento", href: "/gestao-total/planejamento", icon: Target, color: "oklch(0.65 0.15 200)" },
           { label: "Marketing", href: "/gestao-total/marketing", icon: TrendingUp, color: "oklch(0.65 0.15 60)" },
         ].map(item => (
           <Link key={item.href} href={item.href}>
