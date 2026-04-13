@@ -1194,3 +1194,4 @@
 - [x] Dashboard/Data VIP: padronizar faturamento para usar sync_vendas.valor_total (valor real cobrado) em todas as queries
 - [x] Data VIP: padronizar todas as queries de faturamento para usar sync_vendas.valor_total
 - [x] Gestão Total: alinhar syncGtFinanceiro para usar sync_vendas.valor_total como padrão (igual Data VIP)
+- [x] Marketing: adicionar sufixos de qualidade técnica nos prompts de geração de imagem (Nano Banana)

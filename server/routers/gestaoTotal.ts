@@ -1933,7 +1933,7 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
 
       // 2. Gerar imagem via IA se solicitado
       // Prefixo de identidade visual VIP obrigatório para todas as imagens geradas
-      const VIP_IMAGE_PREFIX = `Barbearia VIP premium brand photography. MANDATORY: dark background (deep black or dark charcoal), gold/yellow accents (#D4AF37), cinematic dramatic lighting, high contrast. Well-groomed man with confident posture in luxury environment. Ultra-high quality, 8K, professional studio photography. Style: luxury fashion brand (Louis Vuitton, YSL applied to masculine universe). NOT a cheap barbershop photo. `;
+      const VIP_IMAGE_PREFIX = `Barbearia VIP premium brand photography. MANDATORY: dark background (deep black or dark charcoal), gold/yellow accents (#D4AF37), cinematic dramatic lighting, high contrast. Well-groomed man with confident posture in luxury environment. Ultra-high quality, 8K resolution, professional studio photography. Style: luxury fashion brand (Louis Vuitton, YSL applied to masculine universe). NOT a cheap barbershop photo. Shot on Hasselblad medium format, f/1.8 shallow depth of field, golden hour bokeh. Rule of thirds composition, centered subject with elegant negative space. Photorealistic, hyper-detailed, award-winning commercial photography. `;
       let imagemGeradaUrl: string | null = null;
       if (input.tipoImagem === "ia" && resultado.promptImagem) {
         try {
@@ -1950,7 +1950,7 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
       } else if (input.tipoImagem === "banco-vip" && input.bancoVipImageUrl) {
         // Usa a imagem do Banco VIP como base e refina apenas tonalidade para padrão VIP
         // NÃO gera nova imagem — apenas ajusta cor/tonalidade para identidade visual da marca
-        const REFINEMENT_PROMPT = `Refine this image to match Barbearia VIP brand identity. IMPORTANT: Keep the original image composition, subjects, and content EXACTLY as they are. Only apply these tonal adjustments if they improve the result: 1) Slightly darken the background to deep black or dark charcoal tones if it is currently light. 2) Add subtle warm gold/amber tint (#D4AF37) to highlights and light areas. 3) Enhance cinematic contrast and dramatic lighting. 4) Increase overall sophistication and premium feel. DO NOT change the people, objects, or composition. DO NOT generate a new image. This is a color grading and tonal refinement only.`;
+        const REFINEMENT_PROMPT = `Refine this image to match Barbearia VIP brand identity. IMPORTANT: Keep the original image composition, subjects, and content EXACTLY as they are. Only apply these tonal adjustments if they improve the result: 1) Slightly darken the background to deep black or dark charcoal tones if it is currently light. 2) Add subtle warm gold/amber tint (#D4AF37) to highlights and light areas. 3) Enhance cinematic contrast and dramatic lighting with deep shadows and warm highlights. 4) Increase overall sophistication and premium feel. 5) Apply professional color grading: rich blacks, lifted shadows, warm midtones. 6) Add subtle film grain for cinematic texture. DO NOT change the people, objects, or composition. DO NOT generate a new image. This is a color grading and tonal refinement only. Result should look like a high-end fashion magazine editorial, shot on Hasselblad, processed in professional color suite.`;
         try {
           const imgResult = await generateImage({
             prompt: REFINEMENT_PROMPT,
@@ -2308,6 +2308,18 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
         `FINAL QUALITY: Ultra-high quality, 8K resolution, professional studio design.`,
         `This flyer MUST look like it was designed by a world-class luxury creative agency.`,
         `The result should make the viewer feel they are looking at a premium brand, not a local barbershop.`,
+        ``,
+        `=== TECHNICAL QUALITY REQUIREMENTS (MANDATORY) ===`,
+        `- Resolution: Ultra-high detail, 8K quality rendering`,
+        `- Photography style: Shot on Hasselblad or Phase One medium format camera`,
+        `- Lens: 50mm f/1.4 — shallow depth of field with elegant bokeh on backgrounds`,
+        `- Lighting: Professional 3-point studio lighting with dramatic rim light and warm fill`,
+        `- Color grading: Rich blacks, lifted shadows, warm golden midtones, crisp highlights`,
+        `- Texture: Subtle film grain for cinematic depth`,
+        `- Composition: Rule of thirds, strong visual hierarchy, intentional negative space`,
+        `- Post-processing: Award-winning commercial photography retouching`,
+        `- Overall feel: Luxury fashion editorial — Vogue Homem, GQ, Esquire magazine quality`,
+        `- FORBIDDEN: flat lighting, blown-out whites, muddy shadows, amateur composition`,
         ``,
         `=== FINAL REMINDER: CANVAS SIZE ===`,
         `OUTPUT IMAGE SIZE: ${formato.dims} — ${formato.ratio} aspect ratio.`,
