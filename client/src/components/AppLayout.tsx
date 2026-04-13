@@ -190,6 +190,7 @@ const SIDEBAR_ITEMS: Record<ModuleId, SidebarItem[]> = {
     { label: "Reuniões", path: "/gestao-total/reunioes", icon: Calendar },
     { label: "IA Conselheiro", path: "/gestao-total/ia", icon: Brain },
     { label: "Configurações", path: "/gestao-total/configuracoes", icon: Settings },
+    { label: "Usuários do Sistema", path: "/gestao-total/usuarios-sistema", icon: Users },
     { label: "Privilégios", path: "/gestao-total/privilegios", icon: Shield },
     { type: "separator" },
     { label: "Guia do Sistema", path: "/gestao-total/guia", icon: BookMarked },

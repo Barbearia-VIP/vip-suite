@@ -61,6 +61,8 @@ import ConfiguracoesGtPage from "./pages/gestao-total/ConfiguracoesGtPage";
 import ConfiguracaoFinanceiraPage from "./pages/gestao-total/ConfiguracaoFinanceiraPage";
 import PrivilegiosPage from "./pages/gestao-total/PrivilegiosPage";
 import GuiaSistemaPage from "./pages/gestao-total/GuiaSistemaPage";
+import UsuariosSistemaPage from "./pages/gestao-total/UsuariosSistemaPage";
+import SysLogin from "./pages/SysLogin";
 
 // VIP Cam
 import VipCamPage from "./pages/vip-cam/VipCamPage";
@@ -279,6 +281,9 @@ function Router() {
       <Route path="/gestao-total/privilegios">
         <ProtectedLayout><PrivilegiosPage /></ProtectedLayout>
       </Route>
+      <Route path="/gestao-total/usuarios-sistema">
+        <ProtectedLayout><UsuariosSistemaPage /></ProtectedLayout>
+      </Route>
       <Route path="/gestao-total/guia">
         <ProtectedLayout><GuiaSistemaPage /></ProtectedLayout>
       </Route>
@@ -372,6 +377,9 @@ function Router() {
         <ProtectedLayout><ConfiguracoesPage /></ProtectedLayout>
       </Route>
 
+      <Route path="/login-unidade">
+        <SysLogin />
+      </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

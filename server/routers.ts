@@ -12,6 +12,7 @@ import { igConfigRouter, igDashboardRouter, igLogsRouter, igApprovalRouter, igSt
 import { weSendRouter } from "./routers/weSend";
 import { raioXRouter } from "./routers/raioX";
 import { syncRouter } from "./routers/sync";
+import { sysUsersRouter } from "./routers/sysUsers";
 import { initSchedulers } from "./igScheduler";
 import { initReputacaoScheduler } from "./reputacaoScheduler";
 
@@ -45,6 +46,7 @@ export const appRouter = router({
   weSend: weSendRouter,
   raioX: raioXRouter,
   sync: syncRouter,
+  sysUsers: sysUsersRouter,
 });
 
 export type AppRouter = typeof appRouter;

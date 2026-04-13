@@ -1592,3 +1592,67 @@ export const gtFuncionariosClt = mysqlTable("gt_funcionarios_clt", {
   index("idx_gt_func_clt_org").on(t.orgId, t.unitId),
 ]);
 export type GtFuncionarioClt = typeof gtFuncionariosClt.$inferSelect;
+
+// ─────────────────────────────────────────────
+// SYSTEM USERS (usuários de unidade — login e-mail/senha)
+// ─────────────────────────────────────────────
+export const sysUsers = mysqlTable("sys_users", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
+  roleId: int("roleId"),
+  active: int("active").default(1).notNull(),
+  lastLoginAt: timestamp("lastLoginAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_sys_users_org").on(t.orgId),
+  index("idx_sys_users_email").on(t.email),
+]);
+export type SysUser = typeof sysUsers.$inferSelect;
+
+// ─────────────────────────────────────────────
+// SYSTEM USER UNITS (unidades que o usuário pode acessar)
+// ─────────────────────────────────────────────
+export const sysUserUnits = mysqlTable("sys_user_units", {
+  id: int("id").autoincrement().primaryKey(),
+  sysUserId: int("sysUserId").notNull(),
+  unitId: int("unitId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => [
+  index("idx_sys_user_units_user").on(t.sysUserId),
+  index("idx_sys_user_units_unit").on(t.unitId),
+]);
+
+// ─────────────────────────────────────────────
+// SYSTEM ROLES (perfis de acesso configuráveis)
+// ─────────────────────────────────────────────
+export const sysRoles = mysqlTable("sys_roles", {
+  id: int("id").autoincrement().primaryKey(),
+  orgId: int("orgId").notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  isSystem: int("isSystem").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_sys_roles_org").on(t.orgId),
+]);
+export type SysRole = typeof sysRoles.$inferSelect;
+
+// ─────────────────────────────────────────────
+// SYSTEM ROLE PERMISSIONS (permissões por módulo/seção)
+// ─────────────────────────────────────────────
+export const sysRolePermissions = mysqlTable("sys_role_permissions", {
+  id: int("id").autoincrement().primaryKey(),
+  roleId: int("roleId").notNull(),
+  moduleKey: varchar("moduleKey", { length: 100 }).notNull(),
+  sectionKey: varchar("sectionKey", { length: 100 }).notNull(),
+  canView: int("canView").default(1).notNull(),
+  canEdit: int("canEdit").default(0).notNull(),
+}, (t) => [
+  index("idx_sys_role_perms_role").on(t.roleId),
+]);
+export type SysRolePermission = typeof sysRolePermissions.$inferSelect;
