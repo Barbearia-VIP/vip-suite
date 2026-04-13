@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   sysUsers, sysUserUnits, sysRoles, sysRolePermissions, organizations, units,
@@ -548,8 +549,34 @@ export const sysUsersRouter = router({
         perms.push({ roleId, moduleKey: mod.key, sectionKey: sec.key, canView: 1, canEdit: isApiConfig ? 0 : 1 });
       }
     }
-    await db.insert(sysRolePermissions).values(perms);
-
+     await db.insert(sysRolePermissions).values(perms);
     return { message: "Perfil 'Gestor de Unidade' criado com sucesso.", roleId };
   }),
+
+  // ── Trocar senha (sysUser logado com e-mail/senha) ───────────────────────────
+  changePassword: publicProcedure
+    .input(z.object({
+      currentPassword: z.string().min(1, "Informe a senha atual"),
+      newPassword: z.string().min(6, "A nova senha deve ter pelo menos 6 caracteres"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Ler cookie sys_session diretamente do header
+      const rawCookies = (ctx as any).req?.headers?.cookie ?? "";
+      const sysToken = rawCookies
+        .split(";")
+        .map((c: string) => c.trim())
+        .find((c: string) => c.startsWith(SYS_COOKIE + "="))
+        ?.split("=").slice(1).join("=") ?? null;
+      const session = await verifySysSession(sysToken);
+      if (!session) throw new TRPCError({ code: "UNAUTHORIZED", message: "Sessão inválida. Faça login novamente." });
+      const db = await requireDb();
+      const rows = await db.select().from(sysUsers).where(eq(sysUsers.id, session.sysUserId)).limit(1);
+      const u = rows[0];
+      if (!u) throw new TRPCError({ code: "NOT_FOUND", message: "Usuário não encontrado." });
+      const valid = await bcrypt.compare(input.currentPassword, u.passwordHash);
+      if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha atual incorreta." });
+      const newHash = await bcrypt.hash(input.newPassword, 10);
+      await db.update(sysUsers).set({ passwordHash: newHash }).where(eq(sysUsers.id, u.id));
+      return { success: true };
+    }),
 });

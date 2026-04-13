@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Users,
   Shield,
+  KeyRound,
   TrendingUp,
   UserCheck,
   Target,
@@ -45,6 +46,15 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -242,6 +252,33 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const ct = useChartTheme();
   const isDark = theme === "dark";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [cpCurrentPwd, setCpCurrentPwd] = useState("");
+  const [cpNewPwd, setCpNewPwd] = useState("");
+  const [cpConfirmPwd, setCpConfirmPwd] = useState("");
+
+  const changePasswordMutation = trpc.sysUsers.changePassword.useMutation({
+    onSuccess: () => {
+      toast.success("Senha alterada com sucesso!");
+      setChangePasswordOpen(false);
+      setCpCurrentPwd(""); setCpNewPwd(""); setCpConfirmPwd("");
+    },
+    onError: (err) => {
+      toast.error(err.message || "Erro ao alterar senha.");
+    },
+  });
+
+  const handleChangePassword = () => {
+    if (cpNewPwd !== cpConfirmPwd) {
+      toast.error("A nova senha e a confirmação não coincidem.");
+      return;
+    }
+    if (cpNewPwd.length < 6) {
+      toast.error("A nova senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+    changePasswordMutation.mutate({ currentPassword: cpCurrentPwd, newPassword: cpNewPwd });
+  };
 
   // Queries OAuth só habilitadas para usuários Master (não para usuários de unidade)
   const isOAuthUser = !!user && !sysUser;
@@ -664,10 +701,17 @@ export default function AppLayout({ children }: AppLayoutProps) {
                   )}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/configuracoes")} className="text-xs">
-                  <Settings className="w-3.5 h-3.5 mr-2" />
-                  Configurações
-                </DropdownMenuItem>
+                {sysUser ? (
+                  <DropdownMenuItem onClick={() => setChangePasswordOpen(true)} className="text-xs">
+                    <KeyRound className="w-3.5 h-3.5 mr-2" />
+                    Trocar Senha
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={() => navigate("/configuracoes")} className="text-xs">
+                    <Settings className="w-3.5 h-3.5 mr-2" />
+                    Configurações
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={handleLogout}
@@ -889,6 +933,69 @@ export default function AppLayout({ children }: AppLayoutProps) {
           {children}
         </main>
       </div>
+
+      {/* Modal: Trocar Senha (apenas para sysUser) */}
+      <Dialog open={changePasswordOpen} onOpenChange={(open) => {
+        setChangePasswordOpen(open);
+        if (!open) { setCpCurrentPwd(""); setCpNewPwd(""); setCpConfirmPwd(""); }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="w-4 h-4" />
+              Trocar Senha
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="cp-current" className="text-xs">Senha atual</Label>
+              <Input
+                id="cp-current"
+                type="password"
+                placeholder="Digite sua senha atual"
+                value={cpCurrentPwd}
+                onChange={(e) => setCpCurrentPwd(e.target.value)}
+                className="text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cp-new" className="text-xs">Nova senha</Label>
+              <Input
+                id="cp-new"
+                type="password"
+                placeholder="Mínimo 6 caracteres"
+                value={cpNewPwd}
+                onChange={(e) => setCpNewPwd(e.target.value)}
+                className="text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cp-confirm" className="text-xs">Confirmar nova senha</Label>
+              <Input
+                id="cp-confirm"
+                type="password"
+                placeholder="Repita a nova senha"
+                value={cpConfirmPwd}
+                onChange={(e) => setCpConfirmPwd(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleChangePassword()}
+                className="text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setChangePasswordOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleChangePassword}
+              disabled={changePasswordMutation.isPending || !cpCurrentPwd || !cpNewPwd || !cpConfirmPwd}
+            >
+              {changePasswordMutation.isPending ? "Salvando..." : "Salvar Senha"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
