@@ -1209,3 +1209,14 @@
 - [x] Todos os módulos verificados para sysUser joao@barbeariavip.com.br: Data VIP, Gestão Total, VIP Cam, Reputação, Auto Instagram, We Send — todos funcionando
 - [x] Seletor de unidade: implementado modo somente leitura para sysUser com apenas 1 unidade vinculada (para sysUser com múltiplas unidades, dropdown permanece disponível)
 - [x] Sidebar do sysUser: itens restritos (Unidades, Usuários do Sistema, Perfis de Acesso) ocultos corretamente
+
+## Bug: Sincronização Data VIP não está funcionando
+
+- [x] Diagnosticar por que o status aparece como "sincronizado" mas os dados não chegam
+- [x] Verificar credenciais de API por unidade (orgApiKey, orgApiUrl) — todas configuradas
+- [x] Verificar logs do scheduler automático (08:00 BRT + 4h) — funcionando
+- [x] Verificar se a chamada à API externa está sendo feita corretamente — OK (túnel SSH + API REST)
+- [x] Verificar se os dados estão sendo persistidos no banco — 3M+ registros, última sync hoje
+- [x] Corrigir valor_liquido → valor_total nas metas (bug menor)
+- [x] Limpar 26 registros running presos no sync_log
+- [x] Adicionar limpeza automática de running presos ao reiniciar servidor

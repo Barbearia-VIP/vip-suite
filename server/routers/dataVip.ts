@@ -883,7 +883,7 @@ export const dataVipRouter = router({
           if (extId) {
             const mesStr = `${a}-${String(m).padStart(2, '0')}`;
             const rows = await queryLocal<{ t: number }>(`
-              SELECT COALESCE(SUM(v.valor_liquido), 0) as t
+              SELECT COALESCE(SUM(v.valor_total), 0) as t
               FROM sync_vendas v
               WHERE v.unidade_id = ${extId}
                 AND DATE_FORMAT(v.data_criacao, '%Y-%m') = '${mesStr}'

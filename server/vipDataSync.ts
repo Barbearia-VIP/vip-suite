@@ -697,6 +697,17 @@ let schedulerInterval: ReturnType<typeof setInterval> | null = null;
 export function startAutoSyncScheduler(): void {
   if (schedulerInterval) return;
 
+  // Limpar registros 'running' presos de execuções anteriores (reinicializações do servidor)
+  getDb().then(db => {
+    if (!db) return;
+    db.execute(sql`
+      UPDATE sync_log
+      SET status = 'error', erro = 'Interrompido: servidor reiniciado'
+      WHERE status = 'running'
+        AND iniciadoEm < DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+    `).catch(() => {});
+  }).catch(() => {});
+
   const checkAndRun = async () => {
     const now = new Date();
     // 08:00 BRT = 11:00 UTC
