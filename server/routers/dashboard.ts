@@ -147,16 +147,15 @@ export const dashboardRouter = router({
       const unitUserCondAnt = unitUserCond; // mesmo filtro para período anterior
 
       // Atendimentos COM cadastro (cliente != 2 e não nulo) — base do ticket médio
-      // Usa sync_vendas_produtos.valor_total (soma dos itens) para alinhar com o sistema de origem
+      // PADRÃO DEFINITIVO: usa sync_vendas.valor_total (valor real cobrado ao cliente)
       const [atendComCadRows] = await queryLocal<{
         total_atendimentos: number; faturamento_total: number; clientes_distintos: number;
       }>(`
         SELECT
           COUNT(DISTINCT v.id) as total_atendimentos,
-          COALESCE(SUM(vp.valor_total), 0) as faturamento_total,
+          COALESCE(SUM(v.valor_total), 0) as faturamento_total,
           COUNT(DISTINCT v.cliente) as clientes_distintos
         FROM sync_vendas v
-        JOIN sync_vendas_produtos vp ON vp.venda = v.id
         WHERE ${unitUserCond}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND v.cliente IS NOT NULL AND v.cliente != 2
@@ -168,9 +167,8 @@ export const dashboardRouter = router({
       const [atendSemCadRows] = await queryLocal<{
         total_atendimentos: number; faturamento_total: number;
       }>(`
-        SELECT COUNT(DISTINCT v.id) as total_atendimentos, COALESCE(SUM(vp.valor_total), 0) as faturamento_total
+        SELECT COUNT(DISTINCT v.id) as total_atendimentos, COALESCE(SUM(v.valor_total), 0) as faturamento_total
         FROM sync_vendas v
-        JOIN sync_vendas_produtos vp ON vp.venda = v.id
         WHERE ${unitUserCond}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND (v.cliente IS NULL OR v.cliente = 2)
@@ -191,9 +189,8 @@ export const dashboardRouter = router({
 
       // Faturamento período anterior (para calcular trend)
       const [syncVendaAntRows] = await queryLocal<{ total: number }>(`
-        SELECT COALESCE(SUM(vp.valor_total), 0) as total
+        SELECT COALESCE(SUM(v.valor_total), 0) as total
         FROM sync_vendas v
-        JOIN sync_vendas_produtos vp ON vp.venda = v.id
         WHERE ${unitUserCondAnt}
           AND v.comanda_temp = 0 AND v.cancelado_motivo IS NULL AND v.status = 1
           AND DATE(v.data_criacao) >= '${mesAnteriorStartStr.slice(0, 10)}'
@@ -545,12 +542,11 @@ export const dashboardRouter = router({
       }>(`
         SELECT
           u.unidade as ext_id,
-          COALESCE(SUM(vp.valor_total), 0) as faturamento,
+          COALESCE(SUM(v.valor_total), 0) as faturamento,
           COUNT(DISTINCT v.id) as atendimentos,
           COUNT(DISTINCT CASE WHEN v.cliente IS NOT NULL AND v.cliente != 2 THEN v.cliente END) as clientes
         FROM sync_vendas v
         JOIN sync_usuarios u ON u.id = v.usuario
-        JOIN sync_vendas_produtos vp ON vp.venda = v.id
         WHERE u.unidade IN (${extIds.join(",")})
           AND v.comanda_temp = 0
           AND v.cancelado_motivo IS NULL

@@ -426,9 +426,9 @@ export async function getFaturamentoMensal(extIds: number[], meses: number = 12)
     SELECT
       YEAR(v.data_criacao) as ano,
       MONTH(v.data_criacao) as mes,
-      COALESCE(SUM(vp.valor_total), 0) as total_vendas,
+      COALESCE(SUM(v.valor_total), 0) as total_vendas,
       COUNT(DISTINCT v.id) as quantidade_vendas,
-      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio_por_venda,
+      COALESCE(SUM(v.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio_por_venda,
       COUNT(DISTINCT CASE
         WHEN NOT EXISTS (
           SELECT 1 FROM sync_vendas v2
@@ -449,9 +449,8 @@ export async function getFaturamentoMensal(extIds: number[], meses: number = 12)
             AND v2.status = 1
         ) THEN v.cliente
       END) as total_clientes_antigos
-    FROM sync_vendas_produtos vp
-    JOIN sync_vendas v ON v.id = vp.venda
-    WHERE ${vpUnit}
+    FROM sync_vendas v
+    WHERE ${vUnit}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
