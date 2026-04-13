@@ -34,7 +34,8 @@ async function verifySysSession(token: string | undefined | null): Promise<{ sys
     const { sysUserId, orgId } = payload as Record<string, unknown>;
     if (typeof sysUserId !== "number" || typeof orgId !== "number") return null;
     return { sysUserId, orgId };
-  } catch {
+  } catch (e: any) {
+    console.error('[SysSession] Erro ao verificar token:', e?.message);
     return null;
   }
 }
@@ -54,7 +55,13 @@ export async function createContext(
   // Se não há sessão OAuth, verificar sessão de sysUser
   if (!user) {
     try {
-      const sysToken = opts.req.cookies?.[SYS_COOKIE];
+      // Ler cookie diretamente do header (sem depender do cookie-parser)
+      const rawCookies = opts.req.headers.cookie ?? "";
+      const sysToken = rawCookies
+        .split(";")
+        .map(c => c.trim())
+        .find(c => c.startsWith(SYS_COOKIE + "="))
+        ?.split("=").slice(1).join("=") ?? null;
       const session = await verifySysSession(sysToken);
       if (session) {
         const db = await getDb();
