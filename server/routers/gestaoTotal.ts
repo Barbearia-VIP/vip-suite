@@ -942,6 +942,25 @@ const financeiroGtRouter = router({
       return { geradas };
     }),
 
+  marcarPago: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      orgId: z.number(),
+      pago: z.boolean(),
+      paidAt: z.string().optional(), // YYYY-MM-DD — data real do pagamento
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+      const paidAtDate = input.pago
+        ? (input.paidAt ? new Date(input.paidAt + "T12:00:00Z") : new Date())
+        : null;
+      await db.update(gtFinanceiro)
+        .set({ pago: input.pago ? 1 : 0, paidAt: paidAtDate })
+        .where(and(eq(gtFinanceiro.id, input.id), eq(gtFinanceiro.orgId, input.orgId)));
+      return { success: true, paidAt: paidAtDate?.toISOString().slice(0, 10) ?? null };
+    }),
+
   delete: protectedProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {

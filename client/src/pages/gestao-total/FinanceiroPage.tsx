@@ -22,7 +22,7 @@ import { DatePicker } from "@/components/DatePicker";
 type Lancamento = {
   id: number; tipo: "receita" | "despesa"; categoria: string | null;
   descricao: string; valor: string; pago: number;
-  vencimento: Date | null; formaPagamento: string | null;
+  vencimento: Date | null; paidAt: Date | null; formaPagamento: string | null;
   referencia: string | null; orgId: number; unitId: number | null; createdAt: Date;
   dataVipRef: string | null;
   recorrente: number;
@@ -245,6 +245,7 @@ export default function FinanceiroPage() {
   const [filterTipo, setFilterTipo] = useState<"todos" | "receita" | "despesa">("todos");
   const [referencia, setReferencia] = useState(getCurrentRef());
   const [tab, setTab] = useState<"lancamentos" | "dre" | "recorrentes">("lancamentos");
+  const [pagoDialog, setPagoDialog] = useState<{ id: number; orgId: number; pago: boolean; paidAt: string } | null>(null);
 
   const listQ = trpc.gestaoTotal.financeiro.list.useQuery(
     { orgId: org?.id ?? 0, unitId: selectedUnit?.id, referencia, tipo: filterTipo === "todos" ? undefined : filterTipo },
@@ -288,6 +289,15 @@ export default function FinanceiroPage() {
       toast.success("Removido");
     },
     onError: () => toast.error("Erro ao remover"),
+  });
+  const marcarPagoM = trpc.gestaoTotal.financeiro.marcarPago.useMutation({
+    onSuccess: () => {
+      utils.gestaoTotal.financeiro.list.invalidate();
+      utils.gestaoTotal.financeiro.dre.invalidate();
+      toast.success(pagoDialog?.pago ? "Marcado como pago!" : "Marcado como pendente");
+      setPagoDialog(null);
+    },
+    onError: () => toast.error("Erro ao atualizar pagamento"),
   });
   const cancelarRecorrenciaM = trpc.gestaoTotal.financeiro.cancelarRecorrencia.useMutation({
     onSuccess: () => {
@@ -430,6 +440,25 @@ export default function FinanceiroPage() {
                               <span className="text-xs text-muted-foreground">{l.pago ? "Pago" : "Pendente"}</span>
                             </div>
                           </div>
+                          {/* Botão marcar pago — visível para despesas pendentes e lançamentos CLT/taxa */}
+                          {!l.pago && l.tipo === "despesa" && (
+                            <button
+                              onClick={() => setPagoDialog({ id: l.id, orgId: l.orgId, pago: true, paidAt: new Date().toISOString().slice(0, 10) })}
+                              className="text-muted-foreground hover:text-green-400 p-1 transition-colors"
+                              title="Marcar como pago"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {l.pago && l.tipo === "despesa" && (
+                            <button
+                              onClick={() => setPagoDialog({ id: l.id, orgId: l.orgId, pago: false, paidAt: "" })}
+                              className="text-muted-foreground hover:text-yellow-400 p-1 transition-colors"
+                              title={`Pago em ${l.paidAt ? new Date(l.paidAt).toLocaleDateString("pt-BR") : "data não registrada"} · Clique para reverter`}
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           {!l.dataVipRef && (
                             <button onClick={() => setEditing(l)} className="text-muted-foreground hover:text-foreground p-1" title="Editar">
                               <Edit2 className="w-3.5 h-3.5" />
@@ -575,6 +604,50 @@ export default function FinanceiroPage() {
               onClose={() => setEditing(null)}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirmar pagamento */}
+      <Dialog open={!!pagoDialog} onOpenChange={v => !v && setPagoDialog(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{pagoDialog?.pago ? "Confirmar Pagamento" : "Reverter para Pendente"}</DialogTitle>
+          </DialogHeader>
+          {pagoDialog?.pago ? (
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">Informe a data em que o pagamento foi realizado:</p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Data do pagamento</Label>
+                <Input
+                  type="date"
+                  value={pagoDialog.paidAt}
+                  onChange={e => setPagoDialog(prev => prev ? { ...prev, paidAt: e.target.value } : null)}
+                  className="text-sm"
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground py-2">Deseja reverter este lançamento para &quot;Pendente&quot;?</p>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setPagoDialog(null)}>Cancelar</Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                if (!pagoDialog) return;
+                marcarPagoM.mutate({
+                  id: pagoDialog.id,
+                  orgId: pagoDialog.orgId,
+                  pago: pagoDialog.pago,
+                  paidAt: pagoDialog.paidAt || undefined,
+                });
+              }}
+              disabled={marcarPagoM.isPending}
+              className={pagoDialog?.pago ? "" : "bg-yellow-600 hover:bg-yellow-700"}
+            >
+              {marcarPagoM.isPending ? "Salvando..." : pagoDialog?.pago ? "Confirmar Pagamento" : "Reverter para Pendente"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
