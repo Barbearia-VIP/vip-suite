@@ -370,7 +370,7 @@ export default function InstrucoesPage() {
       processoNome: genProcessoNome,
       processoDescricao: processo?.descricao ?? undefined,
       etapas,
-      segmento: org.segment ?? "Barbearia",
+      segmento: (org as any).segment ?? "Barbearia",
       responsavelNome: genResponsavel || undefined,
     });
   };

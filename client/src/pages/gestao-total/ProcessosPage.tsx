@@ -227,7 +227,7 @@ export default function ProcessosPage() {
     generateM.mutate({
       orgId: org.id, unitId: selectedUnit?.id,
       nomeUnidade: currentUnit.name,
-      segmento: org.segment ?? "Barbearia",
+      segmento: (org as any).segment ?? "Barbearia",
       missao: plan?.missao ?? undefined,
       visao: plan?.visao ?? undefined,
       objetivos,
@@ -297,7 +297,7 @@ export default function ProcessosPage() {
       processoNome: itProcesso.nome,
       processoDescricao: itProcesso.descricao ?? undefined,
       etapas,
-      segmento: org.segment ?? "Barbearia",
+      segmento: (org as any).segment ?? "Barbearia",
       responsavelNome: colab?.nome,
     });
   };

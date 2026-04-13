@@ -146,7 +146,7 @@ export default function PlanejamentoPage() {
     generateM.mutate({
       orgId: org.id, unitId: selectedUnit?.id,
       nomeUnidade: currentUnit.name,
-      segmento: org.segment ?? "Barbearia",
+      segmento: (org as any).segment ?? "Barbearia",
       cidade: currentUnit.city ?? undefined,
       porte: aiPorte,
       descricaoNegocio: aiDescricao,

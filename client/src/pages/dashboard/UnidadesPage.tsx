@@ -98,7 +98,7 @@ export default function UnidadesPage() {
         <Card className="bg-card border-border"><CardContent className="p-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><Building2 className="w-5 h-5 text-primary" /></div>
-            <div><p className="text-sm font-semibold text-foreground">{org.name}</p>{org.segment && <p className="text-xs text-muted-foreground">{org.segment}</p>}</div>
+            <div><p className="text-sm font-semibold text-foreground">{org.name}</p>{(org as any).segment && <p className="text-xs text-muted-foreground">{(org as any).segment}</p>}</div>
             <Badge variant="secondary" className="ml-auto">{units.length} unidade{units.length !== 1 ? "s" : ""}</Badge>
           </div>
         </CardContent></Card>
