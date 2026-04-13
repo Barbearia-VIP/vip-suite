@@ -1193,3 +1193,4 @@
 - [x] Correção do upsertBatch para processar em lotes de 200 (evitar too many placeholders)
 - [x] Dashboard/Data VIP: padronizar faturamento para usar sync_vendas.valor_total (valor real cobrado) em todas as queries
 - [x] Data VIP: padronizar todas as queries de faturamento para usar sync_vendas.valor_total
+- [x] Gestão Total: alinhar syncGtFinanceiro para usar sync_vendas.valor_total como padrão (igual Data VIP)
