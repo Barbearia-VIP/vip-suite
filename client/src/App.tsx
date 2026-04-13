@@ -8,6 +8,7 @@ import AppLayout from "./components/AppLayout";
 import { useAuth } from "./_core/hooks/useAuth";
 import { getLoginUrl } from "./const";
 import { useEffect } from "react";
+import { useSysUser } from "./contexts/SysUserContext";
 
 // Pages
 import Home from "./pages/Home";
@@ -114,18 +115,23 @@ const PROTECTED_PATHS = [
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
-  const [location, navigate] = useLocation();
+  const { sysUser, isLoading: sysLoading } = useSysUser();
+  const [location] = useLocation();
+
+  // Considera autenticado se tiver sessão Manus OU sessão de usuário de unidade
+  const isAnyAuthenticated = isAuthenticated || !!sysUser;
+  const isStillLoading = loading || sysLoading;
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
+    if (!isStillLoading && !isAnyAuthenticated) {
       const isProtected = PROTECTED_PATHS.some((p) => location.startsWith(p));
       if (isProtected) {
         window.location.href = getLoginUrl();
       }
     }
-  }, [isAuthenticated, loading, location]);
+  }, [isAnyAuthenticated, isStillLoading, location]);
 
-  if (loading) {
+  if (isStillLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
