@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
+import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +20,7 @@ export default function SysLogin() {
   const login = trpc.sysUsers.login.useMutation({
     onSuccess: () => {
       refetch();
-      navigate("/");
+      navigate("/dashboard");
     },
     onError: (err) => {
       setError(err.message || "Erro ao fazer login.");
@@ -110,7 +111,7 @@ export default function SysLogin() {
 
         <p className="text-center text-xs text-muted-foreground">
           Administrador?{" "}
-          <a href="/" className="text-amber-500 hover:underline">
+          <a href={getLoginUrl()} className="text-amber-500 hover:underline">
             Acesse com conta Manus
           </a>
         </p>

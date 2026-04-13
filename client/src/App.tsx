@@ -158,7 +158,7 @@ function Router() {
   return (
     <Switch>
       {/* Public */}
-      <Route path="/" component={Home} />
+      <Route path="/" component={SysLogin} />
 
       {/* Dashboard */}
       <Route path="/dashboard">
@@ -388,6 +388,7 @@ function Router() {
       <Route path="/login-unidade">
         <SysLogin />
       </Route>
+      <Route path="/home-legacy" component={Home} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
