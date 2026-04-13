@@ -177,7 +177,7 @@ export const raioXRouter = router({
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds, unitFilter } = await resolveExternalIds(
-        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
       );
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
@@ -819,7 +819,7 @@ export const raioXRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
       );
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
       const dataFimDate = new Date(dataFim + "T00:00:00Z");
@@ -954,7 +954,7 @@ export const raioXRouter = router({
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
       );
       const dataFim = input.dataFim || new Date().toISOString().split("T")[0];
       // Base 12m: clientes com visita nos 12 meses anteriores a dataFim
@@ -1136,7 +1136,7 @@ export const raioXRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds, unitFilter } = await resolveExternalIds(
-        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
       );
 
       const diasPeriodo = input.periodo === "30d" ? 30
@@ -1375,7 +1375,7 @@ export const raioXRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
       );
       if (extIds.length === 0) return { barbeiros: [] };
 
@@ -1511,7 +1511,7 @@ export const raioXRouter = router({
     .input(baseInput.extend({ colaboradorId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
       );
       if (extIds.length === 0) {
         return { cohortMensal: [], analiseNovos: null, distribuicao: null, cohortHistorico: [], cohortPorBarbeiro: [] };
@@ -1824,7 +1824,7 @@ export const raioXRouter = router({
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
       );
       const unitCond = extIds.length === 0 ? "1=1"
         : extIds.length === 1 ? `v.unidade_id = ${extIds[0]}`
@@ -1945,7 +1945,7 @@ export const raioXRouter = router({
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
       );
 
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
@@ -2271,7 +2271,7 @@ export const raioXRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
       );
 
       const dataInicio = input.dataInicio || new Date(Date.now() - 90 * 86400000).toISOString().split("T")[0];
@@ -2363,7 +2363,7 @@ export const raioXRouter = router({
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds, unitFilter } = await resolveExternalIds(
-        ctx.user.id, ctx.user.role, input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
       );
       if (extIds.length === 0) return { kpis: null, barbeiros: [], segmentosGeral: null, evolucao: [] };
 
@@ -2720,7 +2720,7 @@ export const raioXRouter = router({
       forceAll: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      if ((ctx.user?.role ?? "user") !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
       if (input.unitId) {

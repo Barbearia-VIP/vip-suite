@@ -422,7 +422,7 @@ export const reputacaoRouter = router({
         .set({
           resposta: input.resposta,
           respondidoEm: new Date(),
-          respondidoPor: ctx.user.name || "Equipe",
+          respondidoPor: (ctx.user?.name ?? "Equipe") || "Equipe",
           respostaPublicada,
         })
         .where(and(eq(repAvaliacoes.id, input.avaliacaoId), eq(repAvaliacoes.unitId, input.unitId)));
