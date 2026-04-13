@@ -16,8 +16,8 @@ import NotFound from "./pages/NotFound";
 // Dashboard
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import UnidadesPage from "./pages/dashboard/UnidadesPage";
-import UsuariosPage from "./pages/dashboard/UsuariosPage";
-import PermissoesPage from "./pages/dashboard/PermissoesPage";
+import UsuariosPage from "./pages/gestao-total/UsuariosSistemaPage";
+import PermissoesPage from "./pages/gestao-total/PrivilegiosPage";
 
 // Data VIP
 import DataVipPage from "./pages/data-vip/DataVipPage";
@@ -284,6 +284,7 @@ function Router() {
       <Route path="/gestao-total/usuarios-sistema">
         <ProtectedLayout><UsuariosSistemaPage /></ProtectedLayout>
       </Route>
+      {/* Aliases do Dashboard apontando para as mesmas páginas */}
       <Route path="/gestao-total/guia">
         <ProtectedLayout><GuiaSistemaPage /></ProtectedLayout>
       </Route>

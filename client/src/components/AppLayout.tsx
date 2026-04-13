@@ -149,8 +149,8 @@ const SIDEBAR_ITEMS: Record<ModuleId, SidebarItem[]> = {
   dashboard: [
     { label: "Visão Geral", path: "/dashboard", icon: LayoutDashboard },
     { label: "Unidades", path: "/dashboard/unidades", icon: Building2 },
-    { label: "Usuários", path: "/dashboard/usuarios", icon: Users },
-    { label: "Permissões", path: "/dashboard/permissoes", icon: Shield },
+    { label: "Usuários do Sistema", path: "/dashboard/usuarios", icon: Users },
+    { label: "Perfis de Acesso", path: "/dashboard/permissoes", icon: Shield },
   ],
   data_vip: [
     { label: "Dashboard", path: "/data-vip", icon: LayoutDashboard },
@@ -191,8 +191,7 @@ const SIDEBAR_ITEMS: Record<ModuleId, SidebarItem[]> = {
     { label: "Reuniões", path: "/gestao-total/reunioes", icon: Calendar },
     { label: "IA Conselheiro", path: "/gestao-total/ia", icon: Brain },
     { label: "Configurações", path: "/gestao-total/configuracoes", icon: Settings },
-    { label: "Usuários do Sistema", path: "/gestao-total/usuarios-sistema", icon: Users },
-    { label: "Privilégios", path: "/gestao-total/privilegios", icon: Shield },
+
     { type: "separator" },
     { label: "Guia do Sistema", path: "/gestao-total/guia", icon: BookMarked },
   ],
