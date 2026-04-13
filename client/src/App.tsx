@@ -6,7 +6,6 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { AppProvider } from "./contexts/AppContext";
 import AppLayout from "./components/AppLayout";
 import { useAuth } from "./_core/hooks/useAuth";
-import { getLoginUrl } from "./const";
 import { useEffect } from "react";
 import { useSysUser } from "./contexts/SysUserContext";
 
@@ -126,7 +125,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     if (!isStillLoading && !isAnyAuthenticated) {
       const isProtected = PROTECTED_PATHS.some((p) => location.startsWith(p));
       if (isProtected) {
-        window.location.href = getLoginUrl();
+        // Redireciona para a página de login de unidade (e-mail/senha)
+        // que também oferece o link para login Manus (administradores)
+        window.location.href = "/login-unidade";
       }
     }
   }, [isAnyAuthenticated, isStillLoading, location]);

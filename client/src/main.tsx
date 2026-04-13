@@ -1,13 +1,10 @@
 import { trpc } from "@/lib/trpc";
-import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import { getLoginUrl } from "./const";
 import { SysUserProvider } from "./contexts/SysUserContext";
-import { isSysUserAuthenticated, isSysUserStateLoaded } from "./lib/sysUserState";
 import "./index.css";
 
 // Detecta se um erro é de timeout de query
@@ -19,8 +16,6 @@ const isTimeoutError = (error: unknown): boolean => {
     error.message?.includes("número máximo de tentativas atingido")
   );
 };
-
-
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,41 +33,21 @@ const queryClient = new QueryClient({
   },
 });
 
-const redirectToLoginIfUnauthorized = (error: unknown) => {
-  if (!(error instanceof TRPCClientError)) return;
-  if (typeof window === "undefined") return;
-
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
-  if (!isUnauthorized) return;
-
-  // Se o usuário tem sessão de unidade (e-mail/senha), não redirecionar para OAuth.
-  // O estado global é sincronizado pelo SysUserProvider após carregar o sysUser.
-  // Se já foi carregado e há sysUser, não redirecionar.
-  if (isSysUserAuthenticated()) return;
-
-  // Se o estado ainda não foi carregado (primeira carga), aguardar 2s antes de redirecionar.
-  // Isso evita redirecionar antes do SysUserProvider terminar de verificar a sessão.
-  if (!isSysUserStateLoaded()) {
-    setTimeout(() => {
-      if (!isSysUserAuthenticated()) {
-        window.location.href = getLoginUrl();
-      }
-    }, 2000);
-    return;
-  }
-
-  window.location.href = getLoginUrl();
-};
-
+// Handler global de erros: apenas loga, NÃO redireciona.
+// O redirecionamento para login é responsabilidade exclusiva do AuthGuard no App.tsx,
+// que aguarda corretamente os dois carregamentos (OAuth + sysUser) antes de redirecionar.
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.query.state.error;
-    redirectToLoginIfUnauthorized(error);
-    // Não logar erros de timeout como erro — são tratados com retry automático
+    // Não logar erros de timeout — são tratados com retry automático
     if (!isTimeoutError(error)) {
-      console.error("[API Query Error]", error);
+      // Não logar erros de UNAUTHORIZED — são esperados para usuários não autenticados
+      const isUnauth = error instanceof TRPCClientError && error.data?.code === "UNAUTHORIZED";
+      if (!isUnauth) {
+        console.error("[API Query Error]", error);
+      }
     } else {
-      console.warn("[API Query Timeout] Retentando query...", error?.message?.slice(0, 80));
+      console.warn("[API Query Timeout] Retentando query...", (error as Error)?.message?.slice(0, 80));
     }
   }
 });
@@ -80,8 +55,10 @@ queryClient.getQueryCache().subscribe(event => {
 queryClient.getMutationCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.mutation.state.error;
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Mutation Error]", error);
+    const isUnauth = error instanceof TRPCClientError && error.data?.code === "UNAUTHORIZED";
+    if (!isUnauth) {
+      console.error("[API Mutation Error]", error);
+    }
   }
 });
 
