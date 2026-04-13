@@ -99,12 +99,11 @@ async function getKpisRealtime(extIds: number[], ano: number, mes: number) {
     total_clientes_unicos: number;
   }>(`
     SELECT
-      COALESCE(SUM(vp.valor_total), 0) as total_vendas,
+      COALESCE(SUM(v.valor_total), 0) as total_vendas,
       COUNT(DISTINCT v.id) as quantidade_vendas,
       COUNT(DISTINCT v.cliente) as total_clientes_unicos
-    FROM sync_vendas_produtos vp
-    JOIN sync_vendas v ON v.id = vp.venda
-    WHERE ${vpUnit}
+    FROM sync_vendas v
+    WHERE ${vUnit}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
@@ -198,12 +197,11 @@ export async function getKpisRealtimeByRange(
     total_clientes_unicos: number;
   }>(`
     SELECT
-      COALESCE(SUM(vp.valor_total), 0) as total_vendas,
+      COALESCE(SUM(v.valor_total), 0) as total_vendas,
       COUNT(DISTINCT v.id) as quantidade_vendas,
       COUNT(DISTINCT v.cliente) as total_clientes_unicos
-    FROM sync_vendas_produtos vp
-    JOIN sync_vendas v ON v.id = vp.venda
-    WHERE ${vpCond}
+    FROM sync_vendas v
+    WHERE ${vCond}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
@@ -475,9 +473,9 @@ export async function getFaturamentoMensal(extIds: number[], meses: number = 12)
     total_clientes_antigos: number;
   }>(`
     SELECT
-      COALESCE(SUM(vp.valor_total), 0) as total_vendas,
+      COALESCE(SUM(v.valor_total), 0) as total_vendas,
       COUNT(DISTINCT v.id) as quantidade_vendas,
-      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio_por_venda,
+      COALESCE(SUM(v.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio_por_venda,
       COUNT(DISTINCT CASE
         WHEN NOT EXISTS (
           SELECT 1 FROM sync_vendas v2
@@ -551,9 +549,9 @@ export async function getFaturamentoMensalDetalhado(extIds: number[], meses: num
     SELECT
       YEAR(v.data_criacao) as ano,
       MONTH(v.data_criacao) as mes,
-      COALESCE(SUM(vp.valor_total), 0) as faturamento,
+      COALESCE(SUM(v.valor_total), 0) as faturamento,
       COUNT(DISTINCT v.id) as atendimentos,
-      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
+      COALESCE(SUM(v.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
       COUNT(DISTINCT v.cliente) as clientes,
       COUNT(DISTINCT CASE WHEN sc.data_criacao >= DATE_FORMAT(v.data_criacao, '%Y-%m-01') THEN v.cliente END) as clientes_novos,
       COUNT(CASE WHEN p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL OR p.categoria != 'base') AND p.categoria != 'base' THEN 1 END) as extras_qtd,
@@ -622,9 +620,9 @@ export async function getFaturamentoMensalDetalhadoFiltrado(
     SELECT
       YEAR(v.data_criacao) as ano,
       MONTH(v.data_criacao) as mes,
-      COALESCE(SUM(vp.valor_total), 0) as faturamento,
+      COALESCE(SUM(v.valor_total), 0) as faturamento,
       COUNT(DISTINCT v.id) as atendimentos,
-      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
+      COALESCE(SUM(v.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
       COUNT(DISTINCT v.cliente) as clientes,
       COUNT(DISTINCT CASE WHEN sc.data_criacao >= DATE_FORMAT(v.data_criacao, '%Y-%m-01') THEN v.cliente END) as clientes_novos,
       COUNT(CASE WHEN p.tipo = 'ser' AND p.categoria != 'base' THEN 1 END) as extras_qtd,
@@ -752,7 +750,7 @@ export async function getEvolucaoDiaria(
   }>(`
     SELECT
       DATE_FORMAT(v.data_criacao, '%Y-%m-%d') as dia,
-      COALESCE(SUM(vp.valor_total), 0) as faturamento,
+      COALESCE(SUM(DISTINCT v.valor_total), 0) as faturamento,
       COUNT(DISTINCT v.id) as atendimentos,
       COUNT(DISTINCT v.cliente) as clientes,
       COUNT(DISTINCT CASE
@@ -765,7 +763,7 @@ export async function getEvolucaoDiaria(
             AND v2.status = 1
         ) THEN v.cliente
       END) as clientes_novos,
-      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
+      COALESCE(SUM(DISTINCT v.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
       COUNT(CASE WHEN p.tipo = 'ser' THEN 1 END) as servicos,
       COUNT(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN 1 END) as produtos,
       COUNT(CASE WHEN p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL) THEN 1 END) as extra_qtd,
@@ -794,12 +792,11 @@ export async function getFaturamentoDiario(extIds: number[], dataInicio: string,
   }>(`
     SELECT
       DATE_FORMAT(v.data_criacao, '%Y-%m-%d') as dia,
-      COALESCE(SUM(vp.valor_total), 0) as faturamento,
+      COALESCE(SUM(v.valor_total), 0) as faturamento,
       COUNT(DISTINCT v.id) as atendimentos,
       COUNT(DISTINCT v.cliente) as clientes
-    FROM sync_vendas_produtos vp
-    JOIN sync_vendas v ON v.id = vp.venda
-    WHERE ${vpUnit}
+    FROM sync_vendas v
+    WHERE ${vUnit}
       AND v.data_criacao >= ?
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
@@ -875,9 +872,9 @@ export async function getColaboradoresByRange(extIds: number[], dataInicio: stri
     SELECT
       colab.id as colaborador_id,
       colab.nome as colaborador_nome,
-      COALESCE(SUM(vp.valor_total), 0) as faturamento,
+      COALESCE(SUM(v.valor_total), 0) as faturamento,
       COUNT(DISTINCT v.id) as atendimentos,
-      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
+      COALESCE(SUM(v.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
       COUNT(DISTINCT DATE(v.data_criacao)) as dias_trabalhados,
       COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT DATE(v.data_criacao)), 0), 0) as faturamento_dia,
       COUNT(CASE WHEN p.tipo = 'ser' THEN 1 END) as servicos,
@@ -934,13 +931,12 @@ export async function getRankingUnidades(extIds: number[], ano: number, mes: num
     SELECT
       v.unidade_id,
       CONCAT('Unidade ', v.unidade_id) as unidade_nome,
-      COALESCE(SUM(vp.valor_total), 0) as total_vendas,
+      COALESCE(SUM(v.valor_total), 0) as total_vendas,
       COUNT(DISTINCT v.id) as quantidade_vendas,
-      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio_por_venda,
+      COALESCE(SUM(v.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio_por_venda,
       0 as total_clientes_novos,
       0 as total_clientes_antigos
     FROM sync_vendas v
-    JOIN sync_vendas_produtos vp ON vp.venda = v.id
     WHERE ${unitCond}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
@@ -1414,11 +1410,10 @@ export async function getFaturamentoPorDiaSemana(extIds: number[], dataInicio: s
   }>(`
     SELECT
       DAYOFWEEK(v.data_criacao) as dia_semana,
-      COALESCE(SUM(vp.valor_total), 0) as total,
+      COALESCE(SUM(v.valor_total), 0) as total,
       COUNT(DISTINCT v.id) as atendimentos
-    FROM sync_vendas_produtos vp
-    JOIN sync_vendas v ON v.id = vp.venda
-    WHERE ${vpUnit}
+    FROM sync_vendas v
+    WHERE ${vUnit}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
@@ -1461,11 +1456,10 @@ export async function getFaturamentoPorFaixaHoraria(extIds: number[], dataInicio
         WHEN HOUR(v.data_criacao) BETWEEN 19 AND 20 THEN 19
         ELSE 99
       END as hora_inicio,
-      COALESCE(SUM(vp.valor_total), 0) as total,
+      COALESCE(SUM(v.valor_total), 0) as total,
       COUNT(DISTINCT v.id) as atendimentos
-    FROM sync_vendas_produtos vp
-    JOIN sync_vendas v ON v.id = vp.venda
-    WHERE ${vpUnit}
+    FROM sync_vendas v
+    WHERE ${vUnit}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0

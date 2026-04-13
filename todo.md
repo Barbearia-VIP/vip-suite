@@ -1192,3 +1192,4 @@
 - [x] Sincronização completa de abril/2026 para todas as 31 unidades
 - [x] Correção do upsertBatch para processar em lotes de 200 (evitar too many placeholders)
 - [x] Dashboard/Data VIP: padronizar faturamento para usar sync_vendas.valor_total (valor real cobrado) em todas as queries
+- [x] Data VIP: padronizar todas as queries de faturamento para usar sync_vendas.valor_total
