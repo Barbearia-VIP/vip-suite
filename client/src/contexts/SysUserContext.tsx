@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { setSysUserGlobalState } from "@/lib/sysUserState";
 
 export type SysUserPermission = {
   moduleKey: string;
@@ -41,6 +42,13 @@ export function SysUserProvider({ children }: { children: React.ReactNode }) {
   });
 
   const sysUser = (data as SysUser | null | undefined) ?? null;
+
+  // Sincroniza o estado global (acessível fora do React) quando sysUser muda
+  useEffect(() => {
+    if (!isLoading) {
+      setSysUserGlobalState(!!sysUser);
+    }
+  }, [sysUser, isLoading]);
 
   function canView(moduleKey: string, sectionKey: string): boolean {
     if (!sysUser) return true; // Master (OAuth) vê tudo

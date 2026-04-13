@@ -63,6 +63,7 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "../contexts/ThemeContext";
 import { useChartTheme } from "../hooks/useChartTheme";
 import { useSysPermissions } from "../hooks/useSysPermissions";
+import { useSysUser } from "../contexts/SysUserContext";
 
 interface Module {
   id: ModuleId;
@@ -236,17 +237,21 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const [location, navigate] = useLocation();
   const { activeModule, setActiveModule, selectedUnit, setSelectedUnit, availableUnits, setAvailableUnits, sidebarCollapsed, setSidebarCollapsed, userRole } = useApp();
   const { user, logout } = useAuth();
+  const { sysUser } = useSysUser();
   const { theme, themeSource, toggleTheme } = useTheme();
   const ct = useChartTheme();
   const isDark = theme === "dark";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const orgsQuery = trpc.orgs.list.useQuery(undefined, { enabled: !!user });
+  // Queries OAuth só habilitadas para usuários Master (não para usuários de unidade)
+  const isOAuthUser = !!user && !sysUser;
+
+  const orgsQuery = trpc.orgs.list.useQuery(undefined, { enabled: isOAuthUser });
   const firstOrgId = orgsQuery.data?.[0]?.id ?? 0;
 
   // Badge de defasagem do Data VIP
   const syncStatusQuery = trpc.sync.status.useQuery(undefined, {
-    enabled: activeModule === "data_vip" && !!user,
+    enabled: activeModule === "data_vip" && isOAuthUser,
     refetchInterval: 5 * 60 * 1000, // atualiza a cada 5 min
     staleTime: 2 * 60 * 1000,
   });
@@ -285,7 +290,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
   })();
   const unitsQuery = trpc.orgs.units.useQuery(
     { orgId: firstOrgId },
-    { enabled: !!firstOrgId }
+    { enabled: isOAuthUser && !!firstOrgId }
   );
 
   useEffect(() => {
@@ -326,6 +331,22 @@ export default function AppLayout({ children }: AppLayoutProps) {
     },
   });
 
+  const sysLogoutMutation = trpc.sysUsers.logout.useMutation({
+    onSuccess: () => {
+      navigate("/");
+      // Recarrega para limpar o estado do sysUser
+      window.location.href = "/";
+    },
+  });
+
+  const handleLogout = () => {
+    if (sysUser) {
+      sysLogoutMutation.mutate();
+    } else {
+      logoutMutation.mutate();
+    }
+  };
+
   const { canViewPath } = useSysPermissions();
 
   // Sincroniza o módulo ativo com a URL ao navegar diretamente (ex: link externo, refresh ou link no sidebar)
@@ -355,8 +376,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
     setMobileMenuOpen(false);
   };
 
-  const initials = user?.name
-    ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+  // Suporte a ambos os tipos de usuário: OAuth (Master) e e-mail/senha (unidade)
+  const displayName = sysUser?.name ?? user?.name ?? "Usuário";
+  const displayEmail = sysUser?.email ?? user?.email ?? "";
+  const initials = displayName
+    ? displayName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
     : "U";
 
   return (
@@ -575,14 +599,17 @@ export default function AppLayout({ children }: AppLayoutProps) {
                       {initials}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="text-xs hidden md:block max-w-[100px] truncate text-foreground/80">{user?.name ?? "Usuário"}</span>
+                  <span className="text-xs hidden md:block max-w-[100px] truncate text-foreground/80">{displayName}</span>
                   <ChevronDown className="w-3 h-3 opacity-50" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuLabel className="text-xs">
-                  <div className="font-medium truncate">{user?.name}</div>
-                  <div className="text-muted-foreground truncate">{user?.email}</div>
+                  <div className="font-medium truncate">{displayName}</div>
+                  <div className="text-muted-foreground truncate">{displayEmail}</div>
+                  {sysUser && (
+                    <div className="text-[10px] text-amber-500 mt-0.5">Usuário de Unidade</div>
+                  )}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate("/configuracoes")} className="text-xs">
@@ -591,7 +618,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => logoutMutation.mutate()}
+                  onClick={handleLogout}
                   className="text-xs text-destructive focus:text-destructive"
                 >
                   <LogOut className="w-3.5 h-3.5 mr-2" />

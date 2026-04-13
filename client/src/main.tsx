@@ -7,6 +7,7 @@ import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
 import { SysUserProvider } from "./contexts/SysUserContext";
+import { isSysUserAuthenticated, isSysUserStateLoaded } from "./lib/sysUserState";
 import "./index.css";
 
 // Detecta se um erro é de timeout de query
@@ -18,6 +19,8 @@ const isTimeoutError = (error: unknown): boolean => {
     error.message?.includes("número máximo de tentativas atingido")
   );
 };
+
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,8 +43,23 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (typeof window === "undefined") return;
 
   const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
-
   if (!isUnauthorized) return;
+
+  // Se o usuário tem sessão de unidade (e-mail/senha), não redirecionar para OAuth.
+  // O estado global é sincronizado pelo SysUserProvider após carregar o sysUser.
+  // Se já foi carregado e há sysUser, não redirecionar.
+  if (isSysUserAuthenticated()) return;
+
+  // Se o estado ainda não foi carregado (primeira carga), aguardar 2s antes de redirecionar.
+  // Isso evita redirecionar antes do SysUserProvider terminar de verificar a sessão.
+  if (!isSysUserStateLoaded()) {
+    setTimeout(() => {
+      if (!isSysUserAuthenticated()) {
+        window.location.href = getLoginUrl();
+      }
+    }, 2000);
+    return;
+  }
 
   window.location.href = getLoginUrl();
 };
