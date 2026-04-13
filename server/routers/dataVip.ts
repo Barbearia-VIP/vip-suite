@@ -53,12 +53,20 @@ import {
 startAutoSyncScheduler();
 
 // ─── Helper: resolve filtro de unidades (banco interno) ──────────────────────
+type SysUserLike = { orgId: number; allowedUnitIds: number[] } | null | undefined;
+
 async function resolveUnitFilter(
   userId: number,
   userRole: string,
   orgId?: number,
-  unitId?: number
+  unitId?: number,
+  sysUser?: SysUserLike
 ): Promise<{ orgFilter: number | null; unitFilter: number | null; isAdmin: boolean }> {
+  // Usuário de unidade (sysUser): usa orgId e allowedUnitIds diretamente
+  if (sysUser) {
+    const resolvedUnitId = unitId ?? (sysUser.allowedUnitIds.length === 1 ? sysUser.allowedUnitIds[0] : null);
+    return { orgFilter: sysUser.orgId, unitFilter: resolvedUnitId, isAdmin: false };
+  }
   const isAdmin = userRole === "admin";
   if (isAdmin && !orgId && !unitId) return { orgFilter: null, unitFilter: null, isAdmin };
   if (isAdmin && orgId) return { orgFilter: orgId, unitFilter: unitId || null, isAdmin };
@@ -77,9 +85,10 @@ async function resolveExternalIds(
   userId: number,
   userRole: string,
   orgId?: number,
-  unitId?: number
+  unitId?: number,
+  sysUser?: SysUserLike
 ): Promise<{ extIds: number[]; isAdmin: boolean; unitFilter: number | null; orgFilter: number | null }> {
-  const { orgFilter, unitFilter, isAdmin } = await resolveUnitFilter(userId, userRole, orgId, unitId);
+  const { orgFilter, unitFilter, isAdmin } = await resolveUnitFilter(userId, userRole, orgId, unitId, sysUser);
   const db = await getDb();
   if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
@@ -165,7 +174,7 @@ export const dataVipRouter = router({
     .query(async ({ ctx, input }) => {
       try {
       const { extIds, isAdmin, orgFilter } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const now = new Date();
       // Helper: busca nomes base da tabela servico_categorias
@@ -249,7 +258,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const rows = await getFaturamentoMensal(extIds, input.meses);
       return rows.map(r => ({
@@ -270,7 +279,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const rows = await getFaturamentoMensalDetalhado(extIds, input.meses);
       // Retorna em ordem cronológica (mais antigo primeiro)
@@ -286,7 +295,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const now = new Date();
       const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -318,7 +327,7 @@ export const dataVipRouter = router({
     .input(z.object({ orgId: z.number().optional(), periodo: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const { extIds, isAdmin, unitFilter, orgFilter } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, undefined, ctx.sysUser
       );
       const now = new Date();
       const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -375,7 +384,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const { queryLocal } = await import("../db-local");
       const unitCond = extIds.length === 0 ? "1=1"
@@ -443,7 +452,7 @@ export const dataVipRouter = router({
     .input(z.object({ orgId: z.number().optional(), unitId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const { queryLocal } = await import("../db-local");
       const unitCondC = extIds.length === 0 ? "1=1"
@@ -516,7 +525,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const now = new Date();
       // Modo range livre
@@ -603,7 +612,7 @@ export const dataVipRouter = router({
     .query(async ({ ctx, input }) => {
       try {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const now = new Date();
       const periodo = input.periodo || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -717,7 +726,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds, orgFilter } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const now = new Date();
       const db = await getDb();
@@ -854,7 +863,7 @@ export const dataVipRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { orgFilter, unitFilter } = await resolveUnitFilter(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const ano = input.ano || new Date().getFullYear();
       let where = sql`periodo LIKE ${`${ano}-%`}`;
@@ -932,7 +941,7 @@ export const dataVipRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { orgFilter, unitFilter } = await resolveUnitFilter(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       let where = sql`ativo = 1`;
       if (orgFilter) where = sql`${where} AND orgId = ${orgFilter}`;
@@ -952,7 +961,7 @@ export const dataVipRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { orgFilter, unitFilter } = await resolveUnitFilter(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const mes = input.mes || new Date().toISOString().substring(0, 7);
       let where = sql`DATE_FORMAT(data,'%Y-%m') = ${mes}`;
@@ -1054,7 +1063,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), undefined, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), undefined, input.unitId, ctx.sysUser
       );
       const rows = await getFaturamentoDiario(extIds, input.inicio, input.fim);
       const totalFat = rows.reduce((s, r) => s + Number(r.faturamento), 0);
@@ -1139,7 +1148,7 @@ export const dataVipRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const { orgFilter, unitFilter } = await resolveUnitFilter(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       let where = sql`1=1`;
       if (orgFilter) where = sql`${where} AND rs.orgId = ${orgFilter}`;
@@ -1158,7 +1167,7 @@ export const dataVipRouter = router({
     .input(z.object({ orgId: z.number().optional(), unitId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       const { extIds, orgFilter } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const { queryLocal } = await import("../db-local");
       const unitCond2 = extIds.length === 0 ? "1=1"
@@ -1229,7 +1238,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         const rows = await getTopBarbeiros(extIds, input.dataInicio, input.dataFim);
         const total = rows.reduce((s, r) => s + Number(r.faturamento), 0);
         const avg = rows.length > 0 ? total / rows.length : 0;
@@ -1258,7 +1267,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         const rows = await getComposicaoGrupo(extIds, input.dataInicio, input.dataFim);
         const total = rows.reduce((s, r) => s + Number(r.total), 0);
         const avg = rows.length > 0 ? total / rows.length : 0;
@@ -1288,7 +1297,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         const allRows = await getTopItens(extIds, input.dataInicio, input.dataFim);
         const rows = input.limit === 0 ? allRows : allRows.slice(0, input.limit);
         const totalAll = allRows.reduce((s, r) => s + Number(r.total), 0);
@@ -1319,7 +1328,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         const rows = await getFaturamentoPorDiaSemana(extIds, input.dataInicio, input.dataFim);
         const diasNomes = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
         const mapped = diasNomes.map((nome, idx) => {
@@ -1349,7 +1358,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         const rows = await getFaturamentoPorPagamento(extIds, input.dataInicio, input.dataFim);
         const total = rows.reduce((s, r) => s + Number(r.total), 0);
         const avg = rows.length > 0 ? total / rows.length : 0;
@@ -1378,7 +1387,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         const rows = await getFaturamentoPorFaixaHoraria(extIds, input.dataInicio, input.dataFim);
         const total = rows.reduce((s, r) => s + Number(r.total), 0);
         const avg = rows.length > 0 ? total / rows.length : 0;
@@ -1408,7 +1417,7 @@ export const dataVipRouter = router({
     .query(async ({ ctx, input }) => {
       try {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const rows = await getEvolucaoDiaria(extIds, input.dataInicio, input.dataFim);
       return rows.map(r => ({
@@ -1435,7 +1444,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const [ano, mes] = input.periodo.split("-").map(Number);
       // Helper: datas de um mês
@@ -1621,7 +1630,7 @@ export const dataVipRouter = router({
     .query(async ({ ctx, input }) => {
       try {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const N = input.meses;
       const colabId = input.colaboradorId;
@@ -1782,7 +1791,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const rows = await getListaColaboradoresMensal(extIds, input.dataInicio, input.dataFim);
       return rows.map(r => ({
@@ -1803,7 +1812,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         return await getClientesKpis(extIds, input.dataInicio, input.dataFim, input.colaboradorId);
       } catch (err) { handleExternalDbError(err); }
     }),
@@ -1818,7 +1827,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         return await getClientesDistribuicaoStatus(extIds, input.colaboradorId, input.dataInicio, input.dataFim);
       } catch (err) { handleExternalDbError(err); }
     }),
@@ -1833,7 +1842,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         return await getClientesEvolucaoMensal(extIds, input.dataInicio, input.dataFim, input.colaboradorId);
       } catch (err) { handleExternalDbError(err); }
     }),
@@ -1848,7 +1857,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         return await getClientesDistribuicaoFrequencia(extIds, input.dataInicio, input.dataFim, input.colaboradorId);
       } catch (err) { handleExternalDbError(err); }
     }),
@@ -1863,7 +1872,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         return await getClientesDistribuicaoDiasSemVir(extIds, input.dataInicio, input.dataFim, input.colaboradorId);
       } catch (err) { handleExternalDbError(err); }
     }),
@@ -1878,7 +1887,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         return await getClientesTop(extIds, input.dataInicio, input.dataFim, input.limit);
       } catch (err) { handleExternalDbError(err); }
     }),
@@ -1895,7 +1904,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         return await getClientesChurnRisco(extIds, input.dataInicio, input.dataFim, input.colaboradorId, input.statusFiltro, input.limit);
       } catch (err) { handleExternalDbError(err); }
     }),
@@ -1912,7 +1921,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         return await getClientesTopExpandido(extIds, input.dataInicio, input.dataFim, input.limit, input.offset, input.search, input.colaboradorId);
       } catch (err) { handleExternalDbError(err); }
     }),
@@ -1925,7 +1934,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         return await getListaColaboradoresClientes(extIds, input.dataInicio, input.dataFim);
       } catch (err) { handleExternalDbError(err); }
     }),
@@ -1938,7 +1947,7 @@ export const dataVipRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       try {
-        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+        const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
         return await getClienteDetalhes(extIds, input.clienteId);
       } catch (err) { handleExternalDbError(err); }
     }),
@@ -1956,7 +1965,7 @@ export const dataVipRouter = router({
     .query(async ({ ctx, input }) => {
       try {
         const { extIds } = await resolveExternalIds(
-          (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+          (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
         );
         const tipoFiltro = input.tipo === "todos" ? undefined : input.tipo;
         return await getFaturamentoMensalDetalhadoFiltrado(
@@ -2065,7 +2074,7 @@ export const dataVipRouter = router({
       colaboradorId: z.number().nullable().optional(),
     }))
     .query(async ({ input, ctx }) => {
-      const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+      const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
       return getChurnSaudeBase(extIds, input.dataInicio, input.dataFim, input.janelaDias, input.colaboradorId);
     }),
 
@@ -2080,7 +2089,7 @@ export const dataVipRouter = router({
       colaboradorId: z.number().nullable().optional(),
     }))
     .query(async ({ input, ctx }) => {
-      const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+      const { extIds } = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
       return getChurnPorBarbeiro(extIds, input.dataInicio, input.dataFim, input.janelaDias, input.colaboradorId);
     }),
 
@@ -2094,7 +2103,7 @@ export const dataVipRouter = router({
     .query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { orgFilter, unitFilter } = await resolveUnitFilter((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+      const { orgFilter, unitFilter } = await resolveUnitFilter((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
       const conditions = [];
       if (unitFilter) conditions.push(eq(metaFaixas.unitId, unitFilter));
       else if (orgFilter) conditions.push(eq(metaFaixas.orgId, orgFilter));
@@ -2300,7 +2309,7 @@ export const dataVipRouter = router({
       );
       if (metasAtivas.length === 0) return [];
 
-      const extInfo = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId);
+      const extInfo = await resolveExternalIds((ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser);
       if (!extInfo || extInfo.extIds.length === 0) return [];
       const unitIds = extInfo.extIds;
       const { queryLocal } = await import("../db-local");
@@ -2415,7 +2424,7 @@ export const dataVipRouter = router({
     .input(z.object({ orgId: z.number().optional(), unitId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       const { extIds, orgFilter } = await resolveExternalIds(
-        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, input.unitId, ctx.sysUser
       );
       const { queryLocal } = await import("../db-local");
       const unitCond3 = extIds.length === 0 ? "1=1"
