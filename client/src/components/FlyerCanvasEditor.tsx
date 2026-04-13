@@ -1,5 +1,15 @@
+/**
+ * FlyerCanvasEditor.tsx — Editor de flyer com Fabric.js v6
+ *
+ * Correções v2:
+ * - Edição de texto: usa textarea no painel lateral (não depende de enterEditing inline)
+ *   para contornar o conflito de foco do Dialog do Radix UI.
+ * - Redimensionamento de fundo: recalcula scaleX/scaleY com base nas dimensões
+ *   originais da imagem (naturalWidth/naturalHeight) armazenadas em bgNaturalSize.
+ * - Controle de zoom/escala da imagem de fundo via slider.
+ */
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Canvas, FabricImage, IText, type FabricObject } from "fabric";
+import { Canvas, FabricImage, IText, Shadow, type FabricObject } from "fabric";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,11 +17,12 @@ import {
   Type, Palette, Download, Trash2, Bold, Italic,
   AlignLeft, AlignCenter, AlignRight, Plus, Move,
   ChevronUp, ChevronDown, RotateCcw, Layers, Maximize2, Pencil,
+  ZoomIn, ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 import { VIP_STICKERS, STICKER_CATEGORIES, type StickerCategory } from "@/lib/vipStickers";
 
-// ── Paleta de cores VIP para stickers ────────────────────────────────────────
+// ── Paleta de cores VIP ───────────────────────────────────────────────────────
 
 const VIP_STICKER_COLORS = [
   { id: "gold",     label: "Dourado",  hex: "#D4AF37", textHex: "#0A0A0A" },
@@ -35,13 +46,12 @@ const SOCIAL_FORMATS = [
   { id: "flyer-a4",   label: "Flyer A4",        w: 794,  h: 1123, ratio: "A4",    emoji: "📄" },
 ] as const;
 
-// ── Recolorir SVG ─────────────────────────────────────────────────────────────
+// ── Helpers SVG ───────────────────────────────────────────────────────────────
 
 function recolorSvg(svg: string, primaryColor: string, secondaryColor: string): string {
   const originalPrimary   = ["#D4AF37", "#F0C040", "#C9A84C"];
   const originalSecondary = ["#0A0A0A", "#1A1A1A"];
   const originalWhite     = ["#FFFFFF"];
-
   let result = svg;
   for (const c of originalPrimary)   result = result.replaceAll(c, primaryColor);
   for (const c of originalSecondary) result = result.replaceAll(c, secondaryColor);
@@ -72,19 +82,26 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
   const fabricRef    = useRef<Canvas | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Dimensões naturais da imagem de fundo (para recalcular escala corretamente)
+  const bgNaturalRef = useRef<{ w: number; h: number }>({ w: 1, h: 1 });
+
   // Seleção
   const [selectedObj, setSelectedObj] = useState<FabricObject | null>(null);
 
   // Propriedades de texto
-  const [textValue, setTextValue] = useState("");
-  const [textColor, setTextColor] = useState("#FFFFFF");
-  const [fontSize,  setFontSize]  = useState(36);
-  const [isBold,    setIsBold]    = useState(false);
-  const [isItalic,  setIsItalic]  = useState(false);
-  const [textAlign, setTextAlign] = useState<"left" | "center" | "right">("center");
+  const [textValue,  setTextValue]  = useState("");
+  const [textColor,  setTextColor]  = useState("#FFFFFF");
+  const [fontSize,   setFontSize]   = useState(36);
+  const [isBold,     setIsBold]     = useState(false);
+  const [isItalic,   setIsItalic]   = useState(false);
+  const [textAlign,  setTextAlign]  = useState<"left" | "center" | "right">("center");
+  const [fontFamily, setFontFamily] = useState("Oswald, sans-serif");
 
   // Canvas
   const [canvasSize, setCanvasSize] = useState({ w: 540, h: 540 });
+
+  // Zoom da imagem de fundo (0.5 = 50%, 1 = 100%, 2 = 200%)
+  const [bgScale, setBgScale] = useState(1);
 
   // Stickers
   const [stickerTab,     setStickerTab]     = useState<StickerCategory>("selos");
@@ -101,11 +118,12 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
-      const ratio     = img.naturalWidth / img.naturalHeight;
+      bgNaturalRef.current = { w: img.naturalWidth, h: img.naturalHeight };
+      const ratio      = img.naturalWidth / img.naturalHeight;
       const containerW = containerRef.current?.clientWidth ?? 700;
-      const maxW      = Math.min(containerW, 680);
-      const w         = maxW;
-      const h         = Math.round(w / ratio);
+      const maxW       = Math.min(containerW - 16, 660);
+      const w          = maxW;
+      const h          = Math.round(w / ratio);
       setCanvasSize({ w, h });
 
       const canvas = new Canvas(canvasElRef.current!, {
@@ -114,6 +132,8 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
         selection: true,
         preserveObjectStacking: true,
         enableRetinaScaling: false,
+        // Garantir que o canvas capture eventos de teclado
+        allowTouchScrolling: false,
       });
       fabricRef.current = canvas;
 
@@ -126,6 +146,13 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
           selectable: false,
           evented: false,
           name: "__background__",
+          lockMovementX: true,
+          lockMovementY: true,
+          lockRotation: true,
+          lockScalingX: true,
+          lockScalingY: true,
+          hasControls: false,
+          hasBorders: false,
         });
         canvas.add(fabricImg);
         canvas.sendObjectToBack(fabricImg);
@@ -133,24 +160,14 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
       });
 
       // Eventos de seleção
-      canvas.on("selection:created", (e) => handleSelect(e.selected?.[0] ?? null));
-      canvas.on("selection:updated", (e) => handleSelect(e.selected?.[0] ?? null));
+      canvas.on("selection:created", (e) => syncSelectedToPanel(e.selected?.[0] ?? null));
+      canvas.on("selection:updated", (e) => syncSelectedToPanel(e.selected?.[0] ?? null));
       canvas.on("selection:cleared", () => { setSelectedObj(null); setSidePanel("hint"); });
 
-      // Sincronizar painel de texto ao editar inline
+      // Sincronizar painel ao editar texto inline no canvas
       canvas.on("text:changed", (e) => {
         const t = e.target as IText;
         setTextValue(t.text ?? "");
-      });
-
-      // Duplo clique: entrar em modo de edição
-      canvas.on("mouse:dblclick", (e) => {
-        const target = e.target;
-        if (target && target.type === "i-text") {
-          (target as IText).enterEditing();
-          (target as IText).selectAll();
-          canvas.renderAll();
-        }
       });
 
       return () => { canvas.dispose(); fabricRef.current = null; };
@@ -159,9 +176,9 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flyerUrl]);
 
-  // ── Selecionar objeto ─────────────────────────────────────────────────────
+  // ── Sincronizar objeto selecionado → painel ───────────────────────────────
 
-  const handleSelect = (obj: FabricObject | null) => {
+  const syncSelectedToPanel = (obj: FabricObject | null) => {
     setSelectedObj(obj);
     if (!obj) { setSidePanel("hint"); return; }
 
@@ -173,6 +190,7 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
       setIsBold(t.fontWeight === "bold");
       setIsItalic(t.fontStyle === "italic");
       setTextAlign((t.textAlign as "left" | "center" | "right") ?? "center");
+      setFontFamily((t.fontFamily as string) ?? "Oswald, sans-serif");
       setSidePanel("text");
     } else if (
       obj.type === "image" &&
@@ -188,7 +206,7 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     const canvas = fabricRef.current;
     if (!canvas) return;
 
-    const itext = new IText("Toque duas vezes para editar", {
+    const itext = new IText("Novo texto", {
       left:       canvasSize.w / 2,
       top:        canvasSize.h / 2,
       originX:    "center",
@@ -199,26 +217,22 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
       fontWeight: "bold",
       textAlign:  "center",
       editable:   true,
+      shadow: new Shadow({ color: "rgba(0,0,0,0.8)", offsetX: 2, offsetY: 2, blur: 4 }),
     });
 
     canvas.add(itext);
     canvas.setActiveObject(itext);
     canvas.renderAll();
+    syncSelectedToPanel(itext);
     setSidePanel("text");
-
-    // Entrar em modo de edição automaticamente
-    setTimeout(() => {
-      itext.enterEditing();
-      itext.selectAll();
-      canvas.renderAll();
-    }, 100);
   }, [canvasSize]);
 
-  // ── Aplicar mudanças de texto ─────────────────────────────────────────────
+  // ── Aplicar mudanças de texto via painel (sem depender de foco no canvas) ─
 
   const applyTextChange = useCallback((changes: Partial<{
     text: string; fill: string; fontSize: number;
     fontWeight: string; fontStyle: string; textAlign: string;
+    fontFamily: string;
   }>) => {
     const canvas = fabricRef.current;
     const obj    = canvas?.getActiveObject();
@@ -227,16 +241,35 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     canvas?.renderAll();
   }, []);
 
-  // Ativar edição do texto selecionado via botão
-  const startEditingText = useCallback(() => {
+  // ── Controle de zoom da imagem de fundo ───────────────────────────────────
+
+  const applyBgScale = useCallback((scale: number) => {
     const canvas = fabricRef.current;
-    const obj    = canvas?.getActiveObject();
-    if (!obj || obj.type !== "i-text") return;
-    const itext = obj as IText;
-    itext.enterEditing();
-    itext.selectAll();
-    canvas?.renderAll();
-  }, []);
+    if (!canvas) return;
+    const bg = canvas.getObjects().find(
+      (o) => (o as FabricObject & { name?: string }).name === "__background__"
+    );
+    if (!bg) return;
+
+    const { w: cw, h: ch } = canvasSize;
+    const { w: nw, h: nh } = bgNaturalRef.current;
+
+    // Escala base = imagem cobre o canvas inteiro (fit)
+    const baseScaleX = cw / nw;
+    const baseScaleY = ch / nh;
+
+    // Aplicar zoom sobre a escala base
+    const newScaleX = baseScaleX * scale;
+    const newScaleY = baseScaleY * scale;
+
+    // Centralizar a imagem de fundo
+    const offsetX = (cw - nw * newScaleX) / 2;
+    const offsetY = (ch - nh * newScaleY) / 2;
+
+    bg.set({ scaleX: newScaleX, scaleY: newScaleY, left: offsetX, top: offsetY });
+    canvas.renderAll();
+    setBgScale(scale);
+  }, [canvasSize]);
 
   // ── Adicionar sticker ─────────────────────────────────────────────────────
 
@@ -274,7 +307,6 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     const canvas = fabricRef.current;
     const obj    = canvas?.getActiveObject();
     if (!obj || obj.type !== "image") return;
-
     const objWithData = obj as FabricObject & {
       data?: { stickerId: string; originalSvg: string };
       name?: string;
@@ -303,7 +335,7 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     });
   }, []);
 
-  // ── Redimensionar canvas ──────────────────────────────────────────────────
+  // ── Redimensionar canvas para formato de rede social ─────────────────────
 
   const resizeToFormat = useCallback((formatId: string) => {
     const canvas = fabricRef.current;
@@ -312,26 +344,30 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     const fmt = SOCIAL_FORMATS.find((f) => f.id === formatId);
     if (!fmt) return;
 
-    const containerW = containerRef.current?.clientWidth ?? 700;
-    const maxW       = Math.min(containerW, 680);
+    const containerW  = containerRef.current?.clientWidth ?? 700;
+    const maxW        = Math.min(containerW - 16, 660);
     const displayRatio = fmt.w / fmt.h;
-    const displayW   = maxW;
-    const displayH   = Math.round(displayW / displayRatio);
+    const displayW    = maxW;
+    const displayH    = Math.round(displayW / displayRatio);
 
+    // Atualizar canvas
+    canvas.setWidth(displayW);
+    canvas.setHeight(displayH);
+    setCanvasSize({ w: displayW, h: displayH });
+
+    // Reposicionar imagem de fundo para cobrir o novo canvas
     const bg = canvas.getObjects().find(
       (o) => (o as FabricObject & { name?: string }).name === "__background__"
     );
     if (bg) {
-      bg.set({
-        scaleX: displayW / (bg.width  ?? displayW),
-        scaleY: displayH / (bg.height ?? displayH),
-      });
+      const { w: nw, h: nh } = bgNaturalRef.current;
+      const newScaleX = displayW / nw;
+      const newScaleY = displayH / nh;
+      bg.set({ scaleX: newScaleX, scaleY: newScaleY, left: 0, top: 0 });
     }
 
-    canvas.setWidth(displayW);
-    canvas.setHeight(displayH);
     canvas.renderAll();
-    setCanvasSize({ w: displayW, h: displayH });
+    setBgScale(1);
     toast.success(`Redimensionado para ${fmt.label} (${fmt.ratio})`);
   }, []);
 
@@ -377,10 +413,6 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
   const exportPNG = useCallback(() => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    const activeObj = canvas.getActiveObject();
-    if (activeObj && activeObj.type === "i-text") {
-      (activeObj as IText).exitEditing();
-    }
     canvas.discardActiveObject();
     canvas.renderAll();
     const dataUrl = canvas.toDataURL({ format: "png", multiplier: 2 });
@@ -398,10 +430,6 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
   const downloadEdited = useCallback(() => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    const activeObj = canvas.getActiveObject();
-    if (activeObj && activeObj.type === "i-text") {
-      (activeObj as IText).exitEditing();
-    }
     canvas.discardActiveObject();
     canvas.renderAll();
     const dataUrl = canvas.toDataURL({ format: "png", multiplier: 2 });
@@ -412,10 +440,19 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
     toast.success("Flyer baixado!");
   }, []);
 
-  const filteredStickers = VIP_STICKERS.filter((s) => s.category === stickerTab);
+  const filteredStickers  = VIP_STICKERS.filter((s) => s.category === stickerTab);
   const isTextSelected    = selectedObj?.type === "i-text";
   const isStickerSelected = selectedObj?.type === "image" &&
     !!(selectedObj as FabricObject & { name?: string }).name?.startsWith("sticker-");
+
+  const FONT_OPTIONS = [
+    { value: "Oswald, sans-serif",       label: "Oswald (Condensado)" },
+    { value: "Montserrat, sans-serif",   label: "Montserrat" },
+    { value: "Georgia, serif",           label: "Georgia (Serif)" },
+    { value: "Arial, sans-serif",        label: "Arial" },
+    { value: "Impact, sans-serif",       label: "Impact" },
+    { value: "Playfair Display, serif",  label: "Playfair Display" },
+  ];
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -425,13 +462,8 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
       {/* Barra de ferramentas superior */}
       <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-card border border-border">
         <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={addText}>
-          <Plus className="h-3.5 w-3.5" /><Type className="h-3.5 w-3.5" /> Texto
+          <Plus className="h-3.5 w-3.5" /><Type className="h-3.5 w-3.5" /> Adicionar Texto
         </Button>
-        {isTextSelected && (
-          <Button size="sm" variant="default" className="h-8 text-xs gap-1.5 bg-amber-500 hover:bg-amber-600 text-black" onClick={startEditingText}>
-            <Pencil className="h-3.5 w-3.5" /> Editar Texto
-          </Button>
-        )}
         <Button
           size="sm"
           variant={sidePanel === "resize" ? "default" : "outline"}
@@ -483,41 +515,54 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
             <canvas ref={canvasElRef} />
           </div>
           <p className="text-xs text-muted-foreground text-center mt-2 flex items-center justify-center gap-1">
-            <Move className="h-3 w-3" /> Arraste · Selecione texto e clique <strong className="text-amber-400 mx-1">Editar Texto</strong> ou duplo clique
+            <Move className="h-3 w-3" /> Clique para selecionar · Arraste para mover · Use o painel lateral para editar
           </p>
         </div>
 
         {/* Painel lateral */}
-        <div className="w-60 shrink-0">
+        <div className="w-64 shrink-0 space-y-3">
 
           {/* ── Painel: Texto ── */}
-          {(sidePanel === "text" || isTextSelected) && isTextSelected && (
+          {isTextSelected && (
             <div className="space-y-3 p-3 rounded-xl bg-card border border-border">
               <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
-                <Palette className="h-3.5 w-3.5 text-amber-400" /> Propriedades do Texto
+                <Palette className="h-3.5 w-3.5 text-amber-400" /> Editar Texto
               </p>
 
+              {/* Conteúdo do texto */}
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Conteúdo</Label>
                 <textarea
                   value={textValue}
                   rows={3}
                   onChange={(e) => {
-                    setTextValue(e.target.value);
-                    applyTextChange({ text: e.target.value });
+                    const v = e.target.value;
+                    setTextValue(v);
+                    applyTextChange({ text: v });
                   }}
-                  className="w-full text-xs rounded-md border border-border bg-background px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className="w-full text-xs rounded-md border border-border bg-background px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-amber-400 text-foreground"
                   placeholder="Digite o texto..."
+                  // Impede que o Dialog capture o foco ao digitar
+                  onKeyDown={(e) => e.stopPropagation()}
+                  onKeyUp={(e) => e.stopPropagation()}
                 />
-                <Button
-                  size="sm"
-                  className="w-full h-7 text-xs gap-1.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold mt-1"
-                  onClick={startEditingText}
-                >
-                  <Pencil className="h-3 w-3" /> Editar inline no canvas
-                </Button>
               </div>
 
+              {/* Fonte */}
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Fonte</Label>
+                <select
+                  value={fontFamily}
+                  onChange={(e) => { setFontFamily(e.target.value); applyTextChange({ fontFamily: e.target.value }); }}
+                  className="w-full text-xs rounded-md border border-border bg-background px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-400 text-foreground"
+                >
+                  {FONT_OPTIONS.map((f) => (
+                    <option key={f.value} value={f.value}>{f.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Cor */}
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Cor</Label>
                 <div className="flex items-center gap-2">
@@ -531,6 +576,7 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
                     onChange={(e) => { setTextColor(e.target.value); applyTextChange({ fill: e.target.value }); }}
                     className="text-xs h-8 font-mono"
                     placeholder="#FFFFFF"
+                    onKeyDown={(e) => e.stopPropagation()}
                   />
                 </div>
                 <div className="flex gap-1.5 flex-wrap mt-1">
@@ -546,10 +592,11 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
                 </div>
               </div>
 
+              {/* Tamanho */}
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Tamanho ({fontSize}px)</Label>
                 <input
-                  type="range" min={10} max={120} value={fontSize}
+                  type="range" min={10} max={160} value={fontSize}
                   onChange={(e) => {
                     const v = Number(e.target.value);
                     setFontSize(v);
@@ -557,62 +604,144 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
                   }}
                   className="w-full accent-amber-500"
                 />
+                <div className="flex gap-1.5">
+                  {[14, 24, 36, 48, 64, 96].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => { setFontSize(s); applyTextChange({ fontSize: s }); }}
+                      className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                        fontSize === s ? "border-amber-400 text-amber-400 bg-amber-950/30" : "border-border text-muted-foreground hover:border-amber-400/40"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
 
+              {/* Estilo e alinhamento */}
               <div className="flex gap-2">
                 <div className="space-y-1 flex-1">
                   <Label className="text-xs text-muted-foreground">Estilo</Label>
                   <div className="flex gap-1.5">
-                    <Button size="sm" variant={isBold ? "default" : "outline"} className="h-7 w-7 p-0"
-                      onClick={() => { const n = !isBold; setIsBold(n); applyTextChange({ fontWeight: n ? "bold" : "normal" }); }}>
-                      <Bold className="h-3 w-3" />
-                    </Button>
-                    <Button size="sm" variant={isItalic ? "default" : "outline"} className="h-7 w-7 p-0"
-                      onClick={() => { const n = !isItalic; setIsItalic(n); applyTextChange({ fontStyle: n ? "italic" : "normal" }); }}>
-                      <Italic className="h-3 w-3" />
-                    </Button>
+                    <button
+                      onClick={() => { setIsBold(!isBold); applyTextChange({ fontWeight: !isBold ? "bold" : "normal" }); }}
+                      className={`w-8 h-8 rounded border flex items-center justify-center transition-colors ${isBold ? "border-amber-400 bg-amber-950/30 text-amber-400" : "border-border text-muted-foreground hover:border-amber-400/40"}`}
+                    >
+                      <Bold className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => { setIsItalic(!isItalic); applyTextChange({ fontStyle: !isItalic ? "italic" : "normal" }); }}
+                      className={`w-8 h-8 rounded border flex items-center justify-center transition-colors ${isItalic ? "border-amber-400 bg-amber-950/30 text-amber-400" : "border-border text-muted-foreground hover:border-amber-400/40"}`}
+                    >
+                      <Italic className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
                 <div className="space-y-1 flex-1">
                   <Label className="text-xs text-muted-foreground">Alinhamento</Label>
                   <div className="flex gap-1">
                     {(["left", "center", "right"] as const).map((a) => (
-                      <Button key={a} size="sm" variant={textAlign === a ? "default" : "outline"} className="h-7 w-7 p-0"
-                        onClick={() => { setTextAlign(a); applyTextChange({ textAlign: a }); }}>
-                        {a === "left" ? <AlignLeft className="h-3 w-3" /> : a === "center" ? <AlignCenter className="h-3 w-3" /> : <AlignRight className="h-3 w-3" />}
-                      </Button>
+                      <button
+                        key={a}
+                        onClick={() => { setTextAlign(a); applyTextChange({ textAlign: a }); }}
+                        className={`w-8 h-8 rounded border flex items-center justify-center transition-colors ${textAlign === a ? "border-amber-400 bg-amber-950/30 text-amber-400" : "border-border text-muted-foreground hover:border-amber-400/40"}`}
+                      >
+                        {a === "left" ? <AlignLeft className="h-3.5 w-3.5" /> : a === "center" ? <AlignCenter className="h-3.5 w-3.5" /> : <AlignRight className="h-3.5 w-3.5" />}
+                      </button>
                     ))}
                   </div>
+                </div>
+              </div>
+
+              {/* Botão duplicar */}
+              <Button
+                size="sm" variant="outline"
+                className="w-full h-8 text-xs gap-1.5"
+                onClick={() => {
+                  const canvas = fabricRef.current;
+                  const obj = canvas?.getActiveObject();
+                  if (!obj || obj.type !== "i-text") return;
+                  const t = obj as IText;
+                  const clone = new IText(t.text ?? "", {
+                    left: (t.left ?? 0) + 20,
+                    top: (t.top ?? 0) + 20,
+                    fontSize: t.fontSize, fontFamily: t.fontFamily as string,
+                    fill: t.fill as string, fontWeight: t.fontWeight as string,
+                    fontStyle: t.fontStyle as string, textAlign: t.textAlign as string,
+                    editable: true,
+                    shadow: t.shadow ?? undefined,
+                  });
+                  canvas?.add(clone);
+                  canvas?.setActiveObject(clone);
+                  canvas?.renderAll();
+                  syncSelectedToPanel(clone);
+                }}
+              >
+                <Plus className="h-3 w-3" /> Duplicar texto
+              </Button>
+            </div>
+          )}
+
+          {/* ── Painel: Zoom da imagem de fundo ── */}
+          {!isTextSelected && !isStickerSelected && (
+            <div className="space-y-3 p-3 rounded-xl bg-card border border-border">
+              <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <ZoomIn className="h-3.5 w-3.5 text-amber-400" /> Imagem de Fundo
+              </p>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Zoom ({Math.round(bgScale * 100)}%)</Label>
+                <input
+                  type="range" min={50} max={200} step={5} value={Math.round(bgScale * 100)}
+                  onChange={(e) => applyBgScale(Number(e.target.value) / 100)}
+                  className="w-full accent-amber-500"
+                />
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => applyBgScale(Math.max(0.5, bgScale - 0.1))}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:border-amber-400/40 transition-colors"
+                  >
+                    <ZoomOut className="h-3 w-3" /> Menos
+                  </button>
+                  <button
+                    onClick={() => applyBgScale(1)}
+                    className="text-xs text-muted-foreground hover:text-amber-400 px-2 py-1 rounded border border-border hover:border-amber-400/40 transition-colors"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={() => applyBgScale(Math.min(2, bgScale + 0.1))}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:border-amber-400/40 transition-colors"
+                  >
+                    <ZoomIn className="h-3 w-3" /> Mais
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ── Painel: Sticker ── */}
+          {/* ── Painel: Sticker selecionado ── */}
           {isStickerSelected && (
-            <div className="space-y-3 p-3 rounded-xl bg-card border border-amber-500/40">
+            <div className="space-y-3 p-3 rounded-xl bg-card border border-border">
               <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
                 <Palette className="h-3.5 w-3.5 text-amber-400" /> Cor do Sticker
               </p>
-              <p className="text-xs text-muted-foreground">Selecione a cor para combinar com o fundo:</p>
-              <div className="space-y-2">
-                {VIP_STICKER_COLORS.map((color) => (
-                  <button
-                    key={color.id}
-                    onClick={() => { setStickerColorId(color.id); recolorSelectedSticker(color.id); }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border-2 transition-all ${
-                      stickerColorId === color.id
-                        ? "border-amber-400 bg-amber-950/30"
-                        : "border-border hover:border-amber-400/40 hover:bg-muted/30"
-                    }`}
-                  >
-                    <div className="w-5 h-5 rounded-full border border-border flex-shrink-0" style={{ backgroundColor: color.hex }} />
-                    <span className="text-xs font-medium text-foreground">{color.label}</span>
-                    <span className="text-[10px] text-muted-foreground font-mono ml-auto">{color.hex}</span>
-                    {stickerColorId === color.id && <span className="text-amber-400 text-[10px] font-bold">✓</span>}
-                  </button>
-                ))}
-              </div>
+              {VIP_STICKER_COLORS.map((color) => (
+                <button
+                  key={color.id}
+                  onClick={() => { setStickerColorId(color.id); recolorSelectedSticker(color.id); }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border-2 transition-all ${
+                    stickerColorId === color.id
+                      ? "border-amber-400 bg-amber-950/30"
+                      : "border-border hover:border-amber-400/40 hover:bg-muted/30"
+                  }`}
+                >
+                  <div className="w-5 h-5 rounded-full border border-border flex-shrink-0" style={{ backgroundColor: color.hex }} />
+                  <span className="text-xs font-medium text-foreground">{color.label}</span>
+                  <span className="text-[10px] text-muted-foreground font-mono ml-auto">{color.hex}</span>
+                  {stickerColorId === color.id && <span className="text-amber-400 text-[10px] font-bold">✓</span>}
+                </button>
+              ))}
             </div>
           )}
 
@@ -641,19 +770,20 @@ export default function FlyerCanvasEditor({ flyerUrl, onSave, onClose }: FlyerCa
             </div>
           )}
 
-          {/* ── Painel: Dica ── */}
+          {/* ── Painel: Dica inicial ── */}
           {sidePanel === "hint" && !isTextSelected && !isStickerSelected && (
             <div className="p-3 rounded-xl bg-card border border-border">
               <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                <Type className="h-3.5 w-3.5 text-amber-400" /> Editor de Flyer
+                <Pencil className="h-3.5 w-3.5 text-amber-400" /> Como usar
               </p>
               <div className="space-y-2 text-xs text-muted-foreground">
-                <p>1. Clique em <strong className="text-foreground">Texto</strong> para adicionar</p>
-                <p>2. Selecione o texto e clique <strong className="text-amber-400">Editar Texto</strong></p>
-                <p>3. Ou dê <strong className="text-foreground">duplo clique</strong> no texto no canvas</p>
-                <p>4. Clique em <strong className="text-amber-400">Formatos</strong> para redimensionar</p>
-                <p>5. Adicione <strong className="text-amber-400">stickers</strong> abaixo</p>
-                <p>6. Clique em <strong className="text-amber-400">Salvar Flyer</strong> quando terminar</p>
+                <p>1. Clique em <strong className="text-foreground">Adicionar Texto</strong></p>
+                <p>2. <strong className="text-foreground">Clique no texto</strong> no canvas para selecioná-lo</p>
+                <p>3. Edite o conteúdo, cor e tamanho no painel lateral</p>
+                <p>4. Use o <strong className="text-amber-400">Zoom</strong> para ajustar a imagem de fundo</p>
+                <p>5. Clique em <strong className="text-amber-400">Formatos</strong> para redimensionar</p>
+                <p>6. Adicione <strong className="text-amber-400">stickers</strong> abaixo</p>
+                <p>7. Clique em <strong className="text-amber-400">Salvar Flyer</strong> quando terminar</p>
               </div>
             </div>
           )}
