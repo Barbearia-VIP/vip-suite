@@ -161,6 +161,7 @@ export default function MarketingPage() {
     conceito: string; direcaoVisual: { cores: string; tipografia: string; estiloImagem: string; elementosVisuais: string };
     layout: { topo: string; centro: string; rodape: string };
     imagemUrl: string | null; assunto: string; tipoArte: string;
+    tipoImagem?: "upload" | "ia" | "banco" | "banco-vip";
     logoId?: number;
   } | null>(null);
 
@@ -591,6 +592,7 @@ export default function MarketingPage() {
                 imagemUrl: imagemParaFlyer,
                 assunto: lastArtData?.assunto ?? "",
                 tipoArte: tipoArteOverride ?? lastArtData?.tipoArte ?? "post_instagram",
+                tipoImagem: (lastArtData?.tipoImagem as "upload" | "ia" | "banco" | "banco-vip" | undefined),
                 logoId,
               };
               // Guarda os parâmetros para regeneração

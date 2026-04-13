@@ -1195,3 +1195,10 @@
 - [x] Data VIP: padronizar todas as queries de faturamento para usar sync_vendas.valor_total
 - [x] Gestão Total: alinhar syncGtFinanceiro para usar sync_vendas.valor_total como padrão (igual Data VIP)
 - [x] Marketing: adicionar sufixos de qualidade técnica nos prompts de geração de imagem (Nano Banana)
+- [ ] Marketing/Criação de Arte: remover Story e Carrossel da tela 2 (formato)
+- [ ] Marketing/Criação de Arte: remover "Livre" da tela 4 (tema visual)
+- [ ] Marketing/Criação de Arte: remover "Sugestões de banco externo" da tela 7 (imagem)
+- [ ] Marketing/Criação de Arte: remover URL/endereço do site do rodapé da imagem gerada
+- [ ] Marketing/Criação de Arte: melhorar prompt final para menos texto e sem erros ortográficos
+- [ ] Marketing/Criação de Arte: imagem do banco VIP deve ocupar toda a arte (full-bleed), não apenas o centro
+- [ ] Marketing/Criação de Arte: quando imagem for do banco VIP, apenas melhorar qualidade sem adicionar novos elementos

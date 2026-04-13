@@ -76,10 +76,8 @@ const ASSUNTOS = [
 
 const TIPOS_ARTE = [
   { value: "post_instagram", label: "📸 Post Instagram", desc: "Formato 1:1 (quadrado)" },
-  { value: "story", label: "📱 Story", desc: "Formato 9:16 (vertical)" },
   { value: "banner", label: "🖼️ Banner", desc: "Formato horizontal" },
   { value: "flyer_digital", label: "📄 Flyer digital", desc: "Distribuição online" },
-  { value: "carrossel", label: "🎠 Carrossel", desc: "Múltiplos slides" },
 ];
 
 const OBJETIVOS = [
@@ -95,7 +93,6 @@ const TEMAS = [
   { value: "moderno", label: "🌆 Moderno / Urbano", desc: "Contemporâneo e dinâmico" },
   { value: "minimalista", label: "⬜ Minimalista", desc: "Clean, espaço em branco, foco" },
   { value: "impactante", label: "🔥 Impactante / Promocional", desc: "Chamativo, cores fortes" },
-  { value: "livre", label: "🎨 Livre", desc: "Sem restrição de estilo" },
 ];
 
 // ── Componente de seleção de opção ────────────────────────────────────────────
@@ -1286,30 +1283,7 @@ export default function ArtGeneratorWizard({
                 )}
               </div>
             )}
-            {/* Opção: Banco externo */}
-            <button
-              onClick={() => { set("tipoImagem", "banco"); setUploadedImageUrl(null); setSelectedBancoVipUrl(null); }}
-              className={`w-full text-left p-4 rounded-xl border transition-all ${
-                data.tipoImagem === "banco"
-                  ? "border-green-500/60 bg-green-500/10"
-                  : "border-border bg-muted/20 hover:border-green-500/30"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-green-500/20 flex items-center justify-center shrink-0">
-                  <Search className="h-4.5 w-4.5 text-green-400" />
-                </div>
-                <div>
-                  <p className={`text-sm font-semibold ${data.tipoImagem === "banco" ? "text-green-300" : "text-foreground"}`}>
-                    Sugestões de banco externo
-                  </p>
-                  <p className="text-xs text-muted-foreground">A IA sugere palavras-chave para buscar no Unsplash, Pexels, etc.</p>
-                </div>
-                {data.tipoImagem === "banco" && (
-                  <Badge className="ml-auto bg-green-500/20 text-green-300 border-green-500/30 text-xs">Selecionado</Badge>
-                )}
-              </div>
-            </button>
+
           </div>
         </div>
       )}

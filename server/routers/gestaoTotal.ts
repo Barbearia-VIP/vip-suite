@@ -2117,6 +2117,7 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
       // Metadados
       assunto: z.string(),
       tipoArte: z.string(),
+      tipoImagem: z.enum(["upload", "ia", "banco", "banco-vip"]).optional(), // tipo de origem da imagem
       logoId: z.number().optional(), // ID da logo específica selecionada pelo usuário
     }))
     .mutation(async ({ input }) => {
@@ -2266,8 +2267,10 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
         `- MUST NOT overload with text or exclamation marks`,
         `- MUST prioritize: visual impact, desire, sense of exclusivity`,
         `- Inspired by: Louis Vuitton, Gucci, YSL applied to masculine universe`,
-        `- WEBSITE/DOMAIN: If you include a website URL on the flyer, use ONLY: barbeariavip.com.br — DO NOT invent, guess, or use any other domain. If unsure, omit the URL entirely.`,
+        `- WEBSITE/DOMAIN: DO NOT include any website URL, domain, or web address on the flyer. Omit entirely.`,
         `- DO NOT invent any phone numbers, addresses, or contact information not provided in the content below`,
+        `- TEXT MINIMALISM (CRITICAL): Use MINIMAL text on the flyer. Maximum 3 text elements total (headline + one short supporting line + CTA). Each text element must be SHORT — headline max 5 words, body max 8 words, CTA max 4 words. LESS IS MORE. White space is luxury. DO NOT fill the flyer with text blocks, descriptions, or explanations.`,
+        `- FORBIDDEN: long paragraphs, multiple text blocks, excessive copy, crowded layouts`,
         ``,
         `=== LOGO RULES (CRITICAL) ===`,
         allLogos.length > 0
@@ -2292,7 +2295,9 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
         ``,
         `CREATIVE CONCEPT: ${input.conceito}`,
         ``,
-        input.imagemUrl
+        input.imagemUrl && input.tipoImagem === "banco-vip"
+          ? `REFERENCE IMAGE (BANCO VIP — FULL-BLEED MANDATORY): The first image provided is the EXCLUSIVE BACKGROUND of this flyer. CRITICAL RULES: (1) This image MUST fill the ENTIRE canvas edge-to-edge — 100% full-bleed, no margins, no borders, no padding. (2) DO NOT add any new visual elements, people, objects, or decorative graphics. (3) DO NOT replace or modify the image content. (4) ONLY overlay the text (headline, body, CTA) and logo on top of this image with a subtle dark overlay for readability. (5) The image IS the flyer background — treat it as a full-bleed photo background.`
+          : input.imagemUrl
           ? `REFERENCE IMAGE: The first image provided is the BASE VISUAL REFERENCE for this flyer. You MUST incorporate this image (or its visual style, mood, and subjects) prominently in the composition. The image shows the main visual element — use it as the hero image of the flyer.`
           : `REFERENCE IMAGE: No base image provided. Generate a premium VIP barbershop lifestyle image following the brand guidelines above.`,
         ``,
