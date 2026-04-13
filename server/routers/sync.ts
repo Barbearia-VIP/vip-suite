@@ -4,7 +4,8 @@
  * Procedures:
  * - sync.status           → status de todas as unidades sincronizadas
  * - sync.schedulerInfo    → info do agendador (última sync, próxima, intervalo)
- * - sync.syncNow          → força sync incremental de todas as unidades agora
+ * - sync.syncNow          → inicia sync em background (fire-and-forget) e retorna imediatamente
+ * - sync.syncNowStatus    → polling do estado da sync iniciada por syncNow
  * - sync.importHistorico  → importa histórico completo de uma unidade (admin)
  * - sync.importTodas      → importa histórico de todas as unidades sequencialmente (admin)
  * - sync.incremental      → força sync incremental de uma unidade (admin)
@@ -21,6 +22,60 @@ import {
   getSchedulerInfo,
 } from "../syncEngine";
 
+// ─── Estado em memória da sync manual em andamento ───────────────────────────
+interface SyncNowState {
+  running: boolean;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  totalUnidades: number;
+  completedUnidades: number;
+  totalNovas: number;
+  erros: { unidadeId: number; erro: string }[];
+  currentUnidade: number | null;
+}
+
+const syncNowState: SyncNowState = {
+  running: false,
+  startedAt: null,
+  finishedAt: null,
+  totalUnidades: 0,
+  completedUnidades: 0,
+  totalNovas: 0,
+  erros: [],
+  currentUnidade: null,
+};
+
+async function runSyncNowBackground(): Promise<void> {
+  if (syncNowState.running) return; // Já está rodando
+  const unidades = await getUnidadesExternas();
+  syncNowState.running = true;
+  syncNowState.startedAt = new Date();
+  syncNowState.finishedAt = null;
+  syncNowState.totalUnidades = unidades.length;
+  syncNowState.completedUnidades = 0;
+  syncNowState.totalNovas = 0;
+  syncNowState.erros = [];
+  syncNowState.currentUnidade = null;
+
+  // Executa em background sem bloquear a resposta HTTP
+  (async () => {
+    for (const uid of unidades) {
+      syncNowState.currentUnidade = uid;
+      try {
+        const r = await syncIncremental(uid);
+        syncNowState.totalNovas += r.novas;
+      } catch (err) {
+        syncNowState.erros.push({ unidadeId: uid, erro: String(err) });
+      }
+      syncNowState.completedUnidades++;
+    }
+    syncNowState.running = false;
+    syncNowState.finishedAt = new Date();
+    syncNowState.currentUnidade = null;
+    console.log(`[SyncNow] Concluído: ${syncNowState.totalNovas} novas vendas, ${syncNowState.erros.length} erros`);
+  })();
+}
+
 export const syncRouter = router({
   // Status de todas as unidades
   status: sysUserProcedure.query(async () => {
@@ -32,20 +87,18 @@ export const syncRouter = router({
     return getSchedulerInfo();
   }),
 
-  // Sync incremental de todas as unidades agora (botão "Sincronizar agora")
+  // Inicia sync incremental em background e retorna imediatamente (sem timeout)
   syncNow: sysUserProcedure.mutation(async () => {
-    const unidades = await getUnidadesExternas();
-    let totalNovas = 0;
-    const erros: { unidadeId: number; erro: string }[] = [];
-    for (const uid of unidades) {
-      try {
-        const r = await syncIncremental(uid);
-        totalNovas += r.novas;
-      } catch (err) {
-        erros.push({ unidadeId: uid, erro: String(err) });
-      }
+    if (syncNowState.running) {
+      return { started: false, message: "Sincronização já está em andamento" };
     }
-    return { unidades: unidades.length, totalNovas, erros };
+    runSyncNowBackground(); // fire-and-forget
+    return { started: true, message: "Sincronização iniciada em background" };
+  }),
+
+  // Polling do estado da sync em andamento
+  syncNowStatus: sysUserProcedure.query(() => {
+    return { ...syncNowState };
   }),
 
   // Lista unidades disponíveis no banco externo

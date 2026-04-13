@@ -122,21 +122,41 @@ export default function SyncPage() {
 
   const { data: unidades } = trpc.sync.getUnidades.useQuery();
 
+  // Polling do estado da sync manual em background
+  const { data: syncNowStatusData } = trpc.sync.syncNowStatus.useQuery(undefined, {
+    refetchInterval: syncandoAgora ? 2000 : false,
+  });
+
+  // Detectar conclusão da sync em background
+  useEffect(() => {
+    if (!syncandoAgora) return;
+    if (syncNowStatusData && !syncNowStatusData.running && syncNowStatusData.finishedAt) {
+      setSyncandoAgora(false);
+      refetchStatus();
+      refetchScheduler();
+      if (syncNowStatusData.erros.length === 0) {
+        toast.success("Sincronização concluída", {
+          description: `${syncNowStatusData.totalUnidades} unidades — ${formatNumber(syncNowStatusData.totalNovas)} registros atualizados`,
+        });
+      } else {
+        toast.warning("Sincronização com erros", {
+          description: `${syncNowStatusData.erros.length} unidade(s) falharam`,
+        });
+      }
+    }
+  }, [syncNowStatusData, syncandoAgora]);
+
   const countdown = useCountdown(scheduler?.proximoCiclo);
 
   const syncNow = trpc.sync.syncNow.useMutation({
     onSuccess: (data) => {
-      setSyncandoAgora(false);
-      refetchStatus();
-      refetchScheduler();
-      if (data.erros.length === 0) {
-        toast.success("Sincronização concluída", {
-          description: `${data.unidades} unidades — ${formatNumber(data.totalNovas)} registros atualizados`,
+      if (data.started) {
+        setSyncandoAgora(true);
+        toast.info("Sincronização iniciada", {
+          description: "Processando em background. Acompanhe o progresso abaixo.",
         });
       } else {
-        toast.warning("Sincronização com erros", {
-          description: `${data.erros.length} unidade(s) falharam`,
-        });
+        toast.info(data.message);
       }
     },
     onError: (err) => {
@@ -320,7 +340,6 @@ export default function SyncPage() {
         <CardContent className="flex flex-wrap gap-3 items-center">
           <Button
             onClick={() => {
-              setSyncandoAgora(true);
               syncNow.mutate();
             }}
             disabled={isBusy}
@@ -331,7 +350,11 @@ export default function SyncPage() {
             ) : (
               <Zap className="w-4 h-4" />
             )}
-            {syncandoAgora ? "Sincronizando..." : "Sincronizar agora"}
+            {syncandoAgora && syncNowStatusData?.running
+              ? `Sincronizando... ${syncNowStatusData.completedUnidades}/${syncNowStatusData.totalUnidades}`
+              : syncandoAgora
+              ? "Iniciando..."
+              : "Sincronizar agora"}
           </Button>
 
           <Button

@@ -1220,3 +1220,9 @@
 - [x] Corrigir valor_liquido → valor_total nas metas (bug menor)
 - [x] Limpar 26 registros running presos no sync_log
 - [x] Adicionar limpeza automática de running presos ao reiniciar servidor
+
+## Bug: Erro "Unexpected token '<'" na página /data-vip/sync
+
+- [x] Identificar qual mutation tRPC está retornando HTML em vez de JSON — sync.syncNow com timeout 504
+- [x] Converter syncNow para fire-and-forget com polling de syncNowStatus
+- [x] Atualizar SyncPage.tsx para polling + progresso (X/Y unidades)
