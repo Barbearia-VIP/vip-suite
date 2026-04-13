@@ -31,18 +31,23 @@ async function upsertBatch(
   conn: mysql.Connection,
   table: string,
   rows: Record<string, unknown>[],
-  conflictCols: string[] = ["id"]
+  conflictCols: string[] = ["id"],
+  batchSize = 200
 ) {
   if (rows.length === 0) return;
   const cols = Object.keys(rows[0]);
-  const placeholders = rows.map(() => `(${cols.map(() => "?").join(",")})`).join(",");
-  const values = rows.flatMap((r) => cols.map((c) => r[c] ?? null));
   const updateSet = cols
     .filter((c) => !conflictCols.includes(c))
     .map((c) => `${c} = VALUES(${c})`)
     .join(", ");
-  const q = `INSERT INTO ${table} (${cols.join(",")}) VALUES ${placeholders} ON DUPLICATE KEY UPDATE ${updateSet}, synced_at = NOW()`;
-  await conn.execute(q, values);
+  // Processar em lotes para evitar "too many placeholders" (limite MySQL: 65535)
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const chunk = rows.slice(i, i + batchSize);
+    const placeholders = chunk.map(() => `(${cols.map(() => "?").join(",")})`).join(",");
+    const values = chunk.flatMap((r) => cols.map((c) => r[c] ?? null));
+    const q = `INSERT INTO ${table} (${cols.join(",")}) VALUES ${placeholders} ON DUPLICATE KEY UPDATE ${updateSet}, synced_at = NOW()`;
+    await conn.execute(q, values);
+  }
 }
 
 // ─── Buscar unidades disponíveis ─────────────────────────────────────────────
