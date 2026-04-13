@@ -23,6 +23,7 @@ import {
   ChevronRight, X, Package, TrendingUp, Zap, FileText, User,
   ArrowRight, Circle, CheckCircle, ArrowLeft,
 } from "lucide-react";
+import { PermissionGuard } from "@/components/PermissionGuard";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 type PlanoPassos = {
@@ -401,9 +402,11 @@ export default function InstrucoesPage() {
           >
             <Sparkles className="w-3.5 h-3.5" /> Gerar com IA
           </Button>
-          <Button size="sm" className="gap-1.5" onClick={() => { setEditing(null); setShowForm(true); }}>
-            <Plus className="w-3.5 h-3.5" /> Nova IT
-          </Button>
+          <PermissionGuard moduleKey="gestao_total" sectionKey="instrucoes">
+            <Button size="sm" className="gap-1.5" onClick={() => { setEditing(null); setShowForm(true); }}>
+              <Plus className="w-3.5 h-3.5" /> Nova IT
+            </Button>
+          </PermissionGuard>
         </div>
       </div>
 

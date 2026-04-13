@@ -17,6 +17,7 @@ import {
   Plus, Trash2, Edit2, TrendingUp, TrendingDown, DollarSign,
   CheckCircle2, Clock, RefreshCw, Database, Repeat2, XCircle, Info,
 } from "lucide-react";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { DatePicker } from "@/components/DatePicker";
 
 type Lancamento = {
@@ -332,9 +333,11 @@ export default function FinanceiroPage() {
               <RefreshCw className={`w-3.5 h-3.5 ${syncM.isPending ? "animate-spin" : ""}`} /> Sincronizar Data VIP
             </Button>
           )}
-          <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
-            <Plus className="w-3.5 h-3.5" /> Novo
-          </Button>
+          <PermissionGuard moduleKey="gestao_total" sectionKey="financeiro">
+            <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
+              <Plus className="w-3.5 h-3.5" /> Novo
+            </Button>
+          </PermissionGuard>
         </div>
       </div>
 

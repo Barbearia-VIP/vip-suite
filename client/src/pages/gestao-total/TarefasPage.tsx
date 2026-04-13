@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Plus, LayoutGrid, List, Trash2, Edit2, Clock, AlertCircle, BookOpen, ExternalLink } from "lucide-react";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { DatePicker } from "@/components/DatePicker";
 import { Badge } from "@/components/ui/badge";
 import { useLocation } from "wouter";
@@ -61,12 +62,14 @@ function TarefaCard({ tarefa, onEdit, onDelete, onStatusChange }: {
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-medium text-foreground leading-tight">{tarefa.titulo}</p>
         <div className="flex gap-1 shrink-0">
-          <button onClick={() => onEdit(tarefa)} className="text-muted-foreground hover:text-foreground p-0.5 rounded">
-            <Edit2 className="w-3 h-3" />
-          </button>
-          <button onClick={() => onDelete(tarefa.id)} className="text-muted-foreground hover:text-red-400 p-0.5 rounded">
-            <Trash2 className="w-3 h-3" />
-          </button>
+          <PermissionGuard moduleKey="gestao_total" sectionKey="tarefas">
+            <button onClick={() => onEdit(tarefa)} className="text-muted-foreground hover:text-foreground p-0.5 rounded">
+              <Edit2 className="w-3 h-3" />
+            </button>
+            <button onClick={() => onDelete(tarefa.id)} className="text-muted-foreground hover:text-red-400 p-0.5 rounded">
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </PermissionGuard>
         </div>
       </div>
       {tarefa.descricao && <p className="text-xs text-muted-foreground line-clamp-2">{tarefa.descricao}</p>}
@@ -223,9 +226,11 @@ export default function TarefasPage() {
               <List className="w-3.5 h-3.5" /> Lista
             </button>
           </div>
-          <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
-            <Plus className="w-3.5 h-3.5" /> Nova Tarefa
-          </Button>
+          <PermissionGuard moduleKey="gestao_total" sectionKey="tarefas">
+            <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
+              <Plus className="w-3.5 h-3.5" /> Nova Tarefa
+            </Button>
+          </PermissionGuard>
         </div>
       </div>
       <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar tarefas..." className="max-w-sm text-sm" />

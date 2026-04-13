@@ -23,6 +23,7 @@ import {
   Plus, Trash2, Edit2, Sparkles, Loader2, CheckCircle2, XCircle,
   ChevronDown, ChevronUp, Send, Layers, Settings, RefreshCw, Users,
 } from "lucide-react";
+import { PermissionGuard } from "@/components/PermissionGuard";
 
 type Etapa = { titulo: string; descricao?: string; responsavel?: string; concluida: boolean };
 type ProcessoAI = {
@@ -63,8 +64,10 @@ function ProcessoCard({ p, onEdit, onDelete, onEnviarIT }: {
             <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-xs text-violet-400 border-violet-400/30 hover:bg-violet-500/10" onClick={onEnviarIT} title="Enviar para Instruções de Trabalho">
               <Send className="w-3 h-3" /> IT
             </Button>
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={onEdit}><Edit2 className="w-3.5 h-3.5" /></Button>
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-300" onClick={onDelete}><Trash2 className="w-3.5 h-3.5" /></Button>
+            <PermissionGuard moduleKey="gestao_total" sectionKey="processos">
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={onEdit}><Edit2 className="w-3.5 h-3.5" /></Button>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-300" onClick={onDelete}><Trash2 className="w-3.5 h-3.5" /></Button>
+            </PermissionGuard>
           </div>
         </div>
       </div>
@@ -326,9 +329,11 @@ export default function ProcessosPage() {
             {generateM.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
             Gerar com IA
           </Button>
-          <Button size="sm" onClick={() => { setEditing(null); setShowForm(true); }} className="gap-1.5">
-            <Plus className="w-3.5 h-3.5" /> Novo Processo
-          </Button>
+          <PermissionGuard moduleKey="gestao_total" sectionKey="processos">
+            <Button size="sm" onClick={() => { setEditing(null); setShowForm(true); }} className="gap-1.5">
+              <Plus className="w-3.5 h-3.5" /> Novo Processo
+            </Button>
+          </PermissionGuard>
         </div>
       </div>
 

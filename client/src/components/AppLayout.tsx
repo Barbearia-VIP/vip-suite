@@ -62,6 +62,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useTheme } from "../contexts/ThemeContext";
 import { useChartTheme } from "../hooks/useChartTheme";
+import { useSysPermissions } from "../hooks/useSysPermissions";
 
 interface Module {
   id: ModuleId;
@@ -326,11 +327,17 @@ export default function AppLayout({ children }: AppLayoutProps) {
     },
   });
 
+  const { canViewPath } = useSysPermissions();
+
   const currentModule = MODULES.find((m) => m.id === activeModule) ?? MODULES[0];
   const sidebarItems = SIDEBAR_ITEMS[activeModule].filter((item) => {
-    if (item.type === "separator" || item.type === "group") return true;
+    if (item.type === "separator") return true;
+    if (item.type === "group") {
+      // Mostrar grupo se ao menos um filho for visível
+      return item.children.some((child) => canViewPath(child.path));
+    }
     if ((item as any).path === "/data-vip/ranking" && selectedUnit !== null) return false;
-    return true;
+    return canViewPath((item as any).path);
   });
 
   const handleModuleClick = (module: Module) => {
@@ -703,7 +710,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                         </span>
                       </div>
                     )}
-                    {item.children.map((child) => {
+                    {item.children.filter((child) => canViewPath(child.path)).map((child) => {
                       const ChildIcon = child.icon;
                       const isActive = location === child.path;
                       return (

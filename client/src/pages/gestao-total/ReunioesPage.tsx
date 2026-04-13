@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { Plus, Trash2, Edit2, Calendar, Clock, Users } from "lucide-react";
 import { DatePicker } from "@/components/DatePicker";
 
@@ -102,7 +103,9 @@ export default function ReunioesPage() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div><h1 className="text-xl font-bold text-foreground font-display tracking-tight">Reuniões</h1><p className="text-sm text-muted-foreground">{reunioes.length} reuniões registradas</p></div>
-        <Button size="sm" onClick={()=>setShowForm(true)} className="gap-1.5"><Plus className="w-3.5 h-3.5" /> Nova Reunião</Button>
+        <PermissionGuard moduleKey="gestao_total" sectionKey="reunioes">
+          <Button size="sm" onClick={()=>setShowForm(true)} className="gap-1.5"><Plus className="w-3.5 h-3.5" /> Nova Reunião</Button>
+        </PermissionGuard>
       </div>
       {q.isLoading?<div className="space-y-2">{Array.from({length:4}).map((_,i)=><Skeleton key={i} className="h-20 rounded-lg" />)}</div>
       :reunioes.length===0?<div className="glass-card bg-white/5 border-white/10"><div className="p-6 pt-0 p-8 text-center"><Calendar className="w-8 h-8 text-muted-foreground mx-auto mb-2" /><p className="text-sm text-muted-foreground">Nenhuma reunião agendada</p><Button size="sm" variant="outline" className="mt-3" onClick={()=>setShowForm(true)}>Agendar reunião</Button></div></div>
@@ -122,8 +125,10 @@ export default function ReunioesPage() {
           </div>
           <div className="flex items-center gap-2 shrink-0 ml-2">
             <span className={`text-xs font-medium capitalize ${STATUS_COLORS[r.status]??""}`}>{r.status}</span>
-            <button onClick={()=>setEditing(r)} className="text-muted-foreground hover:text-foreground p-1"><Edit2 className="w-3.5 h-3.5" /></button>
-            <button onClick={()=>deleteM.mutate({id:r.id,orgId:r.orgId})} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+            <PermissionGuard moduleKey="gestao_total" sectionKey="reunioes">
+              <button onClick={()=>setEditing(r)} className="text-muted-foreground hover:text-foreground p-1"><Edit2 className="w-3.5 h-3.5" /></button>
+              <button onClick={()=>deleteM.mutate({id:r.id,orgId:r.orgId})} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+            </PermissionGuard>
           </div>
         </div>
       ))}</div></div>}

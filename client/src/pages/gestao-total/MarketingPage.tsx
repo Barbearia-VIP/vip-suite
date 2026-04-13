@@ -19,6 +19,7 @@ import {
   Plus, Trash2, Edit2, Megaphone, Wand2, Eye, UserCheck,
   Calendar, Target, Sparkles, PenLine, Palette, History, Star, ChevronDown, ChevronUp, RefreshCw,
 } from "lucide-react";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import MarketingCampaignWizard, { type WizardData } from "@/components/MarketingCampaignWizard";
 import { DatePicker } from "@/components/DatePicker";
 import CampaignPreview from "@/components/CampaignPreview";

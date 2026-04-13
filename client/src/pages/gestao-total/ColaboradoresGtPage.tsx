@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { Plus, Trash2, Edit2, Users } from "lucide-react";
 import { DatePicker } from "@/components/DatePicker";
 
@@ -134,9 +135,11 @@ export default function ColaboradoresGtPage() {
           <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Colaboradores</h1>
           <p className="text-sm text-muted-foreground">{ativos} ativos de {colaboradores.length} total</p>
         </div>
-        <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
-          <Plus className="w-3.5 h-3.5" /> Novo Colaborador
-        </Button>
+        <PermissionGuard moduleKey="gestao_total" sectionKey="colaboradores">
+          <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> Novo Colaborador
+          </Button>
+        </PermissionGuard>
       </div>
 
       <div className="flex gap-2 flex-wrap items-center">
@@ -172,8 +175,10 @@ export default function ColaboradoresGtPage() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-2">
                   <Badge variant="outline" className={`text-xs ${STATUS_COLORS[c.status] ?? ""}`}>{c.status}</Badge>
-                  <button onClick={() => setEditing(c)} className="text-muted-foreground hover:text-foreground p-1"><Edit2 className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => deleteM.mutate({ id: c.id, orgId: c.orgId })} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <PermissionGuard moduleKey="gestao_total" sectionKey="colaboradores">
+                    <button onClick={() => setEditing(c)} className="text-muted-foreground hover:text-foreground p-1"><Edit2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => deleteM.mutate({ id: c.id, orgId: c.orgId })} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </PermissionGuard>
                 </div>
               </div>
             ))}

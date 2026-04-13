@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { Plus, Trash2, Edit2, FileText, ExternalLink } from "lucide-react";
 
 type Documento = {
@@ -105,9 +106,11 @@ export default function DocumentosPage() {
           <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Documentos</h1>
           <p className="text-sm text-muted-foreground">{documentos.length} documentos</p>
         </div>
-        <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
-          <Plus className="w-3.5 h-3.5" /> Novo Documento
-        </Button>
+        <PermissionGuard moduleKey="gestao_total" sectionKey="documentos">
+          <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> Novo Documento
+          </Button>
+        </PermissionGuard>
       </div>
 
       <div className="flex gap-2 flex-wrap items-center">
@@ -142,8 +145,10 @@ export default function DocumentosPage() {
                   </div>
                   <div className="flex gap-1 shrink-0 ml-2">
                     {d.urlArquivo && <a href={d.urlArquivo} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary p-0.5"><ExternalLink className="w-3 h-3" /></a>}
-                    <button onClick={() => setEditing(d)} className="text-muted-foreground hover:text-foreground p-0.5"><Edit2 className="w-3 h-3" /></button>
-                    <button onClick={() => deleteM.mutate({ id: d.id, orgId: d.orgId })} className="text-muted-foreground hover:text-red-400 p-0.5"><Trash2 className="w-3 h-3" /></button>
+                    <PermissionGuard moduleKey="gestao_total" sectionKey="documentos">
+                      <button onClick={() => setEditing(d)} className="text-muted-foreground hover:text-foreground p-0.5"><Edit2 className="w-3 h-3" /></button>
+                      <button onClick={() => deleteM.mutate({ id: d.id, orgId: d.orgId })} className="text-muted-foreground hover:text-red-400 p-0.5"><Trash2 className="w-3 h-3" /></button>
+                    </PermissionGuard>
                   </div>
                 </div>
               </div>

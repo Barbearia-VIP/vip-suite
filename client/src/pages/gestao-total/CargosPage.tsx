@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { Plus, Trash2, Edit2, Briefcase } from "lucide-react";
 
 type Cargo = {
@@ -97,9 +98,11 @@ export default function CargosPage() {
           <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Cargos</h1>
           <p className="text-sm text-muted-foreground">{cargos.length} cargos cadastrados</p>
         </div>
-        <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
-          <Plus className="w-3.5 h-3.5" /> Novo Cargo
-        </Button>
+        <PermissionGuard moduleKey="gestao_total" sectionKey="cargos">
+          <Button size="sm" onClick={() => setShowForm(true)} className="gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> Novo Cargo
+          </Button>
+        </PermissionGuard>
       </div>
 
       {q.isLoading ? (
@@ -127,8 +130,10 @@ export default function CargosPage() {
                       </div>
                       <div className="flex items-center gap-3 shrink-0 ml-2">
                         {c.salarioBase && <span className="text-sm text-muted-foreground">{fmt(Number(c.salarioBase))}</span>}
-                        <button onClick={() => setEditing(c)} className="text-muted-foreground hover:text-foreground p-1"><Edit2 className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => deleteM.mutate({ id: c.id, orgId: c.orgId })} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                        <PermissionGuard moduleKey="gestao_total" sectionKey="cargos">
+                          <button onClick={() => setEditing(c)} className="text-muted-foreground hover:text-foreground p-1"><Edit2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => deleteM.mutate({ id: c.id, orgId: c.orgId })} className="text-muted-foreground hover:text-red-400 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </PermissionGuard>
                       </div>
                     </div>
                   ))}
