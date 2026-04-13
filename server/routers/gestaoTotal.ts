@@ -2217,124 +2217,95 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
       const formato = formatoMap[input.tipoArte] ?? { ratio: "1:1", desc: "Post quadrado", dims: "1080x1080px" };
       console.log(`[generateFlyer] tipoArte recebido: "${input.tipoArte}" → formato: ${formato.ratio} (${formato.dims})`);
 
-      // Montar prompt de flyer para a IA de imagem
+      // ── Determinar se é banco-vip (imagem ocupa 100% do canvas) ────────────
+      const isBancoVip = input.tipoImagem === "banco-vip" && !!input.imagemUrl;
+
+      // ── Montar prompt de flyer ────────────────────────────────────────────
       const flyerPrompt = [
-        // ===== FORMATO OBRIGATÓRIO — PRIMEIRA INSTRUÇÃO =====
-        `ABSOLUTE CANVAS REQUIREMENT — READ FIRST AND OBEY STRICTLY:`,
-        `This image MUST be generated in ${formato.ratio} aspect ratio (${formato.dims}).`,
+        // ===== CANVAS SIZE — PRIMEIRA E MAIS IMPORTANTE INSTRUÇÃO =====
+        `CANVAS SIZE — MANDATORY AND NON-NEGOTIABLE:`,
+        `Output aspect ratio: ${formato.ratio} (${formato.dims}).`,
         formato.ratio === "9:16"
-          ? `VERTICAL FORMAT: The canvas is TALL and NARROW — height is approximately 1.78x the width. Like a smartphone screen held vertically. DO NOT generate a square or horizontal image.`
+          ? `VERTICAL — tall and narrow like a smartphone screen. Height is 1.78× the width.`
           : formato.ratio === "16:9"
-          ? `HORIZONTAL FORMAT: The canvas is WIDE and SHORT — width is approximately 1.78x the height. Like a widescreen TV or YouTube banner. DO NOT generate a square or vertical image.`
+          ? `HORIZONTAL — wide and short like a YouTube banner. Width is 1.78× the height.`
           : formato.ratio === "4:5"
-          ? `PORTRAIT FORMAT: The canvas is slightly taller than wide — height is 1.25x the width. Like a portrait photo. DO NOT generate a square or horizontal image.`
-          : `SQUARE FORMAT: The canvas has EQUAL width and height (1:1). DO NOT generate a vertical or horizontal image.`,
-        `IGNORE the aspect ratio of any reference images provided — they are ONLY for visual style and content reference. The OUTPUT must be ${formato.ratio}.`,
+          ? `PORTRAIT — slightly taller than wide (height = 1.25× width).`
+          : `SQUARE — equal width and height (1:1).`,
+        `The reference images are ONLY for visual content. OUTPUT must be ${formato.ratio}. Ignore their aspect ratio.`,
         ``,
-        `Create a PREMIUM, ULTRA-HIGH-END digital flyer for Barbearia VIP — Brazil's largest luxury barbershop franchise.`,
-        ``,
-        `=== BARBEARIA VIP BRAND IDENTITY (MANDATORY — DO NOT DEVIATE) ===`,
-        ``,
-        `BRAND CONCEPT: "The VIP man lives experiences" — exclusivity, sophistication, confidence, premium masculine lifestyle.`,
-        ``,
-        `COLOR PALETTE (STRICT VIP STANDARD):`,
-        `- Background: DARK ONLY — deep black (#0A0A0A), dark charcoal (#1A1A1A), or dark gradient`,
-        `- Accent/Highlight: GOLD/VIP YELLOW — #C9A84C, #D4AF37, #F0C040`,
-        `- Text: Pure white or off-white`,
-        `- FORBIDDEN: vibrant colors (red, bright blue, green), pastels, light/white backgrounds`,
-        ``,
-        `TYPOGRAPHY (VIP STANDARD):`,
-        `- Headlines: CONDENSED, BOLD, UPPERCASE font (Bebas Neue, Oswald, or Montserrat Condensed style)`,
-        `- Subheadings: Clean, modern, readable`,
-        `- Body: Minimalist — FEW WORDS, maximum impact`,
-        `- Key words highlighted in GOLD`,
-        ``,
-        `IMAGE STYLE (VIP STANDARD):`,
-        `- Well-groomed men (beard, hair, style) with confident posture`,
-        `- Premium environment (luxury barbershop, luxury car, high-end lifestyle)`,
-        `- Cinematic lighting (warm light, high contrast, dramatic shadows)`,
-        `- FORBIDDEN: generic stock photos, amateur photos, simple/cheap environments`,
-        ``,
-        `LAYOUT STRUCTURE (VIP PATTERN):`,
-        `- Option A: Left side — text (headline + support), Right side — strong lifestyle image`,
-        `- Option B: Dark image as full background + overlaid text with high contrast`,
-        `- Graphic elements: soft-border boxes, gold accents, thin elegant separator lines`,
-        `- Informational blocks with numbers/data highlighted in gold`,
-        ``,
-        `CRITICAL RULES:`,
-        `- MUST NOT look like a cheap promotional flyer or supermarket pamphlet`,
-        `- MUST NOT use sale/discount aesthetics`,
-        `- MUST NOT overload with text or exclamation marks`,
-        `- MUST prioritize: visual impact, desire, sense of exclusivity`,
-        `- Inspired by: Louis Vuitton, Gucci, YSL applied to masculine universe`,
-        `- WEBSITE/DOMAIN: DO NOT include any website URL, domain, or web address on the flyer. Omit entirely.`,
-        `- DO NOT invent any phone numbers, addresses, or contact information not provided in the content below`,
-        `- TEXT MINIMALISM (CRITICAL): Use MINIMAL text on the flyer. Maximum 3 text elements total (headline + one short supporting line + CTA). Each text element must be SHORT — headline max 5 words, body max 8 words, CTA max 4 words. LESS IS MORE. White space is luxury. DO NOT fill the flyer with text blocks, descriptions, or explanations.`,
-        `- FORBIDDEN: long paragraphs, multiple text blocks, excessive copy, crowded layouts`,
-        ``,
-        `=== LOGO RULES (CRITICAL) ===`,
+
+        // ===== MODO BANCO VIP: IMAGEM COMO FUNDO FULL-BLEED =====
+        ...(isBancoVip ? [
+          `=== BANCO VIP MODE — FULL-BLEED BACKGROUND ===`,
+          `The first reference image IS the flyer. It MUST fill the ENTIRE canvas edge-to-edge, 100% full-bleed.`,
+          `SCALE AND CROP the reference image to fill the ${formato.ratio} canvas completely — no margins, no borders, no black bars.`,
+          `DO NOT add new people, objects, or decorative graphics. DO NOT replace the image.`,
+          `Apply a subtle dark gradient overlay (bottom 40% of canvas, opacity 50–70%) for text readability.`,
+          `Place the logo (if provided) at the TOP of the canvas, centered, small and elegant.`,
+          `Place the headline text at the BOTTOM of the canvas, centered, bold uppercase, white or gold.`,
+          `Place the CTA below the headline, smaller, elegant.`,
+          `THAT IS ALL — no other text, no extra elements, no decorations.`,
+          ``,
+        ] : [
+          // ===== MODO NORMAL: FLYER PREMIUM VIP =====
+          `Create a PREMIUM, ULTRA-HIGH-END digital flyer for Barbearia VIP — Brazil's largest luxury barbershop franchise.`,
+          ``,
+          `BRAND IDENTITY (MANDATORY):`,
+          `- Colors: Dark background (#0A0A0A or #1A1A1A) + gold accents (#D4AF37, #C9A84C) + white text`,
+          `- Typography: Condensed bold uppercase headlines (Bebas Neue / Oswald style), key words in gold`,
+          `- Image style: Premium masculine lifestyle — cinematic lighting, high contrast, dramatic shadows`,
+          `- Inspired by: Louis Vuitton, Gucci, YSL applied to masculine universe`,
+          `- FORBIDDEN: cheap promotional aesthetics, bright colors, pastels, light backgrounds`,
+          ``,
+          ...(input.imagemUrl ? [
+            `REFERENCE IMAGE: The first image is the HERO VISUAL. Use it as the dominant background or main visual element. Crop/scale it to fill the ${formato.ratio} canvas completely — no black bars.`,
+          ] : [
+            `No base image provided. Generate a premium VIP barbershop lifestyle scene.`,
+          ]),
+          ``,
+        ]),
+
+        // ===== LOGO =====
         allLogos.length > 0
-          ? `BRAND LOGO — MANDATORY: The official Barbearia VIP logo MUST appear on this flyer EXACTLY as provided in the reference image(s). DO NOT create, invent, or replace the logo with any other graphic, text, or symbol. You MAY ONLY adjust the logo color/tint to harmonize with the dark background (e.g., white version on dark background, gold tint). Available logo versions: ${logoNames}.`
-          : `BRAND LOGO: No official logo provided. Leave the logo area empty — DO NOT invent any logo, wordmark, or brand symbol.`,
+          ? `LOGO (MANDATORY): The official Barbearia VIP logo MUST appear EXACTLY as provided. Do NOT invent or replace it. Adjust color/tint only (white or gold version on dark background). Available: ${logoNames}.`
+          : `LOGO: None provided. Leave logo area empty — do NOT invent any logo or wordmark.`,
         ``,
-        `=== CONTENT TO INCLUDE ===`,
+
+        // ===== TEXTO — ULTRA-MINIMALISTA =====
+        `TEXT — ULTRA-MINIMALIST (CRITICAL RULE):`,
+        `MAXIMUM 2 text elements on the entire flyer:`,
+        `  1. HEADLINE only: "${headline}" — bold, uppercase, max 5 words visible`,
+        `  2. CTA only: "${cta}" — small, elegant, below headline`,
+        `DO NOT include body text, supporting lines, descriptions, or any other copy.`,
+        `DO NOT include "${textoSecundario}" or any secondary text.`,
+        `LESS TEXT = MORE LUXURY. White space is intentional and premium.`,
+        `FORBIDDEN: paragraphs, bullet points, multiple text blocks, crowded copy.`,
         ``,
-        `COLOR PALETTE DIRECTION: ${input.direcaoVisual.cores}`,
-        `TYPOGRAPHY DIRECTION: ${input.direcaoVisual.tipografia}`,
-        `VISUAL ELEMENTS: ${input.direcaoVisual.elementosVisuais}`,
-        ``,
-        `LAYOUT:`,
-        `- TOP: ${input.layout.topo}`,
-        `- CENTER: ${input.layout.centro}`,
-        `- BOTTOM: ${input.layout.rodape}`,
-        ``,
-        `COPY (orthographically reviewed in Brazilian Portuguese):`,
-        `- Headline: "${headline}"`,
-        `- Body text: "${textoSecundario}"`,
-        `- CTA: "${cta}"`,
-        ``,
+
+        // ===== CONCEITO CRIATIVO =====
         `CREATIVE CONCEPT: ${input.conceito}`,
+        `COLOR DIRECTION: ${input.direcaoVisual.cores}`,
         ``,
-        input.imagemUrl && input.tipoImagem === "banco-vip"
-          ? `REFERENCE IMAGE (BANCO VIP — FULL-BLEED MANDATORY): The first image provided is the EXCLUSIVE BACKGROUND of this flyer. CRITICAL RULES: (1) This image MUST fill the ENTIRE canvas edge-to-edge — 100% full-bleed, no margins, no borders, no padding. (2) DO NOT add any new visual elements, people, objects, or decorative graphics. (3) DO NOT replace or modify the image content. (4) ONLY overlay the text (headline, body, CTA) and logo on top of this image with a subtle dark overlay for readability. (5) The image IS the flyer background — treat it as a full-bleed photo background.`
-          : input.imagemUrl
-          ? `REFERENCE IMAGE: The first image provided is the BASE VISUAL REFERENCE for this flyer. You MUST incorporate this image (or its visual style, mood, and subjects) prominently in the composition. The image shows the main visual element — use it as the hero image of the flyer.`
-          : `REFERENCE IMAGE: No base image provided. Generate a premium VIP barbershop lifestyle image following the brand guidelines above.`,
+
+        // ===== REGRAS ABSOLUTAS =====
+        `ABSOLUTE RULES:`,
+        `- NO website URL, domain, phone number, or address`,
+        `- NO invented contact information`,
+        `- NO exclamation marks in text`,
+        `- The entire canvas MUST be filled — no letterboxing, no pillarboxing, no white/black borders`,
         ``,
-        `FORMAT — ABSOLUTELY CRITICAL AND NON-NEGOTIABLE:`,
-        `- Aspect ratio: ${formato.ratio}`,
-        `- Exact dimensions: ${formato.dims}`,
-        `- Format type: ${formato.desc}`,
-        `- The ENTIRE canvas MUST be filled in ${formato.ratio} ratio — no letterboxing, no pillarboxing, no white/black borders`,
-        `- ${formato.ratio === "9:16" ? "VERTICAL orientation — tall and narrow, like a phone screen. Width is MUCH smaller than height." : formato.ratio === "16:9" ? "HORIZONTAL orientation — wide and short, like a landscape banner. Width is MUCH larger than height." : "SQUARE orientation — equal width and height."}`,
-        `- All text, logo, and visual elements MUST be positioned and sized for ${formato.dims} canvas`,
-        `- FAILURE TO RESPECT THIS FORMAT IS NOT ACCEPTABLE`,
+
+        // ===== QUALIDADE =====
+        `QUALITY: Ultra-high quality, cinematic, professional studio design. GQ / Vogue Homem editorial level.`,
         ``,
-        `FINAL QUALITY: Ultra-high quality, 8K resolution, professional studio design.`,
-        `This flyer MUST look like it was designed by a world-class luxury creative agency.`,
-        `The result should make the viewer feel they are looking at a premium brand, not a local barbershop.`,
-        ``,
-        `=== TECHNICAL QUALITY REQUIREMENTS (MANDATORY) ===`,
-        `- Resolution: Ultra-high detail, 8K quality rendering`,
-        `- Photography style: Shot on Hasselblad or Phase One medium format camera`,
-        `- Lens: 50mm f/1.4 — shallow depth of field with elegant bokeh on backgrounds`,
-        `- Lighting: Professional 3-point studio lighting with dramatic rim light and warm fill`,
-        `- Color grading: Rich blacks, lifted shadows, warm golden midtones, crisp highlights`,
-        `- Texture: Subtle film grain for cinematic depth`,
-        `- Composition: Rule of thirds, strong visual hierarchy, intentional negative space`,
-        `- Post-processing: Award-winning commercial photography retouching`,
-        `- Overall feel: Luxury fashion editorial — Vogue Homem, GQ, Esquire magazine quality`,
-        `- FORBIDDEN: flat lighting, blown-out whites, muddy shadows, amateur composition`,
-        ``,
-        `=== FINAL REMINDER: CANVAS SIZE ===`,
-        `OUTPUT IMAGE SIZE: ${formato.dims} — ${formato.ratio} aspect ratio.`,
-        formato.ratio === "9:16"
-          ? `THIS IS A STORY/REELS FORMAT. The image must be PORTRAIT VERTICAL. If you generate anything other than a tall vertical image (9 wide : 16 tall), you have FAILED this task.`
-          : formato.ratio === "16:9"
-          ? `THIS IS A BANNER FORMAT. The image must be LANDSCAPE HORIZONTAL. If you generate anything other than a wide horizontal image (16 wide : 9 tall), you have FAILED this task.`
-          : formato.ratio === "4:5"
-          ? `THIS IS A PORTRAIT FORMAT. The image must be slightly taller than wide (4 wide : 5 tall). If you generate a square or horizontal image, you have FAILED this task.`
-          : `THIS IS A SQUARE FORMAT. The image must have EQUAL width and height (1:1). If you generate a vertical or horizontal image, you have FAILED this task.`,
+
+        // ===== LEMBRETE FINAL DO TAMANHO =====
+        `FINAL REMINDER: Output MUST be ${formato.ratio} (${formato.dims}). ${formato.desc}.`,
+        formato.ratio === "9:16" ? `PORTRAIT VERTICAL — tall and narrow. FAILURE to produce a vertical image = task failed.`
+          : formato.ratio === "16:9" ? `LANDSCAPE HORIZONTAL — wide and short. FAILURE to produce a horizontal image = task failed.`
+          : formato.ratio === "4:5" ? `PORTRAIT — slightly taller than wide. FAILURE to produce this format = task failed.`
+          : `SQUARE 1:1 — equal width and height. FAILURE to produce a square image = task failed.`,
       ].join("\n");
 
       // Montar referências de imagem:
@@ -2379,17 +2350,18 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
           const targetRatio = targetW / targetH;
           let resizedBuffer: Buffer;
           if (Math.abs(origRatio - targetRatio) < 0.05) {
-            // Proporções muito próximas: apenas redimensionar
+            // Proporções muito próximas: apenas redimensionar (fill exato)
             resizedBuffer = await sharp(imgBuffer)
               .resize(targetW, targetH, { fit: "fill" })
               .png()
               .toBuffer();
           } else {
-            // Proporções diferentes: usar contain com fundo preto para não cortar conteúdo
+            // Proporções diferentes: usar cover (crop centralizado) para preencher o canvas
+            // sem bordas pretas — a imagem é recortada para cobrir o canvas inteiro
             resizedBuffer = await sharp(imgBuffer)
               .resize(targetW, targetH, {
-                fit: "contain",
-                background: { r: 10, g: 10, b: 10, alpha: 1 }, // #0A0A0A (preto VIP)
+                fit: "cover",
+                position: "centre",
               })
               .png()
               .toBuffer();
