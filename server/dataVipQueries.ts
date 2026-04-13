@@ -796,7 +796,7 @@ export async function getFaturamentoDiario(extIds: number[], dataInicio: string,
       COUNT(DISTINCT v.id) as atendimentos,
       COUNT(DISTINCT v.cliente) as clientes
     FROM sync_vendas v
-    WHERE ${vUnit}
+    WHERE ${vpUnit}
       AND v.data_criacao >= ?
       AND v.data_criacao < DATE_ADD(?, INTERVAL 1 DAY)
       AND v.comanda_temp = 0
@@ -1413,7 +1413,7 @@ export async function getFaturamentoPorDiaSemana(extIds: number[], dataInicio: s
       COALESCE(SUM(v.valor_total), 0) as total,
       COUNT(DISTINCT v.id) as atendimentos
     FROM sync_vendas v
-    WHERE ${vUnit}
+    WHERE ${vpUnit}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
@@ -1459,7 +1459,7 @@ export async function getFaturamentoPorFaixaHoraria(extIds: number[], dataInicio
       COALESCE(SUM(v.valor_total), 0) as total,
       COUNT(DISTINCT v.id) as atendimentos
     FROM sync_vendas v
-    WHERE ${vUnit}
+    WHERE ${vpUnit}
       AND v.data_criacao >= ?
       AND v.data_criacao < ?
       AND v.comanda_temp = 0
