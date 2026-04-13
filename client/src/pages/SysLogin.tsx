@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,10 +13,20 @@ import { useSysUser } from "@/contexts/SysUserContext";
 
 export default function SysLogin() {
   const [, navigate] = useLocation();
-  const { refetch } = useSysUser();
+  const { sysUser, isLoading: sysLoading, refetch } = useSysUser();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+
+  // Redireciona para o dashboard se já estiver autenticado
+  useEffect(() => {
+    if (!sysLoading && !authLoading) {
+      if (sysUser || isAuthenticated) {
+        navigate("/dashboard");
+      }
+    }
+  }, [sysUser, isAuthenticated, sysLoading, authLoading, navigate]);
 
   const login = trpc.sysUsers.login.useMutation({
     onSuccess: () => {
