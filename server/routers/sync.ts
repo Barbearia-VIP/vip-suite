@@ -12,7 +12,7 @@
  */
 
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure, sysUserProcedure } from "../_core/trpc";
 import {
   getSyncStatus,
   importHistorico,
@@ -23,17 +23,17 @@ import {
 
 export const syncRouter = router({
   // Status de todas as unidades
-  status: protectedProcedure.query(async () => {
+  status: sysUserProcedure.query(async () => {
     return getSyncStatus();
   }),
 
   // Info do agendador automático
-  schedulerInfo: protectedProcedure.query(() => {
+  schedulerInfo: sysUserProcedure.query(() => {
     return getSchedulerInfo();
   }),
 
   // Sync incremental de todas as unidades agora (botão "Sincronizar agora")
-  syncNow: protectedProcedure.mutation(async () => {
+  syncNow: sysUserProcedure.mutation(async () => {
     const unidades = await getUnidadesExternas();
     let totalNovas = 0;
     const erros: { unidadeId: number; erro: string }[] = [];
@@ -49,7 +49,7 @@ export const syncRouter = router({
   }),
 
   // Lista unidades disponíveis no banco externo
-  getUnidades: protectedProcedure.query(async () => {
+  getUnidades: sysUserProcedure.query(async () => {
     return getUnidadesExternas();
   }),
 
@@ -62,7 +62,7 @@ export const syncRouter = router({
     }),
 
   // Importação histórica de todas as unidades (sequencial)
-  importTodas: protectedProcedure.mutation(async () => {
+  importTodas: sysUserProcedure.mutation(async () => {
     const unidades = await getUnidadesExternas();
     const resultados: { unidadeId: number; ok: boolean; totalVendas: number; totalVp: number; totalClientes: number }[] = [];
 
@@ -88,7 +88,7 @@ export const syncRouter = router({
     }),
 
   // Sync incremental de todas as unidades
-  incrementalTodas: protectedProcedure.mutation(async () => {
+  incrementalTodas: sysUserProcedure.mutation(async () => {
     const unidades = await getUnidadesExternas();
     let totalNovas = 0;
     for (const uid of unidades) {

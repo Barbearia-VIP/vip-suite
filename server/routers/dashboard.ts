@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, count, eq, gte, lte, sql, inArray } from "drizzle-orm";
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, router, sysUserProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { queryLocal } from "../db-local";
 import { getFaturamentoMensal } from "../dataVipQueries";
@@ -66,7 +66,7 @@ function getToday() {
 export const dashboardRouter = router({
 
   // ─── KPIs CONSOLIDADOS ────────────────────────────────────────────────────
-  kpis: protectedProcedure
+  kpis: sysUserProcedure
     .input(z.object({
       unitId: z.number().optional(),
       orgId: z.number(),
@@ -414,7 +414,7 @@ export const dashboardRouter = router({
     }),
 
   // ─── STATUS DE CONFIGURAÇÃO DOS MÓDULOS ──────────────────────────────────
-  modulesStatus: protectedProcedure
+  modulesStatus: sysUserProcedure
     .input(z.object({ unitId: z.number().optional(), orgId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -476,7 +476,7 @@ export const dashboardRouter = router({
     }),
 
   // ─── GRÁFICO DE FATURAMENTO MENSAL (últimos 6 meses) ─────────────────────
-  faturamentoMensal: protectedProcedure
+  faturamentoMensal: sysUserProcedure
     .input(z.object({ unitId: z.number().optional(), orgId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -508,7 +508,7 @@ export const dashboardRouter = router({
     }),
 
   // ─── RANKING DE UNIDADES (faturamento do mês) ────────────────────────────
-  rankingUnidades: protectedProcedure
+  rankingUnidades: sysUserProcedure
     .input(z.object({ orgId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -575,7 +575,7 @@ export const dashboardRouter = router({
     }),
 
   // ─── RANKING DE REPUTAÇÃO POR UNIDADE ───────────────────────────────────────────────────────────────────────────────────
-  rankingReputacao: protectedProcedure
+  rankingReputacao: sysUserProcedure
     .input(z.object({ orgId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();

@@ -2,7 +2,7 @@
  * gestaoTotal.ts — Router tRPC do módulo Gestão Total
  */
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure, sysUserProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import {
   gtTarefas, gtProcessos, gtInstrucoes, gtIndicadores, gtPlanejamento,
@@ -44,7 +44,7 @@ async function logAudit(
 
 // ── Tarefas ───────────────────────────────────────────────────────────────────
 const tarefasRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), status: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -55,7 +55,7 @@ const tarefasRouter = router({
       return db.select().from(gtTarefas).where(and(...conds)).orderBy(gtTarefas.ordem, desc(gtTarefas.createdAt));
     }),
 
-  create: protectedProcedure
+  create: sysUserProcedure
     .input(z.object({
       orgId: z.number(), unitId: z.number().optional(),
       titulo: z.string().min(1), descricao: z.string().optional(),
@@ -77,7 +77,7 @@ const tarefasRouter = router({
       return { id: insertId };
     }),
 
-  update: protectedProcedure
+  update: sysUserProcedure
     .input(z.object({
       id: z.number(), orgId: z.number(),
       titulo: z.string().optional(), descricao: z.string().optional(),
@@ -98,7 +98,7 @@ const tarefasRouter = router({
       return { success: true };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -108,7 +108,7 @@ const tarefasRouter = router({
       return { success: true };
     }),
 
-  updateStatus: protectedProcedure
+  updateStatus: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number(), status: z.enum(["pendente", "em_andamento", "em_revisao", "concluida"]) }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -134,7 +134,7 @@ const tarefasRouter = router({
 
 // ── Processos ─────────────────────────────────────────────────────────────────
 const processosRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -144,7 +144,7 @@ const processosRouter = router({
       return db.select().from(gtProcessos).where(and(...conds)).orderBy(desc(gtProcessos.createdAt));
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(), unitId: z.number().optional(),
       nome: z.string().min(1), descricao: z.string().optional(),
@@ -163,7 +163,7 @@ const processosRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -172,7 +172,7 @@ const processosRouter = router({
       return { success: true };
     }),
 
-  generateAI: protectedProcedure
+  generateAI: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -232,7 +232,7 @@ Gere 4-6 processos principais e 2-4 de apoio. Cada processo deve ter 3-6 etapas.
       }
     }),
 
-  saveMany: protectedProcedure
+  saveMany: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -266,7 +266,7 @@ Gere 4-6 processos principais e 2-4 de apoio. Cada processo deve ter 3-6 etapas.
 
 // ── Instruções de Trabalho ────────────────────────────────────────────────────
 const instrucoesRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), categoria: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -277,7 +277,7 @@ const instrucoesRouter = router({
       return db.select().from(gtInstrucoes).where(and(...conds)).orderBy(desc(gtInstrucoes.createdAt));
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(), unitId: z.number().optional(),
       titulo: z.string().min(1), conteudo: z.string().optional(),
@@ -296,7 +296,7 @@ const instrucoesRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -305,7 +305,7 @@ const instrucoesRouter = router({
       return { success: true };
     }),
 
-  generateFromProcesso: protectedProcedure
+  generateFromProcesso: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -403,7 +403,7 @@ Seja detalhado, prático e específico. O conteúdo deve ser suficiente para um 
       }
     }),
 
-  updateStatus: protectedProcedure
+  updateStatus: sysUserProcedure
     .input(z.object({
       id: z.number(), orgId: z.number(),
       status: z.enum(["pendente", "em_andamento", "concluida", "pausada"]),
@@ -429,7 +429,7 @@ Seja detalhado, prático e específico. O conteúdo deve ser suficiente para um 
 
 // ── Indicadores ───────────────────────────────────────────────────────────────
 const indicadoresGtRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), periodo: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -440,7 +440,7 @@ const indicadoresGtRouter = router({
       return db.select().from(gtIndicadores).where(and(...conds)).orderBy(gtIndicadores.nome);
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(), unitId: z.number().optional(),
       nome: z.string().min(1), descricao: z.string().optional(),
@@ -462,7 +462,7 @@ const indicadoresGtRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -472,7 +472,7 @@ const indicadoresGtRouter = router({
     }),
 
   // Indicadores consolidados do sistema (dados reais)
-  consolidado: protectedProcedure
+  consolidado: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -529,7 +529,7 @@ const indicadoresGtRouter = router({
 });
 // ── Planejamento Estratégicoo ──────────────────────────────────────────────────
 const planejamentoRouter = router({
-  get: protectedProcedure
+  get: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), ano: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -540,7 +540,7 @@ const planejamentoRouter = router({
       return rows[0] ?? null;
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(), unitId: z.number().optional(), ano: z.number(),
       missao: z.string().optional(), visao: z.string().optional(), valores: z.string().optional(),
@@ -560,7 +560,7 @@ const planejamentoRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  generateAI: protectedProcedure
+  generateAI: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -622,7 +622,7 @@ Cada array SWOT deve ter 4-5 itens. Objetivos devem ter 4-6 itens. Seja específ
 });
 // ── Reuniões ──────────────────────────────────────────────────────────────────
 const reunioesRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), status: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -633,7 +633,7 @@ const reunioesRouter = router({
       return db.select().from(gtReunioes).where(and(...conds)).orderBy(desc(gtReunioes.data));
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(), unitId: z.number().optional(),
       titulo: z.string().min(1), data: z.string(), duracao: z.number().optional(),
@@ -654,7 +654,7 @@ const reunioesRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -666,7 +666,7 @@ const reunioesRouter = router({
 
 // ── Cargos ────────────────────────────────────────────────────────────────────
 const cargosRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -674,7 +674,7 @@ const cargosRouter = router({
       return db.select().from(gtCargos).where(eq(gtCargos.orgId, input.orgId)).orderBy(gtCargos.nome);
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(),
       nome: z.string().min(1), descricao: z.string().optional(),
@@ -694,7 +694,7 @@ const cargosRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -706,7 +706,7 @@ const cargosRouter = router({
 
 // ── Colaboradores GT ──────────────────────────────────────────────────────────
 const colaboradoresGtRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), status: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -717,7 +717,7 @@ const colaboradoresGtRouter = router({
       return db.select().from(gtColaboradores).where(and(...conds)).orderBy(gtColaboradores.nome);
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(), unitId: z.number().optional(),
       nome: z.string().min(1), email: z.string().optional(), telefone: z.string().optional(),
@@ -741,7 +741,7 @@ const colaboradoresGtRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -753,7 +753,7 @@ const colaboradoresGtRouter = router({
 
 // ── Financeiro GT ─────────────────────────────────────────────────────────────
 const financeiroGtRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), referencia: z.string().optional(), tipo: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -765,7 +765,7 @@ const financeiroGtRouter = router({
       return db.select().from(gtFinanceiro).where(and(...conds)).orderBy(desc(gtFinanceiro.createdAt));
     }),
 
-  dre: protectedProcedure
+  dre: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), referencia: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -780,7 +780,7 @@ const financeiroGtRouter = router({
       return { receitas, despesas, lucro, margem, itens: rows };
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(), unitId: z.number().optional(),
       tipo: z.enum(["receita", "despesa"]), categoria: z.string().optional(),
@@ -865,7 +865,7 @@ const financeiroGtRouter = router({
     }),
 
   // Lista os templates recorrentes ativos
-  listRecorrentes: protectedProcedure
+  listRecorrentes: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -876,7 +876,7 @@ const financeiroGtRouter = router({
     }),
 
   // Cancela recorrência (remove o template e parcelas futuras não pagas)
-  cancelarRecorrencia: protectedProcedure
+  cancelarRecorrencia: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -900,7 +900,7 @@ const financeiroGtRouter = router({
     }),
 
   // Gera parcela do mês atual para todos os templates recorrentes de uma org (chamado pelo scheduler)
-  gerarParcelasRecorrentes: protectedProcedure
+  gerarParcelasRecorrentes: sysUserProcedure
     .input(z.object({ orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -942,7 +942,7 @@ const financeiroGtRouter = router({
       return { geradas };
     }),
 
-  marcarPago: protectedProcedure
+  marcarPago: sysUserProcedure
     .input(z.object({
       id: z.number(),
       orgId: z.number(),
@@ -961,7 +961,7 @@ const financeiroGtRouter = router({
       return { success: true, paidAt: paidAtDate?.toISOString().slice(0, 10) ?? null };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -971,7 +971,7 @@ const financeiroGtRouter = router({
     }),
 
   // Sincroniza faturamento do Data VIP para o Financeiro
-  syncDataVip: protectedProcedure
+  syncDataVip: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number(),
@@ -1008,7 +1008,7 @@ const financeiroGtRouter = router({
     }),
 
   // Retorna o status da última sincronização Data VIP para esta unidade
-  syncDataVipStatus: protectedProcedure
+  syncDataVipStatus: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1040,7 +1040,7 @@ const financeiroGtRouter = router({
 
 // ── Fornecedores ──────────────────────────────────────────────────────────────
 const fornecedoresRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1048,7 +1048,7 @@ const fornecedoresRouter = router({
       return db.select().from(gtFornecedores).where(eq(gtFornecedores.orgId, input.orgId)).orderBy(gtFornecedores.nome);
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(),
       nome: z.string().min(1), cnpj: z.string().optional(),
@@ -1067,7 +1067,7 @@ const fornecedoresRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1079,7 +1079,7 @@ const fornecedoresRouter = router({
 
 // ── Compras ───────────────────────────────────────────────────────────────────
 const comprasRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), status: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1090,7 +1090,7 @@ const comprasRouter = router({
       return db.select().from(gtCompras).where(and(...conds)).orderBy(desc(gtCompras.createdAt));
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(), unitId: z.number().optional(),
       fornecedorId: z.number().optional(), fornecedorNome: z.string().optional(),
@@ -1111,7 +1111,7 @@ const comprasRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  aprovar: protectedProcedure
+  aprovar: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -1121,7 +1121,7 @@ const comprasRouter = router({
       return { success: true };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1133,7 +1133,7 @@ const comprasRouter = router({
 
 // ── Problemas ─────────────────────────────────────────────────────────────────
 const problemasRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), status: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1144,7 +1144,7 @@ const problemasRouter = router({
       return db.select().from(gtProblemas).where(and(...conds)).orderBy(desc(gtProblemas.createdAt));
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(), unitId: z.number().optional(),
       titulo: z.string().min(1), descricao: z.string().optional(),
@@ -1167,7 +1167,7 @@ const problemasRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1179,7 +1179,7 @@ const problemasRouter = router({
 
 // ── Oportunidades ─────────────────────────────────────────────────────────────
 const oportunidadesRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), status: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1190,7 +1190,7 @@ const oportunidadesRouter = router({
       return db.select().from(gtOportunidades).where(and(...conds)).orderBy(desc(gtOportunidades.createdAt));
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(), unitId: z.number().optional(),
       titulo: z.string().min(1), descricao: z.string().optional(),
@@ -1213,7 +1213,7 @@ const oportunidadesRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1225,7 +1225,7 @@ const oportunidadesRouter = router({
 
 // ── Riscos ────────────────────────────────────────────────────────────────────
 const riscosRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1235,7 +1235,7 @@ const riscosRouter = router({
       return db.select().from(gtRiscos).where(and(...conds)).orderBy(desc(gtRiscos.createdAt));
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(), unitId: z.number().optional(),
       titulo: z.string().min(1), descricao: z.string().optional(),
@@ -1256,7 +1256,7 @@ const riscosRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1268,7 +1268,7 @@ const riscosRouter = router({
 
 // ── Documentos ────────────────────────────────────────────────────────────────
 const documentosRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), categoria: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1279,7 +1279,7 @@ const documentosRouter = router({
       return db.select().from(gtDocumentos).where(and(...conds)).orderBy(desc(gtDocumentos.createdAt));
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(), unitId: z.number().optional(),
       titulo: z.string().min(1), descricao: z.string().optional(),
@@ -1299,7 +1299,7 @@ const documentosRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1311,7 +1311,7 @@ const documentosRouter = router({
 
 // ── Marketing ─────────────────────────────────────────────────────────────────
 const marketingRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), status: z.string().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1322,7 +1322,7 @@ const marketingRouter = router({
       return db.select().from(gtMarketing).where(and(...conds)).orderBy(desc(gtMarketing.createdAt));
     }),
 
-  save: protectedProcedure
+  save: sysUserProcedure
     .input(z.object({
       id: z.number().optional(), orgId: z.number(), unitId: z.number().optional(),
       nome: z.string().min(1), descricao: z.string().optional(),
@@ -1348,7 +1348,7 @@ const marketingRouter = router({
       return { id: (r as { insertId: number }).insertId };
     }),
 
-  delete: protectedProcedure
+  delete: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1360,7 +1360,7 @@ const marketingRouter = router({
 
 /// ── Campanhas de Marketing com IA ────────────────────────────────
 const marketingCampaignsRouter = router({
-  listCampaigns: protectedProcedure
+  listCampaigns: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1381,7 +1381,7 @@ const marketingCampaignsRouter = router({
       }).from(gtMarketingCampaigns).where(and(...conds)).orderBy(desc(gtMarketingCampaigns.createdAt)).limit(50);
     }),
 
-  getCampaign: protectedProcedure
+  getCampaign: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1392,7 +1392,7 @@ const marketingCampaignsRouter = router({
       return rows[0] ?? null;
     }),
 
-  generateCampaign: protectedProcedure
+  generateCampaign: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -1530,7 +1530,7 @@ REGRAS:
       return { id: (r as any).insertId, campaignName, campaign };
     }),
 
-  assignCampaign: protectedProcedure
+  assignCampaign: sysUserProcedure
     .input(z.object({
       id: z.number(),
       orgId: z.number(),
@@ -1572,7 +1572,7 @@ REGRAS:
       return { success: true, tarefaId };
     }),
 
-  deleteCampaign: protectedProcedure
+  deleteCampaign: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1583,7 +1583,7 @@ REGRAS:
     }),
 
   // ── Histórico de Conteúdos Gerados ──────────────────────────────────────────────
-  saveContent: protectedProcedure
+  saveContent: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -1616,7 +1616,7 @@ REGRAS:
       return { success: true, id };
     }),
 
-  listContentHistory: protectedProcedure
+  listContentHistory: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -1646,7 +1646,7 @@ REGRAS:
         .limit(input.limit);
     }),
 
-  toggleContentFavorite: protectedProcedure
+  toggleContentFavorite: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number(), favoritado: z.boolean() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1657,7 +1657,7 @@ REGRAS:
       return { success: true };
     }),
 
-  deleteContentHistory: protectedProcedure
+  deleteContentHistory: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1668,7 +1668,7 @@ REGRAS:
     }),
 
   // ── Gerador de Conteúdo ──────────────────────────────────────────────────────
-  generateContent: protectedProcedure
+  generateContent: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -1788,7 +1788,7 @@ RETORNE OBRIGATORIAMENTE um JSON válido com a estrutura abaixo (sem markdown, s
     }),
 
   // ── Criação de Arte ────────────────────────────────────────────────────────
-  generateArt: protectedProcedure
+  generateArt: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -2003,7 +2003,7 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
       return { id, resultado, imagemUrl: imagemGeradaUrl };
     }),
 
-  listArtHistory: protectedProcedure
+  listArtHistory: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -2022,7 +2022,7 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
         .limit(input.limit);
     }),
 
-  toggleArtFavorite: protectedProcedure
+  toggleArtFavorite: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number(), favoritado: z.boolean() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -2033,7 +2033,7 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
       return { success: true };
     }),
 
-  deleteArtHistory: protectedProcedure
+  deleteArtHistory: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -2044,7 +2044,7 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
     }),
 
   // ── Verificar Ortografia dos Textos do Flyer ──────────────────────────────
-  spellCheckFlyer: protectedProcedure
+  spellCheckFlyer: sysUserProcedure
     .input(z.object({
       headline: z.string(),
       textoSecundario: z.string(),
@@ -2111,7 +2111,7 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
     }),
 
   // ── Gerar Flyer Final ────────────────────────────────────────────
-  generateFlyer: protectedProcedure
+  generateFlyer: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -2416,7 +2416,7 @@ LEMBRE: Toda a direção visual deve seguir o padrão VIP: fundo escuro, dourado
 
 // ── IA Conselheiro ────────────────────────────────────────────
 const iaRouter = router({
-  listConversations: protectedProcedure
+  listConversations: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
@@ -2426,7 +2426,7 @@ const iaRouter = router({
       return db.select().from(gtAdvisorConversations).where(and(...conds)).orderBy(desc(gtAdvisorConversations.updatedAt)).limit(20);
     }),
 
-  getConversation: protectedProcedure
+  getConversation: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
@@ -2440,7 +2440,7 @@ const iaRouter = router({
       return rows[0] ?? null;
     }),
 
-  chat: protectedProcedure
+  chat: sysUserProcedure
     .input(z.object({
       orgId: z.number(), unitId: z.number().optional(),
       conversationId: z.number().optional(),
@@ -2503,7 +2503,7 @@ Responda de forma objetiva, prática e focada em resultados para o negócio.`;
       return { conversationId: convId, reply: assistantContent };
     }),
 
-  deleteConversation: protectedProcedure
+  deleteConversation: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -2520,7 +2520,7 @@ Responda de forma objetiva, prática e focada em resultados para o negócio.`;
 
 // ── Auditoria ─────────────────────────────────────────────────────────────────
 const auditoriaRouter = router({
-  list: protectedProcedure
+  list: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), limit: z.number().default(50) }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -2533,7 +2533,7 @@ const auditoriaRouter = router({
 
 // ── Dashboard GT ──────────────────────────────────────────────────────────────
 const dashboardGtRouter = router({
-  kpis: protectedProcedure
+  kpis: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -2616,7 +2616,7 @@ const dashboardGtRouter = router({
       };
     }),
 
-  tarefasRecentes: protectedProcedure
+  tarefasRecentes: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), limit: z.number().default(5) }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -2630,7 +2630,7 @@ const dashboardGtRouter = router({
 // ── Brand Assets & Image Bank ────────────────────────────────────
 const brandAssetsRouter = router({
   // Logo da organização (múltiplas versões)
-  listLogos: protectedProcedure
+  listLogos: sysUserProcedure
     .input(z.object({ orgId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -2640,7 +2640,7 @@ const brandAssetsRouter = router({
         .orderBy(gtBrandAssets.criadoEm);
     }),
 
-  addLogo: protectedProcedure
+  addLogo: sysUserProcedure
     .input(z.object({
       orgId: z.number(), url: z.string(), fileKey: z.string(),
       nome: z.string().optional(), descricao: z.string().optional(),
@@ -2661,7 +2661,7 @@ const brandAssetsRouter = router({
       return { id: (r as { insertId: number }).insertId, url: input.url };
     }),
 
-  updateLogo: protectedProcedure
+  updateLogo: sysUserProcedure
     .input(z.object({
       id: z.number(), orgId: z.number(),
       nome: z.string().optional(), descricao: z.string().optional(),
@@ -2675,7 +2675,7 @@ const brandAssetsRouter = router({
       return { success: true };
     }),
 
-  deleteLogoById: protectedProcedure
+  deleteLogoById: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -2686,7 +2686,7 @@ const brandAssetsRouter = router({
     }),
 
   // Manter getLogo/saveLogo/deleteLogo por compatibilidade (retorna primeira logo)
-  getLogo: protectedProcedure
+  getLogo: sysUserProcedure
     .input(z.object({ orgId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -2697,7 +2697,7 @@ const brandAssetsRouter = router({
       return logo ?? null;
     }),
 
-  saveLogo: protectedProcedure
+  saveLogo: sysUserProcedure
     .input(z.object({ orgId: z.number(), url: z.string(), fileKey: z.string(), nome: z.string().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -2709,7 +2709,7 @@ const brandAssetsRouter = router({
       return { id: (r as { insertId: number }).insertId, url: input.url };
     }),
 
-  deleteLogo: protectedProcedure
+  deleteLogo: sysUserProcedure
     .input(z.object({ orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -2719,7 +2719,7 @@ const brandAssetsRouter = router({
     }),
 
   // Banco de imagens
-  listImageBank: protectedProcedure
+  listImageBank: sysUserProcedure
     .input(z.object({ orgId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -2729,7 +2729,7 @@ const brandAssetsRouter = router({
         .orderBy(desc(gtImageBank.criadoEm));
     }),
 
-  addImageBank: protectedProcedure
+  addImageBank: sysUserProcedure
     .input(z.object({
       orgId: z.number(), url: z.string(), fileKey: z.string(),
       nome: z.string().optional(), descricao: z.string().optional(), tags: z.string().optional(),
@@ -2744,7 +2744,7 @@ const brandAssetsRouter = router({
       return { id: (r as { insertId: number }).insertId, url: input.url };
     }),
 
-  deleteImageBank: protectedProcedure
+  deleteImageBank: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -2753,7 +2753,7 @@ const brandAssetsRouter = router({
       return { success: true };
     }),
 
-  updateImageBank: protectedProcedure
+  updateImageBank: sysUserProcedure
     .input(z.object({
       id: z.number(), orgId: z.number(),
       nome: z.string().optional(), descricao: z.string().optional(), tags: z.string().optional(),

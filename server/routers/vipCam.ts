@@ -5,7 +5,7 @@
  */
 import { z } from 'zod';
 import { eq, and, desc, sql, gte, lte, count, inArray } from 'drizzle-orm';
-import { router, protectedProcedure } from '../_core/trpc';
+import { router, protectedProcedure, sysUserProcedure } from '../_core/trpc';
 import { getDb } from '../db';
 import {
   camClientes,
@@ -141,7 +141,7 @@ export const vipCamRouter = router({
 
   // ── Configuração de câmera ──────────────────
 
-  getCameraConfig: protectedProcedure
+  getCameraConfig: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -153,7 +153,7 @@ export const vipCamRouter = router({
       return config ?? null;
     }),
 
-  saveCameraConfig: protectedProcedure
+  saveCameraConfig: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       cameraType: z.enum(['usb', 'ip']),
@@ -196,7 +196,7 @@ export const vipCamRouter = router({
 
   // ── Descritores faciais (cache) ─────────────
 
-  getFaceDescriptors: protectedProcedure
+  getFaceDescriptors: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -223,7 +223,7 @@ export const vipCamRouter = router({
 
   // ── Upload de imagem de rosto ───────────────
 
-  uploadFaceImage: protectedProcedure
+  uploadFaceImage: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       imageBase64: z.string(), // base64 da imagem (data:image/jpeg;base64,...)
@@ -239,7 +239,7 @@ export const vipCamRouter = router({
 
   // ── Salvar captura (cliente + timeline + métricas) ──
 
-  saveCapture: protectedProcedure
+  saveCapture: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       // Dados do rosto detectado
@@ -429,7 +429,7 @@ export const vipCamRouter = router({
 
   // ── Dashboard / KPIs ────────────────────────
 
-  getDashboard: protectedProcedure
+  getDashboard: sysUserProcedure
     .input(z.object({
       unitId: z.number().optional(), // null = todas as unidades (admin)
       date: z.string().optional(),   // YYYY-MM-DD, default hoje BRT
@@ -646,7 +646,7 @@ export const vipCamRouter = router({
 
   // ── Lista de clientes ───────────────────────
 
-  getClientes: protectedProcedure
+  getClientes: sysUserProcedure
     .input(z.object({
       unitId: z.number().optional(),
       page: z.number().default(1),
@@ -746,7 +746,7 @@ export const vipCamRouter = router({
 
   // ── Detalhes de um cliente ──────────────────
 
-  getClienteDetail: protectedProcedure
+  getClienteDetail: sysUserProcedure
     .input(z.object({ id: z.number(), unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -774,7 +774,7 @@ export const vipCamRouter = router({
 
   // ── Atualizar dados do cliente ──────────────
 
-  updateCliente: protectedProcedure
+  updateCliente: sysUserProcedure
     .input(z.object({
       id: z.number(),
       unitId: z.number(),
@@ -795,7 +795,7 @@ export const vipCamRouter = router({
 
   // ── Métricas detalhadas ─────────────────────
 
-  getMetricas: protectedProcedure
+  getMetricas: sysUserProcedure
     .input(z.object({
       unitId: z.number().optional(),
       startDate: z.string(), // YYYY-MM-DD
@@ -947,7 +947,7 @@ export const vipCamRouter = router({
 
   // ── Timeline paginada ───────────────────────
 
-  getTimeline: protectedProcedure
+  getTimeline: sysUserProcedure
     .input(z.object({
       unitId: z.number().optional(),
       page: z.number().default(1),
@@ -994,7 +994,7 @@ export const vipCamRouter = router({
   // ── Recalcular satisfação de todos os clientes da unidade ──
   // Percorre todos os clientes e reaplica a regra de prioridade positiva
   // usando o histórico completo de capturas de cada um.
-  recalcAllClients: protectedProcedure
+  recalcAllClients: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       orgId: z.number().optional(),
@@ -1056,7 +1056,7 @@ export const vipCamRouter = router({
 
   // ── Histórico de recálculos de satisfação ──
   // Lista os últimos recálculos registrados na tabela de auditoria para a unidade.
-  getRecalcHistory: protectedProcedure
+  getRecalcHistory: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       limit: z.number().default(10),
@@ -1085,7 +1085,7 @@ export const vipCamRouter = router({
   // ── Clientes únicos do dia com satisfação calculada pela regra de prioridade ──
   // Retorna contagem de satisfeitos/neutros/insatisfeitos únicos de um dia,
   // aplicando a regra: satisfeito permanente > neutro >= insatisfeito > insatisfeito
-  getDailyUniqueStats: protectedProcedure
+  getDailyUniqueStats: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       date: z.string().optional(), // YYYY-MM-DD, default hoje
@@ -1144,7 +1144,7 @@ export const vipCamRouter = router({
   // Usa SQL nativo em batch para evitar timeout em bases grandes.
   // Etapa 1: UPDATE da timeline via CASE WHEN (1 query total)
   // Etapa 2: Recalc de clientes em chunks de 500 (N/500 queries)
-  reclassifyAllHistory: protectedProcedure
+  reclassifyAllHistory: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       orgId: z.number().optional(),

@@ -15,7 +15,7 @@
  * - One-Shot: total de vendas = 1
  */
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, router, sysUserProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
 import { sql } from "drizzle-orm";
@@ -173,7 +173,7 @@ const baseInput = z.object({
 // ─── Router ──────────────────────────────────────────────────────────────────
 export const raioXRouter = router({
   // ── Visão Geral ──────────────────────────────────────────────────────────────
-  visaoGeral: protectedProcedure
+  visaoGeral: sysUserProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds, unitFilter } = await resolveExternalIds(
@@ -810,7 +810,7 @@ export const raioXRouter = router({
   // - Grupos por recência (dias desde última visita até dataFim):
   //   Aguardando ≤45d | Em Risco 46-90d | Provavelmente Perdido +91d
   // - KPIs: Total, % da base, Em risco+perdido, Aguardando
-  oneShot: protectedProcedure
+  oneShot: sysUserProcedure
     .input(baseInput.extend({
       status: z.enum(["todos", "aguardando", "em_risco", "perdido"]).optional(),
       search: z.string().optional(),
@@ -950,7 +950,7 @@ export const raioXRouter = router({
     }),
 
   // ── Cadência de visitas (lógica ratio individual) ────────────────────────────
-  cadencia: protectedProcedure
+  cadencia: sysUserProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
@@ -1130,7 +1130,7 @@ export const raioXRouter = router({
       };
     }),
     // ── Churn (visão geral) ────────────────────────────────────────────────────
-  churn: protectedProcedure
+  churn: sysUserProcedure
     .input(baseInput.extend({
       periodo: z.enum(["30d", "60d", "90d", "6m", "12m"]).optional(),
     }))
@@ -1369,7 +1369,7 @@ export const raioXRouter = router({
       return result_churn;
     }),
     // ── Churn por barbeiro ────────────────────────────────────────────────────────
-  churnPorBarbeiro: protectedProcedure
+  churnPorBarbeiro: sysUserProcedure
     .input(baseInput.extend({
       periodo: z.enum(["30d", "60d", "90d", "6m", "12m"]).optional(),
     }))
@@ -1507,7 +1507,7 @@ export const raioXRouter = router({
     }),
 
   // ── Cohort ───────────────────────────────────────────────────────────────────
-  cohort: protectedProcedure
+  cohort: sysUserProcedure
     .input(baseInput.extend({ colaboradorId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
@@ -1820,7 +1820,7 @@ export const raioXRouter = router({
   // ── Barbeiros ────────────────────────────────────────────────────────────────
   // Saúde da base por barbeiro: distribuição de clientes por status (Assíduo, Regular,
   // Espaçando, 1ª Vez, Em Risco, Perdido) + ranking comparativo com métricas de desempenho.
-  barbeiros: protectedProcedure
+  barbeiros: sysUserProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
@@ -1941,7 +1941,7 @@ export const raioXRouter = router({
     }),
 
   // ── Diagnóstico ────────────────────────────────────────────────────────────────────────────
-  diagnostico: protectedProcedure
+  diagnostico: sysUserProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
@@ -2263,7 +2263,7 @@ export const raioXRouter = router({
     }),
 
   // ── Ações (fila CRM) ─────────────────────────────────────────────────────────
-  acoes: protectedProcedure
+  acoes: sysUserProcedure
     .input(baseInput.extend({
       tipo: z.enum(["todos", "one_shot_risco", "perdidos_recentes", "em_risco", "sem_telefone"]).optional(),
       page: z.number().default(1),
@@ -2359,7 +2359,7 @@ export const raioXRouter = router({
     }),
 
   // ── Routing (segmentação de clientes por barbeiro) ──────────────────────────────────────
-  routing: protectedProcedure
+  routing: sysUserProcedure
     .input(baseInput)
     .query(async ({ ctx, input }) => {
       const { extIds, unitFilter } = await resolveExternalIds(
@@ -2714,7 +2714,7 @@ export const raioXRouter = router({
     }),
 
   // ── Cache Sync Manual ────────────────────────────────────────────────────────
-  triggerCacheSync: protectedProcedure
+  triggerCacheSync: sysUserProcedure
     .input(z.object({
       unitId: z.number().optional(),
       forceAll: z.boolean().optional(),
@@ -2745,7 +2745,7 @@ export const raioXRouter = router({
       }
     }),
 
-  getCacheStatus: protectedProcedure
+  getCacheStatus: sysUserProcedure
     .input(z.object({ unitId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();

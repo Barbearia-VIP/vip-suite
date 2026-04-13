@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, router, sysUserProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -31,7 +31,7 @@ async function metaGet(path: string, token: string, params: Record<string, strin
 // ─── Config Router ────────────────────────────────────────────────────────────
 
 export const igConfigRouter = router({
-  getConfig: protectedProcedure
+  getConfig: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -40,7 +40,7 @@ export const igConfigRouter = router({
       return rows[0] ?? null;
     }),
 
-  saveConfig: protectedProcedure
+  saveConfig: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       accessToken: z.string().optional(),
@@ -69,7 +69,7 @@ export const igConfigRouter = router({
       return { success: true };
     }),
 
-  testConnection: protectedProcedure
+  testConnection: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -112,7 +112,7 @@ export const igConfigRouter = router({
       }
     }),
 
-  getStatus: protectedProcedure
+  getStatus: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -132,19 +132,19 @@ export const igConfigRouter = router({
       };
     }),
 
-  startBot: protectedProcedure
+  startBot: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .mutation(async ({ input }) => {
       return startBot(input.unitId);
     }),
 
-  stopBot: protectedProcedure
+  stopBot: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .mutation(async ({ input }) => {
       return stopBot(input.unitId);
     }),
 
-  runCycleNow: protectedProcedure
+  runCycleNow: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .mutation(async ({ input }) => {
       return runCycleNow(input.unitId);
@@ -154,7 +154,7 @@ export const igConfigRouter = router({
 // ─── Dashboard / Stats Router ─────────────────────────────────────────────────
 
 export const igDashboardRouter = router({
-  getStats: protectedProcedure
+  getStats: sysUserProcedure
     .input(z.object({ unitId: z.number(), days: z.number().default(7) }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -189,7 +189,7 @@ export const igDashboardRouter = router({
       };
     }),
 
-  getRecentActivity: protectedProcedure
+  getRecentActivity: sysUserProcedure
     .input(z.object({ unitId: z.number(), limit: z.number().default(20) }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -204,7 +204,7 @@ export const igDashboardRouter = router({
 // ─── Logs Router ──────────────────────────────────────────────────────────────
 
 export const igLogsRouter = router({
-  getList: protectedProcedure
+  getList: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       page: z.number().default(1),
@@ -236,7 +236,7 @@ export const igLogsRouter = router({
 // ─── Approval Router ──────────────────────────────────────────────────────────
 
 export const igApprovalRouter = router({
-  getPending: protectedProcedure
+  getPending: sysUserProcedure
     .input(z.object({ unitId: z.number(), page: z.number().default(1), pageSize: z.number().default(20) }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -252,7 +252,7 @@ export const igApprovalRouter = router({
       return { rows, total: Number(countResult[0]?.count ?? 0) };
     }),
 
-  approve: protectedProcedure
+  approve: sysUserProcedure
     .input(z.object({ id: z.number(), editedReply: z.string().optional() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -276,7 +276,7 @@ export const igApprovalRouter = router({
       return { success: true };
     }),
 
-  reject: protectedProcedure
+  reject: sysUserProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -289,7 +289,7 @@ export const igApprovalRouter = router({
 // ─── Stories Router ───────────────────────────────────────────────────────────
 
 export const igStoriesRouter = router({
-  getConfig: protectedProcedure
+  getConfig: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -298,7 +298,7 @@ export const igStoriesRouter = router({
       return rows[0] ?? null;
     }),
 
-  saveConfig: protectedProcedure
+  saveConfig: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       isActive: z.boolean(),
@@ -319,7 +319,7 @@ export const igStoriesRouter = router({
       return { success: true };
     }),
 
-  getLogs: protectedProcedure
+  getLogs: sysUserProcedure
     .input(z.object({ unitId: z.number(), page: z.number().default(1), pageSize: z.number().default(30) }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -338,7 +338,7 @@ export const igStoriesRouter = router({
 // ─── Prompts Router ───────────────────────────────────────────────────────────
 
 export const igPromptsRouter = router({
-  getPrompts: protectedProcedure
+  getPrompts: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -350,7 +350,7 @@ export const igPromptsRouter = router({
       return rows[0] ?? { personalityPrompt: null, storyPersonalityPrompt: null };
     }),
 
-  savePrompts: protectedProcedure
+  savePrompts: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       personalityPrompt: z.string().optional(),
@@ -369,7 +369,7 @@ export const igPromptsRouter = router({
       return { success: true };
     }),
 
-  testPrompt: protectedProcedure
+  testPrompt: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       commentText: z.string(),

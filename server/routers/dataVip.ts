@@ -5,7 +5,7 @@
  * Dados de configuração: banco interno (VIP Suite)
  */
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, router, sysUserProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
 import { sql, eq, and, asc } from "drizzle-orm";
@@ -143,7 +143,7 @@ function handleExternalDbError(err: unknown): never {
 // ─── Router ──────────────────────────────────────────────────────────────────
 export const dataVipRouter = router({
   // ── Status do banco local (sync_*) ──────────────────────────────────────
-  dbStatus: protectedProcedure.query(async () => {
+  dbStatus: sysUserProcedure.query(async () => {
     try {
       const { queryLocal } = await import("../db-local");
       await queryLocal("SELECT 1");
@@ -154,7 +154,7 @@ export const dataVipRouter = router({
   }),
 
   // ── Dashboard KPIs ──────────────────────────────────────────────────────────
-  dashboard: protectedProcedure
+  dashboard: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -241,7 +241,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Faturamento mensal ───────────────────────────────────────────────────────
-  faturamentoMensal: protectedProcedure
+  faturamentoMensal: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -262,7 +262,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Faturamento mensal detalhado (evolução com extras, serviços, produtos) ────────────
-  faturamentoMensalDetalhado: protectedProcedure
+  faturamentoMensalDetalhado: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -278,7 +278,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Faturamento por produto e forma de pagamento ───────────────────────────────────────
-  faturamentoPorProduto: protectedProcedure
+  faturamentoPorProduto: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -314,7 +314,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Ranking da rede ──────────────────────────────────────────────────────────
-  ranking: protectedProcedure
+  ranking: sysUserProcedure
     .input(z.object({ orgId: z.number().optional(), periodo: z.string().optional() }))
     .query(async ({ ctx, input }) => {
       const { extIds, isAdmin, unitFilter, orgFilter } = await resolveExternalIds(
@@ -365,7 +365,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Clientes ─────────────────────────────────────────────────────────────────
-  clientes: protectedProcedure
+  clientes: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -439,7 +439,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Raio X de retenção ───────────────────────────────────────────────────────
-  raioX: protectedProcedure
+  raioX: sysUserProcedure
     .input(z.object({ orgId: z.number().optional(), unitId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       const { extIds } = await resolveExternalIds(
@@ -506,7 +506,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Colaboradores ────────────────────────────────────────────────────────────
-  colaboradores: protectedProcedure
+  colaboradores: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -575,7 +575,7 @@ export const dataVipRouter = router({
       }));
     }),
 
-  updateColaboradorTipo: protectedProcedure
+  updateColaboradorTipo: sysUserProcedure
     .input(z.object({
       colaboradorId: z.string(),
       orgId: z.number(),
@@ -594,7 +594,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Faturamento Detalhado (Resumo Executivo + Comparativos) ──────────────────────────────────────────────────────────────────────────────────
-  faturamentoDetalhado: protectedProcedure
+  faturamentoDetalhado: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -708,7 +708,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Comissões por colaborador ──────────────────────────────────────────────────────────────────────────────────
-  comissoes: protectedProcedure  .input(z.object({
+  comissoes: sysUserProcedure  .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
       periodo: z.string().optional(),
@@ -824,7 +824,7 @@ export const dataVipRouter = router({
       });
     }),
 
-  saveRegrasComissao: protectedProcedure
+  saveRegrasComissao: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       colaboradorId: z.string(),
@@ -844,7 +844,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Metas ────────────────────────────────────────────────────────────────────
-  metas: protectedProcedure
+  metas: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -894,7 +894,7 @@ export const dataVipRouter = router({
       return result;
     }),
 
-  saveMeta: protectedProcedure
+  saveMeta: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -915,7 +915,7 @@ export const dataVipRouter = router({
       return { success: true };
     }),
 
-  deleteMeta: protectedProcedure
+  deleteMeta: sysUserProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
@@ -926,7 +926,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Serviços ─────────────────────────────────────────────────────────────────
-  servicos: protectedProcedure
+  servicos: sysUserProcedure
     .input(z.object({ orgId: z.number().optional(), unitId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
@@ -942,7 +942,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Folgas/Feriados ──────────────────────────────────────────────────────────
-  folgas: protectedProcedure
+  folgas: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -962,7 +962,7 @@ export const dataVipRouter = router({
       return rows as any[];
     }),
 
-  saveFolga: protectedProcedure
+  saveFolga: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -983,7 +983,7 @@ export const dataVipRouter = router({
       return { success: true };
     }),
 
-  deleteFolga: protectedProcedure
+  deleteFolga: sysUserProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -993,7 +993,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Sync (mantido para compatibilidade) ──────────────────────────────────────
-  syncStatus: protectedProcedure
+  syncStatus: sysUserProcedure
     .input(z.object({ orgId: z.number().optional(), unitId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       if (input.unitId) return getSyncStatus(input.unitId) || null;
@@ -1001,7 +1001,7 @@ export const dataVipRouter = router({
       return getAllSyncStatuses();
     }),
 
-  syncLogs: protectedProcedure
+  syncLogs: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1018,21 +1018,21 @@ export const dataVipRouter = router({
       return rows as any[];
     }),
 
-  startSync: protectedProcedure
+  startSync: sysUserProcedure
     .input(z.object({ unitId: z.number(), inicio: z.string().optional(), fim: z.string().optional(), orgId: z.number().optional(), modo: z.string().optional(), dataInicio: z.string().optional(), dataFim: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       return { success: true, message: "Sincronização via API externa desativada — usando banco direto" };
     }),
 
-  sync: protectedProcedure
+  sync: sysUserProcedure
     .input(z.object({ unitId: z.number(), inicio: z.string().optional(), fim: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
       return { success: true, message: "Sincronização via API externa desativada — usando banco direto" };
     }),
 
-  syncHistory: protectedProcedure
+  syncHistory: sysUserProcedure
     .input(z.object({ unitId: z.number().optional(), limit: z.number().default(10) }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
@@ -1046,7 +1046,7 @@ export const dataVipRouter = router({
     }),
 
   // ── KPIs por período ─────────────────────────────────────────────────────────
-  kpis: protectedProcedure
+  kpis: sysUserProcedure
     .input(z.object({
       unitId: z.number().int().positive().optional(),
       inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -1068,7 +1068,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Configuração de unidades ──────────────────────────────────────────────────
-  unitsConfig: protectedProcedure
+  unitsConfig: sysUserProcedure
     .input(z.object({ orgId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
@@ -1097,7 +1097,7 @@ export const dataVipRouter = router({
       });
     }),
 
-  startSyncAll: protectedProcedure
+  startSyncAll: sysUserProcedure
     .input(z.object({ orgId: z.number(), modo: z.enum(["auto", "manual_13m"]) }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
@@ -1109,7 +1109,7 @@ export const dataVipRouter = router({
       };
     }),
 
-  syncAllStatus: protectedProcedure
+  syncAllStatus: sysUserProcedure
     .input(z.object({ orgId: z.number() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
@@ -1129,7 +1129,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Relatórios semanais ───────────────────────────────────────────────────────
-  relatoriosSemanais: protectedProcedure
+  relatoriosSemanais: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1154,7 +1154,7 @@ export const dataVipRouter = router({
 
   // ── Serviços do banco externo (para configuração de categorias) ──────────────────────────────────────────────
   /** Lista todos os serviços distintos do banco externo + categoria salva no banco local */
-  listServicosExterno: protectedProcedure
+  listServicosExterno: sysUserProcedure
     .input(z.object({ orgId: z.number().optional(), unitId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       const { extIds, orgFilter } = await resolveExternalIds(
@@ -1198,7 +1198,7 @@ export const dataVipRouter = router({
     }),
 
   /** Salva (upsert) a categoria de um ou mais serviços */
-  saveServicoCategorias: protectedProcedure
+  saveServicoCategorias: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       servicos: z.array(z.object({
@@ -1220,7 +1220,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Aberturas: Por barbeiro ──────────────────────────────────────────────────────────────────────────────────
-  aberturasBarbeiro: protectedProcedure
+  aberturasBarbeiro: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1249,7 +1249,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Aberturas: Por grupo ──────────────────────────────────────────────────────────────────────────────────
-  aberturasGrupo: protectedProcedure
+  aberturasGrupo: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1278,7 +1278,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Aberturas: Por item ──────────────────────────────────────────────────────────────────────────────────
-  aberturasItem: protectedProcedure
+  aberturasItem: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1310,7 +1310,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Aberturas: Por dia da semana ──────────────────────────────────────────────────────────────────────────────────
-  aberturasDiaSemana: protectedProcedure
+  aberturasDiaSemana: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1340,7 +1340,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Aberturas: Por pagamento ──────────────────────────────────────────────────────────────────────────────────
-  aberturasPagamento: protectedProcedure
+  aberturasPagamento: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1369,7 +1369,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Aberturas: Faixa horária ──────────────────────────────────────────────────────────────────────────────────
-  aberturasFaixaHoraria: protectedProcedure
+  aberturasFaixaHoraria: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1398,7 +1398,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Evolução diária (gráfico) ──────────────────────────────────────────────────────────────────────────────────
-  evolucaoDiaria: protectedProcedure
+  evolucaoDiaria: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1427,7 +1427,7 @@ export const dataVipRouter = router({
     }),
 
   // ── KPIs mensais com comparativos SPLY / MOM / M12 / M6 ────────────────────────────────────
-  kpisMensais: protectedProcedure
+  kpisMensais: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1611,7 +1611,7 @@ export const dataVipRouter = router({
   // Procedure que agrega KPIs de N meses completos (soma do período selecionado)
   // Comparativos: SPLY = mesmo período N meses um ano antes, MOM = N meses imediatamente anteriores
   // M12 = média mensal dos últimos 12 meses, M6 = média mensal dos últimos 6 meses
-  kpisPeriodoMensal: protectedProcedure
+  kpisPeriodoMensal: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1773,7 +1773,7 @@ export const dataVipRouter = router({
       } catch (err) { handleExternalDbError(err); }
     }),
   // ── Lista colaboradores para filtro mensal ──────────────────────────────────
-  listarColaboradoresMensal: protectedProcedure
+  listarColaboradoresMensal: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1793,7 +1793,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Painel de Clientes ────────────────────────────────────────────────────────
-  clientesKpis: protectedProcedure
+  clientesKpis: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1808,7 +1808,7 @@ export const dataVipRouter = router({
       } catch (err) { handleExternalDbError(err); }
     }),
 
-  clientesDistribuicaoStatus: protectedProcedure
+  clientesDistribuicaoStatus: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1823,7 +1823,7 @@ export const dataVipRouter = router({
       } catch (err) { handleExternalDbError(err); }
     }),
 
-  clientesEvolucaoMensal: protectedProcedure
+  clientesEvolucaoMensal: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1838,7 +1838,7 @@ export const dataVipRouter = router({
       } catch (err) { handleExternalDbError(err); }
     }),
 
-  clientesDistribuicaoFrequencia: protectedProcedure
+  clientesDistribuicaoFrequencia: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1853,7 +1853,7 @@ export const dataVipRouter = router({
       } catch (err) { handleExternalDbError(err); }
     }),
 
-  clientesDistribuicaoDiasSemVir: protectedProcedure
+  clientesDistribuicaoDiasSemVir: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1868,7 +1868,7 @@ export const dataVipRouter = router({
       } catch (err) { handleExternalDbError(err); }
     }),
 
-  clientesTop: protectedProcedure
+  clientesTop: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1883,7 +1883,7 @@ export const dataVipRouter = router({
       } catch (err) { handleExternalDbError(err); }
     }),
   // ── Churn & Risco ───────────────────────────────────────────────────────────────────
-  clientesChurnRisco: protectedProcedure
+  clientesChurnRisco: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1899,7 +1899,7 @@ export const dataVipRouter = router({
         return await getClientesChurnRisco(extIds, input.dataInicio, input.dataFim, input.colaboradorId, input.statusFiltro, input.limit);
       } catch (err) { handleExternalDbError(err); }
     }),
-  clientesTopExpandido: protectedProcedure
+  clientesTopExpandido: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1916,7 +1916,7 @@ export const dataVipRouter = router({
         return await getClientesTopExpandido(extIds, input.dataInicio, input.dataFim, input.limit, input.offset, input.search, input.colaboradorId);
       } catch (err) { handleExternalDbError(err); }
     }),
-  listarColaboradoresClientes: protectedProcedure
+  listarColaboradoresClientes: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1930,7 +1930,7 @@ export const dataVipRouter = router({
       } catch (err) { handleExternalDbError(err); }
     }),
   // ── Detalhes de um cliente específico ────────────────────────────────────────────────
-  clienteDetalhes: protectedProcedure
+  clienteDetalhes: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1944,7 +1944,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Faturamento mensal com filtros avançados ────────────────────────────────────────────
-  faturamentoMensalFiltrado: protectedProcedure
+  faturamentoMensalFiltrado: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -1970,7 +1970,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Registrar contato WhatsApp com cliente ────────────────────────────────────────────
-  registrarContatoCliente: protectedProcedure
+  registrarContatoCliente: sysUserProcedure
     .input(z.object({
       clienteExtId: z.number(),
       mensagem: z.string().optional(),
@@ -1997,7 +1997,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Buscar último contato WhatsApp de um cliente ────────────────────────────────────────
-  buscarUltimoContato: protectedProcedure
+  buscarUltimoContato: sysUserProcedure
     .input(z.object({
       clienteExtId: z.number(),
       orgId: z.number().optional(),
@@ -2026,7 +2026,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Listar todos os contatos WhatsApp de um cliente ────────────────────────────────────────
-  listarContatosCliente: protectedProcedure
+  listarContatosCliente: sysUserProcedure
     .input(z.object({
       clienteExtId: z.number(),
       orgId: z.number().optional(),
@@ -2055,7 +2055,7 @@ export const dataVipRouter = router({
 
 
   // ── Churn & Saúde da Base ────────────────────────────────────────────────────────────────
-  churnSaudeBase: protectedProcedure
+  churnSaudeBase: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -2070,7 +2070,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Churn por Barbeiro ───────────────────────────────────────────────────────────────────────────────────────
-  churnPorBarbeiro: protectedProcedure
+  churnPorBarbeiro: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -2086,7 +2086,7 @@ export const dataVipRouter = router({
 
   // ── Meta Faixas (comissão progressiva) ──────────────────────────────────────────────────────────────────
   // Lista todas as faixas de uma unidade
-  metaFaixasList: protectedProcedure
+  metaFaixasList: sysUserProcedure
     .input(z.object({
       orgId: z.number().optional(),
       unitId: z.number().optional(),
@@ -2114,7 +2114,7 @@ export const dataVipRouter = router({
     }),
 
   // Salva (cria ou atualiza) uma faixa
-  metaFaixaSave: protectedProcedure
+  metaFaixaSave: sysUserProcedure
     .input(z.object({
       id: z.number().optional(),            // undefined = criar novo
       unitId: z.number(),
@@ -2153,7 +2153,7 @@ export const dataVipRouter = router({
     }),
 
   // Salva todas as faixas de uma unidade de uma vez (substitui)
-  metaFaixasSaveAll: protectedProcedure
+  metaFaixasSaveAll: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       orgId: z.number(),
@@ -2192,7 +2192,7 @@ export const dataVipRouter = router({
     }),
 
   // Deleta uma faixa
-  metaFaixaDelete: protectedProcedure
+  metaFaixaDelete: sysUserProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
@@ -2203,7 +2203,7 @@ export const dataVipRouter = router({
     }),
 
   // ── Metas Dinâmicas ──────────────────────────────────────────────────────────
-  metaDinamicaList: protectedProcedure
+  metaDinamicaList: sysUserProcedure
     .input(z.object({ unitId: z.number(), orgId: z.number() }))
     .query(async ({ ctx, input }) => {
       const db = await getDb();
@@ -2222,7 +2222,7 @@ export const dataVipRouter = router({
       }));
     }),
 
-  metaDinamicaSave: protectedProcedure
+  metaDinamicaSave: sysUserProcedure
     .input(z.object({
       id: z.number().optional(),
       unitId: z.number(),
@@ -2266,7 +2266,7 @@ export const dataVipRouter = router({
       }
     }),
 
-  metaDinamicaDelete: protectedProcedure
+  metaDinamicaDelete: sysUserProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
@@ -2277,7 +2277,7 @@ export const dataVipRouter = router({
     }),
 
   // Calcula o atingimento das metas dinâmicas para um período
-  metaDinamicaCalc: protectedProcedure
+  metaDinamicaCalc: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       orgId: z.number(),
@@ -2411,7 +2411,7 @@ export const dataVipRouter = router({
     }),
 
   /** Lista produtos do banco externo com categorias salvas localmente */
-  listProdutosExterno: protectedProcedure
+  listProdutosExterno: sysUserProcedure
     .input(z.object({ orgId: z.number().optional(), unitId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
       const { extIds, orgFilter } = await resolveExternalIds(
@@ -2456,7 +2456,7 @@ export const dataVipRouter = router({
     }),
 
   /** Salva (upsert) a categoria de um ou mais produtos */
-  saveProdutoCategorias: protectedProcedure
+  saveProdutoCategorias: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       produtos: z.array(z.object({

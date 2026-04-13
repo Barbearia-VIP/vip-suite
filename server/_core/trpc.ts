@@ -27,6 +27,21 @@ const requireUser = t.middleware(async opts => {
 
 export const protectedProcedure = t.procedure.use(requireUser);
 
+/**
+ * sysUserProcedure: aceita tanto sessão OAuth (ctx.user) quanto sessão de
+ * usuário de unidade (ctx.sysUser). Use nos routers de dados que devem ser
+ * acessíveis para gestores de unidade logados com e-mail/senha.
+ */
+export const sysUserProcedure = t.procedure.use(
+  t.middleware(async opts => {
+    const { ctx, next } = opts;
+    if (!ctx.user && !ctx.sysUser) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+    }
+    return next({ ctx });
+  })
+);
+
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;

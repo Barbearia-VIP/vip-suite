@@ -4,7 +4,7 @@
  * Gera saídas automáticas no gt_financeiro com base nos dados do Data VIP.
  */
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure, sysUserProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { gtFinConfig, gtFuncionariosClt, gtFinanceiro } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
@@ -37,7 +37,7 @@ async function getOrCreateConfig(db: Awaited<ReturnType<typeof getDb>>, orgId: n
 export const finConfigRouter = router({
 
   // ── Taxas: obter configuração ─────────────────────────────────────────────
-  getTaxas: protectedProcedure
+  getTaxas: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -46,7 +46,7 @@ export const finConfigRouter = router({
     }),
 
   // ── Taxas: salvar configuração ────────────────────────────────────────────
-  saveTaxas: protectedProcedure
+  saveTaxas: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number(),
@@ -149,7 +149,7 @@ export const finConfigRouter = router({
     }),
 
   // ── Funcionários CLT: listar ──────────────────────────────────────────────
-  listFuncionarios: protectedProcedure
+  listFuncionarios: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -161,7 +161,7 @@ export const finConfigRouter = router({
     }),
 
   // ── Funcionários CLT: criar ───────────────────────────────────────────────
-  createFuncionario: protectedProcedure
+  createFuncionario: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -186,7 +186,7 @@ export const finConfigRouter = router({
     }),
 
   // ── Funcionários CLT: atualizar ───────────────────────────────────────────
-  updateFuncionario: protectedProcedure
+  updateFuncionario: sysUserProcedure
     .input(z.object({
       id: z.number(),
       orgId: z.number(),
@@ -212,7 +212,7 @@ export const finConfigRouter = router({
     }),
 
   // ── Funcionários CLT: excluir ─────────────────────────────────────────────
-  deleteFuncionario: protectedProcedure
+  deleteFuncionario: sysUserProcedure
     .input(z.object({ id: z.number(), orgId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -228,7 +228,7 @@ export const finConfigRouter = router({
    * lançamentos de despesa no gt_financeiro com a taxa calculada.
    * Chave de deduplicação: dataVipRef = 'taxa_credito:{unitId}:{YYYY-MM-DD}'
    */
-  aplicarTaxasCartao: protectedProcedure
+  aplicarTaxasCartao: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number(),
@@ -316,7 +316,7 @@ export const finConfigRouter = router({
    * Cria um lançamento mensal de despesa para a taxa bancária.
    * Chave de deduplicação: dataVipRef = 'taxa_bancaria:{unitId}:{YYYY-MM}'
    */
-  lancarTaxaBancaria: protectedProcedure
+  lancarTaxaBancaria: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number(),
@@ -355,7 +355,7 @@ export const finConfigRouter = router({
    * Para cada funcionário CLT ativo, cria um lançamento de despesa no mês.
    * Chave de deduplicação: dataVipRef = 'salario_clt:{funcId}:{YYYY-MM}'
    */
-  lancarSalariosClt: protectedProcedure
+  lancarSalariosClt: sysUserProcedure
     .input(z.object({
       orgId: z.number(),
       unitId: z.number().optional(),
@@ -405,7 +405,7 @@ export const finConfigRouter = router({
     }),
 
   // ── Resumo: o que já foi lançado automaticamente no mês ──────────────────
-  resumoLancamentos: protectedProcedure
+  resumoLancamentos: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number(), referencia: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure, sysUserProcedure } from "../_core/trpc";
 import { getDb, getUnitById } from "../db";
 import {
   repAvaliacoes,
@@ -225,7 +225,7 @@ const batchJobs = new Map<string, { total: number; processados: number; erros: n
 export const reputacaoRouter = router({
 
   // ── Dashboard KPIs ────────────────────────────────────────────────────────
-    getDashboard: protectedProcedure
+    getDashboard: sysUserProcedure
     .input(z.object({ unitId: z.number(), periodo: z.enum(["7d", "30d", "90d", "12m", "all"]).optional() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
@@ -265,7 +265,7 @@ export const reputacaoRouter = router({
       };
     }),
   // ── Listar avaliações ─────────────────────────────────────────────────────
-  getAvaliacoes: protectedProcedure
+  getAvaliacoes: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       plataforma: z.string().optional(),
@@ -309,7 +309,7 @@ export const reputacaoRouter = router({
     }),
 
   // ── Adicionar avaliação manual ────────────────────────────────────────────
-  addAvaliacao: protectedProcedure
+  addAvaliacao: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       plataforma: z.enum(["google", "ifood", "tripadvisor", "ubereats", "rappi", "facebook", "instagram", "manual"]),
@@ -340,7 +340,7 @@ export const reputacaoRouter = router({
     }),
 
   // ── Responder avaliação ───────────────────────────────────────────────────
-  responderAvaliacao: protectedProcedure
+  responderAvaliacao: sysUserProcedure
     .input(z.object({
       avaliacaoId: z.number(),
       unitId: z.number(),
@@ -432,7 +432,7 @@ export const reputacaoRouter = router({
     }),
 
   // ── Gerar resposta com IA ─────────────────────────────────────────────────
-  gerarRespostaIA: protectedProcedure
+  gerarRespostaIA: sysUserProcedure
     .input(z.object({
       avaliacaoId: z.number(),
       unitId: z.number(),
@@ -496,7 +496,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Importar avaliações do Google Places API ──────────────────────────────
-  importarGooglePlaces: protectedProcedure
+  importarGooglePlaces: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       placeId: z.string(),
@@ -592,7 +592,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Conexões configuradas ─────────────────────────────────────────────────
-  getConexoes: protectedProcedure
+  getConexoes: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -600,7 +600,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       return db.select().from(repConexoes).where(eq(repConexoes.unitId, input.unitId));
     }),
 
-  saveConexao: protectedProcedure
+  saveConexao: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       plataforma: z.enum(["google", "ifood", "tripadvisor", "ubereats", "rappi", "facebook", "instagram", "manual"]),
@@ -639,7 +639,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       return { success: true };
     }),
 
-  deleteConexao: protectedProcedure
+  deleteConexao: sysUserProcedure
     .input(z.object({ id: z.number(), unitId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -649,7 +649,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Configuração de IA ────────────────────────────────────────────────────
-  getConfigIA: protectedProcedure
+  getConfigIA: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -658,7 +658,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       return config || null;
     }),
 
-  saveConfigIA: protectedProcedure
+  saveConfigIA: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       nomeEstabelecimento: z.string().optional(),
@@ -681,7 +681,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Análise de sentimento por período ────────────────────────────────────
-  getAnalise: protectedProcedure
+  getAnalise: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       periodo: z.enum(["7d", "30d", "90d", "12m", "all"]).default("all"),
@@ -728,7 +728,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Sincronizar todas as conexões ativas ──────────────────────────────────
-  sincronizar: protectedProcedure
+  sincronizar: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -781,7 +781,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Excluir avaliação ─────────────────────────────────────────────────────
-  deleteAvaliacao: protectedProcedure
+  deleteAvaliacao: sysUserProcedure
     .input(z.object({ id: z.number(), unitId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -792,7 +792,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
    // ── Google OAuth: gerar URL de autorização ──────────────────────────
-  getGoogleAuthUrl: protectedProcedure
+  getGoogleAuthUrl: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       redirectOrigin: z.string(), // window.location.origin do frontend
@@ -827,7 +827,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Buscar avaliações via OAuth (Business Profile API) ───────────────────────
-  fetchGoogleReviews: protectedProcedure
+  fetchGoogleReviews: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -919,7 +919,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Sincronizar TODAS as unidades com Google Business ───────────────────
-  fetchGoogleReviewsAll: protectedProcedure
+  fetchGoogleReviewsAll: sysUserProcedure
     .mutation(async () => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
@@ -1010,7 +1010,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Resumo para o Dashboard Central ────────────────────────────────────
-  getResumo: protectedProcedure
+  getResumo: sysUserProcedure
     .input(z.object({ unitId: z.number(), periodo: z.enum(["7d", "30d", "90d", "12m", "all"]).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1069,7 +1069,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Histórico de Auto-Respostas ──────────────────────────────────────────
-  getHistoricoAutoResposta: protectedProcedure
+  getHistoricoAutoResposta: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       page: z.number().default(1),
@@ -1120,7 +1120,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Estatísticas do Auto-Responder ──────────────────────────────────────
-  getEstatisticasAutoResposta: protectedProcedure
+  getEstatisticasAutoResposta: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1152,7 +1152,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Palavras-chave dos comentários (Nuvem de Palavras) ────────────────────
-  getPalavrasChave: protectedProcedure
+  getPalavrasChave: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       periodo: z.enum(["7d", "30d", "90d", "12m", "all"]).default("30d"),
@@ -1211,7 +1211,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Tempo médio de resposta da IA ─────────────────────────────────────────
-  getTempoResposta: protectedProcedure
+  getTempoResposta: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1251,7 +1251,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Alertas de queda de nota ──────────────────────────────────────────────
-  getAlertas: protectedProcedure
+  getAlertas: sysUserProcedure
     .input(z.object({ unitId: z.number(), periodo: z.enum(["7d", "30d", "90d", "12m", "all"]).optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -1327,7 +1327,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
       }
       return alertas;
     }),
-  responderEmLote: protectedProcedure
+  responderEmLote: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       plataforma: z.string().optional(),
@@ -1426,7 +1426,7 @@ Gere uma resposta personalizada e única para esta avaliação.`;
     }),
 
   // ── Consultar progresso de job em lote ────────────────────────────────────
-  getProgressoLote: protectedProcedure
+  getProgressoLote: sysUserProcedure
     .input(z.object({ jobId: z.string() }))
     .query(({ input }) => {
       const job = batchJobs.get(input.jobId);

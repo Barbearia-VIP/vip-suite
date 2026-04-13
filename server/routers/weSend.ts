@@ -2,7 +2,7 @@
  * We Send — Router tRPC para gerenciamento de campanhas WhatsApp via WAHA API
  */
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure, sysUserProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { wsConfig, wsCampanhas, wsContatos, wsTemplates, wsListasContatos, wsListaItens } from "../../drizzle/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
@@ -47,7 +47,7 @@ function formatChatId(phone: string): string {
 // ─── Router ──────────────────────────────────────────────────────────────────
 export const weSendRouter = router({
   // ── Configuração WAHA ─────────────────────────────────────────────────────
-  getConfig: protectedProcedure
+  getConfig: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -56,7 +56,7 @@ export const weSendRouter = router({
       return config || null;
     }),
 
-  saveConfig: protectedProcedure
+  saveConfig: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       wahaUrl: z.string().url("URL inválida"),
@@ -98,7 +98,7 @@ export const weSendRouter = router({
     }),
 
   // ── Status da sessão WAHA ─────────────────────────────────────────────────
-  getSessionStatus: protectedProcedure
+  getSessionStatus: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -118,7 +118,7 @@ export const weSendRouter = router({
       }
     }),
 
-  getQrCode: protectedProcedure
+  getQrCode: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -134,7 +134,7 @@ export const weSendRouter = router({
       }
     }),
 
-  startSession: protectedProcedure
+  startSession: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -152,7 +152,7 @@ export const weSendRouter = router({
       }
     }),
 
-  stopSession: protectedProcedure
+  stopSession: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -168,7 +168,7 @@ export const weSendRouter = router({
     }),
 
   // ── Templates ─────────────────────────────────────────────────────────────
-  getTemplates: protectedProcedure
+  getTemplates: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -176,7 +176,7 @@ export const weSendRouter = router({
       return db.select().from(wsTemplates).where(eq(wsTemplates.unitId, input.unitId)).orderBy(desc(wsTemplates.createdAt));
     }),
 
-  saveTemplate: protectedProcedure
+  saveTemplate: sysUserProcedure
     .input(z.object({
       id: z.number().optional(),
       unitId: z.number(),
@@ -208,7 +208,7 @@ export const weSendRouter = router({
       return { success: true };
     }),
 
-  deleteTemplate: protectedProcedure
+  deleteTemplate: sysUserProcedure
     .input(z.object({ id: z.number(), unitId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -218,7 +218,7 @@ export const weSendRouter = router({
     }),
 
   // ── Listas de Contatos ────────────────────────────────────────────────────
-  getListas: protectedProcedure
+  getListas: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -226,7 +226,7 @@ export const weSendRouter = router({
       return db.select().from(wsListasContatos).where(eq(wsListasContatos.unitId, input.unitId)).orderBy(desc(wsListasContatos.createdAt));
     }),
 
-  saveLista: protectedProcedure
+  saveLista: sysUserProcedure
     .input(z.object({
       id: z.number().optional(),
       unitId: z.number(),
@@ -253,7 +253,7 @@ export const weSendRouter = router({
       }
     }),
 
-  deleteLista: protectedProcedure
+  deleteLista: sysUserProcedure
     .input(z.object({ id: z.number(), unitId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -263,7 +263,7 @@ export const weSendRouter = router({
       return { success: true };
     }),
 
-  getListaItens: protectedProcedure
+  getListaItens: sysUserProcedure
     .input(z.object({ listaId: z.number(), unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -271,7 +271,7 @@ export const weSendRouter = router({
       return db.select().from(wsListaItens).where(and(eq(wsListaItens.listaId, input.listaId), eq(wsListaItens.unitId, input.unitId)));
     }),
 
-  importarContatos: protectedProcedure
+  importarContatos: sysUserProcedure
     .input(z.object({
       listaId: z.number(),
       unitId: z.number(),
@@ -306,7 +306,7 @@ export const weSendRouter = router({
     }),
 
   // ── Campanhas ─────────────────────────────────────────────────────────────
-  getCampanhas: protectedProcedure
+  getCampanhas: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -314,7 +314,7 @@ export const weSendRouter = router({
       return db.select().from(wsCampanhas).where(eq(wsCampanhas.unitId, input.unitId)).orderBy(desc(wsCampanhas.createdAt));
     }),
 
-  getCampanha: protectedProcedure
+  getCampanha: sysUserProcedure
     .input(z.object({ id: z.number(), unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -325,7 +325,7 @@ export const weSendRouter = router({
       return { ...campanha, contatos };
     }),
 
-  criarCampanha: protectedProcedure
+  criarCampanha: sysUserProcedure
     .input(z.object({
       unitId: z.number(),
       nome: z.string().min(1),
@@ -383,7 +383,7 @@ export const weSendRouter = router({
       return { success: true, campanhaId };
     }),
 
-  deleteCampanha: protectedProcedure
+  deleteCampanha: sysUserProcedure
     .input(z.object({ id: z.number(), unitId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -394,7 +394,7 @@ export const weSendRouter = router({
     }),
 
   // ── Envio de campanha ─────────────────────────────────────────────────────
-  enviarCampanha: protectedProcedure
+  enviarCampanha: sysUserProcedure
     .input(z.object({ campanhaId: z.number(), unitId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -481,7 +481,7 @@ export const weSendRouter = router({
       };
     }),
 
-  pausarCampanha: protectedProcedure
+  pausarCampanha: sysUserProcedure
     .input(z.object({ campanhaId: z.number(), unitId: z.number() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -491,7 +491,7 @@ export const weSendRouter = router({
     }),
 
   // ── Dashboard / Métricas ──────────────────────────────────────────────────
-  getDashboard: protectedProcedure
+  getDashboard: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
