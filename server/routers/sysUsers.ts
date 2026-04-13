@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import {
-  sysUsers, sysUserUnits, sysRoles, sysRolePermissions, organizations,
+  sysUsers, sysUserUnits, sysRoles, sysRolePermissions, organizations, units,
 } from "../../drizzle/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -238,6 +238,34 @@ export const sysUsersRouter = router({
       permissions,
     };
   }),
+
+  // ── Buscar unidades da organização (pública — usada por sysUser sem OAuth) ──
+  unitsByOrg: publicProcedure
+    .input(z.object({ orgId: z.number().int().positive() }))
+    .query(async ({ input, ctx }) => {
+      // Valida que o chamador tem sessão de sysUser para este orgId
+      const cookies = ctx.req.headers.cookie ?? "";
+      const match = cookies.split(";").find((c: string) => c.trim().startsWith(`${SYS_COOKIE}=`));
+      const token = match?.split("=").slice(1).join("=").trim();
+      const session = await verifySysSession(token);
+      // Permite acesso se: (a) há sessão sysUser para este orgId, ou (b) usuário OAuth autenticado
+      const isAuthorized = (session && session.orgId === input.orgId) || !!ctx.user;
+      if (!isAuthorized) return [];
+
+      const db = await requireDb();
+      const rows = await db
+        .select({
+          id: units.id,
+          name: units.name,
+          slug: units.slug,
+          orgId: units.orgId,
+          city: units.city,
+          state: units.state,
+        })
+        .from(units)
+        .where(eq(units.orgId, input.orgId));
+      return rows;
+    }),
 
   // ── CRUD de Usuários ─────────────────────────────────────────────────────
   listUsers: protectedProcedure.query(async ({ ctx }) => {

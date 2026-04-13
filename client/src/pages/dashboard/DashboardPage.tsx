@@ -1,4 +1,5 @@
 import { useApp } from "@/contexts/AppContext";
+import { useSysUser } from "@/contexts/SysUserContext";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -384,8 +385,11 @@ function PremiumTooltip({ active, payload, label }: any) {
 export default function DashboardPage() {
   const { selectedUnit, userRole } = useApp();
   const { org, units, loading: orgLoading } = useOrg();
+  const { sysUser } = useSysUser();
   const [, navigate] = useLocation();
   const isMasterOrAdmin = userRole === "master" || userRole === "org_admin";
+  // sysUser é usuário de unidade (e-mail/senha) — não tem acesso a configurações nem visão de rede
+  const isSysUnitUser = !!sysUser;
   const orgId = org?.id ?? 0;
   const unitId = selectedUnit?.id;
 
@@ -443,6 +447,23 @@ export default function DashboardPage() {
   }
 
   if (!orgLoading && !org) {
+    // Usuários de unidade não vêem o card de criar organização
+    if (isSysUnitUser) {
+      return (
+        <div className="p-6">
+          <div className="rounded-2xl p-12 text-center" style={{ background: ct.cardBg, border: ct.border }}>
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5"
+              style={{ background: "oklch(0.65 0.15 200 / 0.15)", border: "1px solid oklch(0.65 0.15 200 / 0.3)" }}>
+              <Building2 className="w-8 h-8" style={{ color: "oklch(0.65 0.15 200)" }} />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground mb-2">Aguardando configuração</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+              Sua unidade ainda não foi configurada. Entre em contato com o administrador.
+            </p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="p-6">
         <div
@@ -659,7 +680,7 @@ export default function DashboardPage() {
         {/* DATA VIP */}
         <ModuleCard title="Data VIP" icon={BarChart3} color="oklch(0.65 0.15 200)"
           badge="Faturamento e atendimentos" configured={modules?.data_vip ?? true}
-          onConfigure={() => navigate("/configuracoes")} onNavigate={() => navigate("/data-vip")}>
+          onConfigure={isSysUnitUser ? undefined : () => navigate("/configuracoes")} onNavigate={() => navigate("/data-vip")}>
           {kpis?.dataVip.hasData ? (
             <>
               <MiniKPI label="Faturamento" value={fmt(kpis.dataVip.faturamentoMes)}
@@ -729,7 +750,7 @@ export default function DashboardPage() {
         {/* VIP CAM */}
         <ModuleCard title="VIP Cam" icon={Camera} color="oklch(0.65 0.15 280)"
           badge="Distribuição de satisfação" configured={modules?.vip_cam ?? true}
-          onConfigure={() => navigate("/configuracoes")} onNavigate={() => navigate("/vip-cam")}>
+          onConfigure={isSysUnitUser ? undefined : () => navigate("/configuracoes")} onNavigate={() => navigate("/vip-cam")}>
           {kpis?.vipCam.hasData ? (() => {
             const camTotal = kpis.vipCam.clientesNoPeriodo;
             const camSat = kpis.vipCam.satisfacaoPercent;
@@ -790,7 +811,7 @@ export default function DashboardPage() {
         {/* REPUTAÇÃO */}
         <ModuleCard title="Reputação" icon={Star} color="oklch(0.65 0.15 30)"
           badge="Google · Avaliações" configured={modules?.reputacao ?? true}
-          onConfigure={() => navigate("/configuracoes")} onNavigate={() => navigate("/reputacao")}>
+          onConfigure={isSysUnitUser ? undefined : () => navigate("/configuracoes")} onNavigate={() => navigate("/reputacao")}>
           {kpis?.reputacao.hasData ? (
             <>
               {/* Nota Google em destaque */}
@@ -857,7 +878,7 @@ export default function DashboardPage() {
         {/* AUTO INSTAGRAM */}
         <ModuleCard title="Auto Instagram" icon={Instagram} color="oklch(0.65 0.15 320)"
           badge="Respostas automáticas" configured={modules?.auto_instagram ?? true}
-          onConfigure={() => navigate("/configuracoes")} onNavigate={() => navigate("/auto-instagram")}>
+          onConfigure={isSysUnitUser ? undefined : () => navigate("/configuracoes")} onNavigate={() => navigate("/auto-instagram")}>
           {kpis?.autoInstagram.hasData ? (
             <div className="grid grid-cols-2 gap-2">
               {/* Comentários respondidos */}
@@ -890,7 +911,7 @@ export default function DashboardPage() {
         {/* WE SEND */}
         <ModuleCard title="We Send" icon={MessageSquare} color="oklch(0.65 0.15 100)"
           badge="WhatsApp em massa" configured={modules?.we_send ?? true}
-          onConfigure={() => navigate("/configuracoes")} onNavigate={() => navigate("/we-send")}>
+          onConfigure={isSysUnitUser ? undefined : () => navigate("/configuracoes")} onNavigate={() => navigate("/we-send")}>
           {kpis?.weSend.hasData ? (
             <>
               <MiniKPI label="Mensagens Enviadas" value={fmtNum(kpis.weSend.enviados)}
@@ -1010,12 +1031,12 @@ export default function DashboardPage() {
                           style={{ background: "oklch(0.76 0.145 72 / 0.12)", color: "oklch(0.76 0.145 72)", border: "1px solid oklch(0.76 0.145 72 / 0.25)" }}>
                           Sem dados
                         </span>
-                      ) : (
+                      ) : !isSysUnitUser ? (
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full"
                           style={{ background: ct.cardBgMuted, color: ct.textMuted, border: ct.border }}>
                           Configurar
                         </span>
-                      )}
+                      ) : null}
                     </div>
                   </button>
                 );

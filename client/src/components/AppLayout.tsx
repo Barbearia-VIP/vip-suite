@@ -288,9 +288,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
     if (diff > 4 * 3600000) return "text-yellow-400";
     return "text-green-400";
   })();
+  // Para usuários OAuth (Master): busca unidades via orgs.units
   const unitsQuery = trpc.orgs.units.useQuery(
     { orgId: firstOrgId },
     { enabled: isOAuthUser && !!firstOrgId }
+  );
+
+  // Para usuários de unidade (sysUser): busca unidades via sysUsers.unitsByOrg
+  const sysUnitsQuery = trpc.sysUsers.unitsByOrg.useQuery(
+    { orgId: sysUser?.orgId ?? 0 },
+    { enabled: !!sysUser && (sysUser.orgId ?? 0) > 0, staleTime: 5 * 60 * 1000 }
   );
 
   useEffect(() => {
@@ -311,6 +318,39 @@ export default function AppLayout({ children }: AppLayoutProps) {
       }
     }
   }, [unitsQuery.data]);
+
+  // Quando sysUser carrega: filtrar unidades permitidas e selecionar a primeira automaticamente
+  useEffect(() => {
+    if (!sysUser || !sysUnitsQuery.data) return;
+    const allUnits = sysUnitsQuery.data as Array<{ id: number; name: string; slug: string; orgId: number; city?: string | null; state?: string | null }>;
+    const allowed = sysUser.allowedUnitIds.length > 0
+      ? allUnits.filter(u => sysUser.allowedUnitIds.includes(u.id))
+      : allUnits; // se não há restrição, mostra todas
+    const mapped = allowed.map(u => ({
+      id: u.id,
+      name: u.name,
+      slug: u.slug,
+      orgId: u.orgId,
+      city: u.city ?? undefined,
+      state: u.state ?? undefined,
+    }));
+    setAvailableUnits(mapped);
+    // Selecionar automaticamente: verificar se há unidade salva no localStorage que seja permitida
+    const stored = localStorage.getItem("vip_selected_unit");
+    let storedUnit: typeof mapped[0] | null = null;
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        storedUnit = mapped.find(u => u.id === parsed.id) ?? null;
+      } catch {}
+    }
+    if (storedUnit) {
+      setSelectedUnit(storedUnit);
+    } else if (mapped.length > 0) {
+      // Selecionar a primeira unidade permitida automaticamente
+      setSelectedUnit(mapped[0]);
+    }
+  }, [sysUser, sysUnitsQuery.data]);
 
   const [adminDefaultApplied, setAdminDefaultApplied] = useState(false);
   useEffect(() => {
@@ -523,11 +563,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel className="text-xs text-muted-foreground">Selecionar Unidade</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => { setSelectedUnit(null); localStorage.setItem("vip_unit_manually_chosen", "1"); }} className="text-xs">
-                  <Building2 className="w-3.5 h-3.5 mr-2" />
-                  Todas as Unidades
-                  {!selectedUnit && <Badge variant="secondary" className="ml-auto text-xs py-0">Ativo</Badge>}
-                </DropdownMenuItem>
+                {/* Opção "Todas as Unidades" apenas para Master/Admin OAuth */}
+                {!sysUser && (
+                  <DropdownMenuItem onClick={() => { setSelectedUnit(null); localStorage.setItem("vip_unit_manually_chosen", "1"); }} className="text-xs">
+                    <Building2 className="w-3.5 h-3.5 mr-2" />
+                    Todas as Unidades
+                    {!selectedUnit && <Badge variant="secondary" className="ml-auto text-xs py-0">Ativo</Badge>}
+                  </DropdownMenuItem>
+                )}
                 {availableUnits.map((unit) => (
                   <DropdownMenuItem key={unit.id} onClick={() => { setSelectedUnit(unit); localStorage.setItem("vip_unit_manually_chosen", "1"); }} className="text-xs">
                     <Building2 className="w-3.5 h-3.5 mr-2" />
