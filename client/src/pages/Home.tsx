@@ -1,8 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { getLoginUrl } from "@/const";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
+import { useSysUser } from "@/contexts/SysUserContext";
+import { toast } from "sonner";
 import {
   LayoutDashboard,
   BarChart3,
@@ -15,6 +20,10 @@ import {
   Shield,
   Building2,
   Zap,
+  Mail,
+  Lock,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 const MODULES = [
@@ -29,7 +38,24 @@ const MODULES = [
 
 export default function Home() {
   const { isAuthenticated, loading } = useAuth();
+  const { sysUser, refetch } = useSysUser();
   const [, navigate] = useLocation();
+
+  // Formulário de login por e-mail/senha
+  const [showEmailLogin, setShowEmailLogin] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const loginMutation = trpc.sysUsers.login.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Bem-vindo, ${data.name}!`);
+      refetch();
+      navigate("/dashboard");
+    },
+    onError: (err) => {
+      toast.error(err.message || "E-mail ou senha incorretos.");
+    },
+  });
 
   useEffect(() => {
     if (!loading && isAuthenticated) {
@@ -37,7 +63,24 @@ export default function Home() {
     }
   }, [loading, isAuthenticated, navigate]);
 
+  // Se usuário de unidade já está logado, redireciona
+  useEffect(() => {
+    if (sysUser) {
+      navigate("/dashboard");
+    }
+  }, [sysUser, navigate]);
+
   if (!loading && isAuthenticated) return null;
+  if (sysUser) return null;
+
+  const handleEmailLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      toast.error("Preencha e-mail e senha.");
+      return;
+    }
+    loginMutation.mutate({ email, password });
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -55,7 +98,7 @@ export default function Home() {
             onClick={() => { window.location.href = getLoginUrl(); }}
             className="gap-2"
           >
-            Entrar
+            Entrar como Admin
             <ArrowRight className="w-3.5 h-3.5" />
           </Button>
         </div>
@@ -76,15 +119,88 @@ export default function Home() {
             VIP Suite integra dados, operações e automações de todas as suas unidades
             em uma plataforma centralizada com controle total de acesso.
           </p>
-          <div className="flex items-center justify-center gap-3">
+
+          {/* Botões de acesso */}
+          <div className="flex flex-col items-center gap-4 max-w-sm mx-auto">
+            {/* Botão Admin / Manus OAuth */}
             <Button
               size="lg"
               onClick={() => { window.location.href = getLoginUrl(); }}
-              className="gap-2 px-8"
+              className="gap-2 px-8 w-full"
             >
-              Acessar Plataforma
-              <ArrowRight className="w-4 h-4" />
+              <Shield className="w-4 h-4" />
+              Acessar como Administrador
             </Button>
+
+            {/* Separador */}
+            <div className="flex items-center gap-3 w-full">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">ou</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+
+            {/* Botão de login por e-mail/senha */}
+            <button
+              type="button"
+              onClick={() => setShowEmailLogin((v) => !v)}
+              className="flex items-center justify-between w-full rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+            >
+              <span className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-muted-foreground" />
+                Entrar com e-mail e senha
+              </span>
+              {showEmailLogin
+                ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                : <ChevronDown className="w-4 h-4 text-muted-foreground" />
+              }
+            </button>
+
+            {/* Formulário de login por e-mail/senha */}
+            {showEmailLogin && (
+              <form
+                onSubmit={handleEmailLogin}
+                className="w-full rounded-lg border border-border bg-card p-5 space-y-4 text-left"
+              >
+                <div className="space-y-1.5">
+                  <Label htmlFor="email" className="text-xs font-medium">E-mail</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="seu@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-9 text-sm"
+                      autoComplete="email"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="password" className="text-xs font-medium">Senha</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="pl-9 text-sm"
+                      autoComplete="current-password"
+                    />
+                  </div>
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full gap-2"
+                  disabled={loginMutation.isPending}
+                >
+                  {loginMutation.isPending ? "Entrando..." : "Entrar"}
+                  {!loginMutation.isPending && <ArrowRight className="w-3.5 h-3.5" />}
+                </Button>
+              </form>
+            )}
           </div>
         </section>
 
