@@ -2,7 +2,7 @@
  * ArtGeneratorWizard.tsx — Wizard de 7 telas para Criação de Arte
  * Gera briefing criativo + imagem via IA com padrão premium Barbearia VIP
  */
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -179,8 +179,14 @@ function ArtResult({
   // Buscar logos cadastradas
   const logosQ = trpc.gestaoTotal.brandAssets.listLogos.useQuery(
     { orgId: orgId ?? 0 },
-    { enabled: !!orgId && showLogoSelector }
+    { enabled: !!orgId }
   );
+  // Pré-selecionar a primeira logo assim que os dados chegarem
+  useEffect(() => {
+    if (logosQ.data && logosQ.data.length > 0 && selectedLogoId === undefined) {
+      setSelectedLogoId(logosQ.data[0].id);
+    }
+  }, [logosQ.data]);
   // Mutation de spell-check
   const spellCheckMutation = trpc.gestaoTotal.marketingCampaigns.spellCheckFlyer.useMutation({
     onSuccess: (data: SpellCheckResult) => {
@@ -200,16 +206,11 @@ function ArtResult({
   const saveLayout = () => { setLayout(layoutDraft); setEditingLayout(false); toast.success("Layout atualizado!"); };
   const cancelLayout = () => { setEditingLayout(false); };
 
-  // Inicia o fluxo: logo (se necessário) → spell-check → prévia → gerar
+  // Inicia o fluxo: spell-check → prévia → gerar (logo já selecionada no painel acima)
   const handleGenerateFlyerClick = () => {
     if (!onGenerateFlyer) return;
-    if (logosQ.data && logosQ.data.length > 1) {
-      setShowLogoSelector(true);
-    } else {
-      const logoId = logosQ.data?.[0]?.id;
-      setPendingLogoId(logoId);
-      runSpellCheck(logoId);
-    }
+    setPendingLogoId(selectedLogoId);
+    runSpellCheck(selectedLogoId);
   };
   const confirmLogoAndRunSpellCheck = () => {
     setShowLogoSelector(false);
@@ -420,9 +421,70 @@ function ArtResult({
             )}
           </div>
 
-          {/* Botão Gerar Flyer */}
+          {/* Seletor de logo — sempre visível quando há logos cadastradas */}
           {imagemUrl && onGenerateFlyer && (
             <div className="space-y-3">
+              {/* Painel de seleção de logo */}
+              <div className="rounded-xl border border-border bg-muted/10 p-3 space-y-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <FileImage className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="text-xs font-bold text-amber-400 uppercase tracking-wide">Logo do Flyer</span>
+                </div>
+                {logosQ.isLoading ? (
+                  <div className="flex items-center gap-2 py-2">
+                    <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs text-muted-foreground">Carregando logos...</span>
+                  </div>
+                ) : !logosQ.data || logosQ.data.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">Nenhuma logo cadastrada. Acesse Configurações → Logos para adicionar.</p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {/* Opção: sem logo */}
+                    <button
+                      onClick={() => setSelectedLogoId(undefined)}
+                      className={`relative rounded-lg border-2 p-2 transition-all flex flex-col items-center gap-1.5 ${
+                        selectedLogoId === undefined
+                          ? "border-amber-400 bg-amber-500/10"
+                          : "border-border bg-muted/20 hover:border-amber-500/40"
+                      }`}
+                    >
+                      <div className="h-10 w-full flex items-center justify-center">
+                        <X className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <span className="text-[10px] text-muted-foreground font-medium leading-tight text-center">Sem logo</span>
+                      {selectedLogoId === undefined && (
+                        <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-amber-400 flex items-center justify-center">
+                          <Check className="h-2.5 w-2.5 text-black" />
+                        </div>
+                      )}
+                    </button>
+                    {/* Logos cadastradas */}
+                    {logosQ.data.map((logo) => (
+                      <button
+                        key={logo.id}
+                        onClick={() => setSelectedLogoId(logo.id)}
+                        className={`relative rounded-lg border-2 p-2 transition-all flex flex-col items-center gap-1.5 ${
+                          selectedLogoId === logo.id
+                            ? "border-amber-400 bg-amber-500/10"
+                            : "border-border bg-muted/20 hover:border-amber-500/40"
+                        }`}
+                      >
+                        <div className="h-10 w-full flex items-center justify-center overflow-hidden">
+                          <img src={logo.url} alt={logo.nome ?? "Logo"} className="max-h-10 max-w-full object-contain" />
+                        </div>
+                        <span className="text-[10px] text-foreground font-medium leading-tight text-center line-clamp-1">{logo.nome ?? "Logo"}</span>
+                        {selectedLogoId === logo.id && (
+                          <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-amber-400 flex items-center justify-center">
+                            <Check className="h-2.5 w-2.5 text-black" />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Botão Gerar Flyer */}
               <Button
                 className="w-full gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold"
                 onClick={handleGenerateFlyerClick}
@@ -434,62 +496,6 @@ function ArtResult({
                   <><Wand2 className="h-4 w-4" /> Gerar Flyer com esta Arte</>
                 )}
               </Button>
-              {/* Seletor de logo */}
-              {showLogoSelector && (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-bold text-amber-400">Escolha a logo para o flyer</p>
-                    <button onClick={() => setShowLogoSelector(false)} className="text-muted-foreground hover:text-foreground p-1 rounded">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  {logosQ.isLoading ? (
-                    <div className="flex items-center gap-2 py-2">
-                      <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-xs text-muted-foreground">Carregando logos...</span>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      {logosQ.data?.map((logo) => (
-                        <button
-                          key={logo.id}
-                          onClick={() => setSelectedLogoId(logo.id)}
-                          className={`relative rounded-lg border-2 p-3 transition-all flex flex-col items-center gap-2 ${
-                            selectedLogoId === logo.id
-                              ? "border-amber-400 bg-amber-500/10"
-                              : "border-border bg-muted/20 hover:border-amber-500/40"
-                          }`}
-                        >
-                          <img src={logo.url} alt={logo.nome ?? "Logo"} className="h-12 w-auto object-contain" />
-                          <span className="text-xs text-foreground font-medium">{logo.nome ?? "Logo"}</span>
-                          {selectedLogoId === logo.id && (
-                            <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center">
-                              <Check className="h-3 w-3 text-black" />
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm" variant="outline"
-                      className="flex-1 h-8 text-xs"
-                      onClick={() => { setSelectedLogoId(undefined); confirmLogoAndRunSpellCheck(); }}
-                    >
-                      Gerar sem logo específica
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="flex-1 h-8 text-xs bg-amber-500 hover:bg-amber-600 text-white"
-                      onClick={confirmLogoAndRunSpellCheck}
-                      disabled={!selectedLogoId}
-                    >
-                      <Check className="h-3.5 w-3.5 mr-1" /> Confirmar
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
