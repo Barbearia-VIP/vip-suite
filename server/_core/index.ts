@@ -12,6 +12,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { scheduleDailyRaioXSync } from "../raioXCacheSync";
 import { startSyncScheduler } from "../syncEngine";
+import { startFinConfigScheduler } from "../finConfigScheduler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -75,6 +76,8 @@ async function startServer() {
     scheduleDailyRaioXSync();
     // Iniciar sincronização incremental a cada 30 minutos
     startSyncScheduler();
+    // Agendar job mensal de taxas de cartão (dia 1 de cada mês às 06:00 BRT = 09:00 UTC)
+    startFinConfigScheduler();
   });
 }
 
