@@ -400,14 +400,23 @@ export default function AppLayout({ children }: AppLayoutProps) {
   }, [location]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentModule = MODULES.find((m) => m.id === activeModule) ?? MODULES[0];
+  // Itens restritos ao Master (usuário OAuth) — ocultos para gestores de unidade (sysUser)
+  const MASTER_ONLY_PATHS = new Set([
+    "/dashboard/unidades",
+    "/dashboard/usuarios",
+    "/dashboard/permissoes",
+  ]);
+
   const sidebarItems = SIDEBAR_ITEMS[activeModule].filter((item) => {
     if (item.type === "separator") return true;
     if (item.type === "group") {
-      // Mostrar grupo se ao menos um filho for visível
       return item.children.some((child) => canViewPath(child.path));
     }
-    if ((item as any).path === "/data-vip/ranking" && selectedUnit !== null) return false;
-    return canViewPath((item as any).path);
+    const path = (item as any).path as string | undefined;
+    // Ocultar itens restritos ao Master para usuários de unidade
+    if (sysUser && path && MASTER_ONLY_PATHS.has(path)) return false;
+    if (path === "/data-vip/ranking" && selectedUnit !== null) return false;
+    return canViewPath(path ?? "");
   });
 
   const handleModuleClick = (module: Module) => {
