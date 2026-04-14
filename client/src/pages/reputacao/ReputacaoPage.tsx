@@ -99,7 +99,7 @@ export default function ReputacaoPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       <PageHeader
         title="Reputação"
         description="Monitore e responda avaliações da sua unidade"

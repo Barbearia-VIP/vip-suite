@@ -1263,3 +1263,8 @@
 ## Correção: Botão "Configurações" no rodapé do AppLayout
 
 - [x] Ocultar botão "Configurações" (chaves de API) para perfis não-master e não-administrador (gestor de unidade não deve ver) — condicionado a userRole === "master" || userRole === "org_admin"
+
+## Correção: Espaçamento no topo das páginas VIP Cam e Reputação
+
+- [x] VIP Cam: adicionado p-6 no container externo (loading e main return)
+- [x] Reputação: adicionado p-6 no container externo
