@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { router, protectedProcedure, sysUserProcedure } from "../_core/trpc";
 import { getDb } from "../db";
+import { invokeLLM } from "../_core/llm";
 import { wsConfig, wsCampanhas, wsContatos, wsTemplates, wsListasContatos, wsListaItens } from "../../drizzle/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -549,5 +550,60 @@ export const weSendRouter = router({
         wahaConfigurado: config.length > 0,
         ultimasCampanhas: campanhas.slice(0, 5),
       };
+    }),
+
+  // ─── Gerar mensagem de campanha com IA ────────────────────────────────────
+  generateCampaignMessage: sysUserProcedure
+    .input(z.object({
+      segmento: z.enum(["perdidos", "em_risco", "one_shot", "geral"]),
+      nomeBarbearia: z.string().optional(),
+      oferta: z.string().optional(),
+      tom: z.enum(["casual", "formal"]).default("casual"),
+      destaque: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const segmentoDescricao: Record<string, string> = {
+        perdidos: "clientes que não visitam a barbearia há mais de 90 dias e precisam ser reativados com urgência",
+        em_risco: "clientes que não visitam há 45 a 90 dias e estão em risco de se tornarem inativos",
+        one_shot: "clientes que visitaram a barbearia apenas uma vez e precisam ser fidelizados",
+        geral: "clientes em geral da barbearia",
+      };
+      const segmentoObjetivo: Record<string, string> = {
+        perdidos: "reativar o cliente com uma mensagem impactante que gere urgência e vontade de voltar",
+        em_risco: "criar senso de urgência e oferecer um incentivo para o cliente voltar antes de se perder",
+        one_shot: "fidelizar o cliente mostrando o valor de se tornar um frequentador regular",
+        geral: "engajar o cliente com uma oferta ou novidade atrativa",
+      };
+      const nomeBarbearia = input.nomeBarbearia || "nossa barbearia";
+      const ofertaTexto = input.oferta ? `\nOferta/promoção disponível: ${input.oferta}` : "";
+      const destaqueTexto = input.destaque ? `\nAlgo especial a destacar: ${input.destaque}` : "";
+      const tomTexto = input.tom === "formal" ? "formal e profissional" : "casual, próximo e descontraído";
+
+      const systemPrompt = `Você é um especialista em marketing para barbearias, com foco em retenção e reativação de clientes via WhatsApp. Crie mensagens curtas, diretas e altamente engajadoras que gerem ação imediata.`;
+      const userPrompt = `Crie uma mensagem de WhatsApp para ${nomeBarbearia} direcionada a: ${segmentoDescricao[input.segmento]}.
+
+Objetivo: ${segmentoObjetivo[input.segmento]}.${ofertaTexto}${destaqueTexto}
+
+Regras obrigatórias:
+- Tom: ${tomTexto}
+- Máximo 160 caracteres
+- Use {nome} para personalizar com o nome do cliente
+- Inclua um emoji relevante
+- Termine com uma chamada para ação clara (ex: "Agende agora!", "Venha hoje!", "Aproveite!")
+- Não use linguagem genérica — seja específico para barbearia
+- Português do Brasil com ortografia correta
+
+Retorne APENAS o texto da mensagem, sem aspas, sem explicações.`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      });
+      const rawContent = response.choices?.[0]?.message?.content;
+      const mensagem = (typeof rawContent === "string" ? rawContent.trim() : "") || "";
+      if (!mensagem) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao gerar mensagem" });
+      return { mensagem };
     }),
 });

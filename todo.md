@@ -1288,3 +1288,12 @@
 - [x] Modal com lista de campanhas rascunho (nome, total contatos, data de criação, badge "rascunho")
 - [x] Ao selecionar, preenche automaticamente nome, mensagem e contatos no wizard
 - [x] TypeScript compilou sem erros (0 errors)
+
+## Feature: We Send — Gerar Mensagem com IA no Wizard
+
+- [ ] Procedure weSend.generateCampaignMessage: recebe segmento (perdidos/em_risco/one_shot), nome da barbearia, oferta/promoção, tom (formal/casual) e gera mensagem curta e engajadora
+- [ ] Mini-wizard de 3 perguntas: 1) Tem alguma oferta ou promoção? 2) Tom da mensagem (casual/formal)? 3) Algo especial a destacar?
+- [ ] Botão "Gerar com IA" no step de mensagem do wizard
+- [ ] Mensagem gerada pré-preenche o campo de texto (editável)
+- [ ] Botão "Regerar" para gerar nova versão
+- [ ] Mensagem adaptada ao segmento: perdidos (reativação), em risco (urgência/incentivo), one-shot (fidelização)

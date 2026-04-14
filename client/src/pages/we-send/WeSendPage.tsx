@@ -8,7 +8,8 @@ import PageHeader from "@/components/PageHeader";
 import {
   MessageSquare, Send, Users, CheckCircle,
   AlertCircle, ChevronRight, ChevronLeft, Upload, Plus, Trash2,
-  Settings, BarChart3, Wifi, WifiOff, RefreshCw, Download, FolderOpen
+  Settings, BarChart3, Wifi, WifiOff, RefreshCw, Download, FolderOpen,
+  Sparkles
 } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
@@ -22,6 +23,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const STEPS = [
   { label: "Contatos", icon: Users },
@@ -64,6 +66,42 @@ export default function WeSendPage() {
   const [nomeCampanha, setNomeCampanha] = useState("");
   const [intervalo, setIntervalo] = useState(3);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Modal de IA para gerar mensagem
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [aiSegmento, setAiSegmento] = useState<"perdidos" | "em_risco" | "one_shot" | "geral">("geral");
+  const [aiNomeBarbearia, setAiNomeBarbearia] = useState(selectedUnit?.name || "");
+  const [aiOferta, setAiOferta] = useState("");
+  const [aiTom, setAiTom] = useState<"casual" | "formal">("casual");
+  const [aiDestaque, setAiDestaque] = useState("");
+  const [aiMensagemGerada, setAiMensagemGerada] = useState("");
+
+  const generateMessageMutation = trpc.weSend.generateCampaignMessage.useMutation({
+    onSuccess: (data) => {
+      setAiMensagemGerada(data.mensagem);
+    },
+    onError: (err) => toast.error(err.message || "Erro ao gerar mensagem"),
+  });
+
+  const handleGenerateAI = () => {
+    setAiMensagemGerada("");
+    generateMessageMutation.mutate({
+      segmento: aiSegmento,
+      nomeBarbearia: aiNomeBarbearia || undefined,
+      oferta: aiOferta || undefined,
+      tom: aiTom,
+      destaque: aiDestaque || undefined,
+    });
+  };
+
+  const handleApplyAIMessage = () => {
+    if (aiMensagemGerada) {
+      setMensagem(aiMensagemGerada);
+      setShowAIModal(false);
+      setAiMensagemGerada("");
+      toast.success("Mensagem aplicada! Você pode editar antes de enviar.");
+    }
+  };
 
   // Modal de carregar campanha rascunho
   const [showDraftModal, setShowDraftModal] = useState(false);
@@ -386,7 +424,21 @@ export default function WeSendPage() {
           {step === 1 && (
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Mensagem (use {"{nome}"} para personalizar)</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Mensagem (use {"{"}nome{"}"}  para personalizar)</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                    onClick={() => {
+                      setAiNomeBarbearia(selectedUnit?.name || "");
+                      setAiMensagemGerada("");
+                      setShowAIModal(true);
+                    }}
+                  >
+                    <Sparkles className="w-3 h-3" />Gerar com IA
+                  </Button>
+                </div>
                 <Textarea
                   value={mensagem}
                   onChange={e => setMensagem(e.target.value)}
@@ -402,6 +454,127 @@ export default function WeSendPage() {
                   {mensagem.replace(/\{nome\}/g, contatos[0]?.nome || "Cliente")}
                 </p>
               </div>
+
+              {/* Modal mini-wizard IA */}
+              <Dialog open={showAIModal} onOpenChange={open => { setShowAIModal(open); if (!open) setAiMensagemGerada(""); }}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="text-sm flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-primary" />
+                      Gerar mensagem com IA
+                    </DialogTitle>
+                    <DialogDescription className="text-xs">
+                      Responda algumas perguntas para personalizar a mensagem.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4">
+                    {/* Pergunta 1: Segmento */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Para qual público é esta campanha?</Label>
+                      <Select value={aiSegmento} onValueChange={(v) => setAiSegmento(v as typeof aiSegmento)}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="perdidos" className="text-xs">Clientes Perdidos (sem visita há +90 dias)</SelectItem>
+                          <SelectItem value="em_risco" className="text-xs">Em Risco (sem visita há 45–90 dias)</SelectItem>
+                          <SelectItem value="one_shot" className="text-xs">One-Shot (visitaram apenas uma vez)</SelectItem>
+                          <SelectItem value="geral" className="text-xs">Clientes em Geral</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Pergunta 2: Nome da barbearia */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Nome da barbearia / unidade</Label>
+                      <Input
+                        value={aiNomeBarbearia}
+                        onChange={e => setAiNomeBarbearia(e.target.value)}
+                        placeholder="Ex: Barbearia VIP"
+                        className="h-8 text-xs"
+                      />
+                    </div>
+
+                    {/* Pergunta 3: Oferta */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Tem alguma promoção ou oferta? <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+                      <Input
+                        value={aiOferta}
+                        onChange={e => setAiOferta(e.target.value)}
+                        placeholder="Ex: 20% de desconto no corte"
+                        className="h-8 text-xs"
+                      />
+                    </div>
+
+                    {/* Pergunta 4: Tom */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Tom da mensagem</Label>
+                      <div className="flex gap-2">
+                        {(["casual", "formal"] as const).map(t => (
+                          <button
+                            key={t}
+                            onClick={() => setAiTom(t)}
+                            className={`flex-1 py-1.5 rounded-md text-xs border transition-colors ${
+                              aiTom === t
+                                ? "border-primary bg-primary/10 text-primary font-medium"
+                                : "border-border text-muted-foreground hover:border-primary/40"
+                            }`}
+                          >
+                            {t === "casual" ? "😊 Casual" : "👔 Formal"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Resultado gerado */}
+                    {aiMensagemGerada && (
+                      <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                        <p className="text-xs font-medium text-foreground">Mensagem gerada:</p>
+                        <p className="text-xs text-foreground whitespace-pre-wrap">{aiMensagemGerada}</p>
+                        <p className="text-[10px] text-muted-foreground">{aiMensagemGerada.length} caracteres</p>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-1">
+                      {!aiMensagemGerada ? (
+                        <Button
+                          className="flex-1 gap-1.5 text-xs"
+                          onClick={handleGenerateAI}
+                          disabled={generateMessageMutation.isPending}
+                        >
+                          {generateMessageMutation.isPending ? (
+                            <><RefreshCw className="w-3.5 h-3.5 animate-spin" />Gerando...</>
+                          ) : (
+                            <><Sparkles className="w-3.5 h-3.5" />Gerar mensagem</>
+                          )}
+                        </Button>
+                      ) : (
+                        <>
+                          <Button
+                            variant="outline"
+                            className="flex-1 gap-1.5 text-xs"
+                            onClick={handleGenerateAI}
+                            disabled={generateMessageMutation.isPending}
+                          >
+                            {generateMessageMutation.isPending ? (
+                              <><RefreshCw className="w-3.5 h-3.5 animate-spin" />Gerando...</>
+                            ) : (
+                              <><RefreshCw className="w-3.5 h-3.5" />Gerar outra</>
+                            )}
+                          </Button>
+                          <Button
+                            className="flex-1 gap-1.5 text-xs"
+                            onClick={handleApplyAIMessage}
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" />Usar esta
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           )}
 
