@@ -927,24 +927,26 @@ export default function AppLayout({ children }: AppLayoutProps) {
             })}
           </nav>
 
-          {/* Sidebar footer */}
-          <div
-            className="p-2"
-            style={{ borderTop: isDark ? "1px solid oklch(0.175 0.012 260 / 0.8)" : "1px solid oklch(0.88 0.006 260 / 0.7)" }}
-          >
-            <button
-              onClick={() => navigate("/configuracoes")}
-              className={cn(
-                "w-full flex items-center gap-2.5 py-2 rounded-lg text-xs transition-all",
-                sidebarCollapsed ? "px-2.5 justify-center" : "px-3",
-              )}
-              style={{ color: ct.textMuted }}
-              title={sidebarCollapsed ? "Configurações" : undefined}
+          {/* Sidebar footer — visível apenas para master e org_admin */}
+          {(userRole === "master" || userRole === "org_admin" || (!sysUser && !userRole)) && (
+            <div
+              className="p-2"
+              style={{ borderTop: isDark ? "1px solid oklch(0.175 0.012 260 / 0.8)" : "1px solid oklch(0.88 0.006 260 / 0.7)" }}
             >
-              <Settings className="w-3.5 h-3.5 shrink-0" />
-              {!sidebarCollapsed && <span>Configurações</span>}
-            </button>
-          </div>
+              <button
+                onClick={() => navigate("/configuracoes")}
+                className={cn(
+                  "w-full flex items-center gap-2.5 py-2 rounded-lg text-xs transition-all",
+                  sidebarCollapsed ? "px-2.5 justify-center" : "px-3",
+                )}
+                style={{ color: ct.textMuted }}
+                title={sidebarCollapsed ? "Configurações" : undefined}
+              >
+                <Settings className="w-3.5 h-3.5 shrink-0" />
+                {!sidebarCollapsed && <span>Configurações</span>}
+              </button>
+            </div>
+          )}
         </aside>
 
         {/* Page content */}

@@ -1259,3 +1259,7 @@
 - [x] Registrar rota /auto-instagram/sem-resposta no App.tsx
 - [x] Adicionar item "Sem Resposta" ao menu lateral do Instagram
 - [x] Testar página no browser — OK (UI carregou, seletor de período funcional)
+
+## Correção: Botão "Configurações" no rodapé do AppLayout
+
+- [x] Ocultar botão "Configurações" (chaves de API) para perfis não-master e não-administrador (gestor de unidade não deve ver) — condicionado a userRole === "master" || userRole === "org_admin"
