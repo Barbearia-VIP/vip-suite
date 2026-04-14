@@ -226,7 +226,7 @@ const SIDEBAR_ITEMS: Record<ModuleId, SidebarItem[]> = {
   auto_instagram: [
     { label: "Dashboard", path: "/auto-instagram", icon: LayoutDashboard },
     { label: "Editor de Prompts", path: "/auto-instagram/prompts", icon: MessageSquare },
-    { label: "Fila de Aprovação", path: "/auto-instagram/aprovacao", icon: ClipboardList },
+    { label: "Histórico de Respostas", path: "/auto-instagram/aprovacao", icon: ClipboardList },
     { label: "Logs", path: "/auto-instagram/logs", icon: BarChart3 },
     { label: "Stories", path: "/auto-instagram/stories", icon: Star },
     { label: "Diagnóstico", path: "/auto-instagram/diagnostico", icon: Settings },

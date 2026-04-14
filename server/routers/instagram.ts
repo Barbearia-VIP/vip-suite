@@ -284,6 +284,39 @@ export const igApprovalRouter = router({
       await db.update(igApprovalQueue).set({ status: "rejected", reviewedAt: new Date() }).where(eq(igApprovalQueue.id, input.id));
       return { success: true };
     }),
+
+  // Histórico de todas as respostas enviadas pelo sistema (approved + auto_approved)
+  getHistory: sysUserProcedure
+    .input(z.object({
+      unitId: z.number(),
+      page: z.number().default(1),
+      pageSize: z.number().default(30),
+      search: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const offset = (input.page - 1) * input.pageSize;
+
+      const baseWhere = and(
+        eq(igApprovalQueue.unitId, input.unitId),
+        sql`${igApprovalQueue.status} IN ('approved', 'auto_approved')`,
+        input.search
+          ? sql`(${igApprovalQueue.commentText} LIKE ${`%${input.search}%`} OR ${igApprovalQueue.authorName} LIKE ${`%${input.search}%`})`
+          : undefined,
+      );
+
+      const [rows, countResult] = await Promise.all([
+        db.select().from(igApprovalQueue)
+          .where(baseWhere)
+          .orderBy(desc(igApprovalQueue.createdAt))
+          .limit(input.pageSize)
+          .offset(offset),
+        db.select({ count: sql<number>`count(*)` }).from(igApprovalQueue).where(baseWhere),
+      ]);
+
+      return { rows, total: Number(countResult[0]?.count ?? 0) };
+    }),
 });
 
 // ─── Stories Router ───────────────────────────────────────────────────────────

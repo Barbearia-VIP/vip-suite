@@ -1226,3 +1226,13 @@
 - [x] Identificar qual mutation tRPC está retornando HTML em vez de JSON — sync.syncNow com timeout 504
 - [x] Converter syncNow para fire-and-forget com polling de syncNowStatus
 - [x] Atualizar SyncPage.tsx para polling + progresso (X/Y unidades)
+
+## Melhoria: Instagram — Histórico de Respostas
+
+- [x] Analisar estrutura atual do módulo Instagram (fila de aprovação, tabelas, router)
+- [x] Verificar se tabela de histórico de respostas já existe — ig_approval_queue já tem todos os campos
+- [x] Remover componente de fila de aprovação do frontend
+- [x] Criar componente de histórico de respostas (autor, comentário, resposta, status, data)
+- [x] Adicionar procedure getHistory no igApprovalRouter (filtra approved + auto_approved)
+- [x] Atualizar label do menu de "Fila de Aprovação" para "Histórico de Respostas"
+- [x] Testar exibição do histórico no frontend — OK (estado vazio correto, busca funcional, paginação)
