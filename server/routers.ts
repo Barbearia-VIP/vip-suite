@@ -8,7 +8,7 @@ import { dashboardRouter } from "./routers/dashboard";
 import { gestaoTotalRouter } from "./routers/gestaoTotal";
 import { vipCamRouter } from "./routers/vipCam";
 import { reputacaoRouter } from "./routers/reputacao";
-import { igConfigRouter, igDashboardRouter, igLogsRouter, igApprovalRouter, igStoriesRouter, igPromptsRouter } from "./routers/instagram";
+import { igConfigRouter, igDashboardRouter, igLogsRouter, igApprovalRouter, igStoriesRouter, igPromptsRouter, igUnrepliedRouter } from "./routers/instagram";
 import { weSendRouter } from "./routers/weSend";
 import { raioXRouter } from "./routers/raioX";
 import { syncRouter } from "./routers/sync";
@@ -43,6 +43,7 @@ export const appRouter = router({
   igApproval: igApprovalRouter,
   igStories: igStoriesRouter,
   igPrompts: igPromptsRouter,
+  igUnreplied: igUnrepliedRouter,
   weSend: weSendRouter,
   raioX: raioXRouter,
   sync: syncRouter,

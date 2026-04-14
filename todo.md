@@ -1249,3 +1249,13 @@
 - [x] Diagnosticar origem do truncamento — era no log de atividade (substring 60 chars), não no ig_approval_queue
 - [x] Corrigir igScheduler.ts para salvar texto completo no log de atividade (remover .substring(0,60))
 - [x] Atualizar 8 registros existentes com texto completo via Meta Graph API (0 falhas)
+
+## Feature: Instagram — Comentários Sem Resposta
+
+- [x] Procedure getUnreplied: busca posts do período, lista comentários, verifica respostas no IG e no banco local
+- [x] Procedure replyWithAI: gera resposta via LLM com prompt do sistema, envia via Meta Graph API, registra no banco
+- [x] Procedure generatePreview: pré-visualização da resposta antes de enviar
+- [x] Criar ComentariosSemRespostaPage.tsx: seletor de período, atalhos (7/30/90 dias), lista separada (sem resposta / já respondidos no IG), botão "Responder com IA", preview editável, botão regerar
+- [x] Registrar rota /auto-instagram/sem-resposta no App.tsx
+- [x] Adicionar item "Sem Resposta" ao menu lateral do Instagram
+- [x] Testar página no browser — OK (UI carregou, seletor de período funcional)

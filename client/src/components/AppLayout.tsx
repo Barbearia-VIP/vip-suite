@@ -44,6 +44,7 @@ import {
   BookMarked,
   Package,
   Zap,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -227,6 +228,7 @@ const SIDEBAR_ITEMS: Record<ModuleId, SidebarItem[]> = {
     { label: "Dashboard", path: "/auto-instagram", icon: LayoutDashboard },
     { label: "Editor de Prompts", path: "/auto-instagram/prompts", icon: MessageSquare },
     { label: "Histórico de Respostas", path: "/auto-instagram/aprovacao", icon: ClipboardList },
+    { label: "Sem Resposta", path: "/auto-instagram/sem-resposta", icon: MessageCircle },
     { label: "Logs", path: "/auto-instagram/logs", icon: BarChart3 },
     { label: "Stories", path: "/auto-instagram/stories", icon: Star },
     { label: "Diagnóstico", path: "/auto-instagram/diagnostico", icon: Settings },

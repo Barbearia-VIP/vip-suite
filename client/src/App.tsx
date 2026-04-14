@@ -91,6 +91,7 @@ import LogsPage from "./pages/auto-instagram/LogsPage";
 import AprovacaoPage from "./pages/auto-instagram/AprovacaoPage";
 import StoriesPage from "./pages/auto-instagram/StoriesPage";
 import DiagnosticoPage from "./pages/auto-instagram/DiagnosticoPage";
+import ComentariosSemRespostaPage from "./pages/auto-instagram/ComentariosSemRespostaPage";
 
 // We Send
 import WeSendPage from "./pages/we-send/WeSendPage";
@@ -364,6 +365,9 @@ function Router() {
       </Route>
       <Route path="/auto-instagram/engajamento">
         <ProtectedLayout><EngajamentoPage /></ProtectedLayout>
+      </Route>
+      <Route path="/auto-instagram/sem-resposta">
+        <ProtectedLayout><ComentariosSemRespostaPage /></ProtectedLayout>
       </Route>
 
       {/* We Send */}
