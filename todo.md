@@ -1243,3 +1243,9 @@
 - [x] Analisar estrutura da tabela ig_activity_logs (comment_reply) para migrar dados
 - [x] Migrar 8 respostas dos logs para ig_approval_queue com status auto_approved
 - [x] Substituir card "Aguardando Aprovação" por "Respostas Enviadas" com link para histórico
+
+## Melhoria: Instagram — Texto Completo dos Comentários
+
+- [x] Diagnosticar origem do truncamento — era no log de atividade (substring 60 chars), não no ig_approval_queue
+- [x] Corrigir igScheduler.ts para salvar texto completo no log de atividade (remover .substring(0,60))
+- [x] Atualizar 8 registros existentes com texto completo via Meta Graph API (0 falhas)

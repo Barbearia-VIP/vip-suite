@@ -231,7 +231,7 @@ async function runBotCycle(unitId: number) {
               await db.insert(igRepliedComments).values({ unitId, commentId: comment.id });
               entry.repliedCommentIds.add(comment.id);
               repliesThisCycle++;
-              await logActivity(unitId, "comment_reply", `Respondido @${comment.username}: "${comment.text.substring(0, 60)}..."`, {
+              await logActivity(unitId, "comment_reply", `Respondido @${comment.username}: "${comment.text}"`, {
                 commentId: comment.id, postId: post.id, reply: replyText,
               });
             } catch (err: unknown) {
