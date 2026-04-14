@@ -3,6 +3,7 @@
  * Abas: Visão Geral | One-Shot | Cadência | Churn | Cohort | Barbeiros | Ações | Diagnóstico
  */
 import { useState, useMemo, type MouseEvent } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useApp } from "@/contexts/AppContext";
 import { useOrg } from "@/hooks/useOrg";
@@ -11,6 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ComposedChart, Line, ReferenceLine,
@@ -23,7 +27,7 @@ import { useChartTheme } from "../../hooks/useChartTheme";
 import {
   Users, UserCheck, UserX, AlertTriangle, TrendingDown, TrendingUp,
   Zap, Activity, Target, Scissors, Search, RefreshCw, Info, ChevronRight, Calendar,
-  Wifi, WifiOff, Download, RotateCcw, ChevronDown, ChevronUp, DatabaseZap
+  Wifi, WifiOff, Download, RotateCcw, ChevronDown, ChevronUp, DatabaseZap, Send, MessageSquare
 } from "lucide-react";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -176,6 +180,40 @@ export default function RaioXPage() {
   const [oneShotFiltro, setOneShotFiltro] = useState<"aguardando" | "em_risco" | "perdido" | "todos">("aguardando");
 
   const [acoesTipo, setAcoesTipo] = useState<"todos" | "one_shot_risco" | "perdidos_recentes" | "em_risco">("todos");
+
+  // ─── Modal Enviar para Campanha (We Send) ─────────────────────────────────
+  const [, navigate] = useLocation();
+  type SegmentoCampanha = "perdidos" | "em_risco" | "one_shot_urgente";
+  const [campanhaModal, setCampanhaModal] = useState<{
+    open: boolean;
+    segmento: SegmentoCampanha;
+    label: string;
+    count: number;
+    nomeCampanha: string;
+    mensagem: string;
+  } | null>(null);
+
+  const createCampaignMutation = trpc.raioX.createCampaignFromSegment.useMutation({
+    onSuccess: (data) => {
+      setCampanhaModal(null);
+      navigate("/we-send/campanhas");
+    },
+    onError: (err) => {
+      alert(`Erro ao criar campanha: ${err.message}`);
+    },
+  });
+
+  const abrirModalCampanha = (segmento: SegmentoCampanha, label: string, count: number) => {
+    const hoje = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    setCampanhaModal({
+      open: true,
+      segmento,
+      label,
+      count,
+      nomeCampanha: `${label} — ${hoje}`,
+      mensagem: `Olá {nome}, sentimos sua falta! Que tal agendar um horário na Barbearia VIP? 💈`,
+    });
+  };
 
   // Seletor de período
   type PeriodoPreset = "30d" | "60d" | "90d" | "6m" | "12m" | "custom";
@@ -510,25 +548,43 @@ export default function RaioXPage() {
                     <p className="text-2xl font-bold text-green-400 mt-1">{v.sinais.ativos.toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">{v.sinais.pctAtivos}% da base</p>
                   </div>
-                  <div className="bg-card/60 border border-border/50 rounded-lg p-3">
+                  <div className="bg-card/60 border border-border/50 rounded-lg p-3 flex flex-col gap-1">
                     <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />Perdidos</p>
-                    <p className="text-2xl font-bold text-red-400 mt-1">{v.sinais.perdidos.toLocaleString()}</p>
+                    <p className="text-2xl font-bold text-red-400">{v.sinais.perdidos.toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">{v.sinais.pctPerdidos}% da base</p>
+                    <button
+                      onClick={() => abrirModalCampanha("perdidos", "Clientes Perdidos", v.sinais.perdidos)}
+                      className="mt-1 flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors"
+                    >
+                      <MessageSquare className="w-3 h-3" /> Enviar para campanha
+                    </button>
                   </div>
-                  <div className="bg-card/60 border border-border/50 rounded-lg p-3">
+                  <div className="bg-card/60 border border-border/50 rounded-lg p-3 flex flex-col gap-1">
                     <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-500 inline-block" />Em Risco</p>
-                    <p className="text-2xl font-bold text-orange-400 mt-1">{v.sinais.emRisco.toLocaleString()}</p>
+                    <p className="text-2xl font-bold text-orange-400">{v.sinais.emRisco.toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">{v.sinais.pctEmRisco}% da base</p>
+                    <button
+                      onClick={() => abrirModalCampanha("em_risco", "Clientes em Risco", v.sinais.emRisco)}
+                      className="mt-1 flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors"
+                    >
+                      <MessageSquare className="w-3 h-3" /> Enviar para campanha
+                    </button>
                   </div>
                   <div className="bg-card/60 border border-border/50 rounded-lg p-3">
                     <p className="text-xs text-muted-foreground uppercase tracking-wide">Novos</p>
                     <p className="text-2xl font-bold text-blue-400 mt-1">{v.sinais.novos.toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">{v.sinais.pctNovos}% dos atendidos</p>
                   </div>
-                  <div className="bg-card/60 border border-border/50 rounded-lg p-3">
+                  <div className="bg-card/60 border border-border/50 rounded-lg p-3 flex flex-col gap-1">
                     <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-yellow-500 inline-block" />One-Shot Urgente</p>
-                    <p className="text-2xl font-bold text-yellow-400 mt-1">{v.sinais.oneShotUrgente.toLocaleString()}</p>
+                    <p className="text-2xl font-bold text-yellow-400">{v.sinais.oneShotUrgente.toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">{v.sinais.pctOneShotUrgente}% dos one-shots</p>
+                    <button
+                      onClick={() => abrirModalCampanha("one_shot_urgente", "One-Shot Urgente", v.sinais.oneShotUrgente)}
+                      className="mt-1 flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors"
+                    >
+                      <MessageSquare className="w-3 h-3" /> Enviar para campanha
+                    </button>
                   </div>
                   <div className="bg-card/60 border border-border/50 rounded-lg p-3">
                     <p className="text-xs text-muted-foreground uppercase tracking-wide">Resgatados</p>
@@ -3181,6 +3237,82 @@ export default function RaioXPage() {
           ) : null}
         </TabsContent>
       </Tabs>
+
+      {/* ─── Modal: Enviar para Campanha We Send ─────────────────────────────── */}
+      {campanhaModal && (
+        <Dialog open={campanhaModal.open} onOpenChange={(o) => { if (!o) setCampanhaModal(null); }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-green-400" />
+                Criar Campanha We Send
+              </DialogTitle>
+              <DialogDescription>
+                Serão carregados <strong>{campanhaModal.count.toLocaleString()} contatos</strong> do segmento <strong>{campanhaModal.label}</strong> na unidade selecionada.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="camp-nome">Nome da campanha</Label>
+                <Input
+                  id="camp-nome"
+                  value={campanhaModal.nomeCampanha}
+                  onChange={(e) => setCampanhaModal(prev => prev ? { ...prev, nomeCampanha: e.target.value } : null)}
+                  placeholder="Ex: Clientes Perdidos — Abril/2026"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="camp-msg">Mensagem</Label>
+                <Textarea
+                  id="camp-msg"
+                  value={campanhaModal.mensagem}
+                  onChange={(e) => setCampanhaModal(prev => prev ? { ...prev, mensagem: e.target.value } : null)}
+                  placeholder="Use {nome} para personalizar. Ex: Olá {nome}, sentimos sua falta!"
+                  rows={4}
+                />
+                <p className="text-xs text-muted-foreground">Use <code className="bg-muted px-1 rounded">{'{nome}'}</code> para personalizar com o nome do cliente.</p>
+              </div>
+              <div className="rounded-lg bg-muted/30 border border-border/50 p-3 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground mb-1">O que acontece ao confirmar:</p>
+                <ul className="space-y-1 list-disc list-inside text-xs">
+                  <li>Campanha criada como <strong>rascunho</strong> no We Send</li>
+                  <li>Contatos carregados automaticamente com nome e telefone</li>
+                  <li>Você será redirecionado para Campanhas para disparar quando desejar</li>
+                </ul>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCampanhaModal(null)} disabled={createCampaignMutation.isPending}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!campanhaModal.nomeCampanha.trim()) { alert("Informe o nome da campanha."); return; }
+                  if (!campanhaModal.mensagem.trim()) { alert("Informe a mensagem da campanha."); return; }
+                  if (!selectedUnit?.id) { alert("Selecione uma unidade."); return; }
+                  createCampaignMutation.mutate({
+                    unitId: selectedUnit.id,
+                    segmento: campanhaModal.segmento,
+                    nomeCampanha: campanhaModal.nomeCampanha,
+                    mensagem: campanhaModal.mensagem,
+                    intervaloSegundos: 3,
+                  });
+                }}
+                disabled={createCampaignMutation.isPending}
+                className="gap-2"
+              >
+                {createCampaignMutation.isPending ? (
+                  <><RefreshCw className="w-4 h-4 animate-spin" /> Criando...</>
+                ) : (
+                  <><Send className="w-4 h-4" /> Criar Campanha</>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

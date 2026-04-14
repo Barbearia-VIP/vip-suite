@@ -1268,3 +1268,14 @@
 
 - [x] VIP Cam: adicionado p-6 no container externo (loading e main return)
 - [x] Reputação: adicionado p-6 no container externo
+
+## Feature: Integração Raio-X → We Send (Campanhas)
+
+- [x] Verificar se sync_clientes tem campo de telefone — confirmado, 5.556 clientes com telefone_sem_mascara
+- [x] Garantir que o syncEngine popula telefone dos clientes — já populado
+- [x] Criar procedure raioX.createCampaignFromSegment (perdidos >90d, em_risco 61-90d, one_shot_urgente >=46d)
+- [x] Adicionar botão "Enviar para campanha" nos cards Perdidos, Em Risco e One-Shot Urgente do Raio-X
+- [x] Modal com nome pré-preenchido (ex: "Clientes Perdidos — 14/04/2026"), mensagem com {nome}, info de contatos
+- [x] Campanha criada como rascunho no We Send com contatos pré-carregados, redirect para /we-send/campanhas
+- [x] Apenas contatos da unidade ativa incluídos (filtro por unitId na query)
+- [x] Testado no browser — OK (1.568 contatos Perdidos, modal funcional)

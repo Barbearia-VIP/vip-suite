@@ -18,7 +18,8 @@ import { z } from "zod";
 import { protectedProcedure, router, sysUserProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
-import { sql } from "drizzle-orm";
+import { sql, eq, and, isNotNull, ne } from "drizzle-orm";
+import { wsCampanhas, wsContatos } from "../../drizzle/schema";
 import { queryLocal } from "../db-local";
 import {
   syncRaioXCacheUnit,
@@ -2775,6 +2776,117 @@ export const raioXRouter = router({
         meses,
         totalCached: meses.length,
         lastSync: lastLog ? { at: lastLog.createdAt, status: lastLog.status, duracaoMs: lastLog.duracaoMs } : null,
+      };
+    }),
+
+  // ─── Integração Raio-X → We Send ─────────────────────────────────────────────
+  // Busca contatos de um segmento (perdidos, em_risco, one_shot_urgente) e cria campanha no We Send
+  createCampaignFromSegment: sysUserProcedure
+    .input(z.object({
+      unitId: z.number(),
+      segmento: z.enum(["perdidos", "em_risco", "one_shot_urgente"]),
+      nomeCampanha: z.string().min(1),
+      mensagem: z.string().min(1),
+      intervaloSegundos: z.number().min(1).max(60).default(3),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Banco indisponível" });
+
+      // Definir condição SQL para cada segmento
+      const hoje = new Date().toISOString().slice(0, 10);
+      let whereSegmento = "";
+      let segmentoLabel = "";
+      if (input.segmento === "perdidos") {
+        // Perdidos: >90 dias sem visita + mais de 1 visita histórica
+        whereSegmento = `
+          DATEDIFF('${hoje}', sc.ultima_visita) > 90
+          AND (
+            SELECT COUNT(*) FROM sync_vendas sv WHERE sv.cliente = sc.id AND sv.unidade_id = ${input.unitId}
+          ) > 1
+        `;
+        segmentoLabel = "Clientes Perdidos";
+      } else if (input.segmento === "em_risco") {
+        // Em risco: 61-90 dias sem visita + mais de 1 visita histórica
+        whereSegmento = `
+          DATEDIFF('${hoje}', sc.ultima_visita) BETWEEN 61 AND 90
+          AND (
+            SELECT COUNT(*) FROM sync_vendas sv WHERE sv.cliente = sc.id AND sv.unidade_id = ${input.unitId}
+          ) > 1
+        `;
+        segmentoLabel = "Clientes em Risco";
+      } else {
+        // One-Shot Urgente: 1 visita histórica + >=46 dias sem retornar
+        whereSegmento = `
+          DATEDIFF('${hoje}', sc.ultima_visita) >= 46
+          AND (
+            SELECT COUNT(*) FROM sync_vendas sv WHERE sv.cliente = sc.id AND sv.unidade_id = ${input.unitId}
+          ) = 1
+        `;
+        segmentoLabel = "One-Shot Urgente";
+      }
+
+      // Buscar contatos do segmento com telefone válido
+      const [contatos] = await db.execute(sql.raw(`
+        SELECT sc.id, sc.nome, sc.telefone_sem_mascara as telefone
+        FROM sync_clientes sc
+        WHERE sc.unidade_id = ${input.unitId}
+          AND sc.telefone_sem_mascara IS NOT NULL
+          AND sc.telefone_sem_mascara != ''
+          AND LENGTH(REGEXP_REPLACE(sc.telefone_sem_mascara, '[^0-9]', '')) >= 10
+          AND sc.nome IS NOT NULL
+          AND sc.nome != ''
+          AND sc.nome != 'Sem Cadastro'
+          AND ${whereSegmento}
+        ORDER BY sc.ultima_visita ASC
+        LIMIT 5000
+      `)) as any;
+
+      const listaContatos = (contatos as any[]);
+      if (listaContatos.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: `Nenhum contato encontrado para o segmento ${segmentoLabel}` });
+      }
+
+      // Criar campanha no We Send
+      const dataHoje = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const nomeFinal = input.nomeCampanha || `${segmentoLabel} — ${dataHoje}`;
+
+      const [result] = await db.insert(wsCampanhas).values({
+        unitId: input.unitId,
+        nome: nomeFinal,
+        descricao: `Campanha gerada automaticamente pelo Raio-X — ${segmentoLabel} em ${dataHoje}`,
+        mensagem: input.mensagem,
+        tipo: "texto",
+        mediaUrl: null,
+        intervaloSegundos: input.intervaloSegundos,
+        agendadaPara: null,
+        totalContatos: listaContatos.length,
+        criadoPor: ctx.user?.name || "Raio-X",
+        status: "rascunho",
+      });
+      const campanhaId = (result as any).insertId;
+
+      // Inserir contatos em lote
+      const BATCH = 200;
+      for (let i = 0; i < listaContatos.length; i += BATCH) {
+        const batch = listaContatos.slice(i, i + BATCH);
+        const values = batch.map((c: any) => ({
+          campanhaId,
+          unitId: input.unitId,
+          nome: c.nome || null,
+          telefone: c.telefone.replace(/\D/g, ""),
+          variaveis: JSON.stringify({ nome: c.nome || "" }),
+          mensagemPersonalizada: input.mensagem.replace(/\{nome\}/g, c.nome || ""),
+          status: "pendente" as const,
+        }));
+        await db.insert(wsContatos).values(values);
+      }
+
+      return {
+        success: true,
+        campanhaId,
+        totalContatos: listaContatos.length,
+        segmentoLabel,
       };
     }),
 });
