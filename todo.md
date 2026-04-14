@@ -1236,3 +1236,10 @@
 - [x] Adicionar procedure getHistory no igApprovalRouter (filtra approved + auto_approved)
 - [x] Atualizar label do menu de "Fila de Aprovação" para "Histórico de Respostas"
 - [x] Testar exibição do histórico no frontend — OK (estado vazio correto, busca funcional, paginação)
+
+## Correção: Instagram — Acesso Rápido e Migração de Logs
+
+- [x] Corrigir label "Fila de Aprovação" para "Histórico de Respostas" no acesso rápido (AutoInstagramPage.tsx)
+- [x] Analisar estrutura da tabela ig_activity_logs (comment_reply) para migrar dados
+- [x] Migrar 8 respostas dos logs para ig_approval_queue com status auto_approved
+- [x] Substituir card "Aguardando Aprovação" por "Respostas Enviadas" com link para histórico

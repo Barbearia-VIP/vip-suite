@@ -143,20 +143,18 @@ export default function AutoInstagramPage() {
           </div>
         </div>
 
-        <div className={`glass-card ${(stats?.pendingApproval ?? 0) > 0 ? "border-yellow-500/50 bg-yellow-500/5" : "bg-white/5"}`}>
+            <div className="glass-card bg-white/5">
           <div className="p-6 pt-0 p-4">
             <div className="flex items-center gap-2 mb-1">
-              <CheckSquare className={`w-4 h-4 ${(stats?.pendingApproval ?? 0) > 0 ? "text-yellow-400" : "text-muted-foreground"}`} />
-              <p className="text-xs text-muted-foreground">Aguardando Aprovação</p>
+              <CheckSquare className="w-4 h-4 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Respostas Enviadas</p>
             </div>
-            <p className={`text-2xl font-bold ${(stats?.pendingApproval ?? 0) > 0 ? "text-yellow-400" : "text-foreground"}`}>
-              {stats?.pendingApproval ?? 0}
+            <p className="text-2xl font-bold text-foreground">
+              {stats?.replies ?? 0}
             </p>
-            {(stats?.pendingApproval ?? 0) > 0 && (
-              <Link href="/auto-instagram/aprovacao">
-                <p className="text-xs text-yellow-400 hover:underline cursor-pointer mt-1">Ver fila →</p>
-              </Link>
-            )}
+            <Link href="/auto-instagram/aprovacao">
+              <p className="text-xs text-primary hover:underline cursor-pointer mt-1">Ver histórico →</p>
+            </Link>
           </div>
         </div>
       </div>
@@ -233,7 +231,7 @@ export default function AutoInstagramPage() {
           <div className="p-6 pt-0 space-y-1 p-4 pt-0">
             {[
               { href: "/auto-instagram/prompts", icon: BookOpen, label: "Editor de Prompts", desc: "Personalidade do bot" },
-              { href: "/auto-instagram/aprovacao", icon: CheckSquare, label: "Fila de Aprovação", desc: `${stats?.pendingApproval ?? 0} pendentes`, badge: stats?.pendingApproval },
+              { href: "/auto-instagram/aprovacao", icon: CheckSquare, label: "Histórico de Respostas", desc: "Ver todas as respostas enviadas" },
               { href: "/auto-instagram/stories", icon: Activity, label: "Respostas a Stories", desc: "Configurar e ver logs" },
               { href: "/auto-instagram/logs", icon: FileText, label: "Histórico de Logs", desc: "Todas as atividades" },
               { href: "/auto-instagram/diagnostico", icon: Zap, label: "Diagnóstico", desc: "Testar conexão" },
@@ -245,7 +243,7 @@ export default function AutoInstagramPage() {
                     <p className="text-sm font-medium text-foreground">{item.label}</p>
                     <p className="text-xs text-muted-foreground">{item.desc}</p>
                   </div>
-                  {item.badge ? <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-400 text-xs">{item.badge}</Badge> : null}
+
                   <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
                 </div>
               </Link>
