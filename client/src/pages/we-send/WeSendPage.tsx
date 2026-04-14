@@ -8,12 +8,20 @@ import PageHeader from "@/components/PageHeader";
 import {
   MessageSquare, Send, Users, CheckCircle,
   AlertCircle, ChevronRight, ChevronLeft, Upload, Plus, Trash2,
-  Settings, BarChart3, Wifi, WifiOff, RefreshCw, Download
+  Settings, BarChart3, Wifi, WifiOff, RefreshCw, Download, FolderOpen
 } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "@/contexts/AppContext";
 import { trpc } from "@/lib/trpc";
 import { Link } from "wouter";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 
 const STEPS = [
   { label: "Contatos", icon: Users },
@@ -56,6 +64,30 @@ export default function WeSendPage() {
   const [nomeCampanha, setNomeCampanha] = useState("");
   const [intervalo, setIntervalo] = useState(3);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Modal de carregar campanha rascunho
+  const [showDraftModal, setShowDraftModal] = useState(false);
+  const [loadingDraftId, setLoadingDraftId] = useState<number | null>(null);
+  const draftCampanhasQuery = trpc.weSend.getDraftCampanhas.useQuery(
+    { unitId },
+    { enabled: showDraftModal && !!unitId }
+  );
+
+  const handleLoadDraft = async (campanhaId: number) => {
+    setLoadingDraftId(campanhaId);
+    try {
+      const data = await utils.weSend.getDraftCampanhaContatos.fetch({ id: campanhaId, unitId });
+      setNomeCampanha(data.nome);
+      setMensagem(data.mensagem);
+      setContatos(data.contatos.map(c => ({ nome: c.nome, telefone: c.telefone })));
+      setShowDraftModal(false);
+      toast.success(`${data.contatos.length} contatos carregados da campanha "${data.nome}"`);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao carregar campanha");
+    } finally {
+      setLoadingDraftId(null);
+    }
+  };
 
   const dashboardQuery = trpc.weSend.getDashboard.useQuery({ unitId }, { enabled: !!unitId });
   const configQuery = trpc.weSend.getConfig.useQuery({ unitId }, { enabled: !!unitId });
@@ -273,13 +305,16 @@ export default function WeSendPage() {
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted-foreground">ou importar CSV</span>
+                <span className="text-xs text-muted-foreground">ou importar</span>
                 <div className="flex-1 h-px bg-border" />
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileUpload} />
                 <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8" onClick={() => fileRef.current?.click()}>
                   <Upload className="w-3.5 h-3.5" />Importar CSV
+                </Button>
+                <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8 border-primary/40 text-primary hover:bg-primary/10" onClick={() => setShowDraftModal(true)}>
+                  <FolderOpen className="w-3.5 h-3.5" />Carregar Campanha
                 </Button>
                 <Button variant="outline" size="sm" className="text-xs gap-1.5 h-8" onClick={() => {
                   const csv = "nome,telefone\nCarlos Silva,48999990001\nAna Souza,48999990002";
@@ -289,6 +324,49 @@ export default function WeSendPage() {
                   <Download className="w-3.5 h-3.5" />Modelo CSV
                 </Button>
               </div>
+              {/* Modal de seleção de campanha rascunho */}
+              <Dialog open={showDraftModal} onOpenChange={setShowDraftModal}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="text-sm">Carregar Campanha</DialogTitle>
+                    <DialogDescription className="text-xs">
+                      Selecione uma campanha rascunho para carregar os contatos e a mensagem.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-2 max-h-72 overflow-y-auto">
+                    {draftCampanhasQuery.isLoading && (
+                      <p className="text-xs text-muted-foreground text-center py-4">Carregando campanhas...</p>
+                    )}
+                    {draftCampanhasQuery.data?.length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center py-4">Nenhuma campanha rascunho disponível para esta unidade.</p>
+                    )}
+                    {draftCampanhasQuery.data?.map(camp => (
+                      <button
+                        key={camp.id}
+                        onClick={() => handleLoadDraft(camp.id)}
+                        disabled={loadingDraftId === camp.id}
+                        className="w-full text-left rounded-lg border border-border hover:border-primary/50 hover:bg-primary/5 p-3 transition-colors disabled:opacity-50"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-foreground truncate">{camp.nome}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {camp.totalContatos} contatos · {new Date(camp.createdAt!).toLocaleDateString("pt-BR")}
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-[10px] shrink-0 border-amber-500/40 text-amber-500">
+                            rascunho
+                          </Badge>
+                        </div>
+                        {loadingDraftId === camp.id && (
+                          <p className="text-[10px] text-primary mt-1">Carregando contatos...</p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
+
               {contatos.length > 0 && (
                 <div className="rounded-lg border border-white/10 bg-muted/30 p-3 space-y-1.5 max-h-40 overflow-y-auto">
                   <p className="text-xs font-medium text-foreground">{contatos.length} contatos</p>

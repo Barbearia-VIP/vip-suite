@@ -1279,3 +1279,12 @@
 - [x] Campanha criada como rascunho no We Send com contatos pré-carregados, redirect para /we-send/campanhas
 - [x] Apenas contatos da unidade ativa incluídos (filtro por unitId na query)
 - [x] Testado no browser — OK (1.568 contatos Perdidos, modal funcional)
+
+## Feature: We Send — Carregar Campanha do Raio-X no Wizard
+
+- [x] Adicionar procedure weSend.getDraftCampanhas para listar campanhas rascunho da unidade
+- [x] Adicionar procedure weSend.getDraftCampanhaContatos para retornar contatos de uma campanha
+- [x] Adicionar botão "Carregar Campanha" no wizard de nova campanha ao lado do "Importar CSV"
+- [x] Modal com lista de campanhas rascunho (nome, total contatos, data de criação, badge "rascunho")
+- [x] Ao selecionar, preenche automaticamente nome, mensagem e contatos no wizard
+- [x] TypeScript compilou sem erros (0 errors)

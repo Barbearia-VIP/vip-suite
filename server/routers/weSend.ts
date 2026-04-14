@@ -491,6 +491,36 @@ export const weSendRouter = router({
     }),
 
   // ── Dashboard / Métricas ──────────────────────────────────────────────────
+  getDraftCampanhas: sysUserProcedure
+    .input(z.object({ unitId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      return db.select().from(wsCampanhas)
+        .where(and(eq(wsCampanhas.unitId, input.unitId), eq(wsCampanhas.status, "rascunho")))
+        .orderBy(desc(wsCampanhas.createdAt));
+    }),
+
+  getDraftCampanhaContatos: sysUserProcedure
+    .input(z.object({ id: z.number(), unitId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [campanha] = await db.select().from(wsCampanhas)
+        .where(and(eq(wsCampanhas.id, input.id), eq(wsCampanhas.unitId, input.unitId), eq(wsCampanhas.status, "rascunho")))
+        .limit(1);
+      if (!campanha) throw new TRPCError({ code: "NOT_FOUND", message: "Campanha rascunho não encontrada" });
+      const contatos = await db.select().from(wsContatos).where(eq(wsContatos.campanhaId, input.id));
+      return {
+        id: campanha.id,
+        nome: campanha.nome,
+        mensagem: campanha.mensagem,
+        totalContatos: campanha.totalContatos || contatos.length,
+        contatos: contatos.map(c => ({ nome: c.nome || "", telefone: c.telefone })),
+        createdAt: campanha.createdAt,
+      };
+    }),
+
   getDashboard: sysUserProcedure
     .input(z.object({ unitId: z.number() }))
     .query(async ({ input }) => {
