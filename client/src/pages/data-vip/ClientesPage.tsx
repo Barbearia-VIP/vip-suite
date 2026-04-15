@@ -1159,7 +1159,7 @@ export default function ClientesPage() {
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.22 0.014 260 / 0.5)" />
                         <XAxis dataKey="label" tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: "oklch(0.45 0.012 260)" }} tickFormatter={v => v >= 1000 ? `R$${(v/1000).toFixed(1)}k` : `R$${v.toFixed(2)}`} axisLine={false} tickLine={false} />
                         <Tooltip
                           formatter={(v: number) => fmtMoeda(v)}
                           contentStyle={ct.tooltipStyle}

@@ -24,7 +24,7 @@ import { DatePicker } from "@/components/DatePicker";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function fmt(value: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 }
 function fmtNum(value: number) {
   return new Intl.NumberFormat("pt-BR").format(value);
@@ -373,7 +373,7 @@ function PremiumTooltip({ active, payload, label }: any) {
       {payload.map((p: any, i: number) => (
         <p key={i} className="font-bold" style={{ color: p.color ?? "oklch(0.76 0.145 72)" }}>
           {typeof p.value === "number"
-            ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(p.value)
+            ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(p.value)
             : p.value}
         </p>
       ))}
@@ -989,7 +989,7 @@ export default function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke={ct.gridStroke} vertical={false} />
                   <XAxis dataKey="mes" tick={{ fontSize: 10, fill: ct.axisColor }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: ct.axisColor }} axisLine={false} tickLine={false}
-                    tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} width={48} />
+                    tickFormatter={(v) => v >= 1000 ? `R$${(v / 1000).toFixed(1)}k` : `R$${v.toFixed(2)}`} width={56} />
                   <Tooltip content={<PremiumTooltip />} />
                   <Area type="monotone" dataKey="faturamento" stroke="oklch(0.76 0.145 72)"
                     strokeWidth={2.5} fill="url(#gradFat)" dot={false}

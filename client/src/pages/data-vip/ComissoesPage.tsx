@@ -18,7 +18,7 @@ import { DollarSign, Calendar, TrendingUp, Users, Scissors, Package, Star, Troph
 import { DataVipLoadingState, DataVipErrorState, isExternalDbTimeoutError } from "@/components/DataVipLoadingState";
 
 function fmt(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
 }
 function fmtPct(v: number) {
   return `${Number(v).toFixed(1)}%`;

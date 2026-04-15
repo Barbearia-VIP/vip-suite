@@ -689,7 +689,7 @@ export default function MensalPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke={ct.gridStroke} vertical={false} />
                   <XAxis dataKey="mesLabel" tick={{ fontSize: 11, fill: ct.axisColor }} axisLine={false} tickLine={false} />
                   <YAxis
-                    tickFormatter={v => metricCfg.isMoeda ? `R$${(v/1000).toFixed(0)}k` : fmtNum(v)}
+                    tickFormatter={v => metricCfg.isMoeda ? (v >= 1000 ? `R$${(v/1000).toFixed(1)}k` : `R$${v.toFixed(2)}`) : fmtNum(v)}
                     tick={{ fontSize: 11, fill: ct.axisColor }} axisLine={false} tickLine={false} width={55}
                   />
                   <Tooltip
@@ -711,7 +711,7 @@ export default function MensalPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke={ct.gridStroke} vertical={false} />
                   <XAxis dataKey="mesLabel" tick={{ fontSize: 11, fill: ct.axisColor }} axisLine={false} tickLine={false} />
                   <YAxis
-                    tickFormatter={v => metricCfg.isMoeda ? `R$${(v/1000).toFixed(0)}k` : fmtNum(v)}
+                    tickFormatter={v => metricCfg.isMoeda ? (v >= 1000 ? `R$${(v/1000).toFixed(1)}k` : `R$${v.toFixed(2)}`) : fmtNum(v)}
                     tick={{ fontSize: 11, fill: ct.axisColor }} axisLine={false} tickLine={false} width={55}
                   />
                   <Tooltip

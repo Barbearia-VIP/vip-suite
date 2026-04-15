@@ -28,7 +28,7 @@ import { DatePicker } from "@/components/DatePicker";
 const COLORS = ["oklch(0.65 0.15 200)", "oklch(0.78 0.12 75)", "oklch(0.65 0.15 145)", "oklch(0.65 0.15 280)"];
 
 function formatCurrency(val: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(val);
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
 }
 
 function formatDateTime(d: Date | string | null) {
@@ -332,7 +332,7 @@ export default function DataVipPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0 0)" />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: "oklch(0.6 0 0)" }} />
-                  <YAxis tick={{ fontSize: 11, fill: "oklch(0.6 0 0)" }} tickFormatter={v => `R$${(v / 1000).toFixed(0)}k`} />
+                  <YAxis tick={{ fontSize: 11, fill: "oklch(0.6 0 0)" }} tickFormatter={v => v >= 1000 ? `R$${(v / 1000).toFixed(1)}k` : `R$${v.toFixed(2)}`} />
                   <Tooltip formatter={(v: number) => [formatCurrency(v), "Faturamento"]} contentStyle={ct.tooltipStyle} />
                   <Area type="monotone" dataKey="faturamento" stroke="oklch(0.65 0.15 200)" fill="url(#colorFat)" strokeWidth={2} />
                 </AreaChart>

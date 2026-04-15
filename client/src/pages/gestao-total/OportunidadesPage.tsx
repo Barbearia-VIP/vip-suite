@@ -37,7 +37,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 function fmt(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
 }
 
 function FormOportunidade({ initial, onSave, onClose }: {

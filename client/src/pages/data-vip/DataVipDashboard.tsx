@@ -36,7 +36,7 @@ import { useChartTheme } from "../../hooks/useChartTheme";
 const COLORS = ["oklch(0.75 0.15 200)", "oklch(0.78 0.12 75)", "oklch(0.65 0.15 145)", "oklch(0.65 0.15 280)", "oklch(0.65 0.12 30)"];
 
 function fmt(v: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
 }
 function fmtPct(v: number) {
   return `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
@@ -749,7 +749,7 @@ export default function DataVipDashboard() {
                         axisLine={false}
                         tickFormatter={v => {
                           if (metrica === "faturamento" || metrica === "ticketMedio" || metrica === "extraValor") {
-                            return v >= 1000 ? `R$${(v/1000).toFixed(0)}k` : `R$${v.toFixed(0)}`;
+                            return v >= 1000 ? `R$${(v/1000).toFixed(1)}k` : `R$${v.toFixed(2)}`;
                           }
                           return v.toLocaleString("pt-BR");
                         }}

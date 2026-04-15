@@ -25,7 +25,7 @@ type Compra = {
   createdAt: Date; updatedAt: Date;
 };
 function fmt(v: number) {
-  return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL",maximumFractionDigits:0}).format(v);
+  return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL",minimumFractionDigits:2,maximumFractionDigits:2}).format(v);
 }
 const STATUS_ICONS: Record<string,React.ReactNode> = {
   rascunho: <Clock className="w-4 h-4 text-muted-foreground" />,
