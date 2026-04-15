@@ -466,7 +466,6 @@ export function getSchedulerInfo() {
 export function startSyncScheduler() {
   if (schedulerTimer) return;
   schedulerStartedAt = new Date();
-  nextCycleAt = new Date(Date.now() + SYNC_INTERVAL_MS);
   console.log("[Sync Scheduler] Iniciado — sincronização incremental a cada 4 horas");
 
   const runCycle = async () => {
@@ -484,8 +483,42 @@ export function startSyncScheduler() {
     }
   };
 
-  // Sem execução automática no boot — dados já estão no banco local
-  // Ciclos a cada 4 horas para não comprometer o servidor externo
+  // Verificar se a última sync foi há mais de SYNC_INTERVAL_MS (4h)
+  // Se sim, executar imediatamente no boot para cobrir o gap causado por restarts
+  const checkAndRunOnBoot = async () => {
+    try {
+      const conn = await getLocalConn();
+      const [rows] = await conn.execute(
+        "SELECT MAX(ultima_sync) as ultima FROM sync_controle WHERE ultima_sync IS NOT NULL"
+      );
+      await conn.end();
+      const ultimaSync = (rows as { ultima: string | null }[])[0]?.ultima;
+      if (!ultimaSync) {
+        console.log("[Sync Scheduler] Nenhuma sync anterior encontrada — executando ciclo inicial no boot");
+        await runCycle();
+        return;
+      }
+      const diffMs = Date.now() - new Date(ultimaSync).getTime();
+      if (diffMs > SYNC_INTERVAL_MS) {
+        const diffH = (diffMs / (1000 * 60 * 60)).toFixed(1);
+        console.log(`[Sync Scheduler] Última sync foi há ${diffH}h — executando ciclo de recuperação no boot`);
+        await runCycle();
+      } else {
+        const proxH = ((SYNC_INTERVAL_MS - diffMs) / (1000 * 60 * 60)).toFixed(1);
+        console.log(`[Sync Scheduler] Última sync recente — próximo ciclo em ${proxH}h`);
+        nextCycleAt = new Date(Date.now() + (SYNC_INTERVAL_MS - diffMs));
+      }
+    } catch (err) {
+      console.error("[Sync Scheduler] Erro ao verificar sync no boot:", err);
+      // Em caso de erro na verificação, executar ciclo por segurança
+      await runCycle();
+    }
+  };
+
+  // Executar verificação no boot (sem bloquear o startup do servidor)
+  checkAndRunOnBoot();
+
+  // Ciclos regulares a cada 4 horas
   schedulerTimer = setInterval(runCycle, SYNC_INTERVAL_MS);
 }
 
