@@ -9,7 +9,7 @@ import {
   CheckSquare, Wifi, WifiOff, Settings, TrendingDown,
   Users, AlertTriangle, CalendarDays, DollarSign, Smile,
   MessageCircle, ThumbsUp, Clock, Zap, Activity, Meh, Frown, ImagePlay,
-  DatabaseZap, Loader2,
+  DatabaseZap, Loader2, Send, CheckCircle2,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useOrg } from "@/hooks/useOrg";
@@ -914,11 +914,30 @@ export default function DashboardPage() {
           onConfigure={isSysUnitUser ? undefined : () => navigate("/configuracoes")} onNavigate={() => navigate("/we-send")}>
           {kpis?.weSend.hasData ? (
             <>
-              <MiniKPI label="Mensagens Enviadas" value={fmtNum(kpis.weSend.enviados)}
-                sub={`${kpis.weSend.campanhas} campanhas no período`}
-                icon={MessageSquare} color="oklch(0.65 0.15 100)" />
-              <MiniKPI label="Contatos Alcançados" value={fmtNum(kpis.weSend.totalContatos)}
-                icon={Users} color="oklch(0.65 0.15 100)" />
+              <MiniKPI
+                label="Campanhas Criadas"
+                value={fmtNum(kpis.weSend.campanhas)}
+                sub={`${kpis.weSend.campanhasEnviadas ?? 0} enviadas no período`}
+                icon={MessageSquare}
+                color="oklch(0.65 0.15 100)"
+              />
+              <MiniKPI
+                label="Mensagens Enviadas"
+                value={fmtNum(kpis.weSend.enviados)}
+                sub={`${fmtNum(kpis.weSend.totalContatos)} contatos alcançados`}
+                icon={Send}
+                color="oklch(0.65 0.15 100)"
+              />
+              <MiniKPI
+                label="Taxa de Sucesso"
+                value={`${kpis.weSend.taxaSucesso ?? 0}%`}
+                icon={CheckCircle2}
+                color={(
+                  (kpis.weSend.taxaSucesso ?? 0) >= 90 ? "oklch(0.72 0.16 145)" :
+                  (kpis.weSend.taxaSucesso ?? 0) >= 70 ? "oklch(0.76 0.145 72)" :
+                  "oklch(0.65 0.16 15)"
+                )}
+              />
             </>
           ) : (
             <div className="py-2 text-center">

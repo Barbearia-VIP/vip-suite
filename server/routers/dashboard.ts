@@ -14,6 +14,7 @@ import {
   gtProblemas,
   gtReunioes,
   gtFinanceiro,
+  wsCampanhas,
 } from "../../drizzle/schema";
 
 // Helper: db.execute(sql.raw(...)) retorna [[rows], [metadata]] no MySQL2
@@ -326,6 +327,32 @@ export const dashboardRouter = router({
       // NPS = (promotores - detratores) / total * 100
       const nps = totalRep > 0 ? Math.round(((promotores - detratores) / totalRep) * 100) : 0;
 
+      // ── WE SEND: campanhas criadas, enviadas e taxa de sucesso no período ──
+      const weSendWhere = unitId
+        ? and(eq(wsCampanhas.unitId, unitId), gte(wsCampanhas.createdAt, mesStart), lte(wsCampanhas.createdAt, mesEnd))
+        : and(
+            inArray(wsCampanhas.unitId, (await db.select({ id: units.id }).from(units).where(eq(units.orgId, orgId))).map(u => u.id)),
+            gte(wsCampanhas.createdAt, mesStart),
+            lte(wsCampanhas.createdAt, mesEnd)
+          );
+
+      const [weSendStats] = await db.select({
+        totalCampanhas: count(wsCampanhas.id),
+        totalEnviados: sql<string>`COALESCE(SUM(${wsCampanhas.totalEnviados}), 0)`,
+        totalFalhas: sql<string>`COALESCE(SUM(${wsCampanhas.totalFalhas}), 0)`,
+        totalContatos: sql<string>`COALESCE(SUM(${wsCampanhas.totalContatos}), 0)`,
+        campanhasEnviadas: sql<string>`COALESCE(SUM(CASE WHEN ${wsCampanhas.status} IN ('concluida', 'em_andamento') THEN 1 ELSE 0 END), 0)`,
+      }).from(wsCampanhas).where(weSendWhere);
+
+      const wsTotalCampanhas = Number(weSendStats?.totalCampanhas ?? 0);
+      const wsTotalEnviados = Number(weSendStats?.totalEnviados ?? 0);
+      const wsTotalFalhas = Number(weSendStats?.totalFalhas ?? 0);
+      const wsTotalContatos = Number(weSendStats?.totalContatos ?? 0);
+      const wsCampanhasEnviadas = Number(weSendStats?.campanhasEnviadas ?? 0);
+      const wsTaxaSucesso = (wsTotalEnviados + wsTotalFalhas) > 0
+        ? Math.round((wsTotalEnviados / (wsTotalEnviados + wsTotalFalhas)) * 100)
+        : 0;
+
       // ── AUTO INSTAGRAM: comentários e stories respondidos no período ──
       // ig_replied_comments usa timestamp UTC — converter período BRT para UTC adicionando 3h
       // Ex: 2026-04-01 00:00 BRT = 2026-04-01 03:00 UTC; 2026-04-07 23:59 BRT = 2026-04-08 02:59 UTC
@@ -405,10 +432,12 @@ export const dashboardRouter = router({
           hasData: igTotals.comentariosRespondidos > 0 || igTotals.storiesRespondidos > 0,
         },
         weSend: {
-          campanhas: 0,
-          enviados: 0,
-          totalContatos: 0,
-          hasData: false,
+          campanhas: wsTotalCampanhas,
+          campanhasEnviadas: wsCampanhasEnviadas,
+          enviados: wsTotalEnviados,
+          totalContatos: wsTotalContatos,
+          taxaSucesso: wsTaxaSucesso,
+          hasData: wsTotalCampanhas > 0,
         },
       };
     }),
