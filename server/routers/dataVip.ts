@@ -588,10 +588,15 @@ export const dataVipRouter = router({
     .input(z.object({
       colaboradorId: z.string(),
       orgId: z.number(),
-      tipoColaborador: z.enum(["barbeiro", "recepcao", "nenhum"]),
+      tipoColaborador: z.enum(["barbeiro", "recepcao", "estetica", "nenhum"]),
+      unitId: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      if ((ctx.user?.role ?? "user") !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const isAdmin = (ctx.user?.role ?? "user") === "admin";
+      if (!isAdmin && !ctx.sysUser) throw new TRPCError({ code: "FORBIDDEN" });
+      if (!isAdmin && ctx.sysUser && input.unitId && !ctx.sysUser.allowedUnitIds.includes(input.unitId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar esta unidade" });
+      }
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.execute(sql`

@@ -28,7 +28,8 @@ export default function ColaboradoresPage() {
   const { org } = useOrg();
   const { user } = useAuth();
   const ct = useChartTheme();
-  const isAdmin = userRole === "master" || userRole === "org_admin" || user?.role === "admin";
+  // Admin ou gerente de unidade pode editar tipo e ver % comissões
+  const isAdmin = userRole === "master" || userRole === "org_admin" || user?.role === "admin" || userRole === "unit_manager";
   const now = new Date();
 
   const [filter, setFilter] = useState<DateFilter>({
@@ -65,7 +66,7 @@ export default function ColaboradoresPage() {
 
   const isRangeMode = filter.mode === "range";
   const colSpanBase = isRangeMode ? 6 : 7;
-  const colSpanTotal = isAdmin ? colSpanBase + 2 : colSpanBase; // +2 para % Serv, % Prod (somente leitura)
+  const colSpanTotal = isAdmin ? colSpanBase + 2 : colSpanBase; // +2 para % Serv, % Prod
 
   return (
     <div className="p-6 space-y-5">
@@ -157,7 +158,7 @@ export default function ColaboradoresPage() {
                                 {isAdmin ? (
                                   <Select
                                     value={c.tipoColaborador || "nenhum"}
-                                    onValueChange={v => updateTipo.mutate({ colaboradorId: c.colaboradorId, orgId: org!.id, tipoColaborador: v as any })}
+                                    onValueChange={v => updateTipo.mutate({ colaboradorId: c.colaboradorId, orgId: org!.id, unitId: selectedUnit?.id, tipoColaborador: v as any })}
                                   >
                                     <SelectTrigger className="h-7 text-xs w-32">
                                       <SelectValue />
@@ -165,6 +166,7 @@ export default function ColaboradoresPage() {
                                     <SelectContent>
                                       <SelectItem value="barbeiro">Barbeiro</SelectItem>
                                       <SelectItem value="recepcao">Recepção</SelectItem>
+                                      <SelectItem value="estetica">Estética</SelectItem>
                                       <SelectItem value="nenhum">Nenhum</SelectItem>
                                     </SelectContent>
                                   </Select>
