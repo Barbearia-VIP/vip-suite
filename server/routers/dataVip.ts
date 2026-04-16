@@ -1220,7 +1220,7 @@ export const dataVipRouter = router({
         ORDER BY qtd DESC
       `);
 
-      // Busca categorias salvas no banco local
+      // Busca categorias salvas no banco local (case-insensitive)
       const db = await getDb();
       let catMap: Record<string, string> = {};
       if (db && orgFilter) {
@@ -1228,14 +1228,14 @@ export const dataVipRouter = router({
           SELECT nomeServico, categoria FROM servico_categorias WHERE orgId = ${orgFilter}
         `) as any;
         for (const r of catRows as any[]) {
-          catMap[r.nomeServico] = r.categoria;
+          // Normaliza para lowercase para match case-insensitive
+          catMap[r.nomeServico.toLowerCase()] = r.categoria;
         }
       }
-
       return extServicos.map(s => ({
         nome: s.nome,
         qtd: Number(s.qtd),
-        categoria: catMap[s.nome] as "base" | "extra" | null ?? null,
+        categoria: (catMap[s.nome.toLowerCase()] as "base" | "extra" | null) ?? null,
       }));
     }),
 
@@ -2495,7 +2495,7 @@ export const dataVipRouter = router({
         ORDER BY qtd DESC
       `);
 
-      // Busca categorias salvas no banco local
+       // Busca categorias salvas no banco local (case-insensitive)
       const db = await getDb();
       let catMap: Record<string, string> = {};
       if (db && orgFilter) {
@@ -2503,15 +2503,14 @@ export const dataVipRouter = router({
           SELECT nomeProduto, categoria FROM produto_categorias WHERE orgId = ${orgFilter}
         `) as any;
         for (const r of catRows as any[]) {
-          catMap[r.nomeProduto] = r.categoria;
+          catMap[r.nomeProduto.toLowerCase()] = r.categoria;
         }
       }
-
       return extProdutos.map(p => ({
         nome: p.nome,
         qtd: Number(p.qtd),
         valorTotal: Number(p.valorTotal ?? 0),
-        categoria: (catMap[p.nome] as "cabelo" | "barba" | "outros" | null) ?? null,
+        categoria: (catMap[p.nome.toLowerCase()] as "cabelo" | "barba" | "outros" | null) ?? null,
       }));
     }),
 
