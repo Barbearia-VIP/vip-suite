@@ -750,7 +750,7 @@ export async function getEvolucaoDiaria(
   }>(`
     SELECT
       DATE_FORMAT(v.data_criacao, '%Y-%m-%d') as dia,
-      COALESCE(SUM(DISTINCT v.valor_total), 0) as faturamento,
+      COALESCE(SUM(vp.valor_total), 0) as faturamento,
       COUNT(DISTINCT v.id) as atendimentos,
       COUNT(DISTINCT v.cliente) as clientes,
       COUNT(DISTINCT CASE
@@ -763,7 +763,7 @@ export async function getEvolucaoDiaria(
             AND v2.status = 1
         ) THEN v.cliente
       END) as clientes_novos,
-      COALESCE(SUM(DISTINCT v.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
+      COALESCE(SUM(vp.valor_total) / NULLIF(COUNT(DISTINCT v.id), 0), 0) as ticket_medio,
       COUNT(CASE WHEN p.tipo = 'ser' THEN 1 END) as servicos,
       COUNT(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN 1 END) as produtos,
       COUNT(CASE WHEN p.tipo = 'ser' AND (p.categoria = 'extra' OR p.categoria IS NULL) THEN 1 END) as extra_qtd,
