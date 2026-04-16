@@ -617,7 +617,7 @@ export const dataVipRouter = router({
       await pool.query(
         `INSERT INTO dimensao_colaboradores (colaboradorId, orgId, tipoColaborador, ativo)
         VALUES (?, ?, ?, 1)
-        ON DUPLICATE KEY UPDATE tipoColaborador = VALUES(tipoColaborador), updatedAt = NOW()`,
+        ON DUPLICATE KEY UPDATE tipoColaborador = VALUES(tipoColaborador)`,
         [input.colaboradorId, input.orgId, input.tipoColaborador]
       );
       return { success: true };
