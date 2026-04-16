@@ -9,6 +9,20 @@ import { protectedProcedure, router, sysUserProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
 import { sql, eq, and, asc } from "drizzle-orm";
+import mysql from "mysql2/promise";
+
+// Pool mysql2 direto (sem prepared statements do Drizzle) para mutations de enum
+let _localPool: mysql.Pool | null = null;
+function getLocalPool(): mysql.Pool {
+  if (!_localPool) {
+    _localPool = mysql.createPool({
+      uri: process.env.DATABASE_URL,
+      waitForConnections: true,
+      connectionLimit: 5,
+    });
+  }
+  return _localPool;
+}
 import { metaFaixas, metasDinamicas } from "../../drizzle/schema";
 import { getSyncStatus, getAllSyncStatuses, startAutoSyncScheduler } from "../vipDataSync";
 import {
@@ -597,13 +611,15 @@ export const dataVipRouter = router({
       if (!isAdmin && ctx.sysUser && input.unitId && !ctx.sysUser.allowedUnitIds.includes(input.unitId)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar esta unidade" });
       }
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      await db.execute(sql`
-        INSERT INTO dimensao_colaboradores (colaboradorId, orgId, tipoColaborador, ativo)
-        VALUES (${input.colaboradorId}, ${input.orgId}, ${input.tipoColaborador}, 1)
-        ON DUPLICATE KEY UPDATE tipoColaborador = VALUES(tipoColaborador), updatedAt = NOW()
-      `);
+      // Usar mysql2 diretamente (não Drizzle) para evitar cache de prepared statements
+      // que rejeitaria novos valores de enum como 'estetica'
+      const pool = getLocalPool();
+      await pool.query(
+        `INSERT INTO dimensao_colaboradores (colaboradorId, orgId, tipoColaborador, ativo)
+        VALUES (?, ?, ?, 1)
+        ON DUPLICATE KEY UPDATE tipoColaborador = VALUES(tipoColaborador), updatedAt = NOW()`,
+        [input.colaboradorId, input.orgId, input.tipoColaborador]
+      );
       return { success: true };
     }),
 
