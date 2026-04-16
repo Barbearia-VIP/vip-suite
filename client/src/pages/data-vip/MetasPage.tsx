@@ -49,7 +49,8 @@ function FaixasComissaoTab() {
   const { selectedUnit, userRole } = useApp();
   const { org, units } = useOrg();
   const { user } = useAuth();
-  const isAdmin = userRole === "master" || userRole === "org_admin" || user?.role === "admin";
+  // Admin ou usuário de unidade (unit_user) pode editar as faixas da sua própria unidade
+  const isAdmin = userRole === "master" || userRole === "org_admin" || user?.role === "admin" || userRole === "unit_user";
 
   // Unidade selecionada para editar faixas
   const [editUnitId, setEditUnitId] = useState<number | null>(null);
@@ -410,7 +411,8 @@ function MetaDinamicaTab() {
   const { selectedUnit, userRole } = useApp();
   const { org, units } = useOrg();
   const { user } = useAuth();
-  const isAdmin = userRole === "master" || userRole === "org_admin" || user?.role === "admin";
+  // Admin ou usuário de unidade pode editar metas da sua própria unidade
+  const isAdmin = userRole === "master" || userRole === "org_admin" || user?.role === "admin" || userRole === "unit_user";
 
   const [editUnitId, setEditUnitId] = useState<number | null>(null);
   const unitId = editUnitId ?? selectedUnit?.id ?? null;

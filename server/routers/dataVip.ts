@@ -912,7 +912,12 @@ export const dataVipRouter = router({
       alertaAbaixoPercent: z.number().default(80),
     }))
     .mutation(async ({ ctx, input }) => {
-      if ((ctx.user?.role ?? "user") !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      // Admin pode editar tudo; sysUser pode editar apenas sua(s) unidade(s)
+      const isAdmin = (ctx.user?.role ?? "user") === "admin";
+      if (!isAdmin && !ctx.sysUser) throw new TRPCError({ code: "FORBIDDEN" });
+      if (!isAdmin && ctx.sysUser && input.unitId && !ctx.sysUser.allowedUnitIds.includes(input.unitId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar esta unidade" });
+      }
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.execute(sql`
@@ -925,9 +930,13 @@ export const dataVipRouter = router({
     }),
 
   deleteMeta: sysUserProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number(), unitId: z.number().optional() }))
     .mutation(async ({ ctx, input }) => {
-      if ((ctx.user?.role ?? "user") !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const isAdmin = (ctx.user?.role ?? "user") === "admin";
+      if (!isAdmin && !ctx.sysUser) throw new TRPCError({ code: "FORBIDDEN" });
+      if (!isAdmin && ctx.sysUser && input.unitId && !ctx.sysUser.allowedUnitIds.includes(input.unitId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar esta unidade" });
+      }
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.execute(sql`DELETE FROM metas_vip WHERE id = ${input.id}`);
@@ -2135,7 +2144,11 @@ export const dataVipRouter = router({
       ativo: z.boolean().default(true),
     }))
     .mutation(async ({ ctx, input }) => {
-      if ((ctx.user?.role ?? "user") !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const isAdmin = (ctx.user?.role ?? "user") === "admin";
+      if (!isAdmin && !ctx.sysUser) throw new TRPCError({ code: "FORBIDDEN" });
+      if (!isAdmin && ctx.sysUser && !ctx.sysUser.allowedUnitIds.includes(input.unitId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar esta unidade" });
+      }
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       if (input.id) {
@@ -2175,7 +2188,11 @@ export const dataVipRouter = router({
       })),
     }))
     .mutation(async ({ ctx, input }) => {
-      if ((ctx.user?.role ?? "user") !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const isAdmin = (ctx.user?.role ?? "user") === "admin";
+      if (!isAdmin && !ctx.sysUser) throw new TRPCError({ code: "FORBIDDEN" });
+      if (!isAdmin && ctx.sysUser && !ctx.sysUser.allowedUnitIds.includes(input.unitId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar esta unidade" });
+      }
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       // Deleta todas as faixas existentes da unidade
@@ -2202,9 +2219,13 @@ export const dataVipRouter = router({
 
   // Deleta uma faixa
   metaFaixaDelete: sysUserProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number(), unitId: z.number().optional() }))
     .mutation(async ({ ctx, input }) => {
-      if ((ctx.user?.role ?? "user") !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+      const isAdmin = (ctx.user?.role ?? "user") === "admin";
+      if (!isAdmin && !ctx.sysUser) throw new TRPCError({ code: "FORBIDDEN" });
+      if (!isAdmin && ctx.sysUser && input.unitId && !ctx.sysUser.allowedUnitIds.includes(input.unitId)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para editar esta unidade" });
+      }
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.delete(metaFaixas).where(eq(metaFaixas.id, input.id));
