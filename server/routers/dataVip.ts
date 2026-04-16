@@ -807,8 +807,11 @@ export const dataVipRouter = router({
 
       return colabs.map(c => {
         const regra = (regras as any[]).find((r: any) => r.colaboradorId === String(c.colaborador_id));
-        const pctServicos = regra ? Number(regra.percentual) : 0;
-        const pctProdutos = regra ? Number(regra.pctComissaoProdutos ?? 0) : 0;
+        // Usa regra manual (override) se existir; caso contrário usa percentuais nativos do sync_usuarios
+        const pctServicoNativo = Number((c as any).pct_servico_nativo ?? 0);
+        const pctProdutoNativo = Number((c as any).pct_produto_nativo ?? 0);
+        const pctServicos = regra ? Number(regra.percentual) : pctServicoNativo;
+        const pctProdutos = regra ? Number(regra.pctComissaoProdutos ?? 0) : pctProdutoNativo;
         const fatTotal = Number(c.faturamento ?? 0);
         const atend = Number(c.atendimentos ?? 0);
         // Breakdown direto da query (getColaboradoresComissoes retorna campos separados)

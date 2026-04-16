@@ -2399,6 +2399,8 @@ export async function getColaboradoresComissoes(
     extra_valor: number;
     produtos_valor: number;
     clientes: number;
+    pct_servico_nativo: number;
+    pct_produto_nativo: number;
   }>(`
     SELECT
       colab.id as colaborador_id,
@@ -2410,7 +2412,9 @@ export async function getColaboradoresComissoes(
       COALESCE(SUM(CASE WHEN ${baseCond} THEN vp.valor_total END), 0) as servicos_base_valor,
       COALESCE(SUM(CASE WHEN ${extraCond} THEN vp.valor_total END), 0) as extra_valor,
       COALESCE(SUM(CASE WHEN p.tipo IN ('probar','proemp','proins') THEN vp.valor_total END), 0) as produtos_valor,
-      COUNT(DISTINCT v.cliente) as clientes
+      COUNT(DISTINCT v.cliente) as clientes,
+      COALESCE(colab.comissao_servico, 0) as pct_servico_nativo,
+      COALESCE(colab.comissao_produto, 0) as pct_produto_nativo
     FROM sync_vendas_produtos vp
     JOIN sync_usuarios colab ON colab.id = vp.colaborador
     JOIN sync_vendas v ON v.id = vp.venda
