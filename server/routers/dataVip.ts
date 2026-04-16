@@ -1242,20 +1242,26 @@ export const dataVipRouter = router({
   /** Salva (upsert) a categoria de um ou mais serviços */
   saveServicoCategorias: sysUserProcedure
     .input(z.object({
-      orgId: z.number(),
+      orgId: z.number().optional(),
       servicos: z.array(z.object({
         nome: z.string(),
         categoria: z.enum(["base", "extra"]),
       })),
     }))
     .mutation(async ({ ctx, input }) => {
+      // Resolve orgId correto via sysUser (mesmo padrão da listagem)
+      const { orgFilter } = await resolveUnitFilter(
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, undefined, ctx.sysUser
+      );
+      const resolvedOrgId = orgFilter ?? input.orgId;
+      if (!resolvedOrgId) throw new TRPCError({ code: "BAD_REQUEST", message: "orgId não encontrado" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       for (const s of input.servicos) {
         await db.execute(sql`
           INSERT INTO servico_categorias (orgId, nomeServico, categoria)
-          VALUES (${input.orgId}, ${s.nome}, ${s.categoria})
-          ON DUPLICATE KEY UPDATE categoria = ${s.categoria}, updatedAt = NOW()
+          VALUES (${resolvedOrgId}, ${s.nome}, ${s.categoria})
+          ON DUPLICATE KEY UPDATE categoria = ${s.categoria}
         `);
       }
       return { success: true, count: input.servicos.length };
@@ -2512,20 +2518,26 @@ export const dataVipRouter = router({
   /** Salva (upsert) a categoria de um ou mais produtos */
   saveProdutoCategorias: sysUserProcedure
     .input(z.object({
-      orgId: z.number(),
+      orgId: z.number().optional(),
       produtos: z.array(z.object({
         nome: z.string(),
         categoria: z.enum(["cabelo", "barba", "outros"]),
       })),
     }))
     .mutation(async ({ ctx, input }) => {
+      // Resolve orgId correto via sysUser (mesmo padrão da listagem)
+      const { orgFilter } = await resolveUnitFilter(
+        (ctx.user?.id ?? 0), (ctx.user?.role ?? "user"), input.orgId, undefined, ctx.sysUser
+      );
+      const resolvedOrgId = orgFilter ?? input.orgId;
+      if (!resolvedOrgId) throw new TRPCError({ code: "BAD_REQUEST", message: "orgId não encontrado" });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       for (const p of input.produtos) {
         await db.execute(sql`
           INSERT INTO produto_categorias (orgId, nomeProduto, categoria)
-          VALUES (${input.orgId}, ${p.nome}, ${p.categoria})
-          ON DUPLICATE KEY UPDATE categoria = ${p.categoria}, updatedAt = NOW()
+          VALUES (${resolvedOrgId}, ${p.nome}, ${p.categoria})
+          ON DUPLICATE KEY UPDATE categoria = ${p.categoria}
         `);
       }
       return { success: true, count: input.produtos.length };
