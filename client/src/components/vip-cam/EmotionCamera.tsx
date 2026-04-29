@@ -71,6 +71,8 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ipImgRef = useRef<HTMLImageElement>(null);
+  const ipWsRef = useRef<WebSocket | null>(null);       // WebSocket para câmera IP
+  const ipBlobUrlRef = useRef<string | null>(null);     // URL do último frame recebido
   const streamRef = useRef<MediaStream | null>(null);
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cacheIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -225,6 +227,16 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
     if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
     if (cacheIntervalRef.current) clearInterval(cacheIntervalRef.current);
     if (captureWindowRef.current) clearTimeout(captureWindowRef.current);
+    // Fecha WebSocket da câmera IP se estiver aberto
+    if (ipWsRef.current) {
+      ipWsRef.current.close();
+      ipWsRef.current = null;
+    }
+    if (ipBlobUrlRef.current) {
+      URL.revokeObjectURL(ipBlobUrlRef.current);
+      ipBlobUrlRef.current = null;
+    }
+    setIpConnected(false);
     setCameraActive(false);
   }, []);
 
@@ -404,16 +416,67 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
     };
   }, [cameraActive, faceApiStatus, runDetection, loadCache]);
 
-  // ── Construir URL da câmera IP ──────────────
-  // Usa o proxy RTSP→MJPEG do servidor. Browsers não suportam RTSP nativamente,
-  // por isso o servidor converte o stream em MJPEG over HTTP (multipart/x-mixed-replace).
-
+  // ── WebSocket para câmera IP ──────────────
+  // Usa WebSocket em vez de MJPEG over HTTP para contornar o buffering do Cloudflare/HTTP2.
+  // O servidor envia cada frame como ArrayBuffer (binário JPEG).
+  // O frontend exibe via URL.createObjectURL em uma tag <img>.
   const buildIpCameraUrl = useCallback(() => {
     if (!config?.rtspUrl) return null;
-    // Prioridade: unitId do config > unitId da prop
     const id = config.unitId ?? unitId;
     if (!id) return null;
-    return `/api/vip-cam/stream/${id}`;
+    return `/api/vip-cam/stream/${id}`; // mantido para compatibilidade
+  }, [config, unitId]);
+
+  const connectIpCameraWs = useCallback(() => {
+    const id = config?.unitId ?? unitId;
+    if (!id) return;
+    // Fecha conexão anterior
+    if (ipWsRef.current) {
+      ipWsRef.current.close();
+      ipWsRef.current = null;
+    }
+    // Monta URL do WebSocket
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${proto}//${window.location.host}/api/vip-cam/ws/${id}`;
+    const ws = new WebSocket(wsUrl);
+    ws.binaryType = 'arraybuffer';
+    ipWsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log('[IP Camera] WebSocket conectado');
+      setIpConnected(true);
+    };
+
+    ws.onmessage = (event) => {
+      if (!(event.data instanceof ArrayBuffer)) return;
+      // Cria Blob JPEG e atualiza a tag <img>
+      const blob = new Blob([event.data], { type: 'image/jpeg' });
+      const newUrl = URL.createObjectURL(blob);
+      if (ipImgRef.current) {
+        ipImgRef.current.src = newUrl;
+      }
+      // Libera URL anterior para evitar vazamento de memória
+      if (ipBlobUrlRef.current) {
+        URL.revokeObjectURL(ipBlobUrlRef.current);
+      }
+      ipBlobUrlRef.current = newUrl;
+    };
+
+    ws.onerror = (err) => {
+      console.error('[IP Camera] WebSocket erro:', err);
+      setIpConnected(false);
+    };
+
+    ws.onclose = (event) => {
+      console.log('[IP Camera] WebSocket fechado:', event.code, event.reason);
+      setIpConnected(false);
+      ipWsRef.current = null;
+      // Libera URL do último frame
+      if (ipBlobUrlRef.current) {
+        URL.revokeObjectURL(ipBlobUrlRef.current);
+        ipBlobUrlRef.current = null;
+      }
+    };
   }, [config, unitId]);
 
   // ── Renderização ────────────────────────────
@@ -570,13 +633,12 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
             <Button
               onClick={async () => {
                 await loadModels();
-                const url = buildIpCameraUrl();
-                if (!url) {
+                if (!config?.rtspUrl) {
                   toast.error('Configure a URL da câmera IP nas configurações');
                   return;
                 }
-                setIpConnected(true);
                 setCameraActive(true);
+                connectIpCameraWs();
               }}
               disabled={faceApiStatus === 'loading'}
             >
@@ -594,8 +656,10 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
           <Button variant="outline" size="sm" onClick={async () => {
             stopCamera();
             await new Promise(r => setTimeout(r, 500));
-            const url = buildIpCameraUrl();
-            if (url) { setIpConnected(true); setCameraActive(true); }
+            if (config?.rtspUrl) {
+              setCameraActive(true);
+              connectIpCameraWs();
+            }
           }}>
             <RefreshCw className="h-4 w-4 mr-1" />Reconectar
           </Button>

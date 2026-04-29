@@ -1,27 +1,31 @@
 /**
- * RTSP → MJPEG Proxy
+ * RTSP → WebSocket Proxy
  *
- * Converte streams RTSP de câmeras IP em MJPEG over HTTP,
- * formato suportado nativamente por todos os navegadores via <img src="...">.
+ * Converte streams RTSP de câmeras IP em frames JPEG enviados via WebSocket.
+ * O WebSocket funciona corretamente através do Cloudflare (HTTP/2 bufferiza MJPEG).
  *
  * Fluxo:
- *   Browser → GET /api/vip-cam/stream/:unitId
- *   Server  → busca URL RTSP no banco → inicia ffmpeg → pipe MJPEG → browser
+ *   Browser → WS /api/vip-cam/ws/:unitId
+ *   Server  → busca URL RTSP no banco → inicia ffmpeg → frames JPEG → WebSocket → browser
+ *
+ * O frontend recebe cada frame como ArrayBuffer (binary) e exibe via URL.createObjectURL.
  */
 
-import { type Express, type Request, type Response } from "express";
+import { type Express, type Request } from "express";
 import { spawn, type ChildProcess } from "child_process";
+import { WebSocketServer, WebSocket } from "ws";
+import { IncomingMessage } from "http";
 import { getDb } from "./db";
 import { sql } from "drizzle-orm";
 import ffmpegStatic from "ffmpeg-static";
+import type { Server } from "http";
 
 // Usa o binário do ffmpeg-static (bundled) se disponível, caso contrário usa o do PATH
-// Isso garante funcionamento em produção onde o ffmpeg pode não estar instalado
 const FFMPEG_BIN = ffmpegStatic ?? "ffmpeg";
 
 interface ActiveStream {
   ffmpeg: ChildProcess;
-  clients: Set<Response>;
+  clients: Set<WebSocket>;
   lastFrame: Buffer | null;
   startedAt: number;
 }
@@ -40,9 +44,7 @@ function buildRtspUrl(config: {
   if (!config.rtspUrl) return null;
   try {
     const parsed = new URL(config.rtspUrl);
-    // Se a URL já tem credenciais, usa como está
     if (parsed.username || !config.rtspLogin) return config.rtspUrl;
-    // Injeta credenciais
     parsed.username = encodeURIComponent(config.rtspLogin);
     parsed.password = encodeURIComponent(config.rtspPassword ?? "");
     return parsed.toString();
@@ -52,23 +54,18 @@ function buildRtspUrl(config: {
 }
 
 /**
- * Inicia o ffmpeg para o stream RTSP e registra o cliente.
+ * Inicia o ffmpeg para o stream RTSP e registra o cliente WebSocket.
  */
-function startStream(unitId: number, rtspUrl: string, res: Response): void {
+function startStream(unitId: number, rtspUrl: string, ws: WebSocket): void {
   let stream = activeStreams.get(unitId);
 
   if (!stream) {
-    // Inicia novo processo ffmpeg
-    // -rtsp_transport tcp: usa TCP para evitar perda de pacotes UDP
-    // -i <url>: input RTSP
-    // -f mjpeg: output MJPEG
+    // -rtsp_transport tcp: encapsula RTP sobre TCP (necessário quando UDP é bloqueado por firewall/NAT)
+    // -f mjpeg: output MJPEG (frames JPEG individuais)
     // -q:v 5: qualidade JPEG (1=melhor, 31=pior)
-    // -r 10: 10 fps (balanço entre fluidez e CPU)
+    // -r 10: 10 fps
     // -vf scale=1280:-2: redimensiona para 1280px de largura
     // pipe:1: output para stdout
-    // -rtsp_transport tcp: encapsula RTP sobre TCP (necessário quando UDP é bloqueado por firewall/NAT)
-    // -an: ignorar áudio (não necessário para MJPEG)
-    // -vcodec copy não funciona para MJPEG — precisa decodificar e re-encodar
     const ffmpeg = spawn(FFMPEG_BIN, [
       "-loglevel", "error",
       "-rtsp_transport", "tcp",
@@ -95,15 +92,12 @@ function startStream(unitId: number, rtspUrl: string, res: Response): void {
       buffer = Buffer.concat([buffer, chunk]);
 
       // Extrai todos os frames JPEG completos do buffer
-      // Um frame JPEG começa com FF D8 (SOI) e termina com FF D9 (EOI)
       let processed = true;
       while (processed) {
         processed = false;
         const soiIdx = buffer.indexOf(Buffer.from([0xff, 0xd8]));
         if (soiIdx === -1) break;
-        // Descarta dados antes do SOI
         if (soiIdx > 0) buffer = buffer.slice(soiIdx);
-        // Procura o EOI a partir do byte 2 (após o SOI)
         let eoiIdx = -1;
         for (let i = 2; i < buffer.length - 1; i++) {
           if (buffer[i] === 0xff && buffer[i + 1] === 0xd9) {
@@ -111,19 +105,20 @@ function startStream(unitId: number, rtspUrl: string, res: Response): void {
             break;
           }
         }
-        if (eoiIdx === -1) break; // Frame incompleto — aguarda mais dados
+        if (eoiIdx === -1) break;
         const frame = buffer.slice(0, eoiIdx);
         buffer = buffer.slice(eoiIdx);
         stream!.lastFrame = frame;
         processed = true;
-        // Envia frame para todos os clientes conectados
-        const header = `--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.length}\r\n\r\n`;
+        // Envia frame para todos os clientes WebSocket conectados
         for (const client of Array.from(stream!.clients)) {
-          try {
-            client.write(header);
-            client.write(frame);
-            client.write("\r\n");
-          } catch {
+          if (client.readyState === WebSocket.OPEN) {
+            try {
+              client.send(frame);
+            } catch {
+              stream!.clients.delete(client);
+            }
+          } else {
             stream!.clients.delete(client);
           }
         }
@@ -132,7 +127,6 @@ function startStream(unitId: number, rtspUrl: string, res: Response): void {
 
     ffmpeg.stderr?.on("data", (data: Buffer) => {
       const msg = data.toString();
-      // Só loga erros relevantes
       if (!msg.includes("frame=") && !msg.includes("fps=")) {
         console.error(`[RTSP Proxy] Unit ${unitId}: ${msg.trim()}`);
       }
@@ -140,37 +134,31 @@ function startStream(unitId: number, rtspUrl: string, res: Response): void {
 
     ffmpeg.on("close", (code) => {
       console.log(`[RTSP Proxy] Unit ${unitId}: ffmpeg encerrado (code=${code})`);
-      // Fecha todos os clientes
       const s = activeStreams.get(unitId);
       if (s) {
         for (const client of Array.from(s.clients)) {
-          try { client.end(); } catch {}
+          try { client.close(); } catch {}
         }
         activeStreams.delete(unitId);
       }
     });
   }
 
-  // Registra o cliente
-  stream.clients.add(res);
-
-  // Headers já foram enviados pelo handler antes de chamar startStream.
-  // Não chamar writeHead novamente para evitar erro "Cannot set headers after they are sent".
+  // Registra o cliente WebSocket
+  stream.clients.add(ws);
 
   // Envia o último frame imediatamente se disponível
-  if (stream.lastFrame) {
-    const header = `--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${stream.lastFrame.length}\r\n\r\n`;
-    res.write(header);
-    res.write(stream.lastFrame);
-    res.write("\r\n");
+  if (stream.lastFrame && ws.readyState === WebSocket.OPEN) {
+    try {
+      ws.send(stream.lastFrame);
+    } catch {}
   }
 
   // Remove cliente quando desconectar
-  res.on("close", () => {
+  ws.on("close", () => {
     const s = activeStreams.get(unitId);
     if (s) {
-      s.clients.delete(res);
-      // Se não há mais clientes, encerra o ffmpeg após 30s
+      s.clients.delete(ws);
       if (s.clients.size === 0) {
         setTimeout(() => {
           const current = activeStreams.get(unitId);
@@ -186,82 +174,90 @@ function startStream(unitId: number, rtspUrl: string, res: Response): void {
 }
 
 /**
- * Registra as rotas do proxy RTSP no Express.
+ * Registra as rotas do proxy RTSP no servidor HTTP (WebSocket + HTTP).
  */
-export async function registerRtspProxyRoutes(app: Express): Promise<void> {
-  // GET /api/vip-cam/stream/:unitId — stream MJPEG ao vivo
-  app.get("/api/vip-cam/stream/:unitId", async (req: Request, res: Response) => {
+export async function registerRtspProxyRoutes(app: Express, server: Server): Promise<void> {
+  // WebSocket server para streams de câmera
+  const wss = new WebSocketServer({ noServer: true });
+
+  // Upgrade HTTP → WebSocket para /api/vip-cam/ws/:unitId
+  server.on("upgrade", async (req: IncomingMessage, socket, head) => {
+    const url = req.url ?? "";
+    const match = url.match(/^\/api\/vip-cam\/ws\/(\d+)$/);
+    if (!match) return; // Não é nosso WebSocket, ignora
+
+    const unitId = parseInt(match[1], 10);
+    if (isNaN(unitId) || unitId <= 0) {
+      socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+
+    wss.handleUpgrade(req, socket, head, async (ws) => {
+      try {
+        const db = await getDb();
+        if (!db) {
+          ws.close(1011, "Banco de dados indisponível");
+          return;
+        }
+
+        const [rows] = await db.execute(sql`
+          SELECT rtspUrl, rtspLogin, rtspPassword, cameraType
+          FROM cam_camera_config
+          WHERE unitId = ${unitId}
+          LIMIT 1
+        `) as any;
+
+        const config = (rows as any[])[0];
+        if (!config) {
+          ws.close(1008, "Câmera não configurada para esta unidade");
+          return;
+        }
+
+        if (config.cameraType !== "ip") {
+          ws.close(1008, "Esta unidade usa câmera USB, não IP");
+          return;
+        }
+
+        const rtspUrl = buildRtspUrl(config);
+        if (!rtspUrl) {
+          ws.close(1008, "URL RTSP não configurada");
+          return;
+        }
+
+        startStream(unitId, rtspUrl, ws);
+      } catch (err) {
+        console.error("[RTSP Proxy] Erro no WebSocket:", err);
+        try { ws.close(1011, "Erro interno"); } catch {}
+      }
+    });
+  });
+
+  // GET /api/vip-cam/streams/status — status dos streams ativos (diagnóstico)
+  app.get("/api/vip-cam/streams/status", (_req, res) => {
+    const streams = Array.from(activeStreams.entries()).map(([unitId, s]) => ({
+      unitId,
+      clients: s.clients.size,
+      uptime: Math.round((Date.now() - s.startedAt) / 1000),
+      hasLastFrame: s.lastFrame !== null,
+    }));
+    res.json({ streams });
+  });
+
+  // GET /api/vip-cam/stream/:unitId/snapshot — captura um frame JPEG único (HTTP)
+  app.get("/api/vip-cam/stream/:unitId/snapshot", async (req, res) => {
     const unitId = parseInt(req.params.unitId, 10);
     if (isNaN(unitId) || unitId <= 0) {
       res.status(400).json({ error: "unitId inválido" });
       return;
     }
 
-    // ⚡ Envia headers MJPEG IMEDIATAMENTE para evitar timeout do Cloud Run/Cloudflare.
-    // A consulta ao banco e o início do ffmpeg acontecem de forma assíncrona.
-    // Sem isso, o Cloud Run retorna 503 antes dos headers chegarem.
-    res.writeHead(200, {
-      "Content-Type": "multipart/x-mixed-replace; boundary=frame",
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-      "Pragma": "no-cache",
-      "Connection": "keep-alive",
-      "Transfer-Encoding": "chunked",
-      "X-Accel-Buffering": "no", // Desabilita buffering no nginx/Cloudflare
-    });
-    res.flushHeaders();
-
-    // Fecha a conexão com mensagem de erro se algo falhar
-    function closeWithError(msg: string) {
-      try {
-        res.write(`--frame\r\nContent-Type: text/plain\r\nContent-Length: ${msg.length}\r\n\r\n${msg}\r\n`);
-        res.end();
-      } catch {}
-    }
-
-    try {
-      // Busca configuração da câmera no banco local
-      const db = await getDb();
-      if (!db) {
-        closeWithError("Banco de dados indisponível");
-        return;
-      }
-
-      const [rows] = await db.execute(sql`
-        SELECT rtspUrl, rtspLogin, rtspPassword, cameraType
-        FROM cam_camera_config
-        WHERE unitId = ${unitId}
-        LIMIT 1
-      `) as any;
-
-      const config = (rows as any[])[0];
-      if (!config) {
-        closeWithError("Câmera não configurada para esta unidade");
-        return;
-      }
-
-      if (config.cameraType !== "ip") {
-        closeWithError("Esta unidade usa câmera USB, não IP");
-        return;
-      }
-
-      const rtspUrl = buildRtspUrl(config);
-      if (!rtspUrl) {
-        closeWithError("URL RTSP não configurada");
-        return;
-      }
-
-      startStream(unitId, rtspUrl, res);
-    } catch (err) {
-      console.error("[RTSP Proxy] Erro:", err);
-      closeWithError("Erro interno ao iniciar stream");
-    }
-  });
-
-  // GET /api/vip-cam/stream/:unitId/snapshot — captura um frame JPEG único
-  app.get("/api/vip-cam/stream/:unitId/snapshot", async (req: Request, res: Response) => {
-    const unitId = parseInt(req.params.unitId, 10);
-    if (isNaN(unitId) || unitId <= 0) {
-      res.status(400).json({ error: "unitId inválido" });
+    // Se há stream ativo com último frame, retorna imediatamente
+    const active = activeStreams.get(unitId);
+    if (active?.lastFrame) {
+      res.set("Content-Type", "image/jpeg");
+      res.set("Cache-Control", "no-cache");
+      res.send(active.lastFrame);
       return;
     }
 
@@ -280,8 +276,13 @@ export async function registerRtspProxyRoutes(app: Express): Promise<void> {
       `) as any;
 
       const config = (rows as any[])[0];
-      if (!config || config.cameraType !== "ip") {
-        res.status(404).json({ error: "Câmera IP não configurada" });
+      if (!config) {
+        res.status(404).json({ error: "Câmera não configurada para esta unidade" });
+        return;
+      }
+
+      if (config.cameraType !== "ip") {
+        res.status(400).json({ error: "Esta unidade usa câmera USB, não IP" });
         return;
       }
 
@@ -291,60 +292,53 @@ export async function registerRtspProxyRoutes(app: Express): Promise<void> {
         return;
       }
 
-      // Captura um único frame via ffmpeg
-      // -rtsp_transport tcp: necessário quando UDP é bloqueado por firewall/NAT
+      // Captura um único frame com ffmpeg
       const ffmpeg = spawn(FFMPEG_BIN, [
         "-loglevel", "error",
         "-rtsp_transport", "tcp",
         "-i", rtspUrl,
-        "-an",
         "-frames:v", "1",
         "-f", "image2",
         "-vcodec", "mjpeg",
-        "-q:v", "3",
         "pipe:1",
       ]);
 
       const chunks: Buffer[] = [];
       ffmpeg.stdout?.on("data", (chunk: Buffer) => chunks.push(chunk));
+
       ffmpeg.on("close", (code) => {
         if (code === 0 && chunks.length > 0) {
           const frame = Buffer.concat(chunks);
-          res.writeHead(200, {
-            "Content-Type": "image/jpeg",
-            "Content-Length": frame.length,
-            "Cache-Control": "no-cache",
-          });
-          res.end(frame);
+          res.set("Content-Type", "image/jpeg");
+          res.set("Cache-Control", "no-cache");
+          res.send(frame);
         } else {
           if (!res.headersSent) {
-            res.status(502).json({ error: "Falha ao capturar frame da câmera" });
+            res.status(500).json({ error: "Falha ao capturar frame" });
           }
         }
       });
 
-      // Timeout de 10s para o snapshot
+      ffmpeg.on("error", (err) => {
+        console.error("[RTSP Proxy] Snapshot error:", err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Erro ao iniciar ffmpeg" });
+        }
+      });
+
+      // Timeout de 15 segundos
       setTimeout(() => {
         ffmpeg.kill("SIGTERM");
         if (!res.headersSent) {
           res.status(504).json({ error: "Timeout ao capturar frame" });
         }
-      }, 10_000);
+      }, 15_000);
+
     } catch (err) {
       console.error("[RTSP Proxy] Snapshot error:", err);
       if (!res.headersSent) {
         res.status(500).json({ error: "Erro interno" });
       }
     }
-  });
-
-  // GET /api/vip-cam/stream/status — lista streams ativos
-  app.get("/api/vip-cam/streams/status", (_req: Request, res: Response) => {
-    const status = Array.from(activeStreams.entries()).map(([unitId, s]) => ({
-      unitId,
-      clients: s.clients.size,
-      uptimeSeconds: Math.floor((Date.now() - s.startedAt) / 1000),
-    }));
-    res.json({ streams: status });
   });
 }

@@ -51,6 +51,7 @@
     "@types/multer": "^2.1.0",
     "@types/sharp": "^0.32.0",
     "@types/ssh2": "^1.15.5",
+    "@types/ws": "^8.18.1",
     "@vladmandic/face-api": "^1.7.15",
     "axios": "^1.12.0",
     "bcryptjs": "^3.0.3",
@@ -88,6 +89,7 @@
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
     "wouter": "^3.3.5",
+    "ws": "^8.20.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {

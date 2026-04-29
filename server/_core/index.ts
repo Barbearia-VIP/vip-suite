@@ -48,9 +48,9 @@ async function startServer() {
   registerGoogleOAuthCallback(app);
   // Upload routes (art image reference, etc.)
   registerUploadRoutes(app);
-  // RTSP → MJPEG proxy para câmeras IP do VIP Cam
+  // RTSP → WebSocket proxy para câmeras IP do VIP Cam
   const { registerRtspProxyRoutes } = await import("../rtspProxy");
-  await registerRtspProxyRoutes(app);
+  await registerRtspProxyRoutes(app, server);
   // tRPC API
   app.use(
     "/api/trpc",
