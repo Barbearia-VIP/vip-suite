@@ -48,6 +48,7 @@ interface DetectionResult {
 
 interface CameraConfig {
   cameraType: 'usb' | 'ip';
+  unitId?: number | null;        // ID da unidade — usado para montar a URL do proxy MJPEG
   rtspUrl?: string | null;
   rtspLogin?: string | null;
   rtspPassword?: string | null;
@@ -231,15 +232,17 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
 
   const captureFrame = useCallback((): string | null => {
     const canvas = canvasRef.current;
-    const video = videoRef.current;
-    if (!canvas || !video) return null;
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    // Para câmera IP, capturar da tag <img> (frame MJPEG atual)
+    const source: HTMLVideoElement | HTMLImageElement | null =
+      cameraType === 'ip' ? ipImgRef.current : videoRef.current;
+    if (!canvas || !source) return null;
+    canvas.width = (source instanceof HTMLVideoElement ? source.videoWidth : source.naturalWidth) || 640;
+    canvas.height = (source instanceof HTMLVideoElement ? source.videoHeight : source.naturalHeight) || 480;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
-    ctx.drawImage(video, 0, 0);
+    ctx.drawImage(source, 0, 0);
     return canvas.toDataURL('image/jpeg', 0.8);
-  }, []);
+  }, [cameraType]);
 
   // ── Processar captura final (após buffer de 1.5s) ──
 
@@ -335,12 +338,17 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
 
   const runDetection = useCallback(async () => {
     if (cooldownRef.current) return;
-    const video = videoRef.current;
-    if (!video || video.readyState < 2) return;
+    // Para câmera IP (MJPEG), usar a tag <img> como fonte; para USB, usar <video>
+    const source: HTMLVideoElement | HTMLImageElement | null =
+      cameraType === 'ip' ? ipImgRef.current : videoRef.current;
+    if (!source) return;
+    // Para <video>, verificar readyState; para <img> verificar se carregou
+    if (source instanceof HTMLVideoElement && source.readyState < 2) return;
+    if (source instanceof HTMLImageElement && !source.complete) return;
 
     try {
       const detection = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.45 }))
+        .detectSingleFace(source as HTMLVideoElement, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.45 }))
         .withFaceLandmarks()
         .withFaceDescriptor()
         .withFaceExpressions();
@@ -374,7 +382,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
     } catch {
       // Ignorar erros de detecção individuais
     }
-  }, [processFinalCapture, captureWindowMs]);
+  }, [processFinalCapture, captureWindowMs, cameraType]);
 
   // ── Iniciar detecção quando câmera ativa ────
 
@@ -397,23 +405,16 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
   }, [cameraActive, faceApiStatus, runDetection, loadCache]);
 
   // ── Construir URL da câmera IP ──────────────
+  // Usa o proxy RTSP→MJPEG do servidor. Browsers não suportam RTSP nativamente,
+  // por isso o servidor converte o stream em MJPEG over HTTP (multipart/x-mixed-replace).
 
   const buildIpCameraUrl = useCallback(() => {
     if (!config?.rtspUrl) return null;
-    let url = config.rtspUrl;
-    // Se tiver login/senha, injetar na URL
-    if (config.rtspLogin && config.rtspPassword) {
-      try {
-        const parsed = new URL(url);
-        parsed.username = config.rtspLogin;
-        parsed.password = config.rtspPassword;
-        url = parsed.toString();
-      } catch {
-        // URL inválida
-      }
-    }
-    return url;
-  }, [config]);
+    // Prioridade: unitId do config > unitId da prop
+    const id = config.unitId ?? unitId;
+    if (!id) return null;
+    return `/api/vip-cam/stream/${id}`;
+  }, [config, unitId]);
 
   // ── Renderização ────────────────────────────
 
