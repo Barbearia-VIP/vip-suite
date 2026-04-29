@@ -13,6 +13,11 @@ import { type Express, type Request, type Response } from "express";
 import { spawn, type ChildProcess } from "child_process";
 import { getDb } from "./db";
 import { sql } from "drizzle-orm";
+import ffmpegStatic from "ffmpeg-static";
+
+// Usa o binário do ffmpeg-static (bundled) se disponível, caso contrário usa o do PATH
+// Isso garante funcionamento em produção onde o ffmpeg pode não estar instalado
+const FFMPEG_BIN = ffmpegStatic ?? "ffmpeg";
 
 interface ActiveStream {
   ffmpeg: ChildProcess;
@@ -64,7 +69,7 @@ function startStream(unitId: number, rtspUrl: string, res: Response): void {
     // -rtsp_transport tcp: encapsula RTP sobre TCP (necessário quando UDP é bloqueado por firewall/NAT)
     // -an: ignorar áudio (não necessário para MJPEG)
     // -vcodec copy não funciona para MJPEG — precisa decodificar e re-encodar
-    const ffmpeg = spawn("ffmpeg", [
+    const ffmpeg = spawn(FFMPEG_BIN, [
       "-loglevel", "error",
       "-rtsp_transport", "tcp",
       "-i", rtspUrl,
@@ -275,7 +280,7 @@ export async function registerRtspProxyRoutes(app: Express): Promise<void> {
 
       // Captura um único frame via ffmpeg
       // -rtsp_transport tcp: necessário quando UDP é bloqueado por firewall/NAT
-      const ffmpeg = spawn("ffmpeg", [
+      const ffmpeg = spawn(FFMPEG_BIN, [
         "-loglevel", "error",
         "-rtsp_transport", "tcp",
         "-i", rtspUrl,
