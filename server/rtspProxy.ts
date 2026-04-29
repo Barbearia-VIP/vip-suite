@@ -154,14 +154,8 @@ function startStream(unitId: number, rtspUrl: string, res: Response): void {
   // Registra o cliente
   stream.clients.add(res);
 
-  // Configura headers MJPEG
-  res.writeHead(200, {
-    "Content-Type": "multipart/x-mixed-replace; boundary=frame",
-    "Cache-Control": "no-cache, no-store, must-revalidate",
-    "Pragma": "no-cache",
-    "Connection": "keep-alive",
-    "Transfer-Encoding": "chunked",
-  });
+  // Headers já foram enviados pelo handler antes de chamar startStream.
+  // Não chamar writeHead novamente para evitar erro "Cannot set headers after they are sent".
 
   // Envia o último frame imediatamente se disponível
   if (stream.lastFrame) {
@@ -203,11 +197,32 @@ export async function registerRtspProxyRoutes(app: Express): Promise<void> {
       return;
     }
 
+    // ⚡ Envia headers MJPEG IMEDIATAMENTE para evitar timeout do Cloud Run/Cloudflare.
+    // A consulta ao banco e o início do ffmpeg acontecem de forma assíncrona.
+    // Sem isso, o Cloud Run retorna 503 antes dos headers chegarem.
+    res.writeHead(200, {
+      "Content-Type": "multipart/x-mixed-replace; boundary=frame",
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      "Pragma": "no-cache",
+      "Connection": "keep-alive",
+      "Transfer-Encoding": "chunked",
+      "X-Accel-Buffering": "no", // Desabilita buffering no nginx/Cloudflare
+    });
+    res.flushHeaders();
+
+    // Fecha a conexão com mensagem de erro se algo falhar
+    function closeWithError(msg: string) {
+      try {
+        res.write(`--frame\r\nContent-Type: text/plain\r\nContent-Length: ${msg.length}\r\n\r\n${msg}\r\n`);
+        res.end();
+      } catch {}
+    }
+
     try {
       // Busca configuração da câmera no banco local
       const db = await getDb();
       if (!db) {
-        res.status(503).json({ error: "Banco de dados indisponível" });
+        closeWithError("Banco de dados indisponível");
         return;
       }
 
@@ -220,27 +235,25 @@ export async function registerRtspProxyRoutes(app: Express): Promise<void> {
 
       const config = (rows as any[])[0];
       if (!config) {
-        res.status(404).json({ error: "Câmera não configurada para esta unidade" });
+        closeWithError("Câmera não configurada para esta unidade");
         return;
       }
 
       if (config.cameraType !== "ip") {
-        res.status(400).json({ error: "Esta unidade usa câmera USB, não IP" });
+        closeWithError("Esta unidade usa câmera USB, não IP");
         return;
       }
 
       const rtspUrl = buildRtspUrl(config);
       if (!rtspUrl) {
-        res.status(400).json({ error: "URL RTSP não configurada" });
+        closeWithError("URL RTSP não configurada");
         return;
       }
 
       startStream(unitId, rtspUrl, res);
     } catch (err) {
       console.error("[RTSP Proxy] Erro:", err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Erro interno ao iniciar stream" });
-      }
+      closeWithError("Erro interno ao iniciar stream");
     }
   });
 
