@@ -73,6 +73,8 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
   const ipImgRef = useRef<HTMLImageElement>(null);
   const ipWsRef = useRef<WebSocket | null>(null);       // WebSocket para câmera IP
   const ipBlobUrlRef = useRef<string | null>(null);     // URL do último frame recebido
+  const ipPollingRef = useRef<ReturnType<typeof setInterval> | null>(null); // Polling fallback
+  const ipFrameCountRef = useRef(0);                    // Frames recebidos via WS
   const streamRef = useRef<MediaStream | null>(null);
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cacheIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -232,6 +234,12 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
       ipWsRef.current.close();
       ipWsRef.current = null;
     }
+    // Para polling se estiver ativo
+    if (ipPollingRef.current) {
+      clearInterval(ipPollingRef.current);
+      ipPollingRef.current = null;
+    }
+    ipFrameCountRef.current = 0;
     if (ipBlobUrlRef.current) {
       URL.revokeObjectURL(ipBlobUrlRef.current);
       ipBlobUrlRef.current = null;
@@ -449,6 +457,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
 
     ws.onmessage = (event) => {
       if (!(event.data instanceof ArrayBuffer)) return;
+      ipFrameCountRef.current += 1;
       // Cria Blob JPEG e atualiza a tag <img>
       const blob = new Blob([event.data], { type: 'image/jpeg' });
       const newUrl = URL.createObjectURL(blob);
@@ -468,16 +477,50 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
     };
 
     ws.onclose = (event) => {
-      console.log('[IP Camera] WebSocket fechado:', event.code, event.reason);
+      console.log('[IP Camera] WebSocket fechado:', event.code, event.reason, 'frames recebidos:', ipFrameCountRef.current);
       setIpConnected(false);
       ipWsRef.current = null;
-      // Libera URL do último frame
-      if (ipBlobUrlRef.current) {
-        URL.revokeObjectURL(ipBlobUrlRef.current);
-        ipBlobUrlRef.current = null;
+      // Se fechou sem receber nenhum frame, ativar polling como fallback
+      if (ipFrameCountRef.current === 0) {
+        console.log('[IP Camera] WebSocket não enviou frames, ativando polling de snapshots...');
+        startIpPolling(id);
+      } else {
+        // Libera URL do último frame
+        if (ipBlobUrlRef.current) {
+          URL.revokeObjectURL(ipBlobUrlRef.current);
+          ipBlobUrlRef.current = null;
+        }
       }
     };
   }, [config, unitId]);
+
+  // ── Polling de snapshots (fallback quando WebSocket não funciona) ──────────
+  const startIpPolling = useCallback((id: number) => {
+    if (ipPollingRef.current) return; // já está rodando
+    console.log('[IP Camera] Iniciando polling de snapshots (~2fps)...');
+    setIpConnected(true);
+    const poll = async () => {
+      try {
+        const resp = await fetch(`/api/vip-cam/stream/${id}/snapshot`, { cache: 'no-store' });
+        if (!resp.ok) {
+          console.warn('[IP Camera] Snapshot falhou:', resp.status);
+          return;
+        }
+        const blob = await resp.blob();
+        if (blob.size < 100) return; // frame inválido
+        const newUrl = URL.createObjectURL(blob);
+        if (ipImgRef.current) {
+          ipImgRef.current.src = newUrl;
+        }
+        if (ipBlobUrlRef.current) URL.revokeObjectURL(ipBlobUrlRef.current);
+        ipBlobUrlRef.current = newUrl;
+      } catch (e) {
+        console.warn('[IP Camera] Polling erro:', e);
+      }
+    };
+    poll(); // primeiro frame imediatamente
+    ipPollingRef.current = setInterval(poll, 500); // ~2fps
+  }, []);
 
   // ── Renderização ────────────────────────────
 
@@ -680,17 +723,23 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
           />
         )}
 
-        {/* Câmera IP — snapshot via img tag (MJPEG/HTTP) */}
+        {/* Câmera IP — frames via WebSocket (o src é controlado pelo connectIpCameraWs) */}
         {isIP && cameraActive && (
-          <div className="w-full h-full flex items-center justify-center">
+          <div className="w-full h-full relative flex items-center justify-center">
+            {/* A tag img começa sem src; o WebSocket atualiza ipImgRef.current.src a cada frame */}
             <img
               ref={ipImgRef}
-              src={buildIpCameraUrl() ?? ''}
+              src=""
               className="w-full h-full object-cover"
               alt="Câmera IP"
-              onLoad={() => setIpConnected(true)}
-              onError={() => setIpConnected(false)}
+              style={{ display: ipConnected ? 'block' : 'none' }}
             />
+            {!ipConnected && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 gap-2">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400" />
+                <p className="text-xs">Conectando câmera...</p>
+              </div>
+            )}
             {/* Canvas oculto para captura de frames da câmera IP */}
             <video
               ref={videoRef}

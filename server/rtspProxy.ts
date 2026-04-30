@@ -292,14 +292,16 @@ export async function registerRtspProxyRoutes(app: Express, server: Server): Pro
         return;
       }
 
-      // Captura um único frame com ffmpeg
+      // Captura um único frame com ffmpeg (reduzido para 1280px para polling mais rápido)
       const ffmpeg = spawn(FFMPEG_BIN, [
         "-loglevel", "error",
         "-rtsp_transport", "tcp",
         "-i", rtspUrl,
         "-frames:v", "1",
+        "-vf", "scale=1280:-2",
         "-f", "image2",
         "-vcodec", "mjpeg",
+        "-q:v", "3",
         "pipe:1",
       ]);
 
