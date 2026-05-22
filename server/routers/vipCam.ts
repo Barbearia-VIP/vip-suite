@@ -1254,5 +1254,51 @@ export const vipCamRouter = router({
         clientesUpdated,
       };
     }),
+
+  // ── Capturas recentes (painel ao vivo da câmera IP) ──
+  getRecentCaptures: sysUserProcedure
+    .input(z.object({
+      unitId: z.number(),
+      limit: z.number().default(20),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      const captures = await db!
+        .select({
+          id: camSentimentTimeline.id,
+          clienteId: camSentimentTimeline.clienteId,
+          satisfactionLevel: camSentimentTimeline.satisfactionLevel,
+          expression: camSentimentTimeline.expression,
+          confidence: camSentimentTimeline.confidence,
+          recordedAt: camSentimentTimeline.recordedAt,
+        })
+        .from(camSentimentTimeline)
+        .where(eq(camSentimentTimeline.unitId, input.unitId))
+        .orderBy(desc(camSentimentTimeline.recordedAt))
+        .limit(input.limit);
+      // Métricas de hoje (BRT)
+      const todayStr = (() => {
+        const now = new Date();
+        const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+        return brt.toISOString().slice(0, 10);
+      })();
+      const [metric] = await db!
+        .select()
+        .from(camMetricasDiarias)
+        .where(and(
+          eq(camMetricasDiarias.unitId, input.unitId),
+          eq(camMetricasDiarias.data, todayStr as any)
+        ))
+        .limit(1);
+      return {
+        captures,
+        todayStats: metric ? {
+          total: Number(metric.totalDeteccoes),
+          satisfied: Number(metric.satisfeitos),
+          neutral: Number(metric.neutros),
+          unsatisfied: Number(metric.insatisfeitos),
+        } : { total: 0, satisfied: 0, neutral: 0, unsatisfied: 0 },
+      };
+    }),
 });
 

@@ -1,0 +1,67 @@
+{
+  "query": "SELECT * FROM cam_metricas_diarias WHERE unitId=1 ORDER BY data DESC LIMIT 5;\nSELECT COUNT(*) as total, satisfactionLevel FROM cam_sentiment_timeline WHERE unitId=1 AND DATE(recordedAt) = '2026-05-22' GROUP BY satisfactionLevel;\nSELECT COUNT(*) as total FROM cam_clientes WHERE unitId=1 AND DATE(lastSeenAt) = '2026-05-22';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 4T7G3uAA8hnJwsB.fa5b0780ed64 --database Gw6CU8nRy9T64yBMvKuEjJ --execute SELECT * FROM cam_metricas_diarias WHERE unitId=1 ORDER BY data DESC LIMIT 5;\nSELECT COUNT(*) as total, satisfactionLevel FROM cam_sentiment_timeline WHERE unitId=1 AND DATE(recordedAt) = '2026-05-22' GROUP BY satisfactionLevel;\nSELECT COUNT(*) as total FROM cam_clientes WHERE unitId=1 AND DATE(lastSeenAt) = '2026-05-22';",
+  "rows": [
+    {
+      "id": "150001",
+      "unitId": "1",
+      "data": "2026-05-22",
+      "totalDeteccoes": "127",
+      "satisfeitos": "2",
+      "neutros": "52",
+      "insatisfeitos": "73",
+      "createdAt": "2026-05-22 09:48:20"
+    },
+    {
+      "id": "120001",
+      "unitId": "1",
+      "data": "2026-05-19",
+      "totalDeteccoes": "2",
+      "satisfeitos": "0",
+      "neutros": "1",
+      "insatisfeitos": "1",
+      "createdAt": "2026-05-19 10:41:32"
+    },
+    {
+      "id": "90001",
+      "unitId": "1",
+      "data": "2026-04-29",
+      "totalDeteccoes": "71",
+      "satisfeitos": "26",
+      "neutros": "7",
+      "insatisfeitos": "38",
+      "createdAt": "2026-04-29 19:19:21"
+    },
+    {
+      "id": "60018",
+      "unitId": "1",
+      "data": "2026-04-27",
+      "totalDeteccoes": "149",
+      "satisfeitos": "32",
+      "neutros": "54",
+      "insatisfeitos": "63",
+      "createdAt": "2026-04-27 04:01:01"
+    },
+    {
+      "id": "60017",
+      "unitId": "1",
+      "data": "2026-04-26",
+      "totalDeteccoes": "18",
+      "satisfeitos": "17",
+      "neutros": "0",
+      "insatisfeitos": "1",
+      "createdAt": "2026-04-26 04:19:14"
+    }
+  ],
+  "messages": [
+    "total\tsatisfactionLevel",
+    "2\tsatisfied",
+    "52\tneutral",
+    "73\tunsatisfied",
+    "total",
+    "27"
+  ],
+  "stdout": "id\tunitId\tdata\ttotalDeteccoes\tsatisfeitos\tneutros\tinsatisfeitos\tcreatedAt\n150001\t1\t2026-05-22\t127\t2\t52\t73\t2026-05-22 09:48:20\n120001\t1\t2026-05-19\t2\t0\t1\t1\t2026-05-19 10:41:32\n90001\t1\t2026-04-29\t71\t26\t7\t38\t2026-04-29 19:19:21\n60018\t1\t2026-04-27\t149\t32\t54\t63\t2026-04-27 04:01:01\n60017\t1\t2026-04-26\t18\t17\t0\t1\t2026-04-26 04:19:14\ntotal\tsatisfactionLevel\n2\tsatisfied\n52\tneutral\n73\tunsatisfied\ntotal\n27\n",
+  "stderr": "",
+  "execution_time_ms": 349
+}

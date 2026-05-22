@@ -593,24 +593,35 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
     ipPollingRef.current = setInterval(poll, 400);
   }, []);
 
-  // ── Auto-iniciar exibição se worker já estiver ativo ──
+  // ── Auto-iniciar câmera IP ao montar (worker já roda no servidor) ──
 
   useEffect(() => {
-    if (cameraType !== 'ip' || !cameraActive) return;
+    if (cameraType !== 'ip') return;
     const id = config?.unitId ?? unitId;
     if (!id) return;
+    // Para câmera IP, auto-conectar sem precisar clicar no botão
+    // O worker já está rodando no servidor independentemente do browser
     fetch('/api/vip-cam/streams/status')
       .then(r => r.json())
       .then((data: { streams: Array<{ unitId: number; running: boolean; hasFrame: boolean }> }) => {
         const ws = data.streams.find(s => s.unitId === id);
         if (ws?.running) {
-          console.log('[IP Camera] Worker já está rodando, iniciando exibição...');
+          console.log('[IP Camera] Worker ativo — auto-conectando exibição...');
+          setCameraActive(true);
           startIpPolling(id);
+        } else {
+          // Worker não está rodando — tentar iniciar
+          fetch(`/api/vip-cam/worker/${id}/start`, { method: 'POST' })
+            .then(() => {
+              setCameraActive(true);
+              startIpPolling(id);
+            })
+            .catch(() => {});
         }
       })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraType, cameraActive, config, unitId]);
+  }, [cameraType, config?.unitId, unitId]);
 
   // ── Renderização ────────────────────────────
 
