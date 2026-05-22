@@ -844,7 +844,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
           <div ref={ipContainerRef} className="w-full h-full relative flex items-center justify-center">
             <img
               ref={ipImgRef}
-              src=""
+              src={undefined}
               className="w-full h-full object-cover"
               alt="Câmera IP"
               style={{ display: ipConnected ? 'block' : 'none' }}
