@@ -234,7 +234,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
       ipWsRef.current.close();
       ipWsRef.current = null;
     }
-    // Para polling se estiver ativo
+    // Para polling de exibição (o worker no servidor continua rodando)
     if (ipPollingRef.current) {
       clearInterval(ipPollingRef.current);
       ipPollingRef.current = null;
@@ -246,6 +246,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
     }
     setIpConnected(false);
     setCameraActive(false);
+    console.log('[IP Camera] Exibição pausada (worker continua capturando no servidor)');
   }, []);
 
   // ── Capturar frame como base64 ──────────────
@@ -435,92 +436,79 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
     return `/api/vip-cam/stream/${id}`; // mantido para compatibilidade
   }, [config, unitId]);
 
-  const connectIpCameraWs = useCallback(() => {
+  // ── Inicia o worker permanente no servidor e o polling de exibição ──────────
+  const connectIpCamera = useCallback(async () => {
     const id = config?.unitId ?? unitId;
     if (!id) return;
-    // Fecha conexão anterior
-    if (ipWsRef.current) {
-      ipWsRef.current.close();
-      ipWsRef.current = null;
+
+    // 1. Inicia o worker no servidor (continua mesmo ao fechar o browser)
+    try {
+      await fetch(`/api/vip-cam/worker/${id}/start`, { method: 'POST' });
+      console.log('[IP Camera] Worker iniciado no servidor para unidade', id);
+    } catch (e) {
+      console.warn('[IP Camera] Falha ao iniciar worker:', e);
     }
-    // Monta URL do WebSocket
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${proto}//${window.location.host}/api/vip-cam/ws/${id}`;
-    const ws = new WebSocket(wsUrl);
-    ws.binaryType = 'arraybuffer';
-    ipWsRef.current = ws;
 
-    ws.onopen = () => {
-      console.log('[IP Camera] WebSocket conectado');
-      setIpConnected(true);
-    };
-
-    ws.onmessage = (event) => {
-      if (!(event.data instanceof ArrayBuffer)) return;
-      ipFrameCountRef.current += 1;
-      // Cria Blob JPEG e atualiza a tag <img>
-      const blob = new Blob([event.data], { type: 'image/jpeg' });
-      const newUrl = URL.createObjectURL(blob);
-      if (ipImgRef.current) {
-        ipImgRef.current.src = newUrl;
-      }
-      // Libera URL anterior para evitar vazamento de memória
-      if (ipBlobUrlRef.current) {
-        URL.revokeObjectURL(ipBlobUrlRef.current);
-      }
-      ipBlobUrlRef.current = newUrl;
-    };
-
-    ws.onerror = (err) => {
-      console.error('[IP Camera] WebSocket erro:', err);
-      setIpConnected(false);
-    };
-
-    ws.onclose = (event) => {
-      console.log('[IP Camera] WebSocket fechado:', event.code, event.reason, 'frames recebidos:', ipFrameCountRef.current);
-      setIpConnected(false);
-      ipWsRef.current = null;
-      // Se fechou sem receber nenhum frame, ativar polling como fallback
-      if (ipFrameCountRef.current === 0) {
-        console.log('[IP Camera] WebSocket não enviou frames, ativando polling de snapshots...');
-        startIpPolling(id);
-      } else {
-        // Libera URL do último frame
-        if (ipBlobUrlRef.current) {
-          URL.revokeObjectURL(ipBlobUrlRef.current);
-          ipBlobUrlRef.current = null;
-        }
-      }
-    };
+    // 2. Inicia polling de snapshots para exibição no browser
+    startIpPolling(id);
   }, [config, unitId]);
 
-  // ── Polling de snapshots (fallback quando WebSocket não funciona) ──────────
+  // ── Polling de snapshots para exibição (worker roda independente no servidor) ──
   const startIpPolling = useCallback((id: number) => {
-    if (ipPollingRef.current) return; // já está rodando
-    console.log('[IP Camera] Iniciando polling de snapshots (~2fps)...');
-    setIpConnected(true);
+    // Para polling anterior se existir
+    if (ipPollingRef.current) {
+      clearInterval(ipPollingRef.current);
+      ipPollingRef.current = null;
+    }
+    console.log('[IP Camera] Iniciando polling de snapshots...');
+    let consecutiveErrors = 0;
+
     const poll = async () => {
       try {
         const resp = await fetch(`/api/vip-cam/stream/${id}/snapshot`, { cache: 'no-store' });
         if (!resp.ok) {
-          console.warn('[IP Camera] Snapshot falhou:', resp.status);
+          consecutiveErrors++;
+          console.warn('[IP Camera] Snapshot falhou:', resp.status, '(erro', consecutiveErrors, ')');
+          if (consecutiveErrors >= 5) setIpConnected(false);
           return;
         }
         const blob = await resp.blob();
         if (blob.size < 100) return; // frame inválido
+        consecutiveErrors = 0;
+        setIpConnected(true);
         const newUrl = URL.createObjectURL(blob);
-        if (ipImgRef.current) {
-          ipImgRef.current.src = newUrl;
-        }
+        if (ipImgRef.current) ipImgRef.current.src = newUrl;
         if (ipBlobUrlRef.current) URL.revokeObjectURL(ipBlobUrlRef.current);
         ipBlobUrlRef.current = newUrl;
       } catch (e) {
+        consecutiveErrors++;
         console.warn('[IP Camera] Polling erro:', e);
+        if (consecutiveErrors >= 5) setIpConnected(false);
       }
     };
+
     poll(); // primeiro frame imediatamente
-    ipPollingRef.current = setInterval(poll, 500); // ~2fps
+    ipPollingRef.current = setInterval(poll, 400); // ~2.5fps
   }, []);
+
+  // ── Auto-iniciar exibição se câmera IP já estiver configurada e worker ativo ──
+  useEffect(() => {
+    if (cameraType !== 'ip' || !cameraActive) return;
+    const id = config?.unitId ?? unitId;
+    if (!id) return;
+    fetch(`/api/vip-cam/streams/status`)
+      .then(r => r.json())
+      .then((data: { streams: Array<{ unitId: number; running: boolean; hasFrame: boolean }> }) => {
+        const workerStatus = data.streams.find(s => s.unitId === id);
+        if (workerStatus?.running) {
+          console.log('[IP Camera] Worker já está rodando, iniciando exibição...');
+          startIpPolling(id);
+        }
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraType, cameraActive, config, unitId]);
+
 
   // ── Renderização ────────────────────────────
 
@@ -681,7 +669,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
                   return;
                 }
                 setCameraActive(true);
-                connectIpCameraWs();
+                await connectIpCamera();
               }}
               disabled={faceApiStatus === 'loading'}
             >
@@ -701,7 +689,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
             await new Promise(r => setTimeout(r, 500));
             if (config?.rtspUrl) {
               setCameraActive(true);
-              connectIpCameraWs();
+              await connectIpCamera();
             }
           }}>
             <RefreshCw className="h-4 w-4 mr-1" />Reconectar
@@ -723,7 +711,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
           />
         )}
 
-        {/* Câmera IP — frames via WebSocket (o src é controlado pelo connectIpCameraWs) */}
+        {/* Câmera IP — frames via polling de snapshots do worker permanente */}
         {isIP && cameraActive && (
           <div className="w-full h-full relative flex items-center justify-center">
             {/* A tag img começa sem src; o WebSocket atualiza ipImgRef.current.src a cada frame */}
