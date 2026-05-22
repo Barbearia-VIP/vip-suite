@@ -21,7 +21,7 @@ const RECONNECT_DELAY_MS = 5_000;
 // Máximo de tentativas consecutivas antes de aumentar o delay
 const MAX_FAST_RETRIES = 3;
 // Intervalo entre rodadas de detecção facial (ms) — 30 segundos por padrão
-const FACE_DETECTION_INTERVAL_MS = 30_000;
+const FACE_DETECTION_INTERVAL_MS = 15_000;
 // Cooldown mínimo entre capturas do mesmo cliente (ms)
 const SAME_CLIENT_COOLDOWN_MS = 60_000;
 
