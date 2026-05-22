@@ -1,11 +1,15 @@
 /**
- * IP Camera Worker — Captura contínua server-side
+ * IP Camera Worker — Captura contínua + Reconhecimento facial server-side
  *
  * Mantém um stream ffmpeg permanente por unidade, independente do browser.
  * - Reconecta automaticamente quando o stream cai
  * - Expõe o último frame JPEG via getLastFrame(unitId)
  * - Não para quando o browser fecha ou troca de página
  * - Gerenciado via startWorker/stopWorker por unitId
+ *
+ * Para câmeras IP: detecta faces automaticamente no servidor a cada N segundos
+ * e salva capturas no banco sem precisar do browser aberto.
+ * Para câmeras USB: comportamento inalterado (browser-side face-api.js).
  */
 import { spawn, ChildProcess } from "child_process";
 import ffmpegStatic from "ffmpeg-static";
@@ -16,17 +20,27 @@ const FFMPEG_BIN = ffmpegStatic ?? "ffmpeg";
 const RECONNECT_DELAY_MS = 5_000;
 // Máximo de tentativas consecutivas antes de aumentar o delay
 const MAX_FAST_RETRIES = 3;
+// Intervalo entre rodadas de detecção facial (ms) — 30 segundos por padrão
+const FACE_DETECTION_INTERVAL_MS = 30_000;
+// Cooldown mínimo entre capturas do mesmo cliente (ms)
+const SAME_CLIENT_COOLDOWN_MS = 60_000;
 
 interface WorkerState {
   unitId: number;
   rtspUrl: string;
   ffmpeg: ChildProcess | null;
   lastFrame: Buffer | null;
-  lastFrameAt: number; // timestamp do último frame recebido
-  running: boolean;    // true enquanto o worker deve continuar
+  lastFrameAt: number;     // timestamp do último frame recebido
+  running: boolean;        // true enquanto o worker deve continuar
   retryCount: number;
   retryTimer: ReturnType<typeof setTimeout> | null;
   startedAt: number;
+  // Face recognition state
+  faceDetectionTimer: ReturnType<typeof setTimeout> | null;
+  lastDetectionAt: number;         // timestamp da última detecção
+  lastDetectionCount: number;      // faces detectadas na última rodada
+  lastClientCooldown: Map<number, number>; // clienteId → último timestamp de captura
+  totalCapturesSaved: number;      // total de capturas salvas no DB
 }
 
 // Mapa de workers ativos por unitId
@@ -57,10 +71,16 @@ export function startWorker(unitId: number, rtspUrl: string): void {
     retryCount: 0,
     retryTimer: null,
     startedAt: Date.now(),
+    faceDetectionTimer: null,
+    lastDetectionAt: 0,
+    lastDetectionCount: 0,
+    lastClientCooldown: new Map(),
+    totalCapturesSaved: 0,
   };
   workers.set(unitId, state);
   console.log(`[IP Worker] Unit ${unitId}: iniciando worker (${rtspUrl.replace(/:[^:@]*@/, ':***@')})`);
   spawnFfmpeg(state);
+  scheduleFaceDetection(state);
 }
 
 /**
@@ -73,6 +93,10 @@ export function stopWorker(unitId: number): void {
   if (state.retryTimer) {
     clearTimeout(state.retryTimer);
     state.retryTimer = null;
+  }
+  if (state.faceDetectionTimer) {
+    clearTimeout(state.faceDetectionTimer);
+    state.faceDetectionTimer = null;
   }
   if (state.ffmpeg) {
     try { state.ffmpeg.kill("SIGTERM"); } catch {}
@@ -104,9 +128,12 @@ export function getWorkersStatus(): Array<{
   unitId: number;
   running: boolean;
   hasFrame: boolean;
-  lastFrameAge: number; // segundos desde o último frame
-  uptime: number;       // segundos desde o início
+  lastFrameAge: number;        // segundos desde o último frame
+  uptime: number;              // segundos desde o início
   retryCount: number;
+  lastDetectionAt: number;     // timestamp da última detecção facial
+  lastDetectionCount: number;  // faces detectadas na última rodada
+  totalCapturesSaved: number;  // total de capturas salvas no DB
 }> {
   const now = Date.now();
   return Array.from(workers.values()).map(s => ({
@@ -116,8 +143,13 @@ export function getWorkersStatus(): Array<{
     lastFrameAge: s.lastFrameAt > 0 ? Math.round((now - s.lastFrameAt) / 1000) : -1,
     uptime: Math.round((now - s.startedAt) / 1000),
     retryCount: s.retryCount,
+    lastDetectionAt: s.lastDetectionAt,
+    lastDetectionCount: s.lastDetectionCount,
+    totalCapturesSaved: s.totalCapturesSaved,
   }));
 }
+
+// ─── ffmpeg ──────────────────────────────────────────────────────────────────
 
 /**
  * Inicia o processo ffmpeg para captura contínua.
@@ -204,6 +236,351 @@ function spawnFfmpeg(state: WorkerState): void {
   });
 }
 
+// ─── Face Detection Loop ─────────────────────────────────────────────────────
+
+/**
+ * Agenda a próxima rodada de detecção facial.
+ * Executa a cada FACE_DETECTION_INTERVAL_MS segundos.
+ */
+function scheduleFaceDetection(state: WorkerState): void {
+  if (!state.running) return;
+
+  state.faceDetectionTimer = setTimeout(async () => {
+    if (!state.running) return;
+
+    try {
+      await runFaceDetection(state);
+    } catch (err) {
+      console.error(`[IP Worker] Unit ${state.unitId}: erro na detecção facial:`, err);
+    }
+
+    // Reagendar próxima rodada
+    scheduleFaceDetection(state);
+  }, FACE_DETECTION_INTERVAL_MS);
+}
+
+/**
+ * Executa uma rodada de detecção facial no frame atual.
+ * Salva capturas no banco para cada face detectada.
+ */
+async function runFaceDetection(state: WorkerState): Promise<void> {
+  // Verificar se há frame disponível e se não é muito antigo (max 10s)
+  const frameAge = state.lastFrameAt > 0 ? Date.now() - state.lastFrameAt : Infinity;
+  if (!state.lastFrame || frameAge > 10_000) {
+    return; // Sem frame fresco disponível
+  }
+
+  const frame = state.lastFrame; // captura referência local
+
+  // Importar serviço de reconhecimento facial (lazy import para não bloquear startup)
+  const { initFaceRecognition, detectFaces, matchFaceDescriptor } = await import("./faceRecognitionService");
+
+  // Garantir que os modelos estão carregados
+  await initFaceRecognition();
+
+  // Detectar faces no frame
+  const t0 = Date.now();
+  const faces = await detectFaces(frame);
+  const elapsed = Date.now() - t0;
+
+  state.lastDetectionAt = Date.now();
+  state.lastDetectionCount = faces.length;
+
+  if (faces.length === 0) {
+    return; // Nenhuma face detectada
+  }
+
+  console.log(`[IP Worker] Unit ${state.unitId}: ${faces.length} face(s) detectada(s) em ${elapsed}ms`);
+
+  // Buscar clientes cadastrados para matching
+  const { getDb } = await import("./db");
+  const { sql: drizzleSql, and, eq } = await import("drizzle-orm");
+  const { camClientes } = await import("../drizzle/schema");
+
+  const db = await getDb();
+  if (!db) return;
+
+  const knownClientes = await db
+    .select({
+      id: camClientes.id,
+      faceDescriptor: camClientes.faceDescriptor,
+    })
+    .from(camClientes)
+    .where(
+      and(
+        eq(camClientes.unitId, state.unitId),
+        drizzleSql`${camClientes.faceDescriptor} IS NOT NULL`
+      )
+    );
+
+  // Processar cada face detectada
+  for (const face of faces) {
+    // Verificar cooldown por cliente
+    const match = matchFaceDescriptor(face.descriptor, knownClientes as any);
+    if (match) {
+      const lastCapture = state.lastClientCooldown.get(match.clienteId) ?? 0;
+      if (Date.now() - lastCapture < SAME_CLIENT_COOLDOWN_MS) {
+        continue; // Cooldown ativo para este cliente
+      }
+    }
+
+    // Salvar captura no banco via função interna (evita overhead do tRPC)
+    try {
+      await saveCaptureInternal({
+        unitId: state.unitId,
+        faceDescriptor: face.descriptor,
+        satisfactionLevel: face.satisfactionLevel,
+        expression: face.expression,
+        confidence: face.confidence,
+        existingClienteId: match?.clienteId,
+      });
+
+      state.totalCapturesSaved++;
+
+      // Registrar cooldown para este cliente
+      if (match) {
+        state.lastClientCooldown.set(match.clienteId, Date.now());
+      }
+
+      console.log(
+        `[IP Worker] Unit ${state.unitId}: captura salva — ` +
+        `cliente=${match?.clienteId ?? "novo"}, ` +
+        `expressão=${face.expression}, ` +
+        `satisfação=${face.satisfactionLevel}, ` +
+        `confiança=${(face.confidence * 100).toFixed(1)}%`
+      );
+    } catch (err) {
+      console.error(`[IP Worker] Unit ${state.unitId}: erro ao salvar captura:`, err);
+    }
+  }
+}
+
+// ─── Save Capture (lógica interna, sem tRPC) ─────────────────────────────────
+
+interface SaveCaptureInput {
+  unitId: number;
+  faceDescriptor: number[];
+  satisfactionLevel: "satisfied" | "neutral" | "unsatisfied";
+  expression: string;
+  confidence: number;
+  faceImageUrl?: string;
+  existingClienteId?: number;
+}
+
+/**
+ * Salva uma captura facial diretamente no banco, sem passar pelo tRPC.
+ * Replica a lógica da procedure saveCapture do vipCam router.
+ */
+async function saveCaptureInternal(input: SaveCaptureInput): Promise<{ clienteId: number; isNewCliente: boolean }> {
+  const { getDb } = await import("./db");
+  const { sql: drizzleSql, and, eq } = await import("drizzle-orm");
+  const {
+    camClientes,
+    camSentimentTimeline,
+    camMetricasDiarias,
+    camMetricasHorarias,
+  } = await import("../drizzle/schema");
+
+  const db = await getDb();
+  if (!db) throw new Error("Banco indisponível");
+
+  const now = new Date();
+  const todayStr = todayBRT();
+  const currentHour = hourBRT();
+
+  let clienteId: number;
+  let isNewCliente = false;
+
+  if (input.existingClienteId) {
+    // ── Cliente existente: atualizar descriptor e satisfação ──
+    clienteId = input.existingClienteId;
+
+    const [cliente] = await db
+      .select()
+      .from(camClientes)
+      .where(and(eq(camClientes.id, clienteId), eq(camClientes.unitId, input.unitId)))
+      .limit(1);
+
+    if (!cliente) throw new Error("Cliente não encontrado");
+
+    // Atualizar descriptor: 70% velho + 30% novo (aprendizado incremental)
+    const oldDescriptor = (cliente.faceDescriptor as number[]) ?? [];
+    let newDescriptor = input.faceDescriptor;
+    if (oldDescriptor.length === newDescriptor.length) {
+      newDescriptor = oldDescriptor.map((v, i) => v * 0.7 + newDescriptor[i] * 0.3);
+    }
+
+    // Buscar histórico da timeline para calcular satisfação final
+    const timeline = await db
+      .select({ satisfactionLevel: camSentimentTimeline.satisfactionLevel })
+      .from(camSentimentTimeline)
+      .where(and(
+        eq(camSentimentTimeline.clienteId, clienteId),
+        eq(camSentimentTimeline.unitId, input.unitId)
+      ))
+      .limit(50);
+
+    const allTimeline = [...timeline, { satisfactionLevel: input.satisfactionLevel }];
+    const finalLevel = calcFinalSatisfactionLevel(allTimeline);
+
+    // Verificar se é a primeira visita do dia
+    const lastSeenDate = cliente.lastSeenAt
+      ? (() => {
+          const d = new Date(cliente.lastSeenAt);
+          const brt = new Date(d.getTime() - 3 * 60 * 60 * 1000);
+          return brt.toISOString().slice(0, 10);
+        })()
+      : null;
+    const isNewDay = lastSeenDate !== todayStr;
+
+    await db.update(camClientes).set({
+      faceDescriptor: newDescriptor,
+      satisfactionLevel: finalLevel,
+      expression: input.expression as any,
+      confidenceScore: String(input.confidence),
+      lastSeenAt: now,
+      visitCount: isNewDay ? drizzleSql`${camClientes.visitCount} + 1` : undefined,
+      expressao: finalLevel === "satisfied" ? "satisfeito" : finalLevel === "neutral" ? "neutro" : "insatisfeito",
+      totalVisitas: isNewDay ? drizzleSql`${camClientes.totalVisitas} + 1` : undefined,
+      ultimaVisita: now,
+      updatedAt: now,
+    }).where(eq(camClientes.id, clienteId));
+
+  } else {
+    // ── Novo cliente ──
+    isNewCliente = true;
+    const [result] = await db.insert(camClientes).values({
+      unitId: input.unitId,
+      faceDescriptor: input.faceDescriptor,
+      faceImageUrl: input.faceImageUrl ?? null,
+      satisfactionLevel: input.satisfactionLevel,
+      expression: input.expression as any,
+      confidenceScore: String(input.confidence),
+      visitCount: 1,
+      lastSeenAt: now,
+      fotoUrl: input.faceImageUrl ?? null,
+      expressao: input.satisfactionLevel === "satisfied" ? "satisfeito" : input.satisfactionLevel === "neutral" ? "neutro" : "insatisfeito",
+      totalVisitas: 1,
+      ultimaVisita: now,
+    });
+    clienteId = (result as any).insertId;
+  }
+
+  // ── Inserir na timeline ──
+  await db.insert(camSentimentTimeline).values({
+    unitId: input.unitId,
+    clienteId,
+    satisfactionLevel: input.satisfactionLevel,
+    expression: input.expression,
+    confidence: String(input.confidence),
+    faceImageUrl: input.faceImageUrl ?? null,
+    recordedAt: now,
+  });
+
+  // ── Atualizar métricas diárias ──
+  const satisfiedInc = input.satisfactionLevel === "satisfied" ? 1 : 0;
+  const neutralInc = input.satisfactionLevel === "neutral" ? 1 : 0;
+  const unsatisfiedInc = input.satisfactionLevel === "unsatisfied" ? 1 : 0;
+
+  const [existingMetric] = await db
+    .select()
+    .from(camMetricasDiarias)
+    .where(and(
+      eq(camMetricasDiarias.unitId, input.unitId),
+      eq(camMetricasDiarias.data, todayStr as any)
+    ))
+    .limit(1);
+
+  if (existingMetric) {
+    await db.update(camMetricasDiarias).set({
+      totalDeteccoes: drizzleSql`${camMetricasDiarias.totalDeteccoes} + 1`,
+      satisfeitos: drizzleSql`${camMetricasDiarias.satisfeitos} + ${satisfiedInc}`,
+      neutros: drizzleSql`${camMetricasDiarias.neutros} + ${neutralInc}`,
+      insatisfeitos: drizzleSql`${camMetricasDiarias.insatisfeitos} + ${unsatisfiedInc}`,
+    }).where(and(
+      eq(camMetricasDiarias.unitId, input.unitId),
+      eq(camMetricasDiarias.data, todayStr as any)
+    ));
+  } else {
+    await db.insert(camMetricasDiarias).values({
+      unitId: input.unitId,
+      data: todayStr as any,
+      totalDeteccoes: 1,
+      satisfeitos: satisfiedInc,
+      neutros: neutralInc,
+      insatisfeitos: unsatisfiedInc,
+    });
+  }
+
+  // ── Atualizar métricas horárias ──
+  const [existingHourly] = await db
+    .select()
+    .from(camMetricasHorarias)
+    .where(and(
+      eq(camMetricasHorarias.unitId, input.unitId),
+      eq(camMetricasHorarias.data, todayStr as any),
+      eq(camMetricasHorarias.hora, currentHour)
+    ))
+    .limit(1);
+
+  if (existingHourly) {
+    await db.update(camMetricasHorarias).set({
+      totalDeteccoes: drizzleSql`${camMetricasHorarias.totalDeteccoes} + 1`,
+      satisfeitos: drizzleSql`${camMetricasHorarias.satisfeitos} + ${satisfiedInc}`,
+      neutros: drizzleSql`${camMetricasHorarias.neutros} + ${neutralInc}`,
+      insatisfeitos: drizzleSql`${camMetricasHorarias.insatisfeitos} + ${unsatisfiedInc}`,
+    }).where(and(
+      eq(camMetricasHorarias.unitId, input.unitId),
+      eq(camMetricasHorarias.data, todayStr as any),
+      eq(camMetricasHorarias.hora, currentHour)
+    ));
+  } else {
+    await db.insert(camMetricasHorarias).values({
+      unitId: input.unitId,
+      data: todayStr as any,
+      hora: currentHour,
+      totalDeteccoes: 1,
+      satisfeitos: satisfiedInc,
+      neutros: neutralInc,
+      insatisfeitos: unsatisfiedInc,
+    });
+  }
+
+  return { clienteId, isNewCliente };
+}
+
+// ─── Helpers de data/hora (replicados do vipCam router) ──────────────────────
+
+function todayBRT(): string {
+  const now = new Date();
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  return brt.toISOString().slice(0, 10);
+}
+
+function hourBRT(): number {
+  const now = new Date();
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  return brt.getUTCHours();
+}
+
+function calcFinalSatisfactionLevel(
+  timeline: Array<{ satisfactionLevel: string }>
+): "satisfied" | "neutral" | "unsatisfied" {
+  const total = timeline.length;
+  if (total === 0) return "neutral";
+
+  const satisfied = timeline.filter(t => t.satisfactionLevel === "satisfied").length;
+  const unsatisfied = timeline.filter(t => t.satisfactionLevel === "unsatisfied").length;
+
+  const pctUnsatisfied = unsatisfied / total;
+
+  if (satisfied >= 1) return "satisfied";
+  if (pctUnsatisfied >= 0.25) return "unsatisfied";
+  return "neutral";
+}
+
+// ─── Inicialização via banco ──────────────────────────────────────────────────
+
 /**
  * Inicializa workers para todas as câmeras IP ativas no banco.
  * Chamado no startup do servidor.
@@ -244,6 +621,19 @@ export async function initWorkersFromDb(): Promise<void> {
     }
 
     console.log(`[IP Worker] ${configs.length} worker(s) iniciado(s) no startup`);
+
+    // Pré-carregar modelos de reconhecimento facial em background
+    // (não bloqueia o startup — modelos são carregados assincronamente)
+    setTimeout(async () => {
+      try {
+        const { initFaceRecognition } = await import("./faceRecognitionService");
+        await initFaceRecognition();
+        console.log("[IP Worker] Modelos de reconhecimento facial pré-carregados");
+      } catch (err) {
+        console.warn("[IP Worker] Aviso: falha ao pré-carregar modelos faciais:", err);
+      }
+    }, 5_000); // aguarda 5s para o servidor estabilizar
+
   } catch (err) {
     console.error("[IP Worker] Erro ao inicializar workers do banco:", err);
   }

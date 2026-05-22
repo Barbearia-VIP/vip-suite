@@ -1297,3 +1297,15 @@
 - [ ] Mensagem gerada pré-preenche o campo de texto (editável)
 - [ ] Botão "Regerar" para gerar nova versão
 - [ ] Mensagem adaptada ao segmento: perdidos (reativação), em risco (urgência/incentivo), one-shot (fidelização)
+
+## VIP Cam — Reconhecimento Facial Server-Side para Câmera IP (2026-05-22)
+
+- [x] Validar @vladmandic/face-api + canvas em Node.js com frame real da câmera Dahua (1280x724, 98.2% confiança)
+- [x] Criar faceRecognitionService.ts: initFaceRecognition(), detectFaces(), matchFaceDescriptor()
+- [x] Integrar loop de detecção automática no ipCameraWorker.ts (a cada 30s, salva no DB sem browser)
+- [x] Implementar saveCaptureInternal() no worker (replica lógica do tRPC saveCapture, sem overhead HTTP)
+- [x] Adicionar campos de telemetria no worker: lastDetectionAt, lastDetectionCount, totalCapturesSaved
+- [x] Atualizar EmotionCamera.tsx: câmera IP usa apenas polling de frames (sem face-api no browser)
+- [x] Câmera USB mantida inalterada (face-api.js no browser, comportamento original)
+- [x] Badge "Captura automática ativa" e informações do worker na UI da câmera IP
+- [x] Testes Vitest: 15 testes passando (matchFaceDescriptor + mapExpressionToSatisfaction)

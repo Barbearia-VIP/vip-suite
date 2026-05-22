@@ -3,14 +3,22 @@
  *
  * Suporta:
  * - Webcam USB via getUserMedia (modo "usb")
+ *   → Reconhecimento facial no BROWSER (face-api.js) — comportamento inalterado
  * - Câmera IP via snapshot MJPEG/HTTP (modo "ip")
+ *   → Reconhecimento facial no SERVIDOR (worker permanente) — sem face-api no browser
+ *   → Browser apenas exibe frames via polling (~2.5fps)
  *
- * Lógica de detecção:
+ * Lógica de detecção USB (inalterada):
  * - Loop a ~4 FPS (250ms)
  * - Buffer de 1.5s para acumular expressões e descriptors
  * - Cooldown de 4s após cada captura
  * - Cache de descritores recarregado a cada 60s
  * - Threshold de matching: 0.55
+ *
+ * Lógica de detecção IP (nova):
+ * - Worker permanente no servidor detecta faces a cada 30s
+ * - Salva capturas no banco sem precisar do browser aberto
+ * - Browser apenas exibe frames e mostra status do worker
  */
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as faceapi from '@vladmandic/face-api';
@@ -30,7 +38,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Camera, CameraOff, RefreshCw, Wifi, WifiOff } from 'lucide-react';
+import { Loader2, Camera, CameraOff, RefreshCw, Wifi, WifiOff, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ─────────────────────────────────────────────
@@ -48,7 +56,7 @@ interface DetectionResult {
 
 interface CameraConfig {
   cameraType: 'usb' | 'ip';
-  unitId?: number | null;        // ID da unidade — usado para montar a URL do proxy MJPEG
+  unitId?: number | null;
   rtspUrl?: string | null;
   rtspLogin?: string | null;
   rtspPassword?: string | null;
@@ -63,6 +71,18 @@ interface EmotionCameraProps {
   onDetection?: (result: DetectionResult) => void;
 }
 
+interface WorkerStatus {
+  unitId: number;
+  running: boolean;
+  hasFrame: boolean;
+  lastFrameAge: number;
+  uptime: number;
+  retryCount: number;
+  lastDetectionAt: number;
+  lastDetectionCount: number;
+  totalCapturesSaved: number;
+}
+
 // ─────────────────────────────────────────────
 // Componente
 // ─────────────────────────────────────────────
@@ -71,10 +91,10 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ipImgRef = useRef<HTMLImageElement>(null);
-  const ipWsRef = useRef<WebSocket | null>(null);       // WebSocket para câmera IP
-  const ipBlobUrlRef = useRef<string | null>(null);     // URL do último frame recebido
-  const ipPollingRef = useRef<ReturnType<typeof setInterval> | null>(null); // Polling fallback
-  const ipFrameCountRef = useRef(0);                    // Frames recebidos via WS
+  const ipWsRef = useRef<WebSocket | null>(null);
+  const ipBlobUrlRef = useRef<string | null>(null);
+  const ipPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const ipFrameCountRef = useRef(0);
   const streamRef = useRef<MediaStream | null>(null);
   const detectionIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cacheIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -83,6 +103,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
   const cooldownRef = useRef(false);
   const isCapturingRef = useRef(false);
   const clientCacheRef = useRef<Array<{ id: number; faceDescriptor: number[] | null }>>([]);
+  const workerStatusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { status: faceApiStatus, error: faceApiError, loadModels } = useFaceApi();
 
@@ -93,6 +114,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
   const [lastDetection, setLastDetection] = useState<DetectionResult | null>(null);
   const [detectionCount, setDetectionCount] = useState(0);
   const [ipConnected, setIpConnected] = useState(false);
+  const [workerStatus, setWorkerStatus] = useState<WorkerStatus | null>(null);
 
   const cameraType = config?.cameraType ?? 'usb';
   const cooldownMs = (config?.cooldownSeconds ?? 4) * 1000;
@@ -103,7 +125,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
   const saveCaptureM = trpc.vipCam.saveCapture.useMutation();
   const uploadImageM = trpc.vipCam.uploadFaceImage.useMutation();
 
-  // ── Cache de descritores ────────────────────
+  // ── Cache de descritores (USB only) ────────
 
   const { refetch: refetchDescriptors } = trpc.vipCam.getFaceDescriptors.useQuery(
     { unitId },
@@ -118,7 +140,9 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
         faceDescriptor: c.faceDescriptor as number[] | null,
       }));
     }
-  }, [refetchDescriptors]);  // ── Listar câmeras disponíveis ──────────────────
+  }, [refetchDescriptors]);
+
+  // ── Listar câmeras disponíveis ──────────────────
 
   const listCameras = useCallback(async (autoSelect = true) => {
     try {
@@ -126,14 +150,12 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
       const videoDevices = devices.filter(d => d.kind === 'videoinput');
       setAvailableCameras(videoDevices);
       if (!autoSelect) return;
-      // Preferência por câmeras externas/USB (pelo label ou por ser a última da lista)
       const preferred = videoDevices.find(d =>
         /usb|logitech|c920|c930|c270|c615|brio|external|webcam|hd pro|hd cam/i.test(d.label)
       );
       if (preferred) {
         setSelectedCameraId(preferred.deviceId);
       } else if (videoDevices.length > 0 && !selectedCameraId) {
-        // Não sobrescrever seleção manual do usuário
         setSelectedCameraId(videoDevices[0].deviceId);
       }
     } catch {
@@ -141,15 +163,14 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
     }
   }, [selectedCameraId]);
 
-  // Listar câmeras ao montar o componente (sem labels ainda, mas mostra quantas há)
   useEffect(() => {
     listCameras();
-    // Escutar mudanças de dispositivos (USB conectado/desconectado)
     const handler = () => listCameras(false);
     navigator.mediaDevices?.addEventListener('devicechange', handler);
     return () => navigator.mediaDevices?.removeEventListener('devicechange', handler);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   // ── Iniciar câmera USB ──────────────────────
 
   const friendlyError = useCallback((err: unknown): string => {
@@ -176,21 +197,16 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
   const startUSBCamera = useCallback(async () => {
     setCameraError(null);
 
-    // Estratégia de retry em 4 etapas
     const attempts: (() => Promise<MediaStream>)[] = [
-      // 1. deviceId exato + resolução ideal
       ...(selectedCameraId ? [() => navigator.mediaDevices.getUserMedia({
         video: { deviceId: { exact: selectedCameraId }, width: { ideal: 1280 }, height: { ideal: 720 } },
       })] : []),
-      // 2. deviceId exato sem restrição de resolução
       ...(selectedCameraId ? [() => navigator.mediaDevices.getUserMedia({
         video: { deviceId: { exact: selectedCameraId } },
       })] : []),
-      // 3. qualquer câmera com resolução ideal
       () => navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 1280 }, height: { ideal: 720 } },
       }),
-      // 4. mínimo absoluto
       () => navigator.mediaDevices.getUserMedia({ video: true }),
     ];
 
@@ -208,7 +224,6 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
         return;
       } catch (err) {
         lastErr = err;
-        // Se for NotReadableError não adianta tentar outras configurações do mesmo device
         const name = err instanceof Error ? err.name : '';
         if (name === 'NotReadableError') break;
       }
@@ -229,12 +244,14 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
     if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
     if (cacheIntervalRef.current) clearInterval(cacheIntervalRef.current);
     if (captureWindowRef.current) clearTimeout(captureWindowRef.current);
-    // Fecha WebSocket da câmera IP se estiver aberto
+    if (workerStatusIntervalRef.current) {
+      clearInterval(workerStatusIntervalRef.current);
+      workerStatusIntervalRef.current = null;
+    }
     if (ipWsRef.current) {
       ipWsRef.current.close();
       ipWsRef.current = null;
     }
-    // Para polling de exibição (o worker no servidor continua rodando)
     if (ipPollingRef.current) {
       clearInterval(ipPollingRef.current);
       ipPollingRef.current = null;
@@ -249,23 +266,21 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
     console.log('[IP Camera] Exibição pausada (worker continua capturando no servidor)');
   }, []);
 
-  // ── Capturar frame como base64 ──────────────
+  // ── Capturar frame como base64 (USB only) ──
 
   const captureFrame = useCallback((): string | null => {
     const canvas = canvasRef.current;
-    // Para câmera IP, capturar da tag <img> (frame MJPEG atual)
-    const source: HTMLVideoElement | HTMLImageElement | null =
-      cameraType === 'ip' ? ipImgRef.current : videoRef.current;
+    const source: HTMLVideoElement | null = videoRef.current;
     if (!canvas || !source) return null;
-    canvas.width = (source instanceof HTMLVideoElement ? source.videoWidth : source.naturalWidth) || 640;
-    canvas.height = (source instanceof HTMLVideoElement ? source.videoHeight : source.naturalHeight) || 480;
+    canvas.width = source.videoWidth || 640;
+    canvas.height = source.videoHeight || 480;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
     ctx.drawImage(source, 0, 0);
     return canvas.toDataURL('image/jpeg', 0.8);
-  }, [cameraType]);
+  }, []);
 
-  // ── Processar captura final (após buffer de 1.5s) ──
+  // ── Processar captura final (USB only) ──────
 
   const processFinalCapture = useCallback(async () => {
     const buffer = captureBufferRef.current;
@@ -274,11 +289,9 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
       return;
     }
 
-    // Média das expressões
     const avgExpressions = averageExpressions(buffer.expressions);
     const { satisfactionLevel, dominantExpression } = classifyExpression(avgExpressions);
 
-    // Média dos descritores
     const avgDescriptor = new Float32Array(buffer.descriptors[0].length);
     for (const d of buffer.descriptors) {
       for (let i = 0; i < d.length; i++) avgDescriptor[i] += d[i];
@@ -287,10 +300,8 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
       avgDescriptor[i] /= buffer.descriptors.length;
     }
 
-    // Encontrar cliente no cache
     const match = findMatchingClient(avgDescriptor, clientCacheRef.current);
 
-    // Capturar imagem do rosto
     const frameBase64 = captureFrame();
     let faceImageUrl: string | undefined;
     if (frameBase64) {
@@ -302,7 +313,6 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
       }
     }
 
-    // Salvar no banco
     const confidence = avgExpressions[dominantExpression as keyof ExpressionScores] ?? 0;
     try {
       const saved = await saveCaptureM.mutateAsync({
@@ -328,7 +338,6 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
       setDetectionCount(c => c + 1);
       onDetection?.(result);
 
-      // Atualizar cache local imediatamente
       if (saved.isNewCliente) {
         clientCacheRef.current.push({
           id: saved.clienteId,
@@ -337,7 +346,6 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
       } else {
         const idx = clientCacheRef.current.findIndex(c => c.id === saved.clienteId);
         if (idx >= 0) {
-          // Atualizar descriptor no cache: 70% velho + 30% novo
           const old = clientCacheRef.current[idx].faceDescriptor ?? [];
           if (old.length === avgDescriptor.length) {
             clientCacheRef.current[idx].faceDescriptor = old.map((v, i) => v * 0.7 + avgDescriptor[i] * 0.3);
@@ -348,34 +356,27 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
       console.error('Erro ao salvar captura:', err);
     }
 
-    // Limpar buffer e ativar cooldown
     captureBufferRef.current = { expressions: [], descriptors: [] };
     isCapturingRef.current = false;
     cooldownRef.current = true;
     setTimeout(() => { cooldownRef.current = false; }, cooldownMs);
   }, [unitId, captureFrame, saveCaptureM, uploadImageM, onDetection, cooldownMs]);
 
-  // ── Loop de detecção ────────────────────────
+  // ── Loop de detecção (USB only) ─────────────
 
   const runDetection = useCallback(async () => {
     if (cooldownRef.current) return;
-    // Para câmera IP (MJPEG), usar a tag <img> como fonte; para USB, usar <video>
-    const source: HTMLVideoElement | HTMLImageElement | null =
-      cameraType === 'ip' ? ipImgRef.current : videoRef.current;
-    if (!source) return;
-    // Para <video>, verificar readyState; para <img> verificar se carregou
-    if (source instanceof HTMLVideoElement && source.readyState < 2) return;
-    if (source instanceof HTMLImageElement && !source.complete) return;
+    const source: HTMLVideoElement | null = videoRef.current;
+    if (!source || source.readyState < 2) return;
 
     try {
       const detection = await faceapi
-        .detectSingleFace(source as HTMLVideoElement, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.45 }))
+        .detectSingleFace(source, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.45 }))
         .withFaceLandmarks()
         .withFaceDescriptor()
         .withFaceExpressions();
 
       if (!detection) {
-        // Sem rosto: cancelar captura em andamento
         if (isCapturingRef.current) {
           if (captureWindowRef.current) clearTimeout(captureWindowRef.current);
           captureBufferRef.current = { expressions: [], descriptors: [] };
@@ -387,7 +388,6 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
       const { expressions, descriptor } = detection;
 
       if (!isCapturingRef.current) {
-        // Iniciar janela de captura de 1.5s
         isCapturingRef.current = true;
         captureBufferRef.current = { expressions: [], descriptors: [] };
 
@@ -396,52 +396,60 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
         }, captureWindowMs);
       }
 
-      // Acumular no buffer
       captureBufferRef.current.expressions.push(expressions as unknown as ExpressionScores);
       captureBufferRef.current.descriptors.push(descriptor);
 
     } catch {
       // Ignorar erros de detecção individuais
     }
-  }, [processFinalCapture, captureWindowMs, cameraType]);
+  }, [processFinalCapture, captureWindowMs]);
 
-  // ── Iniciar detecção quando câmera ativa ────
+  // ── Iniciar detecção quando câmera USB ativa ─
 
   useEffect(() => {
-    if (!cameraActive || faceApiStatus !== 'ready') return;
+    if (!cameraActive || faceApiStatus !== 'ready' || cameraType !== 'usb') return;
 
-    // Carregar cache inicial
     loadCache();
-
-    // Loop de detecção a 4 FPS
     detectionIntervalRef.current = setInterval(runDetection, 250);
-
-    // Recarregar cache a cada 60s
     cacheIntervalRef.current = setInterval(loadCache, 60_000);
 
     return () => {
       if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
       if (cacheIntervalRef.current) clearInterval(cacheIntervalRef.current);
     };
-  }, [cameraActive, faceApiStatus, runDetection, loadCache]);
+  }, [cameraActive, faceApiStatus, cameraType, runDetection, loadCache]);
 
-  // ── WebSocket para câmera IP ──────────────
-  // Usa WebSocket em vez de MJPEG over HTTP para contornar o buffering do Cloudflare/HTTP2.
-  // O servidor envia cada frame como ArrayBuffer (binário JPEG).
-  // O frontend exibe via URL.createObjectURL em uma tag <img>.
-  const buildIpCameraUrl = useCallback(() => {
-    if (!config?.rtspUrl) return null;
-    const id = config.unitId ?? unitId;
-    if (!id) return null;
-    return `/api/vip-cam/stream/${id}`; // mantido para compatibilidade
-  }, [config, unitId]);
+  // ── Polling de status do worker IP ──────────
+
+  const fetchWorkerStatus = useCallback(async () => {
+    try {
+      const resp = await fetch('/api/vip-cam/streams/status', { cache: 'no-store' });
+      if (!resp.ok) return;
+      const data = await resp.json() as { streams: WorkerStatus[] };
+      const ws = data.streams.find(s => s.unitId === unitId);
+      if (ws) setWorkerStatus(ws);
+    } catch {
+      // Silencioso
+    }
+  }, [unitId]);
+
+  useEffect(() => {
+    if (cameraType !== 'ip' || !cameraActive) return;
+
+    fetchWorkerStatus();
+    workerStatusIntervalRef.current = setInterval(fetchWorkerStatus, 10_000);
+
+    return () => {
+      if (workerStatusIntervalRef.current) clearInterval(workerStatusIntervalRef.current);
+    };
+  }, [cameraType, cameraActive, fetchWorkerStatus]);
 
   // ── Inicia o worker permanente no servidor e o polling de exibição ──────────
+
   const connectIpCamera = useCallback(async () => {
     const id = config?.unitId ?? unitId;
     if (!id) return;
 
-    // 1. Inicia o worker no servidor (continua mesmo ao fechar o browser)
     try {
       await fetch(`/api/vip-cam/worker/${id}/start`, { method: 'POST' });
       console.log('[IP Camera] Worker iniciado no servidor para unidade', id);
@@ -449,13 +457,12 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
       console.warn('[IP Camera] Falha ao iniciar worker:', e);
     }
 
-    // 2. Inicia polling de snapshots para exibição no browser
     startIpPolling(id);
   }, [config, unitId]);
 
-  // ── Polling de snapshots para exibição (worker roda independente no servidor) ──
+  // ── Polling de snapshots para exibição ──────
+
   const startIpPolling = useCallback((id: number) => {
-    // Para polling anterior se existir
     if (ipPollingRef.current) {
       clearInterval(ipPollingRef.current);
       ipPollingRef.current = null;
@@ -468,12 +475,11 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
         const resp = await fetch(`/api/vip-cam/stream/${id}/snapshot`, { cache: 'no-store' });
         if (!resp.ok) {
           consecutiveErrors++;
-          console.warn('[IP Camera] Snapshot falhou:', resp.status, '(erro', consecutiveErrors, ')');
           if (consecutiveErrors >= 5) setIpConnected(false);
           return;
         }
         const blob = await resp.blob();
-        if (blob.size < 100) return; // frame inválido
+        if (blob.size < 100) return;
         consecutiveErrors = 0;
         setIpConnected(true);
         const newUrl = URL.createObjectURL(blob);
@@ -482,25 +488,25 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
         ipBlobUrlRef.current = newUrl;
       } catch (e) {
         consecutiveErrors++;
-        console.warn('[IP Camera] Polling erro:', e);
         if (consecutiveErrors >= 5) setIpConnected(false);
       }
     };
 
-    poll(); // primeiro frame imediatamente
-    ipPollingRef.current = setInterval(poll, 400); // ~2.5fps
+    poll();
+    ipPollingRef.current = setInterval(poll, 400);
   }, []);
 
-  // ── Auto-iniciar exibição se câmera IP já estiver configurada e worker ativo ──
+  // ── Auto-iniciar exibição se worker já estiver ativo ──
+
   useEffect(() => {
     if (cameraType !== 'ip' || !cameraActive) return;
     const id = config?.unitId ?? unitId;
     if (!id) return;
-    fetch(`/api/vip-cam/streams/status`)
+    fetch('/api/vip-cam/streams/status')
       .then(r => r.json())
       .then((data: { streams: Array<{ unitId: number; running: boolean; hasFrame: boolean }> }) => {
-        const workerStatus = data.streams.find(s => s.unitId === id);
-        if (workerStatus?.running) {
+        const ws = data.streams.find(s => s.unitId === id);
+        if (ws?.running) {
           console.log('[IP Camera] Worker já está rodando, iniciando exibição...');
           startIpPolling(id);
         }
@@ -509,7 +515,6 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraType, cameraActive, config, unitId]);
 
-
   // ── Renderização ────────────────────────────
 
   const isUSB = cameraType === 'usb';
@@ -517,8 +522,8 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Status dos modelos de IA */}
-      {faceApiStatus === 'idle' && (
+      {/* Status dos modelos de IA — apenas para câmera USB */}
+      {isUSB && faceApiStatus === 'idle' && (
         <Alert>
           <AlertDescription className="flex items-center gap-2">
             <Camera className="h-4 w-4" />
@@ -526,7 +531,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
           </AlertDescription>
         </Alert>
       )}
-      {faceApiStatus === 'loading' && (
+      {isUSB && faceApiStatus === 'loading' && (
         <Alert>
           <AlertDescription className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -534,7 +539,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
           </AlertDescription>
         </Alert>
       )}
-      {faceApiStatus === 'error' && (
+      {isUSB && faceApiStatus === 'error' && (
         <Alert variant="destructive">
           <AlertDescription>Erro ao carregar IA: {faceApiError}</AlertDescription>
         </Alert>
@@ -568,12 +573,10 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
       {isUSB && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Seletor de câmera — sempre visível */}
             <Select
               value={selectedCameraId || undefined}
               onValueChange={(val) => {
                 setSelectedCameraId(val);
-                // Se a câmera já está ativa, reiniciar com a nova câmera
                 if (cameraActive) {
                   stopCamera();
                   setTimeout(() => startUSBCamera(), 300);
@@ -598,12 +601,10 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
               </SelectContent>
             </Select>
 
-            {/* Botão atualizar lista (após conectar USB) */}
             <Button
               variant="outline"
               size="sm"
               onClick={async () => {
-                // Pedir permissão rápida para obter labels completos
                 try {
                   const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
                   tmp.getTracks().forEach(t => t.stop());
@@ -637,7 +638,6 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
             )}
           </div>
 
-          {/* Dica quando há apenas uma câmera (provavelmente a interna) */}
           {!cameraActive && availableCameras.filter(c => !!c.deviceId).length <= 1 && (
             <p className="text-xs text-muted-foreground">
               💡 Se a câmera USB não aparecer, conecte-a e clique em <strong>🔄</strong> para atualizar a lista.
@@ -648,52 +648,72 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
 
       {/* Controles de câmera IP */}
       {isIP && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            {ipConnected ? (
-              <Badge variant="outline" className="text-green-600 border-green-600">
-                <Wifi className="h-3 w-3 mr-1" />Câmera IP Conectada
-              </Badge>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              {ipConnected ? (
+                <Badge variant="outline" className="text-green-600 border-green-600">
+                  <Wifi className="h-3 w-3 mr-1" />Câmera IP Conectada
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-red-500 border-red-500">
+                  <WifiOff className="h-3 w-3 mr-1" />Câmera IP Desconectada
+                </Badge>
+              )}
+              {/* Badge de captura automática server-side */}
+              {workerStatus?.running && (
+                <Badge variant="outline" className="text-blue-600 border-blue-600">
+                  <Bot className="h-3 w-3 mr-1" />
+                  Captura automática ativa
+                  {workerStatus.totalCapturesSaved > 0 && ` · ${workerStatus.totalCapturesSaved} salvas`}
+                </Badge>
+              )}
+            </div>
+            {!cameraActive ? (
+              <Button
+                onClick={async () => {
+                  if (!config?.rtspUrl) {
+                    toast.error('Configure a URL da câmera IP nas configurações');
+                    return;
+                  }
+                  setCameraActive(true);
+                  await connectIpCamera();
+                }}
+              >
+                <Camera className="h-4 w-4 mr-2" />Conectar Câmera IP
+              </Button>
             ) : (
-              <Badge variant="outline" className="text-red-500 border-red-500">
-                <WifiOff className="h-3 w-3 mr-1" />Câmera IP Desconectada
-              </Badge>
+              <Button variant="destructive" onClick={stopCamera}>
+                <CameraOff className="h-4 w-4 mr-2" />Desconectar
+              </Button>
             )}
-          </div>
-          {!cameraActive ? (
-            <Button
-              onClick={async () => {
-                await loadModels();
-                if (!config?.rtspUrl) {
-                  toast.error('Configure a URL da câmera IP nas configurações');
-                  return;
-                }
+            <Button variant="outline" size="sm" onClick={async () => {
+              stopCamera();
+              await new Promise(r => setTimeout(r, 500));
+              if (config?.rtspUrl) {
                 setCameraActive(true);
                 await connectIpCamera();
-              }}
-              disabled={faceApiStatus === 'loading'}
-            >
-              {faceApiStatus === 'loading' ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Carregando IA...</>
-              ) : (
-                <><Camera className="h-4 w-4 mr-2" />Conectar Câmera IP</>
+              }
+            }}>
+              <RefreshCw className="h-4 w-4 mr-1" />Reconectar
+            </Button>
+          </div>
+
+          {/* Informações do worker server-side */}
+          {workerStatus && cameraActive && (
+            <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
+              <span>Uptime: {Math.floor(workerStatus.uptime / 60)}min</span>
+              {workerStatus.lastDetectionAt > 0 && (
+                <span>
+                  Última detecção: {new Date(workerStatus.lastDetectionAt).toLocaleTimeString('pt-BR')}
+                  {workerStatus.lastDetectionCount > 0 && ` (${workerStatus.lastDetectionCount} face${workerStatus.lastDetectionCount > 1 ? 's' : ''})`}
+                </span>
               )}
-            </Button>
-          ) : (
-            <Button variant="destructive" onClick={stopCamera}>
-              <CameraOff className="h-4 w-4 mr-2" />Desconectar
-            </Button>
+              <span className="text-blue-600 font-medium">
+                Reconhecimento facial automático no servidor — sem necessidade do browser aberto
+              </span>
+            </div>
           )}
-          <Button variant="outline" size="sm" onClick={async () => {
-            stopCamera();
-            await new Promise(r => setTimeout(r, 500));
-            if (config?.rtspUrl) {
-              setCameraActive(true);
-              await connectIpCamera();
-            }
-          }}>
-            <RefreshCw className="h-4 w-4 mr-1" />Reconectar
-          </Button>
         </div>
       )}
 
@@ -714,7 +734,6 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
         {/* Câmera IP — frames via polling de snapshots do worker permanente */}
         {isIP && cameraActive && (
           <div className="w-full h-full relative flex items-center justify-center">
-            {/* A tag img começa sem src; o WebSocket atualiza ipImgRef.current.src a cada frame */}
             <img
               ref={ipImgRef}
               src=""
@@ -728,14 +747,6 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
                 <p className="text-xs">Conectando câmera...</p>
               </div>
             )}
-            {/* Canvas oculto para captura de frames da câmera IP */}
-            <video
-              ref={videoRef}
-              className="hidden"
-              autoPlay
-              muted
-              playsInline
-            />
           </div>
         )}
 
@@ -746,23 +757,35 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
             <p className="text-sm opacity-60">
               {isUSB ? 'Câmera inativa' : 'Câmera IP desconectada'}
             </p>
+            {isIP && (
+              <p className="text-xs opacity-40 text-center px-4">
+                O reconhecimento facial continua ativo no servidor mesmo sem o browser aberto
+              </p>
+            )}
           </div>
         )}
 
-        {/* Overlay de detecção */}
-        {cameraActive && faceApiStatus === 'ready' && (
+        {/* Overlay de status — USB: contador de capturas / IP: indicador server-side */}
+        {cameraActive && (
           <div className="absolute top-2 left-2 flex flex-col gap-1">
             <Badge className="bg-black/70 text-white text-xs">
               🔴 AO VIVO
             </Badge>
-            <Badge className="bg-black/70 text-white text-xs">
-              {detectionCount} capturas
-            </Badge>
+            {isUSB && faceApiStatus === 'ready' && (
+              <Badge className="bg-black/70 text-white text-xs">
+                {detectionCount} capturas
+              </Badge>
+            )}
+            {isIP && workerStatus?.running && (
+              <Badge className="bg-blue-900/80 text-blue-200 text-xs">
+                <Bot className="h-3 w-3 mr-1" />IA no servidor
+              </Badge>
+            )}
           </div>
         )}
 
-        {/* Resultado da última detecção */}
-        {lastDetection && cameraActive && (
+        {/* Resultado da última detecção (USB only — IP salva direto no servidor) */}
+        {isUSB && lastDetection && cameraActive && (
           <div
             className="absolute bottom-2 left-2 right-2 rounded-lg p-3 text-white text-sm"
             style={{ backgroundColor: SATISFACTION_COLORS[lastDetection.satisfactionLevel] + 'cc' }}
@@ -781,8 +804,11 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
         )}
       </div>
 
-      {/* Canvas oculto para captura de frames */}
+      {/* Canvas oculto para captura de frames USB */}
       <canvas ref={canvasRef} className="hidden" />
+
+      {/* Video oculto (referência para câmera USB) */}
+      {isIP && <video ref={videoRef} className="hidden" autoPlay muted playsInline />}
     </div>
   );
 }
