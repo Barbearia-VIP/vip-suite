@@ -95,6 +95,47 @@ describe('matchFaceDescriptor', () => {
   });
 });
 
+// ─── IoU e deduplicação (replicada do worker) ──────────────────────────────────
+
+describe('IoU deduplication logic', () => {
+  function iou(
+    a: { x: number; y: number; width: number; height: number },
+    b: { x: number; y: number; width: number; height: number }
+  ): number {
+    const ax2 = a.x + a.width, ay2 = a.y + a.height;
+    const bx2 = b.x + b.width, by2 = b.y + b.height;
+    const ix1 = Math.max(a.x, b.x), iy1 = Math.max(a.y, b.y);
+    const ix2 = Math.min(ax2, bx2), iy2 = Math.min(ay2, by2);
+    if (ix2 <= ix1 || iy2 <= iy1) return 0;
+    const inter = (ix2 - ix1) * (iy2 - iy1);
+    return inter / (a.width * a.height + b.width * b.height - inter);
+  }
+
+  it('boxes idênticas têm IoU = 1', () => {
+    const box = { x: 10, y: 10, width: 50, height: 50 };
+    expect(iou(box, box)).toBeCloseTo(1, 5);
+  });
+
+  it('boxes sem sobreposição têm IoU = 0', () => {
+    const a = { x: 0, y: 0, width: 50, height: 50 };
+    const b = { x: 100, y: 100, width: 50, height: 50 };
+    expect(iou(a, b)).toBe(0);
+  });
+
+  it('boxes com 50% de sobreposição têm IoU correto', () => {
+    const a = { x: 0, y: 0, width: 100, height: 100 };
+    const b = { x: 50, y: 0, width: 100, height: 100 }; // metade sobreposta
+    // interseção = 50x100 = 5000; união = 10000+10000-5000 = 15000; IoU = 1/3
+    expect(iou(a, b)).toBeCloseTo(1 / 3, 2);
+  });
+
+  it('boxes adjacentes (sem sobreposição) têm IoU = 0', () => {
+    const a = { x: 0, y: 0, width: 50, height: 50 };
+    const b = { x: 50, y: 0, width: 50, height: 50 };
+    expect(iou(a, b)).toBe(0);
+  });
+});
+
 // ─── Integração: lógica de satisfação (replicada do worker) ─────────────────
 
 describe('mapExpressionToSatisfaction (lógica interna)', () => {
