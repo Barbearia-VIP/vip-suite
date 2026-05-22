@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle, MySql2Database } from "drizzle-orm/mysql2";
+import { createPool, Pool } from "mysql2/promise";
 import {
   InsertUser,
   moduleAccess,
@@ -25,12 +26,38 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
-let _db: ReturnType<typeof drizzle> | null = null;
+let _db: MySql2Database | null = null;
+let _pool: Pool | null = null;
+
+export function getDbPool(): Pool {
+  if (!_pool && process.env.DATABASE_URL) {
+    _pool = createPool({
+      uri: process.env.DATABASE_URL,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      connectTimeout: 10000,       // 10s para conectar
+      enableKeepAlive: true,       // mantém conexão viva
+      keepAliveInitialDelay: 10000, // keepalive a cada 10s
+    });
+    // Reconectar automaticamente após inatividade
+    _pool.on("connection", (conn: any) => {
+      conn.on("error", (err: Error) => {
+        if ((err as any).code === "PROTOCOL_CONNECTION_LOST" || (err as any).code === "ECONNRESET") {
+          console.warn("[Database] Conexão perdida, pool reconectará automaticamente.");
+          _db = null; // força recriação do drizzle na próxima chamada
+        }
+      });
+    });
+  }
+  return _pool!;
+}
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const pool = getDbPool();
+      _db = drizzle(pool);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;

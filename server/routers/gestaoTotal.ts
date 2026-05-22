@@ -3,6 +3,7 @@
  */
 import { z } from "zod";
 import { router, protectedProcedure, sysUserProcedure } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   gtTarefas, gtProcessos, gtInstrucoes, gtIndicadores, gtPlanejamento,
@@ -2536,6 +2537,7 @@ const dashboardGtRouter = router({
   kpis: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional() }))
     .query(async ({ input }) => {
+      const _kpisInner = async () => {
       const db = await getDb();
       if (!db) return {
         tarefasPendentes: 0, tarefasAndamento: 0, tarefasConcluidas: 0,
@@ -2614,16 +2616,30 @@ const dashboardGtRouter = router({
         riscosAltos, totalTarefas: tarefas.length, totalProblemas: problemas.length,
         processosCount, tarefasDestinadas,
       };
+      };
+      // Timeout de 15s para evitar gateway timeout (504)
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new TRPCError({ code: "TIMEOUT", message: "Dashboard KPIs: banco demorou mais de 15s" })), 15000)
+      );
+      return Promise.race([_kpisInner(), timeoutPromise]);
     }),
 
   tarefasRecentes: sysUserProcedure
     .input(z.object({ orgId: z.number(), unitId: z.number().optional(), limit: z.number().default(5) }))
     .query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) return [];
-      const conds = [eq(gtTarefas.orgId, input.orgId)];
-      if (input.unitId) conds.push(eq(gtTarefas.unitId, input.unitId));
-      return db.select().from(gtTarefas).where(and(...conds)).orderBy(desc(gtTarefas.updatedAt)).limit(input.limit);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new TRPCError({ code: "TIMEOUT", message: "Tarefas recentes: banco demorou mais de 15s" })), 15000)
+      );
+      return Promise.race([
+        (async () => {
+          const db = await getDb();
+          if (!db) return [];
+          const conds = [eq(gtTarefas.orgId, input.orgId)];
+          if (input.unitId) conds.push(eq(gtTarefas.unitId, input.unitId));
+          return db.select().from(gtTarefas).where(and(...conds)).orderBy(desc(gtTarefas.updatedAt)).limit(input.limit);
+        })(),
+        timeoutPromise,
+      ]);
     }),
 });
 
