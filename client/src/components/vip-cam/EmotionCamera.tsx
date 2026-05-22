@@ -104,6 +104,9 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
   const isCapturingRef = useRef(false);
   const clientCacheRef = useRef<Array<{ id: number; faceDescriptor: number[] | null }>>([]);
   const workerStatusIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const ipContainerRef = useRef<HTMLDivElement>(null);
+  const detectionsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { status: faceApiStatus, error: faceApiError, loadModels } = useFaceApi();
 
@@ -115,6 +118,14 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
   const [detectionCount, setDetectionCount] = useState(0);
   const [ipConnected, setIpConnected] = useState(false);
   const [workerStatus, setWorkerStatus] = useState<WorkerStatus | null>(null);
+
+  // Face boxes para overlay na câmera IP
+  interface FaceBoxData {
+    x: number; y: number; width: number; height: number;
+    satisfaction: 'satisfied' | 'neutral' | 'unsatisfied';
+    expression: string; confidence: number; detectedAt: number;
+  }
+  const [faceBoxes, setFaceBoxes] = useState<FaceBoxData[]>([]);
 
   const cameraType = config?.cameraType ?? 'usb';
   const cooldownMs = (config?.cooldownSeconds ?? 4) * 1000;
@@ -444,6 +455,92 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
     };
   }, [cameraType, cameraActive, fetchWorkerStatus]);
 
+  // ── Polling de detecções (face boxes) para overlay na câmera IP ──────────
+
+  const fetchDetections = useCallback(async () => {
+    const id = config?.unitId ?? unitId;
+    if (!id) return;
+    try {
+      const resp = await fetch(`/api/vip-cam/stream/${id}/detections`, { cache: 'no-store' });
+      if (!resp.ok) return;
+      const data = await resp.json() as { detections: FaceBoxData[] };
+      // Descartar detecções com mais de 60s (worker detecta a cada 30s)
+      const cutoff = Date.now() - 60_000;
+      setFaceBoxes(data.detections.filter(d => d.detectedAt > cutoff));
+    } catch {
+      // Silencioso
+    }
+  }, [unitId, config]);
+
+  useEffect(() => {
+    if (cameraType !== 'ip' || !cameraActive) return;
+
+    fetchDetections();
+    detectionsIntervalRef.current = setInterval(fetchDetections, 5_000);
+
+    return () => {
+      if (detectionsIntervalRef.current) clearInterval(detectionsIntervalRef.current);
+    };
+  }, [cameraType, cameraActive, fetchDetections]);
+
+  // ── Desenhar boxes no canvas overlay ─────────────────────────────────────
+
+  useEffect(() => {
+    const canvas = overlayCanvasRef.current;
+    const img = ipImgRef.current;
+    const container = ipContainerRef.current;
+    if (!canvas || !img || !container || !ipConnected) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Sincronizar dimensões do canvas com o container
+    const containerW = container.offsetWidth;
+    const containerH = container.offsetHeight;
+    canvas.width = containerW;
+    canvas.height = containerH;
+
+    ctx.clearRect(0, 0, containerW, containerH);
+
+    if (faceBoxes.length === 0) return;
+
+    // A imagem da câmera é 1280x720 (aprox), o canvas tem dimensões do container
+    // Precisamos escalar as coordenadas
+    const imgNaturalW = img.naturalWidth || 1280;
+    const imgNaturalH = img.naturalHeight || 720;
+
+    // object-cover: calcula a escala e offset para cobrir o container
+    const scaleX = containerW / imgNaturalW;
+    const scaleY = containerH / imgNaturalH;
+    const scale = Math.max(scaleX, scaleY);
+    const offsetX = (containerW - imgNaturalW * scale) / 2;
+    const offsetY = (containerH - imgNaturalH * scale) / 2;
+
+    for (const box of faceBoxes) {
+      const color = SATISFACTION_COLORS[box.satisfaction];
+      const x = box.x * scale + offsetX;
+      const y = box.y * scale + offsetY;
+      const w = box.width * scale;
+      const h = box.height * scale;
+
+      // Retângulo
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, w, h);
+
+      // Fundo do label
+      const label = `${SATISFACTION_EMOJIS[box.satisfaction]} ${Math.round(box.confidence * 100)}%`;
+      ctx.font = 'bold 11px sans-serif';
+      const textW = ctx.measureText(label).width;
+      ctx.fillStyle = color + 'cc';
+      ctx.fillRect(x, y - 18, textW + 8, 18);
+
+      // Texto do label
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(label, x + 4, y - 4);
+    }
+  }, [faceBoxes, ipConnected]);
+
   // ── Inicia o worker permanente no servidor e o polling de exibição ──────────
 
   const connectIpCamera = useCallback(async () => {
@@ -733,7 +830,7 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
 
         {/* Câmera IP — frames via polling de snapshots do worker permanente */}
         {isIP && cameraActive && (
-          <div className="w-full h-full relative flex items-center justify-center">
+          <div ref={ipContainerRef} className="w-full h-full relative flex items-center justify-center">
             <img
               ref={ipImgRef}
               src=""
@@ -741,6 +838,14 @@ export function EmotionCamera({ unitId, config, onDetection }: EmotionCameraProp
               alt="Câmera IP"
               style={{ display: ipConnected ? 'block' : 'none' }}
             />
+            {/* Canvas overlay para face boxes — posicionado sobre a imagem */}
+            {ipConnected && (
+              <canvas
+                ref={overlayCanvasRef}
+                className="absolute inset-0 pointer-events-none"
+                style={{ width: '100%', height: '100%' }}
+              />
+            )}
             {!ipConnected && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 gap-2">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400" />

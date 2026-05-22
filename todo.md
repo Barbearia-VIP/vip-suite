@@ -1309,3 +1309,14 @@
 - [x] Câmera USB mantida inalterada (face-api.js no browser, comportamento original)
 - [x] Badge "Captura automática ativa" e informações do worker na UI da câmera IP
 - [x] Testes Vitest: 15 testes passando (matchFaceDescriptor + mapExpressionToSatisfaction)
+
+## VIP Cam — Overlay de Face Boxes (Concluído)
+
+- [x] FaceBox interface exportada no ipCameraWorker.ts com coordenadas e satisfação
+- [x] Worker armazena lastDetections[] com boxes de cada face detectada
+- [x] Endpoint GET /api/vip-cam/stream/:unitId/detections expõe os boxes
+- [x] EmotionCamera.tsx: polling de detecções a cada 5s (câmera IP)
+- [x] Canvas overlay absoluto sobre o feed ao vivo com retângulos verde/âmbar/vermelho
+- [x] Label com emoji de satisfação e % de confiança em cada box
+- [x] Boxes expiram após 60s (worker detecta a cada 30s)
+- [x] Câmera USB: comportamento inalterado

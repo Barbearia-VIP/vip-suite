@@ -21,6 +21,7 @@ import {
   getLastFrame,
   getLastFrameAt,
   getWorkersStatus,
+  getLastDetections,
   initWorkersFromDb,
 } from "./ipCameraWorker";
 
@@ -142,11 +143,22 @@ export async function registerRtspProxyRoutes(app: Express, server: Server): Pro
     });
   });
 
-  // ── GET /api/vip-cam/streams/status ──────────────────────────────────────
+  // ── GET /api/vip-cam/streams/status ───────────────────────────────────────
   app.get("/api/vip-cam/streams/status", (_req, res) => {
     res.json({ streams: getWorkersStatus() });
   });
 
+  // ── GET /api/vip-cam/stream/:unitId/detections ───────────────────────────
+  // Retorna as últimas detecções (face boxes) para overlay no frontend
+  app.get("/api/vip-cam/stream/:unitId/detections", (req, res) => {
+    const unitId = parseInt(req.params.unitId, 10);
+    if (isNaN(unitId) || unitId <= 0) {
+      res.status(400).json({ error: "unitId inválido" });
+      return;
+    }
+    res.set("Cache-Control", "no-cache, no-store");
+    res.json({ detections: getLastDetections(unitId) });
+  });
   // ── GET /api/vip-cam/stream/:unitId/snapshot ──────────────────────────────
   app.get("/api/vip-cam/stream/:unitId/snapshot", async (req, res) => {
     // Envia headers imediatamente para evitar timeout do Cloud Run/Cloudflare

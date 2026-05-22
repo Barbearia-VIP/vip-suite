@@ -25,6 +25,17 @@ const FACE_DETECTION_INTERVAL_MS = 30_000;
 // Cooldown mínimo entre capturas do mesmo cliente (ms)
 const SAME_CLIENT_COOLDOWN_MS = 60_000;
 
+export interface FaceBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  satisfaction: "satisfied" | "neutral" | "unsatisfied";
+  expression: string;
+  confidence: number;
+  detectedAt: number; // timestamp
+}
+
 interface WorkerState {
   unitId: number;
   rtspUrl: string;
@@ -41,6 +52,7 @@ interface WorkerState {
   lastDetectionCount: number;      // faces detectadas na última rodada
   lastClientCooldown: Map<number, number>; // clienteId → último timestamp de captura
   totalCapturesSaved: number;      // total de capturas salvas no DB
+  lastDetections: FaceBox[];       // boxes das últimas faces detectadas (para overlay)
 }
 
 // Mapa de workers ativos por unitId
@@ -76,6 +88,7 @@ export function startWorker(unitId: number, rtspUrl: string): void {
     lastDetectionCount: 0,
     lastClientCooldown: new Map(),
     totalCapturesSaved: 0,
+    lastDetections: [],
   };
   workers.set(unitId, state);
   console.log(`[IP Worker] Unit ${unitId}: iniciando worker (${rtspUrl.replace(/:[^:@]*@/, ':***@')})`);
@@ -119,6 +132,14 @@ export function getLastFrame(unitId: number): Buffer | null {
  */
 export function getLastFrameAt(unitId: number): number {
   return workers.get(unitId)?.lastFrameAt ?? 0;
+}
+
+/**
+ * Retorna as últimas detecções (boxes) de uma unidade para overlay no frontend.
+ * Retorna array vazio se o worker não estiver ativo ou sem detecções recentes.
+ */
+export function getLastDetections(unitId: number): FaceBox[] {
+  return workers.get(unitId)?.lastDetections ?? [];
 }
 
 /**
@@ -283,8 +304,21 @@ async function runFaceDetection(state: WorkerState): Promise<void> {
   const faces = await detectFaces(frame);
   const elapsed = Date.now() - t0;
 
-  state.lastDetectionAt = Date.now();
+  const detectedAt = Date.now();
+  state.lastDetectionAt = detectedAt;
   state.lastDetectionCount = faces.length;
+
+  // Armazenar boxes para overlay no frontend (mesmo que 0 faces — limpa o overlay)
+  state.lastDetections = faces.map(f => ({
+    x: f.box.x,
+    y: f.box.y,
+    width: f.box.width,
+    height: f.box.height,
+    satisfaction: f.satisfactionLevel,
+    expression: f.expression,
+    confidence: f.confidence,
+    detectedAt,
+  }));
 
   if (faces.length === 0) {
     return; // Nenhuma face detectada
