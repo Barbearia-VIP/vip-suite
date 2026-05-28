@@ -806,10 +806,10 @@ export default function ClientesPage() {
                 const churnPct = cs.churnPct;
                 const churnCor = churnPct >= 20 ? "#ef4444" : churnPct >= 10 ? "#f97316" : "#22c55e";
                 const churnLabel = churnPct >= 20 ? "Crítico" : churnPct >= 10 ? "Atenção" : "Saudável";
-                const kpis = [
+                const kpis: Array<{ label: string; valor: string; sub: string; cor: string; barra?: boolean; pct?: number; tooltip?: string }> = [
                   { label: "BASE ATIVA", valor: fmtNum(cs.baseAtiva), sub: "Clientes no período", cor: "#3b82f6" },
                   { label: "PERDIDOS", valor: fmtNum(cs.perdidos), sub: `Sem retorno há >${janelaDias}d`, cor: "#ef4444" },
-                  { label: "CHURN %", valor: `${churnPct.toFixed(1)}%`, sub: churnLabel, cor: churnCor, barra: true, pct: churnPct },
+                  { label: "CHURN %", valor: `${churnPct.toFixed(1)}%`, sub: churnLabel, cor: churnCor, barra: true, pct: churnPct, tooltip: "Taxa de clientes que deixaram de vir. Fórmula: (Perdidos / (Base Ativa + Perdidos)) × 100" },
                   { label: "RESGATADOS", valor: fmtNum(cs.resgatados), sub: "Voltaram após ausência", cor: "#22c55e" },
                   { label: "TEMPO MÉD. RESGATE", valor: `${cs.tempoMedioResgate.toFixed(1)}d`, sub: "Dias de ausência", cor: "#a855f7" },
                   { label: "VALOR PERDIDO EST.", valor: fmtMoedaCompact(cs.valorPerdidoEst), sub: "Perdidos × ticket médio", cor: "#f97316" },
@@ -819,7 +819,17 @@ export default function ClientesPage() {
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                       {kpis.map((k, i) => (
                         <div key={i} className="rounded-xl border border-border bg-card/50 p-4 space-y-1" style={{ borderColor: `${k.cor}30` }}>
-                          <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">{k.label}</p>
+                          <div className="flex items-center justify-between">
+                            <p className="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">{k.label}</p>
+                            {k.tooltip && (
+                              <div className="group relative">
+                                <button className="text-[10px] w-4 h-4 rounded-full bg-muted/50 text-muted-foreground hover:bg-muted flex items-center justify-center cursor-help">?</button>
+                                <div className="absolute bottom-full right-0 mb-2 w-48 bg-popover text-popover-foreground text-xs p-2 rounded-lg border border-border shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-50">
+                                  {k.tooltip}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                           <p className="text-2xl font-bold" style={{ color: k.cor }}>{k.valor}</p>
                           {k.barra && (
                             <div className="w-full h-1.5 bg-muted/30 rounded-full overflow-hidden mt-1">
