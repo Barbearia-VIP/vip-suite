@@ -1675,20 +1675,38 @@ export default function RaioXPage() {
               {/* 4 KPIs principais */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {/* Churn Geral */}
-                <div className="rounded-lg border border-border/50 bg-card/60 p-4">
-                  <p className="text-xs text-muted-foreground mb-1">Churn geral</p>
+                <div className="rounded-lg border border-border/50 bg-card/60 p-4 group relative">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs text-muted-foreground">Churn geral</p>
+                    <button className="text-[10px] w-3.5 h-3.5 rounded-full bg-muted/50 text-muted-foreground hover:bg-muted flex items-center justify-center cursor-help opacity-0 group-hover:opacity-100 transition-opacity">?</button>
+                    <div className="absolute bottom-full left-0 mb-2 w-44 bg-popover text-popover-foreground text-xs p-2 rounded-lg border border-border shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-50">
+                      Taxa de clientes que deixaram de vir. Fórmula: (Perdidos / Total) × 100
+                    </div>
+                  </div>
                   <p className="text-3xl font-bold text-red-400">{qChurn.data.kpis.churnGeralPct}%</p>
                   <p className="text-xs text-muted-foreground mt-1">{qChurn.data.kpis.churnGeral.toLocaleString()} perdidos de {qChurn.data.resumo.total.toLocaleString()}</p>
                 </div>
                 {/* Churn Fidelizados */}
-                <div className="rounded-lg border border-border/50 bg-card/60 p-4">
-                  <p className="text-xs text-muted-foreground mb-1">Churn fidelizados</p>
+                <div className="rounded-lg border border-border/50 bg-card/60 p-4 group relative">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs text-muted-foreground">Churn fidelizados</p>
+                    <button className="text-[10px] w-3.5 h-3.5 rounded-full bg-muted/50 text-muted-foreground hover:bg-muted flex items-center justify-center cursor-help opacity-0 group-hover:opacity-100 transition-opacity">?</button>
+                    <div className="absolute bottom-full left-0 mb-2 w-44 bg-popover text-popover-foreground text-xs p-2 rounded-lg border border-border shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-50">
+                      Taxa de churn apenas entre clientes fidelizados (3+ visitas)
+                    </div>
+                  </div>
                   <p className="text-3xl font-bold text-orange-400">{qChurn.data.kpis.churnFidelizadosPct}%</p>
                   <p className="text-xs text-muted-foreground mt-1">{qChurn.data.kpis.churnFidelizados.toLocaleString()} de {qChurn.data.kpis.baseFidelizados.toLocaleString()} (≥3 vis.)</p>
                 </div>
                 {/* Churn One-Shot */}
-                <div className="rounded-lg border border-border/50 bg-card/60 p-4">
-                  <p className="text-xs text-muted-foreground mb-1">Churn one-shot</p>
+                <div className="rounded-lg border border-border/50 bg-card/60 p-4 group relative">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs text-muted-foreground">Churn one-shot</p>
+                    <button className="text-[10px] w-3.5 h-3.5 rounded-full bg-muted/50 text-muted-foreground hover:bg-muted flex items-center justify-center cursor-help opacity-0 group-hover:opacity-100 transition-opacity">?</button>
+                    <div className="absolute bottom-full left-0 mb-2 w-44 bg-popover text-popover-foreground text-xs p-2 rounded-lg border border-border shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-50">
+                      Taxa de churn entre clientes que vieram apenas 1 vez
+                    </div>
+                  </div>
                   <p className="text-3xl font-bold text-yellow-400">{qChurn.data.kpis.churnOneShotPct}%</p>
                   <p className="text-xs text-muted-foreground mt-1">{qChurn.data.kpis.churnOneShot.toLocaleString()} de {qChurn.data.kpis.baseOneShot.toLocaleString()} (1 vis.)</p>
                 </div>
