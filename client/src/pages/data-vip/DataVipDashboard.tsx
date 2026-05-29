@@ -459,6 +459,7 @@ export default function DataVipDashboard() {
             var: isRangeMode ? undefined : d?.varFaturamento,
             icon: DollarSign,
             color: "text-green-400",
+            tooltip: "Soma de todas as vendas (serviços + produtos) no período",
           },
           {
             label: "Atendimentos",
@@ -466,25 +467,38 @@ export default function DataVipDashboard() {
             var: isRangeMode ? undefined : d?.varAtendimentos,
             icon: Scissors,
             color: "text-blue-400",
+            tooltip: "Total de serviços realizados (cortes, barbas, etc.)",
           },
           {
             label: "Ticket Médio",
             value: d ? fmt(d.ticketMedio) : "—",
             icon: TrendingUp,
             color: "text-yellow-400",
+            tooltip: "Faturamento ÷ Atendimentos",
           },
           {
             label: "Clientes Atendidos",
             value: d ? d.clientesAtendidos.toLocaleString("pt-BR") : "—",
             icon: Users,
             color: "text-purple-400",
+            tooltip: "Clientes únicos que visitaram no período",
           },
         ].map((kpi, i) => (
-          <Card key={i}>
+          <Card key={i} className="group relative">
             <CardContent className="p-4">
               <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">{kpi.label}</p>
+                <div className="space-y-1 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">{kpi.label}</p>
+                    {kpi.tooltip && (
+                      <div className="relative inline-block">
+                        <button className="text-[10px] w-3.5 h-3.5 rounded-full bg-muted/50 text-muted-foreground hover:bg-muted flex items-center justify-center cursor-help opacity-0 group-hover:opacity-100 transition-opacity">?</button>
+                        <div className="absolute bottom-full left-0 mb-2 w-40 bg-popover text-popover-foreground text-xs p-2 rounded-lg border border-border shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-50 whitespace-normal">
+                          {kpi.tooltip}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   {dashQ.isLoading
                     ? <Skeleton className="h-7 w-24" />
                     : <p className="text-xl font-bold">{kpi.value}</p>
@@ -513,11 +527,19 @@ export default function DataVipDashboard() {
 
       {/* KPIs secundários: Taxa de Retorno, Clientes Novos, Serviços e Produtos */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card>
+        <Card className="group relative">
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Taxa de Retorno</p>
+              <div className="space-y-1 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs text-muted-foreground">Taxa de Retorno</p>
+                  <div className="relative inline-block">
+                    <button className="text-[10px] w-3.5 h-3.5 rounded-full bg-muted/50 text-muted-foreground hover:bg-muted flex items-center justify-center cursor-help opacity-0 group-hover:opacity-100 transition-opacity">?</button>
+                    <div className="absolute bottom-full left-0 mb-2 w-40 bg-popover text-popover-foreground text-xs p-2 rounded-lg border border-border shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-50 whitespace-normal">
+                      (Clientes antigos ÷ Clientes atendidos) × 100
+                    </div>
+                  </div>
+                </div>
                 {dashQ.isLoading
                   ? <Skeleton className="h-7 w-24" />
                   : <p className="text-xl font-bold">
@@ -596,11 +618,19 @@ export default function DataVipDashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="group relative">
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Fat. / Dia Trabalhado</p>
+              <div className="space-y-1 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs text-muted-foreground">Fat. / Dia Trabalhado</p>
+                  <div className="relative inline-block">
+                    <button className="text-[10px] w-3.5 h-3.5 rounded-full bg-muted/50 text-muted-foreground hover:bg-muted flex items-center justify-center cursor-help opacity-0 group-hover:opacity-100 transition-opacity">?</button>
+                    <div className="absolute bottom-full left-0 mb-2 w-40 bg-popover text-popover-foreground text-xs p-2 rounded-lg border border-border shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-50 whitespace-normal">
+                      Faturamento ÷ Dias trabalhados
+                    </div>
+                  </div>
+                </div>
                 {dashQ.isLoading
                   ? <Skeleton className="h-7 w-24" />
                   : <p className="text-xl font-bold">{d ? fmt(d.fatPorDia ?? 0) : "—"}</p>
@@ -626,11 +656,19 @@ export default function DataVipDashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="group relative">
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">Total Serviços Extra</p>
+              <div className="space-y-1 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs text-muted-foreground">Total Serviços Extra</p>
+                  <div className="relative inline-block">
+                    <button className="text-[10px] w-3.5 h-3.5 rounded-full bg-muted/50 text-muted-foreground hover:bg-muted flex items-center justify-center cursor-help opacity-0 group-hover:opacity-100 transition-opacity">?</button>
+                    <div className="absolute bottom-full left-0 mb-2 w-40 bg-popover text-popover-foreground text-xs p-2 rounded-lg border border-border shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto z-50 whitespace-normal">
+                      Soma do valor de todos os serviços extras (acabamentos, sobrancelha, etc.)
+                    </div>
+                  </div>
+                </div>
                 {dashQ.isLoading
                   ? <Skeleton className="h-7 w-24" />
                   : <p className="text-xl font-bold">{d ? fmt(d.servicosExtraTotal ?? 0) : "—"}</p>
