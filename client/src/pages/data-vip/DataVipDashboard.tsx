@@ -321,12 +321,34 @@ export default function DataVipDashboard() {
     return { orgId, unitId, dataInicio, dataFim };
   }, [filter, orgId, unitId]);
 
+  // Calcular parâmetros para período anterior (mesmo período do mês anterior)
+  const prevDashParams = useMemo(() => {
+    if (filter.mode === "range") {
+      // Range: subtrair a mesma quantidade de dias
+      const inicio = new Date(filter.dataInicio);
+      const fim = new Date(filter.dataFim);
+      const dias = Math.floor((fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const prevFim = new Date(inicio);
+      prevFim.setDate(prevFim.getDate() - 1);
+      const prevInicio = new Date(prevFim);
+      prevInicio.setDate(prevInicio.getDate() - dias + 1);
+      return { orgId, unitId, dataInicio: toISO(prevInicio), dataFim: toISO(prevFim) };
+    }
+    // Modo mensal: pegar o mês anterior
+    const [ano, mes] = filter.periodo.split("-").map(Number);
+    const prevMes = mes === 1 ? 12 : mes - 1;
+    const prevAno = mes === 1 ? ano - 1 : ano;
+    return { orgId, unitId, periodo: `${prevAno}-${String(prevMes).padStart(2, "0")}` };
+  }, [filter, orgId, unitId]);
+
   const dashQ = trpc.dataVip.dashboard.useQuery(dashParams, { enabled: !!orgId });
+  const dashPrevQ = trpc.dataVip.dashboard.useQuery(prevDashParams, { enabled: !!orgId });
   const evolQ = trpc.dataVip.evolucaoDiaria.useQuery(evolParams, { enabled: !!orgId });
   const colaborQ = trpc.dataVip.colaboradores.useQuery(colaborParams, { enabled: !!orgId });
   const prodQ = trpc.dataVip.faturamentoPorProduto.useQuery(prodParams, { enabled: !!orgId });
 
   const d = dashQ.data;
+  const dPrev = dashPrevQ.data;
   const evolData = evolQ.data ?? [];
   const colabs = colaborQ.data ?? [];
   const produtos = (prodQ.data?.porProduto ?? []).slice(0, 5);
@@ -483,7 +505,26 @@ export default function DataVipDashboard() {
             color: "text-purple-400",
             tooltip: "Clientes únicos que visitaram no período",
           },
-        ].map((kpi, i) => (
+        ].map((kpi, i) => {
+          // Calcular comparação com período anterior
+          let comparison = 0;
+          if (dPrev) {
+            const fieldMap: Record<string, keyof typeof dPrev> = {
+              "Faturamento": "faturamento",
+              "Atendimentos": "atendimentos",
+              "Ticket Médio": "ticketMedio",
+              "Clientes Atendidos": "clientesAtendidos",
+            };
+            const field = fieldMap[kpi.label];
+            if (field && typeof dPrev[field] === "number") {
+              const prevValue = dPrev[field] as number;
+              const currentVal = typeof (d as any)?.[field] === "number" ? (d as any)[field] : 0;
+              if (prevValue !== 0) {
+                comparison = ((currentVal - prevValue) / prevValue) * 100;
+              }
+            }
+          }
+          return (
           <Card key={i} className="group relative">
             <CardContent className="p-4">
               <div className="flex items-start justify-between">
@@ -503,6 +544,13 @@ export default function DataVipDashboard() {
                     ? <Skeleton className="h-7 w-24" />
                     : <p className="text-xl font-bold">{kpi.value}</p>
                   }
+                  {/* Comparação com período anterior */}
+                  {dPrev && !dashPrevQ.isLoading && comparison !== 0 && (
+                    <p className={`text-xs flex items-center gap-0.5 ${comparison >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {comparison >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                      {comparison >= 0 ? "+" : ""}{comparison.toFixed(1)}% vs período anterior
+                    </p>
+                  )}
                   {kpi.var !== undefined && (
                     <p className={`text-xs flex items-center gap-0.5 ${isMesAtual ? "text-muted-foreground" : kpi.var >= 0 ? "text-green-400" : "text-red-400"}`}>
                       {isMesAtual
@@ -522,7 +570,8 @@ export default function DataVipDashboard() {
               </div>
             </CardContent>
           </Card>
-        ))}
+        );
+        })}
       </div>
 
       {/* KPIs secundários: Taxa de Retorno, Clientes Novos, Serviços e Produtos */}
@@ -557,12 +606,28 @@ export default function DataVipDashboard() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
-              <div className="space-y-1">
+              <div className="space-y-1 flex-1">
                 <p className="text-xs text-muted-foreground">Clientes Novos</p>
                 {dashQ.isLoading
                   ? <Skeleton className="h-7 w-24" />
                   : <p className="text-xl font-bold">{d ? (d.clientesNovos ?? 0).toLocaleString("pt-BR") : "—"}</p>
                 }
+                {/* Comparação com período anterior */}
+                {dPrev && !dashPrevQ.isLoading && (
+                  (() => {
+                    const curr = d?.clientesNovos ?? 0;
+                    const prev = dPrev.clientesNovos ?? 0;
+                    if (prev !== 0) {
+                      const comp = ((curr - prev) / prev) * 100;
+                      return (
+                        <p className={`text-xs flex items-center gap-0.5 ${comp >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          {comp >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                          {comp >= 0 ? "+" : ""}{comp.toFixed(1)}% vs período anterior
+                        </p>
+                      );
+                    }
+                  })()
+                )}
                 <p className="text-xs text-muted-foreground">primeira visita no período</p>
               </div>
               <UserCheck className="w-5 h-5 text-pink-400 opacity-70" />
@@ -572,12 +637,28 @@ export default function DataVipDashboard() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
-              <div className="space-y-1">
+              <div className="space-y-1 flex-1">
                 <p className="text-xs text-muted-foreground">Serviços Realizados</p>
                 {dashQ.isLoading
                   ? <Skeleton className="h-7 w-24" />
                   : <p className="text-xl font-bold">{d ? (d.servicosTotal ?? 0).toLocaleString("pt-BR") : "—"}</p>
                 }
+                {/* Comparação com período anterior */}
+                {dPrev && !dashPrevQ.isLoading && (
+                  (() => {
+                    const curr = d?.servicosTotal ?? 0;
+                    const prev = dPrev.servicosTotal ?? 0;
+                    if (prev !== 0) {
+                      const comp = ((curr - prev) / prev) * 100;
+                      return (
+                        <p className={`text-xs flex items-center gap-0.5 ${comp >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          {comp >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                          {comp >= 0 ? "+" : ""}{comp.toFixed(1)}% vs período anterior
+                        </p>
+                      );
+                    }
+                  })()
+                )}
                 <p className="text-xs text-muted-foreground">cortes e serviços no período</p>
               </div>
               <Scissors className="w-5 h-5 text-cyan-400 opacity-70" />
@@ -587,12 +668,28 @@ export default function DataVipDashboard() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
-              <div className="space-y-1">
+              <div className="space-y-1 flex-1">
                 <p className="text-xs text-muted-foreground">Produtos Vendidos</p>
                 {dashQ.isLoading
                   ? <Skeleton className="h-7 w-24" />
                   : <p className="text-xl font-bold">{d ? (d.produtosVendidos ?? 0).toLocaleString("pt-BR") : "—"}</p>
                 }
+                {/* Comparação com período anterior */}
+                {dPrev && !dashPrevQ.isLoading && (
+                  (() => {
+                    const curr = d?.produtosVendidos ?? 0;
+                    const prev = dPrev.produtosVendidos ?? 0;
+                    if (prev !== 0) {
+                      const comp = ((curr - prev) / prev) * 100;
+                      return (
+                        <p className={`text-xs flex items-center gap-0.5 ${comp >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          {comp >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                          {comp >= 0 ? "+" : ""}{comp.toFixed(1)}% vs período anterior
+                        </p>
+                      );
+                    }
+                  })()
+                )}
                 <p className="text-xs text-muted-foreground">itens de produto no período</p>
               </div>
               <BarChart3 className="w-5 h-5 text-orange-400 opacity-70" />
@@ -635,6 +732,22 @@ export default function DataVipDashboard() {
                   ? <Skeleton className="h-7 w-24" />
                   : <p className="text-xl font-bold">{d ? fmt(d.fatPorDia ?? 0) : "—"}</p>
                 }
+                {/* Comparação com período anterior */}
+                {dPrev && !dashPrevQ.isLoading && (
+                  (() => {
+                    const curr = d?.fatPorDia ?? 0;
+                    const prev = dPrev.fatPorDia ?? 0;
+                    if (prev !== 0) {
+                      const comp = ((curr - prev) / prev) * 100;
+                      return (
+                        <p className={`text-xs flex items-center gap-0.5 ${comp >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          {comp >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                          {comp >= 0 ? "+" : ""}{comp.toFixed(1)}% vs período anterior
+                        </p>
+                      );
+                    }
+                  })()
+                )}
                 <p className="text-xs text-muted-foreground">média por dia ativo</p>
               </div>
               <TrendingUp className="w-5 h-5 text-emerald-400 opacity-70" />
@@ -644,12 +757,28 @@ export default function DataVipDashboard() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
-              <div className="space-y-1">
+              <div className="space-y-1 flex-1">
                 <p className="text-xs text-muted-foreground">Serviços Extra (Qtd)</p>
                 {dashQ.isLoading
                   ? <Skeleton className="h-7 w-24" />
                   : <p className="text-xl font-bold">{d ? (d.servicosExtraQtd ?? 0).toLocaleString("pt-BR") : "—"}</p>
                 }
+                {/* Comparação com período anterior */}
+                {dPrev && !dashPrevQ.isLoading && (
+                  (() => {
+                    const curr = d?.servicosExtraQtd ?? 0;
+                    const prev = dPrev.servicosExtraQtd ?? 0;
+                    if (prev !== 0) {
+                      const comp = ((curr - prev) / prev) * 100;
+                      return (
+                        <p className={`text-xs flex items-center gap-0.5 ${comp >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          {comp >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                          {comp >= 0 ? "+" : ""}{comp.toFixed(1)}% vs período anterior
+                        </p>
+                      );
+                    }
+                  })()
+                )}
                 <p className="text-xs text-muted-foreground">acabamentos e adicionais</p>
               </div>
               <Scissors className="w-5 h-5 text-amber-400 opacity-70" />
@@ -673,6 +802,22 @@ export default function DataVipDashboard() {
                   ? <Skeleton className="h-7 w-24" />
                   : <p className="text-xl font-bold">{d ? fmt(d.servicosExtraTotal ?? 0) : "—"}</p>
                 }
+                {/* Comparação com período anterior */}
+                {dPrev && !dashPrevQ.isLoading && (
+                  (() => {
+                    const curr = d?.servicosExtraTotal ?? 0;
+                    const prev = dPrev.servicosExtraTotal ?? 0;
+                    if (prev !== 0) {
+                      const comp = ((curr - prev) / prev) * 100;
+                      return (
+                        <p className={`text-xs flex items-center gap-0.5 ${comp >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          {comp >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                          {comp >= 0 ? "+" : ""}{comp.toFixed(1)}% vs período anterior
+                        </p>
+                      );
+                    }
+                  })()
+                )}
                 <p className="text-xs text-muted-foreground">valor dos adicionais</p>
               </div>
               <DollarSign className="w-5 h-5 text-amber-400 opacity-70" />
