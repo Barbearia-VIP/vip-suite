@@ -334,12 +334,15 @@ export default function DataVipDashboard() {
       prevInicio.setDate(prevInicio.getDate() - dias + 1);
       return { orgId, unitId, dataInicio: toISO(prevInicio), dataFim: toISO(prevFim) };
     }
-    // Modo mensal: pegar o mês anterior
+    // Modo mensal: pegar o mesmo período do mês anterior (dia 1 ao dia atual)
     const [ano, mes] = filter.periodo.split("-").map(Number);
+    const diaAtual = now.getDate();
     const prevMes = mes === 1 ? 12 : mes - 1;
     const prevAno = mes === 1 ? ano - 1 : ano;
-    return { orgId, unitId, periodo: `${prevAno}-${String(prevMes).padStart(2, "0")}` };
-  }, [filter, orgId, unitId]);
+    const dataInicio = `${prevAno}-${String(prevMes).padStart(2, "0")}-01`;
+    const dataFim = `${prevAno}-${String(prevMes).padStart(2, "0")}-${String(diaAtual).padStart(2, "0")}`;
+    return { orgId, unitId, dataInicio, dataFim };
+  }, [filter, orgId, unitId, now]);
 
   const dashQ = trpc.dataVip.dashboard.useQuery(dashParams, { enabled: !!orgId });
   const dashPrevQ = trpc.dataVip.dashboard.useQuery(prevDashParams, { enabled: !!orgId });
