@@ -3,6 +3,7 @@ import { and, count, eq, gte, lte, sql, inArray } from "drizzle-orm";
 import { protectedProcedure, router, sysUserProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { queryLocal } from "../db-local";
+import { dashboardCache, cacheKeys } from "../cache";
 import { getFaturamentoMensal } from "../dataVipQueries";
 import {
   vendas,
@@ -75,6 +76,12 @@ export const dashboardRouter = router({
       dateTo: z.string().optional(),
     }))
     .query(async ({ input }) => {
+      // Gerar cache key baseado em unitId e data
+      const cacheKey = cacheKeys.dashboardKpis(
+        input.unitId || input.orgId,
+        input.dateFrom || new Date().toISOString().split('T')[0]
+      );
+
       const db = await getDb();
       if (!db) return null;
 
@@ -380,7 +387,7 @@ export const dashboardRouter = router({
         storiesRespondidos: Number(igStoriesRow.storiesRespondidos ?? 0),
       };
 
-      return {
+      const kpisResult = {
         dataVip: {
           faturamentoMes,
           atendimentos,
@@ -440,6 +447,10 @@ export const dashboardRouter = router({
           hasData: wsTotalCampanhas > 0,
         },
       };
+
+      // Salvar no cache por 5 minutos
+      dashboardCache.set(cacheKey, kpisResult, 5 * 60 * 1000);
+      return kpisResult;
     }),
 
   // ─── STATUS DE CONFIGURAÇÃO DOS MÓDULOS ──────────────────────────────────
