@@ -7,6 +7,7 @@ WORKDIR /app
 # Copiar package files
 COPY package.json pnpm-lock.yaml ./
 COPY .npmrc ./
+COPY patches ./patches
 
 # Instalar dependências (sem scripts nativos)
 RUN npm install -g pnpm && \
@@ -30,6 +31,7 @@ RUN npm install -g pnpm
 # Copiar package files
 COPY package.json pnpm-lock.yaml ./
 COPY .npmrc ./
+COPY patches ./patches
 
 # Instalar apenas dependências de produção
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts

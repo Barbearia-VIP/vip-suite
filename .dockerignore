@@ -39,3 +39,4 @@ deployment/snapshot_*.tar.gz
 backups/
 data/
 nginx/certbot/
+!patches/
