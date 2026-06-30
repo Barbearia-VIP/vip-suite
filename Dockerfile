@@ -1,18 +1,24 @@
 # Multi-stage build para vip-suite
 # Stage 1: Build
-FROM node:22-alpine AS builder
+FROM node:22-slim AS builder
 
 WORKDIR /app
+
+# Instalar dependências de build necessárias para módulos nativos
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copiar package files
 COPY package.json pnpm-lock.yaml ./
 COPY .npmrc ./
 COPY patches ./patches
 
-# Instalar dependências (sem scripts nativos)
+# Instalar dependências (com scripts nativos habilitados)
 RUN npm install -g pnpm && \
-    pnpm install --frozen-lockfile --prod && \
-    pnpm install --frozen-lockfile --dev
+    pnpm install --frozen-lockfile
 
 # Copiar código fonte
 COPY . .
@@ -21,11 +27,16 @@ COPY . .
 RUN pnpm run build
 
 # Stage 2: Runtime
-FROM node:22-alpine
+FROM node:22-slim
 
 WORKDIR /app
 
-# Instalar apenas dependências de runtime
+# Instalar apenas dependências de runtime necessárias
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instalar pnpm
 RUN npm install -g pnpm
 
 # Copiar package files
@@ -34,7 +45,7 @@ COPY .npmrc ./
 COPY patches ./patches
 
 # Instalar apenas dependências de produção
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts
+RUN pnpm install --frozen-lockfile --prod
 
 # Copiar build do stage anterior
 COPY --from=builder /app/dist ./dist
@@ -54,8 +65,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 EXPOSE 3000
 
 # User não-root
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN groupadd -g 1001 -r nodejs && \
+    useradd -r -u 1001 -g nodejs nodejs
 USER nodejs
 
 # Start application
