@@ -1333,3 +1333,13 @@
 - [ ] Implementar alertas de degradação
 - [x] Adicionar testes unitários para health check (19 testes passando)
 - [x] Integrar página de status no menu de navegação
+
+## Fase 19: Scripts de Deploy para VPS
+- [x] Criar script de instalação completo (install-vps.sh)
+- [x] Criar script de gerenciamento (manage.sh)
+- [x] Criar script de backup automático
+- [x] Criar script de monitoramento
+- [x] Criar guia de instalação rápida (INSTALL_VPS.md)
+- [x] Configurar docker-compose para produção
+- [x] Configurar firewall (UFW)
+- [x] Configurar cron job para backups diários
