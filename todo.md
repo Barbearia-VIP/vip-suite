@@ -1320,3 +1320,16 @@
 - [x] Label com emoji de satisfação e % de confiança em cada box
 - [x] Boxes expiram após 60s (worker detecta a cada 30s)
 - [x] Câmera USB: comportamento inalterado
+
+## Fase 18: Página de Status e Monitoramento
+- [x] Criar página de status em client/src/pages/Status.tsx
+- [x] Implementar health check endpoint em server/routers/system.ts
+- [x] Adicionar verificação de conexão MySQL com pool stats
+- [x] Adicionar verificação de conexão Redis
+- [x] Criar componentes visuais de status (cards com indicadores)
+- [x] Implementar polling automático de status (5s)
+- [ ] Adicionar histórico de status (últimas 24h)
+- [ ] Criar gráfico de uptime
+- [ ] Implementar alertas de degradação
+- [x] Adicionar testes unitários para health check (19 testes passando)
+- [x] Integrar página de status no menu de navegação

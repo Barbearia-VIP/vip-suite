@@ -45,6 +45,7 @@ import {
   Package,
   Zap,
   MessageCircle,
+  Activity as ActivityIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -731,6 +732,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     Configurações
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem onClick={() => navigate("/status")} className="text-xs">
+                  <Activity className="w-3.5 h-3.5 mr-2" />
+                  Status do Sistema
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={handleLogout}

@@ -102,6 +102,9 @@ import ConfiguracaoWeSendPage from "./pages/we-send/ConfiguracaoWeSendPage";
 // Configurações
 import ConfiguracoesPage from "./pages/ConfiguracoesPage";
 
+// Status
+import StatusPage from "./pages/Status";
+
 const PROTECTED_PATHS = [
   "/dashboard",
   "/data-vip",
@@ -387,6 +390,11 @@ function Router() {
       {/* Configurações */}
       <Route path="/configuracoes">
         <ProtectedLayout><ConfiguracoesPage /></ProtectedLayout>
+      </Route>
+
+      {/* Status */}
+      <Route path="/status">
+        <ProtectedLayout><StatusPage /></ProtectedLayout>
       </Route>
 
       <Route path="/login-unidade">
