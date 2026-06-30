@@ -44,8 +44,8 @@ COPY package.json pnpm-lock.yaml ./
 COPY .npmrc ./
 COPY patches ./patches
 
-# Instalar apenas dependências de produção
-RUN pnpm install --frozen-lockfile --prod
+# Instalar todas as dependências (incluindo dev para runtime)
+RUN pnpm install --frozen-lockfile
 
 # Copiar build do stage anterior
 COPY --from=builder /app/dist ./dist
