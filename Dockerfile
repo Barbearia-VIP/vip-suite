@@ -49,9 +49,7 @@ RUN pnpm install --frozen-lockfile --prod
 
 # Copiar build do stage anterior
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/client/dist ./client/dist
 COPY --from=builder /app/drizzle ./drizzle
-COPY --from=builder /app/public ./public
 
 # Criar diretórios para logs
 RUN mkdir -p /var/log/vip-suite && \
@@ -70,4 +68,4 @@ RUN groupadd -g 1001 -r nodejs && \
 USER nodejs
 
 # Start application
-CMD ["node", "dist/server/_core/index.js"]
+CMD ["node", "dist/index.js"]
