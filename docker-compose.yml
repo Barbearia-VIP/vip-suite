@@ -1,0 +1,134 @@
+version: '3.9'
+
+services:
+  # Aplicação Node.js
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vip-suite-app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      
+      # Database
+      DATABASE_URL: mysql://suite:D5mj476Bf07n@@127.0.0.1:3306/suite
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_NAME: suite
+      DB_USER: suite
+      DB_PASSWORD: D5mj476Bf07n@
+      DB_POOL_MIN: 2
+      DB_POOL_MAX: 10
+      DB_POOL_TIMEOUT: 15000
+      DB_ENABLE_KEEP_ALIVE: "true"
+      DB_KEEP_ALIVE_INITIAL_DELAY: 10000
+      
+      # Redis
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+      REDIS_TTL_DASHBOARD: 300
+      REDIS_TTL_REPORTS: 600
+      
+      # Logging
+      LOG_LEVEL: info
+      LOG_DIR: /var/log/vip-suite
+      
+      # OAuth (do Manus, mantém valores existentes)
+      VITE_APP_ID: ${VITE_APP_ID}
+      OAUTH_SERVER_URL: ${OAUTH_SERVER_URL}
+      VITE_OAUTH_PORTAL_URL: ${VITE_OAUTH_PORTAL_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      
+      # Manus APIs
+      BUILT_IN_FORGE_API_URL: ${BUILT_IN_FORGE_API_URL}
+      BUILT_IN_FORGE_API_KEY: ${BUILT_IN_FORGE_API_KEY}
+      VITE_FRONTEND_FORGE_API_URL: ${VITE_FRONTEND_FORGE_API_URL}
+      VITE_FRONTEND_FORGE_API_KEY: ${VITE_FRONTEND_FORGE_API_KEY}
+      
+      # Owner
+      OWNER_NAME: ${OWNER_NAME}
+      OWNER_OPEN_ID: ${OWNER_OPEN_ID}
+      
+      # App Config
+      VITE_APP_TITLE: VIP Suite
+      VITE_APP_PUBLIC_URL: https://suite.franquiabv.xyz
+    
+    volumes:
+      - ./logs:/var/log/vip-suite
+      - ./data:/app/data
+    
+    networks:
+      - vip-network
+    
+    depends_on:
+      - nginx
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Nginx com SSL (Let's Encrypt)
+  nginx:
+    image: nginx:alpine
+    container_name: vip-suite-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./nginx/certbot/conf:/etc/letsencrypt:ro
+      - ./nginx/certbot/www:/var/www/certbot:ro
+    networks:
+      - vip-network
+    depends_on:
+      - app
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Certbot para SSL automático
+  certbot:
+    image: certbot/certbot:latest
+    container_name: vip-suite-certbot
+    restart: unless-stopped
+    volumes:
+      - ./nginx/certbot/conf:/etc/letsencrypt
+      - ./nginx/certbot/www:/var/www/certbot
+    entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done;'
+    networks:
+      - vip-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  vip-network:
+    driver: bridge
+
+volumes:
+  app-data:
+    driver: local
+  logs:
+    driver: local
