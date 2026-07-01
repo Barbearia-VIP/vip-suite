@@ -7,7 +7,7 @@ services:
     container_name: vip-suite-app
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3098:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -61,9 +61,6 @@ services:
       - ./logs:/var/log/vip-suite
       - ./data:/app/data
     
-    networks:
-      - vip-network
-    
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s
@@ -71,47 +68,6 @@ services:
       retries: 3
       start_period: 40s
     
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # Nginx com SSL (Let's Encrypt)
-  nginx:
-    image: nginx:alpine
-    container_name: vip-suite-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - ./nginx/certbot/conf:/etc/letsencrypt:ro
-      - ./nginx/certbot/www:/var/www/certbot:ro
-    networks:
-      - vip-network
-    depends_on:
-      - app
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # Certbot para SSL automático
-  certbot:
-    image: certbot/certbot:latest
-    container_name: vip-suite-certbot
-    restart: unless-stopped
-    volumes:
-      - ./nginx/certbot/conf:/etc/letsencrypt
-      - ./nginx/certbot/www:/var/www/certbot
-    entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $${!}; done;'
-    networks:
-      - vip-network
     logging:
       driver: "json-file"
       options:
