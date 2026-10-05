@@ -19,6 +19,7 @@ import { getDb } from "./db";
 import { gtFinConfig, gtFuncionariosClt } from "../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { queryLocal } from "./db-local";
+import { scheduleAt } from "./scheduleAt";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -231,8 +232,9 @@ export async function runSalariosCltJob(): Promise<void> {
 
 // ── Agendamento ───────────────────────────────────────────────────────────────
 
-let taxasTimer: ReturnType<typeof setTimeout> | null = null;
-let salariosTimer: ReturnType<typeof setTimeout> | null = null;
+let taxasTimer: ReturnType<typeof scheduleAt> | null = null;
+let salariosTimer: ReturnType<typeof scheduleAt> | null = null;
+let schedulerRunning = false;
 
 /** Agenda o job de taxas de cartão para o dia 1 do próximo mês às 06:00 BRT */
 function scheduleTaxasNextRun(): void {
@@ -240,11 +242,16 @@ function scheduleTaxasNextRun(): void {
   const nextDate = new Date(Date.now() + ms);
   console.log(`[FinConfig] Próxima execução de taxas: ${nextDate.toISOString()} (em ${Math.round(ms / 1000 / 60 / 60)}h)`);
 
-  if (taxasTimer) clearTimeout(taxasTimer);
-  taxasTimer = setTimeout(async () => {
-    await runFinConfigMonthlyJob();
-    scheduleTaxasNextRun();
-  }, ms);
+  taxasTimer?.cancel();
+  taxasTimer = scheduleAt(nextDate, async () => {
+    try {
+      await runFinConfigMonthlyJob();
+    } catch (err) {
+      console.error("[FinConfig] Falha no job de taxas:", err);
+    } finally {
+      if (schedulerRunning) scheduleTaxasNextRun();
+    }
+  });
 }
 
 /** Agenda o job de salários CLT para as 07:00 BRT (10:00 UTC) de cada dia */
@@ -253,15 +260,22 @@ function scheduleSalariosNextRun(): void {
   const nextDate = new Date(Date.now() + ms);
   console.log(`[FinConfig] Próxima verificação de salários CLT: ${nextDate.toISOString()} (em ${Math.round(ms / 1000 / 60 / 60)}h)`);
 
-  if (salariosTimer) clearTimeout(salariosTimer);
-  salariosTimer = setTimeout(async () => {
-    await runSalariosCltJob();
-    scheduleSalariosNextRun(); // reagendar para o próximo dia
-  }, ms);
+  salariosTimer?.cancel();
+  salariosTimer = scheduleAt(nextDate, async () => {
+    try {
+      await runSalariosCltJob();
+    } catch (err) {
+      console.error("[FinConfig] Falha no job de salários:", err);
+    } finally {
+      if (schedulerRunning) scheduleSalariosNextRun();
+    }
+  });
 }
 
 /** Inicia ambos os schedulers. Chamar uma vez no boot do servidor. */
 export function startFinConfigScheduler(): void {
+  if (schedulerRunning) return;
+  schedulerRunning = true;
   console.log("[FinConfig] Scheduler mensal de taxas de cartão iniciado.");
   console.log("[FinConfig] Scheduler diário de salários CLT iniciado.");
   scheduleTaxasNextRun();
@@ -269,7 +283,8 @@ export function startFinConfigScheduler(): void {
 }
 
 export function stopFinConfigScheduler(): void {
-  if (taxasTimer) { clearTimeout(taxasTimer); taxasTimer = null; }
-  if (salariosTimer) { clearTimeout(salariosTimer); salariosTimer = null; }
+  schedulerRunning = false;
+  taxasTimer?.cancel(); taxasTimer = null;
+  salariosTimer?.cancel(); salariosTimer = null;
   console.log("[FinConfig] Schedulers parados.");
 }

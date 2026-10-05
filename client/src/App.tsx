@@ -6,7 +6,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { AppProvider } from "./contexts/AppContext";
 import AppLayout from "./components/AppLayout";
 import { useAuth } from "./_core/hooks/useAuth";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { useSysUser } from "./contexts/SysUserContext";
 
 // Pages
@@ -14,96 +14,96 @@ import Home from "./pages/Home";
 import NotFound from "./pages/NotFound";
 
 // Dashboard
-import DashboardPage from "./pages/dashboard/DashboardPage";
-import UnidadesPage from "./pages/dashboard/UnidadesPage";
-import UsuariosPage from "./pages/gestao-total/UsuariosSistemaPage";
-import PermissoesPage from "./pages/gestao-total/PrivilegiosPage";
+const DashboardPage = lazy(() => import("./pages/dashboard/DashboardPage"));
+const UnidadesPage = lazy(() => import("./pages/dashboard/UnidadesPage"));
+const UsuariosPage = lazy(() => import("./pages/gestao-total/UsuariosSistemaPage"));
+const PermissoesPage = lazy(() => import("./pages/gestao-total/PrivilegiosPage"));
 
 // Data VIP
-import DataVipPage from "./pages/data-vip/DataVipPage";
-import DataVipDashboard from "./pages/data-vip/DataVipDashboard";
-import FaturamentoPage from "./pages/data-vip/FaturamentoPage";
-import ColaboradoresPage from "./pages/data-vip/ColaboradoresPage";
-import ClientesPage from "./pages/data-vip/ClientesPage";
-import MetasPage from "./pages/data-vip/MetasPage";
-import RankingPage from "./pages/data-vip/RankingPage";
-import SyncPage from "./pages/data-vip/SyncPage";
-import MensalPage from "./pages/data-vip/MensalPage";
-import RaioXPage from "./pages/data-vip/RaioXPage";
-import ComissoesPage from "./pages/data-vip/ComissoesPage";
-import SincronizacaoPage from "./pages/data-vip/SincronizacaoPage";
-import ServicosPage from "./pages/data-vip/ServicosPage";
-import ProdutosPage from "./pages/data-vip/ProdutosPage";
-import CalendarioPage from "./pages/data-vip/CalendarioPage";
-import RelatoriosPage from "./pages/data-vip/RelatoriosPage";
-import AdministracaoPage from "./pages/data-vip/AdministracaoPage";
+const DataVipPage = lazy(() => import("./pages/data-vip/DataVipPage"));
+const DataVipDashboard = lazy(() => import("./pages/data-vip/DataVipDashboard"));
+const FaturamentoPage = lazy(() => import("./pages/data-vip/FaturamentoPage"));
+const ColaboradoresPage = lazy(() => import("./pages/data-vip/ColaboradoresPage"));
+const ClientesPage = lazy(() => import("./pages/data-vip/ClientesPage"));
+const MetasPage = lazy(() => import("./pages/data-vip/MetasPage"));
+const RankingPage = lazy(() => import("./pages/data-vip/RankingPage"));
+const SyncPage = lazy(() => import("./pages/data-vip/SyncPage"));
+const MensalPage = lazy(() => import("./pages/data-vip/MensalPage"));
+const RaioXPage = lazy(() => import("./pages/data-vip/RaioXPage"));
+const ComissoesPage = lazy(() => import("./pages/data-vip/ComissoesPage"));
+const SincronizacaoPage = lazy(() => import("./pages/data-vip/SincronizacaoPage"));
+const ServicosPage = lazy(() => import("./pages/data-vip/ServicosPage"));
+const ProdutosPage = lazy(() => import("./pages/data-vip/ProdutosPage"));
+const CalendarioPage = lazy(() => import("./pages/data-vip/CalendarioPage"));
+const RelatoriosPage = lazy(() => import("./pages/data-vip/RelatoriosPage"));
+const AdministracaoPage = lazy(() => import("./pages/data-vip/AdministracaoPage"));
 
 // Gestão Total
-import GestaoTotalPage from "./pages/gestao-total/GestaoTotalPage";
-import TarefasPage from "./pages/gestao-total/TarefasPage";
-import ProcessosPage from "./pages/gestao-total/ProcessosPage";
-import IndicadoresPage from "./pages/gestao-total/IndicadoresPage";
-import FinanceiroPage from "./pages/gestao-total/FinanceiroPage";
-import ComprasPage from "./pages/gestao-total/ComprasPage";
-import ReunioesPage from "./pages/gestao-total/ReunioesPage";
-import IAConselheiroPage from "./pages/gestao-total/IAConselheiroPage";
-import GestaoTotalDashboard from "./pages/gestao-total/GestaoTotalDashboard";
-import CargosPage from "./pages/gestao-total/CargosPage";
-import ColaboradoresGtPage from "./pages/gestao-total/ColaboradoresGtPage";
-import InstrucoesPage from "./pages/gestao-total/InstrucoesPage";
-import ProblemasPage from "./pages/gestao-total/ProblemasPage";
-import OportunidadesPage from "./pages/gestao-total/OportunidadesPage";
-import RiscosPage from "./pages/gestao-total/RiscosPage";
-import DocumentosPage from "./pages/gestao-total/DocumentosPage";
-import MarketingPage from "./pages/gestao-total/MarketingPage";
-import PlanejamentoPage from "./pages/gestao-total/PlanejamentoPage";
-import ConfiguracoesGtPage from "./pages/gestao-total/ConfiguracoesGtPage";
-import ConfiguracaoFinanceiraPage from "./pages/gestao-total/ConfiguracaoFinanceiraPage";
-import PrivilegiosPage from "./pages/gestao-total/PrivilegiosPage";
-import GuiaSistemaPage from "./pages/gestao-total/GuiaSistemaPage";
-import UsuariosSistemaPage from "./pages/gestao-total/UsuariosSistemaPage";
+const GestaoTotalPage = lazy(() => import("./pages/gestao-total/GestaoTotalPage"));
+const TarefasPage = lazy(() => import("./pages/gestao-total/TarefasPage"));
+const ProcessosPage = lazy(() => import("./pages/gestao-total/ProcessosPage"));
+const IndicadoresPage = lazy(() => import("./pages/gestao-total/IndicadoresPage"));
+const FinanceiroPage = lazy(() => import("./pages/gestao-total/FinanceiroPage"));
+const ComprasPage = lazy(() => import("./pages/gestao-total/ComprasPage"));
+const ReunioesPage = lazy(() => import("./pages/gestao-total/ReunioesPage"));
+const IAConselheiroPage = lazy(() => import("./pages/gestao-total/IAConselheiroPage"));
+const GestaoTotalDashboard = lazy(() => import("./pages/gestao-total/GestaoTotalDashboard"));
+const CargosPage = lazy(() => import("./pages/gestao-total/CargosPage"));
+const ColaboradoresGtPage = lazy(() => import("./pages/gestao-total/ColaboradoresGtPage"));
+const InstrucoesPage = lazy(() => import("./pages/gestao-total/InstrucoesPage"));
+const ProblemasPage = lazy(() => import("./pages/gestao-total/ProblemasPage"));
+const OportunidadesPage = lazy(() => import("./pages/gestao-total/OportunidadesPage"));
+const RiscosPage = lazy(() => import("./pages/gestao-total/RiscosPage"));
+const DocumentosPage = lazy(() => import("./pages/gestao-total/DocumentosPage"));
+const MarketingPage = lazy(() => import("./pages/gestao-total/MarketingPage"));
+const PlanejamentoPage = lazy(() => import("./pages/gestao-total/PlanejamentoPage"));
+const ConfiguracoesGtPage = lazy(() => import("./pages/gestao-total/ConfiguracoesGtPage"));
+const ConfiguracaoFinanceiraPage = lazy(() => import("./pages/gestao-total/ConfiguracaoFinanceiraPage"));
+const PrivilegiosPage = lazy(() => import("./pages/gestao-total/PrivilegiosPage"));
+const GuiaSistemaPage = lazy(() => import("./pages/gestao-total/GuiaSistemaPage"));
+const UsuariosSistemaPage = lazy(() => import("./pages/gestao-total/UsuariosSistemaPage"));
 import SysLogin from "./pages/SysLogin";
 
 // VIP Cam
-import VipCamPage from "./pages/vip-cam/VipCamPage";
-import CamClientesPage from "./pages/vip-cam/CamClientesPage";
-import CamHistoricoPage from "./pages/vip-cam/CamHistoricoPage";
-import CamRelatoriosPage from "./pages/vip-cam/CamRelatoriosPage";
-import CamConfigPage from "./pages/vip-cam/CamConfigPage";
-import VipCamLivePage from "./pages/vip-cam/VipCamLivePage";
+const VipCamPage = lazy(() => import("./pages/vip-cam/VipCamPage"));
+const CamClientesPage = lazy(() => import("./pages/vip-cam/CamClientesPage"));
+const CamHistoricoPage = lazy(() => import("./pages/vip-cam/CamHistoricoPage"));
+const CamRelatoriosPage = lazy(() => import("./pages/vip-cam/CamRelatoriosPage"));
+const CamConfigPage = lazy(() => import("./pages/vip-cam/CamConfigPage"));
+const VipCamLivePage = lazy(() => import("./pages/vip-cam/VipCamLivePage"));
 
 // Reputação
-import ReputacaoPage from "./pages/reputacao/ReputacaoPage";
-import AvaliacoesPage from "./pages/reputacao/AvaliacoesPage";
-import RespostasPage from "./pages/reputacao/RespostasPage";
-import AnaliseReputacaoPage from "./pages/reputacao/AnaliseReputacaoPage";
-import IntegracoesPage from "./pages/reputacao/IntegracoesPage";
-import ConfigIAPage from "./pages/reputacao/ConfigIAPage";
-import HistoricoIAPage from "./pages/reputacao/HistoricoIAPage";
+const ReputacaoPage = lazy(() => import("./pages/reputacao/ReputacaoPage"));
+const AvaliacoesPage = lazy(() => import("./pages/reputacao/AvaliacoesPage"));
+const RespostasPage = lazy(() => import("./pages/reputacao/RespostasPage"));
+const AnaliseReputacaoPage = lazy(() => import("./pages/reputacao/AnaliseReputacaoPage"));
+const IntegracoesPage = lazy(() => import("./pages/reputacao/IntegracoesPage"));
+const ConfigIAPage = lazy(() => import("./pages/reputacao/ConfigIAPage"));
+const HistoricoIAPage = lazy(() => import("./pages/reputacao/HistoricoIAPage"));
 
 // Auto Instagram
-import AutoInstagramPage from "./pages/auto-instagram/AutoInstagramPage";
-import ComentariosPage from "./pages/auto-instagram/ComentariosPage";
-import SeguidoresPage from "./pages/auto-instagram/SeguidoresPage";
-import EngajamentoPage from "./pages/auto-instagram/EngajamentoPage";
-import PromptsPage from "./pages/auto-instagram/PromptsPage";
-import LogsPage from "./pages/auto-instagram/LogsPage";
-import AprovacaoPage from "./pages/auto-instagram/AprovacaoPage";
-import StoriesPage from "./pages/auto-instagram/StoriesPage";
-import DiagnosticoPage from "./pages/auto-instagram/DiagnosticoPage";
-import ComentariosSemRespostaPage from "./pages/auto-instagram/ComentariosSemRespostaPage";
+const AutoInstagramPage = lazy(() => import("./pages/auto-instagram/AutoInstagramPage"));
+const ComentariosPage = lazy(() => import("./pages/auto-instagram/ComentariosPage"));
+const SeguidoresPage = lazy(() => import("./pages/auto-instagram/SeguidoresPage"));
+const EngajamentoPage = lazy(() => import("./pages/auto-instagram/EngajamentoPage"));
+const PromptsPage = lazy(() => import("./pages/auto-instagram/PromptsPage"));
+const LogsPage = lazy(() => import("./pages/auto-instagram/LogsPage"));
+const AprovacaoPage = lazy(() => import("./pages/auto-instagram/AprovacaoPage"));
+const StoriesPage = lazy(() => import("./pages/auto-instagram/StoriesPage"));
+const DiagnosticoPage = lazy(() => import("./pages/auto-instagram/DiagnosticoPage"));
+const ComentariosSemRespostaPage = lazy(() => import("./pages/auto-instagram/ComentariosSemRespostaPage"));
 
 // We Send
-import WeSendPage from "./pages/we-send/WeSendPage";
-import CampanhasPage from "./pages/we-send/CampanhasPage";
-import RelatoriosWeSendPage from "./pages/we-send/RelatoriosWeSendPage";
-import ConfiguracaoWeSendPage from "./pages/we-send/ConfiguracaoWeSendPage";
+const WeSendPage = lazy(() => import("./pages/we-send/WeSendPage"));
+const CampanhasPage = lazy(() => import("./pages/we-send/CampanhasPage"));
+const RelatoriosWeSendPage = lazy(() => import("./pages/we-send/RelatoriosWeSendPage"));
+const ConfiguracaoWeSendPage = lazy(() => import("./pages/we-send/ConfiguracaoWeSendPage"));
 
 // Configurações
-import ConfiguracoesPage from "./pages/ConfiguracoesPage";
+const ConfiguracoesPage = lazy(() => import("./pages/ConfiguracoesPage"));
 
 // Status
-import StatusPage from "./pages/Status";
+const StatusPage = lazy(() => import("./pages/Status"));
 
 const PROTECTED_PATHS = [
   "/dashboard",
@@ -415,7 +415,7 @@ function App() {
           <TooltipProvider>
             <Toaster />
             <AuthGuard>
-              <Router />
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-muted-foreground">A carregar módulo...</div>}><Router /></Suspense>
             </AuthGuard>
           </TooltipProvider>
         </AppProvider>

@@ -12,9 +12,11 @@
  * Para câmeras USB: comportamento inalterado (browser-side face-api.js).
  */
 import { spawn, ChildProcess } from "child_process";
+import { existsSync } from "fs";
 import ffmpegStatic from "ffmpeg-static";
+import { extractJpegFrames } from "./mjpegFrames";
 
-const FFMPEG_BIN = ffmpegStatic ?? "ffmpeg";
+const FFMPEG_BIN = ffmpegStatic && existsSync(ffmpegStatic) ? ffmpegStatic : "ffmpeg";
 
 // Intervalo de reconexão em caso de falha (ms)
 const RECONNECT_DELAY_MS = 5_000;
@@ -22,6 +24,18 @@ const RECONNECT_DELAY_MS = 5_000;
 const MAX_FAST_RETRIES = 3;
 // Intervalo entre rodadas de detecção facial (ms) — 30 segundos por padrão
 const FACE_DETECTION_INTERVAL_MS = 15_000;
+const MAX_FRAME_BUFFER_BYTES = 4 * 1024 * 1024;
+let faceDetectionSupported: Promise<boolean> | null = null;
+
+function canDetectFaces(): Promise<boolean> {
+  if (!faceDetectionSupported) {
+    faceDetectionSupported = import("canvas").then(() => true).catch(() => {
+      console.warn("[IP Worker] Canvas nativo indisponível; vídeo permanece ativo, detecção facial suspensa.");
+      return false;
+    });
+  }
+  return faceDetectionSupported;
+}
 // Cooldown mínimo entre capturas do mesmo cliente (ms)
 const SAME_CLIENT_COOLDOWN_MS = 60_000;
 
@@ -93,7 +107,9 @@ export function startWorker(unitId: number, rtspUrl: string): void {
   workers.set(unitId, state);
   console.log(`[IP Worker] Unit ${unitId}: iniciando worker (${rtspUrl.replace(/:[^:@]*@/, ':***@')})`);
   spawnFfmpeg(state);
-  scheduleFaceDetection(state);
+  void canDetectFaces().then(available => {
+    if (available && state.running) scheduleFaceDetection(state);
+  });
 }
 
 /**
@@ -195,36 +211,18 @@ function spawnFfmpeg(state: WorkerState): void {
 
   state.ffmpeg = ffmpeg;
 
-  let buffer = Buffer.alloc(0);
+  let buffer: Buffer = Buffer.alloc(0);
 
   ffmpeg.stdout?.on("data", (chunk: Buffer) => {
-    buffer = Buffer.concat([buffer, chunk]);
-
-    // Extrai todos os frames JPEG completos do buffer
-    let processed = true;
-    while (processed) {
-      processed = false;
-      const soiIdx = buffer.indexOf(Buffer.from([0xff, 0xd8]));
-      if (soiIdx === -1) break;
-      if (soiIdx > 0) buffer = buffer.slice(soiIdx);
-
-      let eoiIdx = -1;
-      for (let i = 2; i < buffer.length - 1; i++) {
-        if (buffer[i] === 0xff && buffer[i + 1] === 0xd9) {
-          eoiIdx = i + 2;
-          break;
-        }
-      }
-      if (eoiIdx === -1) break;
-
-      const frame = buffer.slice(0, eoiIdx);
-      buffer = buffer.slice(eoiIdx);
-
-      // Armazena o frame
+    const parsed = extractJpegFrames(buffer, chunk, MAX_FRAME_BUFFER_BYTES);
+    buffer = parsed.remaining;
+    for (const frame of parsed.frames) {
       state.lastFrame = frame;
       state.lastFrameAt = Date.now();
       state.retryCount = 0; // reset retry count ao receber frames
-      processed = true;
+    }
+    if (parsed.dropped) {
+      console.warn(`[IP Worker] Unit ${state.unitId}: frame MJPEG incompleto descartado`);
     }
   });
 
@@ -236,9 +234,9 @@ function spawnFfmpeg(state: WorkerState): void {
   });
 
   ffmpeg.on("close", (code) => {
+    state.ffmpeg = null;
     if (!state.running) return; // parado intencionalmente
 
-    state.ffmpeg = null;
     state.retryCount++;
     console.log(`[IP Worker] Unit ${state.unitId}: ffmpeg encerrado (code=${code}), reconectando em ${RECONNECT_DELAY_MS / 1000}s...`);
 
@@ -254,6 +252,10 @@ function spawnFfmpeg(state: WorkerState): void {
 
   ffmpeg.on("error", (err) => {
     console.error(`[IP Worker] Unit ${state.unitId}: erro ao iniciar ffmpeg:`, err.message);
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      // Sem binário: aguardar correção do ambiente em vez de criar processos em loop.
+      state.running = false;
+    }
   });
 }
 
@@ -273,10 +275,14 @@ function scheduleFaceDetection(state: WorkerState): void {
       await runFaceDetection(state);
     } catch (err) {
       console.error(`[IP Worker] Unit ${state.unitId}: erro na detecção facial:`, err);
+      if (/Cannot find module|ERR_MODULE_NOT_FOUND|canvas\.node/.test(String(err))) {
+        faceDetectionSupported = Promise.resolve(false);
+        return;
+      }
     }
 
     // Reagendar próxima rodada
-    scheduleFaceDetection(state);
+    if (state.running) scheduleFaceDetection(state);
   }, FACE_DETECTION_INTERVAL_MS);
 }
 
@@ -660,6 +666,7 @@ export async function initWorkersFromDb(): Promise<void> {
     // (não bloqueia o startup — modelos são carregados assincronamente)
     setTimeout(async () => {
       try {
+        if (!await canDetectFaces()) return;
         const { initFaceRecognition } = await import("./faceRecognitionService");
         await initFaceRecognition();
         console.log("[IP Worker] Modelos de reconhecimento facial pré-carregados");

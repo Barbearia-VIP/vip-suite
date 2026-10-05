@@ -1,175 +1,119 @@
 import { LRUCache } from 'lru-cache';
 
-/**
- * Cache em memória para queries pesadas
- * - TTL configurável por tipo de dado
- * - Invalidação manual por chave
- * - Suporte a invalidação em massa por padrão
- */
-
+/** Cache de consultas limitado por entradas, bytes serializados e TTL. */
 interface CacheOptions {
-  ttl?: number; // milliseconds
-  max?: number; // max items in cache
+  ttl?: number;
+  max?: number;
+  maxSize?: number;
 }
 
 type CacheKey = string;
 
-class QueryCache {
+export class QueryCache {
   private cache: LRUCache<CacheKey, any>;
-  private ttls: Map<CacheKey, number> = new Map();
-  private timers: Map<CacheKey, NodeJS.Timeout> = new Map();
+  private expires = new Map<CacheKey, number>();
+  private defaultTtl: number;
+  private sweepTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: CacheOptions = {}) {
+    this.defaultTtl = options.ttl ?? 5 * 60 * 1000;
     this.cache = new LRUCache({
-      max: options.max || 100,
-      ttl: options.ttl || 5 * 60 * 1000, // 5 min default
+      max: options.max ?? 100,
+      maxSize: options.maxSize ?? 8 * 1024 * 1024,
+      dispose: (_value, key) => { this.expires.delete(key); },
+      sizeCalculation: (value) => {
+        try {
+          return Math.max(1, Buffer.byteLength(JSON.stringify(value) ?? 'null'));
+        } catch {
+          return Number.MAX_SAFE_INTEGER;
+        }
+      },
     });
   }
 
-  /**
-   * Get cached value or compute it
-   */
-  async get<T>(
-    key: CacheKey,
-    compute: () => Promise<T>,
-    ttl?: number
-  ): Promise<T> {
-    const cached = this.cache.get(key);
-    if (cached !== undefined) {
-      return cached as T;
+  async get<T>(key: CacheKey, compute: () => Promise<T>, ttl?: number): Promise<T> {
+    if ((this.expires.get(key) ?? 0) > Date.now()) {
+      const cached = this.cache.get(key);
+      if (cached !== undefined) return cached as T;
     }
-
+    this.cache.delete(key);
     const result = await compute();
     this.set(key, result, ttl);
     return result;
   }
 
-  /**
-   * Set cache value
-   */
-  set(key: CacheKey, value: any, ttl?: number): void {
-    // Clear existing timer
-    const existingTimer = this.timers.get(key);
-    if (existingTimer) clearTimeout(existingTimer);
-
-    // Set value
+  set(key: CacheKey, value: unknown, ttl?: number): void {
     this.cache.set(key, value);
-
-    // Set expiration timer
-    const effectiveTtl = ttl || 5 * 60 * 1000;
-    const timer = setTimeout(() => {
-      this.invalidate(key);
-    }, effectiveTtl);
-
-    this.timers.set(key, timer);
-    this.ttls.set(key, Date.now() + effectiveTtl);
+    if (this.cache.has(key)) this.expires.set(key, Date.now() + (ttl ?? this.defaultTtl));
+    this.scheduleSweep();
   }
 
-  /**
-   * Invalidate single key
-   */
   invalidate(key: CacheKey): void {
     this.cache.delete(key);
-    const timer = this.timers.get(key);
-    if (timer) clearTimeout(timer);
-    this.timers.delete(key);
-    this.ttls.delete(key);
+    this.scheduleSweep();
   }
 
-  /**
-   * Invalidate multiple keys by pattern
-   */
   invalidatePattern(pattern: string): void {
     const regex = new RegExp(pattern);
-    const keysToInvalidate: CacheKey[] = [];
     for (const key of Array.from(this.cache.keys())) {
-      if (regex.test(key)) {
-        keysToInvalidate.push(key);
-      }
+      regex.lastIndex = 0;
+      if (regex.test(key)) this.cache.delete(key);
     }
-    keysToInvalidate.forEach(key => this.invalidate(key));
+    this.scheduleSweep();
   }
 
-  /**
-   * Clear all cache
-   */
   clear(): void {
-    const timersToCancel = Array.from(this.timers.values());
-    timersToCancel.forEach(timer => clearTimeout(timer));
+    if (this.sweepTimer) clearTimeout(this.sweepTimer);
+    this.sweepTimer = null;
     this.cache.clear();
-    this.timers.clear();
-    this.ttls.clear();
+    this.expires.clear();
   }
 
-  /**
-   * Get cache stats
-   */
+  private scheduleSweep(): void {
+    if (this.sweepTimer) clearTimeout(this.sweepTimer);
+    this.sweepTimer = null;
+    if (!this.expires.size) return;
+    const nearest = Math.min(...Array.from(this.expires.values()));
+    this.sweepTimer = setTimeout(() => {
+      this.sweepTimer = null;
+      for (const [key, expiry] of Array.from(this.expires.entries())) {
+        if (expiry <= Date.now()) this.cache.delete(key);
+      }
+      this.scheduleSweep();
+    }, Math.max(1, nearest - Date.now()));
+    this.sweepTimer.unref?.();
+  }
+
   getStats() {
     return {
       size: this.cache.size,
       max: this.cache.max,
       keys: Array.from(this.cache.keys()).map(key => ({
         key,
-        expiresAt: new Date(this.ttls.get(key) || 0),
+        expiresAt: new Date(this.expires.get(key) ?? 0),
       })),
     };
   }
 }
 
-// Global cache instances
-export const dashboardCache = new QueryCache({
-  max: 50,
-  ttl: 5 * 60 * 1000, // 5 minutes
-});
+export const dashboardCache = new QueryCache({ max: 50, maxSize: 8 * 1024 * 1024, ttl: 5 * 60 * 1000 });
+export const dataVipCache = new QueryCache({ max: 100, maxSize: 16 * 1024 * 1024, ttl: 10 * 60 * 1000 });
+export const vipCamCache = new QueryCache({ max: 50, maxSize: 8 * 1024 * 1024, ttl: 2 * 60 * 1000 });
 
-export const dataVipCache = new QueryCache({
-  max: 100,
-  ttl: 10 * 60 * 1000, // 10 minutes
-});
-
-export const vipCamCache = new QueryCache({
-  max: 50,
-  ttl: 2 * 60 * 1000, // 2 minutes
-});
-
-/**
- * Cache key builders
- */
 export const cacheKeys = {
-  // Dashboard
   dashboardKpis: (unitId: number, date: string) => `dashboard:kpis:${unitId}:${date}`,
-  
-  // Data VIP
   dataVipDashboard: (unitId: number, startDate: string, endDate: string) =>
     `dataVip:dashboard:${unitId}:${startDate}:${endDate}`,
   dataVipChurn: (unitId: number, date: string) => `dataVip:churn:${unitId}:${date}`,
   dataVipTimeline: (unitId: number, page: number) => `dataVip:timeline:${unitId}:${page}`,
-  
-  // VIP Cam
   vipCamDashboard: (unitId: number, date: string) => `vipCam:dashboard:${unitId}:${date}`,
   vipCamRecent: (unitId: number) => `vipCam:recent:${unitId}`,
 };
 
-/**
- * Invalidation helpers
- */
 export const invalidateCache = {
-  // Invalidate all dashboard cache for a unit
-  dashboardUnit: (unitId: number) => {
-    dashboardCache.invalidatePattern(`^dashboard:kpis:${unitId}:`);
-  },
-
-  // Invalidate all Data VIP cache for a unit
-  dataVipUnit: (unitId: number) => {
-    dataVipCache.invalidatePattern(`^dataVip:.*:${unitId}:`);
-  },
-
-  // Invalidate all VIP Cam cache for a unit
-  vipCamUnit: (unitId: number) => {
-    vipCamCache.invalidatePattern(`^vipCam:.*:${unitId}:`);
-  },
-
-  // Invalidate all caches
+  dashboardUnit: (unitId: number) => dashboardCache.invalidatePattern(`^dashboard:kpis:${unitId}:`),
+  dataVipUnit: (unitId: number) => dataVipCache.invalidatePattern(`^dataVip:.*:${unitId}:`),
+  vipCamUnit: (unitId: number) => vipCamCache.invalidatePattern(`^vipCam:.*:${unitId}:`),
   all: () => {
     dashboardCache.clear();
     dataVipCache.clear();
